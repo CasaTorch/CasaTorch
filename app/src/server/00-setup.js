@@ -2,16 +2,19 @@
  * HouseOS - setup: config, data folder, demo mode.
  *
  * The server is built from src/server/*.js in name order into one module
- * (build.mjs), the same way homedash is. Every house-specific value lives in
- * config.json (see config.example.json) - never in code.
+ * (build.mjs). Every house-specific value lives in data/config.json, written
+ * by the setup wizard (/setup) - never in code.
  *
- * Demo mode (HOUSEOS_DEMO=1, or no config.json at all) serves the fixtures in
- * ../demo/fixtures, so anyone can try HouseOS - and every screenshot is taken
- * - without a real house behind it.
+ *   no config.json         -> the setup wizard (/setup)
+ *   config.demo = true     -> demo mode: sample data from ../demo/fixtures
+ *   HOUSEOS_DEMO=1         -> demo mode regardless
+ *   HOUSEOS_SETUP=1        -> re-open the wizard on a configured install
  * ====================================================================== */
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
+import https from 'node:https';
 import { fileURLToPath } from 'node:url';
 
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -20,8 +23,16 @@ const CONFIG_FILE = process.env.HOUSEOS_CONFIG || path.join(DATA_DIR, 'config.js
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 let config = {};
-try { config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { /* none yet: demo mode */ }
-const DEMO = process.env.HOUSEOS_DEMO === '1' || !fs.existsSync(CONFIG_FILE);
+const loadConfig = () => { try { config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { config = {}; } };
+loadConfig();
+/** Written owner-only: it holds tokens and API keys. */
+function saveConfig(next) {
+  fs.writeFileSync(`${CONFIG_FILE}.tmp`, JSON.stringify(next, null, 2), { mode: 0o600 });
+  fs.renameSync(`${CONFIG_FILE}.tmp`, CONFIG_FILE);
+  config = next;
+}
+const isConfigured = () => fs.existsSync(CONFIG_FILE) && Object.keys(config).length > 0;
+const isDemo = () => process.env.HOUSEOS_DEMO === '1' || config.demo === true;
 const PORT = Number(process.env.PORT || config.port || 8090);
 const nowIso = () => new Date().toISOString();
 

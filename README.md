@@ -20,6 +20,29 @@ npm run demo          # → http://localhost:8090
 
 Or with Docker: `cd deploy && docker compose up -d`.
 
+## Setup
+
+Start HouseOS and open it in a browser: a setup wizard asks what you have and sets it up.
+
+1. **Your home**: name, time zone, °F/°C, currency
+2. **Your login**: username, password, and a PIN for unlocking doors
+3. **Home Assistant**: connect it (address + admin token), or get help installing it
+4. **Cameras**: Frigate, UniFi Protect, Reolink, Ring, Nest, ONVIF, Meraki MV, Wyze, Arlo/Eufy
+5. **Lights, locks and climate**: Hue, Lutron Caseta, Kasa/Tapo, Shelly, ecobee, Nest, August, Yale, Z-Wave, Zigbee, Matter, Rachio
+6. **Sensors**: Zigbee, Z-Wave, Shelly, SwitchBot, YoLink, Ecowitt, Meraki MT, and which ones should alert you
+7. **Network**: UniFi, Meraki, Omada, OPNsense/pfSense, eero, Google Wifi or your ISP's router; Pi-hole or AdGuard; speed tests
+8. **Energy**: your power company (the list comes from Home Assistant's Opower integration) and its sign-in, or a price per kWh; smart plugs, solar, Powerwall, EV charger, UPS; a monthly budget
+9. **Servers**: your NAS or server, with a one-line command to install the HouseOS agent on it
+10. **Alerts**: phone alerts through the Home Assistant app, quiet hours
+
+Anything that lives in Home Assistant is added **inside Home Assistant** by running that
+integration's own setup: Home Assistant asks its questions (your power company, your Ring login,
+a verification code) and HouseOS shows them. Passwords you type there go to Home Assistant only.
+Google and Yale sign in on their own pages, so those open in Home Assistant.
+
+The questions and the supported gear are in [app/catalog/setup.json](app/catalog/setup.json):
+adding a device that Home Assistant already supports is one entry there, no code.
+
 ## What's in it
 
 | Tab | What it does | Edition |

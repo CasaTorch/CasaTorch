@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up HouseOS</title>
+  <link rel="stylesheet" href="setup.css">
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">HouseOS</div>
+      <ol class="steps" id="progress" aria-label="Setup steps"></ol>
+    </header>
+    <main id="page" aria-live="polite"></main>
+    <footer>
+      <button type="button" class="ghost" id="back">Back</button>
+      <span class="spacer err" id="navmsg" role="alert"></span>
+      <button type="button" class="primary" id="next">Next</button>
+    </footer>
+  </div>
+  <script src="setup.js"></script>
+</body>
+</html>
