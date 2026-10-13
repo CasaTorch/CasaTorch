@@ -1,0 +1,131 @@
+{
+  "floors": [
+    {
+      "id": "ground",
+      "name": "Ground floor",
+      "file": "demo-ground.glb",
+      "level": 0,
+      "heightM": 2.8,
+      "rotationY": 0,
+      "scale": 1,
+      "offset": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "upstairs",
+      "name": "Upstairs",
+      "file": "demo-upstairs.glb",
+      "level": 1,
+      "heightM": 2.8,
+      "rotationY": 0,
+      "scale": 1,
+      "offset": [
+        0,
+        0
+      ]
+    }
+  ],
+  "pins": [
+    {
+      "deviceId": "hue:1",
+      "floor": "ground",
+      "pos": [
+        3.5,
+        2.2,
+        2.5
+      ]
+    },
+    {
+      "deviceId": "hue:2",
+      "floor": "ground",
+      "pos": [
+        9.5,
+        2.2,
+        2.5
+      ]
+    },
+    {
+      "deviceId": "ha:media_player.living_room",
+      "floor": "ground",
+      "pos": [
+        1.2,
+        0.9,
+        1
+      ]
+    },
+    {
+      "deviceId": "shelly:fridge",
+      "floor": "ground",
+      "pos": [
+        11.3,
+        0.8,
+        4.6
+      ]
+    },
+    {
+      "deviceId": "ha:binary_sensor.front_door",
+      "floor": "ground",
+      "pos": [
+        5.5,
+        1.2,
+        9
+      ]
+    },
+    {
+      "deviceId": "camera:porch",
+      "floor": "ground",
+      "pos": [
+        6.5,
+        2.3,
+        9.2
+      ]
+    },
+    {
+      "deviceId": "yolink:leak1",
+      "floor": "ground",
+      "pos": [
+        10.5,
+        0.1,
+        7.5
+      ]
+    },
+    {
+      "deviceId": "hue:3",
+      "floor": "upstairs",
+      "pos": [
+        2,
+        2.2,
+        2
+      ]
+    },
+    {
+      "deviceId": "ha:media_player.bedroom",
+      "floor": "upstairs",
+      "pos": [
+        10,
+        1,
+        2
+      ]
+    },
+    {
+      "deviceId": "shelly:office",
+      "floor": "upstairs",
+      "pos": [
+        10.5,
+        0.8,
+        7
+      ]
+    },
+    {
+      "deviceId": "ha:climate.thermostat",
+      "floor": "ground",
+      "pos": [
+        4.2,
+        1.5,
+        6
+      ]
+    }
+  ]
+}

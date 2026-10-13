@@ -1,0 +1,30 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy: { matrix: { node: [20, 22] } }
+    defaults: { run: { working-directory: app } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ matrix.node }}", cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci --no-audit --no-fund
+      - run: node build.mjs
+      - run: node --check server.js && node --check public/app.js && node --check public/setup.js && node --check public/floorplan.js
+      - run: node test/unit.mjs
+      - name: Demo server answers
+        run: |
+          HOUSEOS_DEMO=1 HOUSEOS_DATA_DIR=$RUNNER_TEMP/hos PORT=18090 node server.js &
+          for i in $(seq 1 20); do curl -fs localhost:18090/api/health && break; sleep 1; done
+          for u in status home alerts devices internet settings floorplan floorplan/live; do curl -fs "localhost:18090/api/$u" >/dev/null || { echo "/api/$u failed"; exit 1; }; done
+      - name: No personal data
+        run: node ../tools/scrub-check.mjs ..
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f app/Dockerfile -t houseos:ci .

@@ -2,7 +2,7 @@
    (app/catalog/setup.json); this file only knows how to ask them.
    Integrations are added to Home Assistant by running that integration's own
    setup ("config flow"): Home Assistant sends its questions, we show them. */
-const W = { cat: null, steps: [], i: 0, a: {}, ha: null, haDomains: [], added: [], tests: {}, flows: {} };
+const W = { cat: null, steps: [], i: 0, a: {}, ha: null, haDomains: [], added: [], tests: {}, flows: {}, rerun: false, keeps: {}, hue: null, ring: null };
 const $ = (s) => document.querySelector(s);
 function el(tag, attrs = {}, ...kids) {
   const e = document.createElement(tag);
@@ -29,6 +29,7 @@ function visible(f, store) {
   return true;
 }
 function fieldEl(f, store, onChange) {
+  if (CUSTOM[f.type]) return CUSTOM[f.type](f, store);
   if (store[f.id] === undefined && f.default !== undefined) store[f.id] = Array.isArray(f.default) ? [...f.default] : f.default;
   if (f.type === 'timezone' && !store[f.id]) store[f.id] = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const id = `f-${f.id}-${Math.random().toString(36).slice(2, 7)}`;
@@ -42,6 +43,8 @@ function fieldEl(f, store, onChange) {
       const b = el('button', { type: 'button', class: `opt${cur.has(v) ? ' on' : ''}`, onclick: () => { cur.has(v) ? cur.delete(v) : cur.add(v); store[f.id] = [...cur]; b.classList.toggle('on'); } }, l);
       return b;
     })));
+  } else if (f.type === 'textarea') {
+    input = el('textarea', { id, rows: 3, spellcheck: 'false', oninput: (e) => set(e.target.value.trim()) }, store[f.id] || '');
   } else if (f.type === 'timezone') {
     const zones = (Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : [store[f.id]]);
     input = el('select', { id, onchange: (e) => set(e.target.value) }, ...zones.map((z) => el('option', { value: z, selected: z === store[f.id] }, z)));
@@ -56,6 +59,82 @@ function fieldsEl(fields, store, rerender) {
   const drivers = new Set((fields || []).flatMap((g) => Object.keys(g.showIf || {})));
   return (fields || []).filter((f) => visible(f, store)).map((f) => fieldEl(f, store, drivers.has(f.id) ? rerender : null));
 }
+
+
+/* ---------- the "your day" questions: town, calendars, teams, headlines, reminders ---------- */
+const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const COLORS = [['#60a5fa', 'Blue'], ['#34d399', 'Green'], ['#fbbf24', 'Yellow'], ['#f87171', 'Red'], ['#c084fc', 'Purple'], ['#f472b6', 'Pink']];
+const CUSTOM = {
+  location(f, store) {
+    const box = el('div', { class: 'field' }, el('label', {}, f.label));
+    const cur = store[f.id];
+    const q = el('input', { type: 'text', placeholder: 'Town, ZIP code, or latitude, longitude', value: '' });
+    const results = el('div', { class: 'results' });
+    const pick = (p) => { store[f.id] = p; go(); };
+    const find = async () => {
+      const ll = q.value.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+      if (ll) { pick({ name: `${ll[1]}, ${ll[2]}`, lat: Number(ll[1]), lon: Number(ll[2]) }); return; }
+      results.replaceChildren(el('div', { class: 'note' }, 'Looking...'));
+      try { const r = await api(`/api/setup/geocode?q=${encodeURIComponent(q.value)}`); results.replaceChildren(...(r.places.length ? r.places.map((p) => el('button', { type: 'button', class: 'small', onclick: () => pick(p) }, p.name)) : [el('div', { class: 'note' }, 'No match - try the nearest bigger town.')])); }
+      catch (e) { results.replaceChildren(el('div', { class: 'err' }, e.message)); }
+    };
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); find(); } });
+    if (cur?.lat != null) box.append(el('div', { class: 'ok' }, `✓ ${cur.name || `${cur.lat}, ${cur.lon}`}`));
+    box.append(el('div', { class: 'row' }, el('div', { style: 'flex:1;min-width:180px' }, q), el('button', { type: 'button', class: 'small', onclick: find }, 'Find'),
+      navigator.geolocation ? el('button', { type: 'button', class: 'small', onclick: () => navigator.geolocation.getCurrentPosition((g) => pick({ name: 'This location', lat: Math.round(g.coords.latitude * 1e4) / 1e4, lon: Math.round(g.coords.longitude * 1e4) / 1e4 }), () => results.replaceChildren(el('div', { class: 'note' }, 'The browser did not share a location - search instead.'))) }, 'Use this device\'s location') : null), results);
+    if (f.help) box.append(el('div', { class: 'help' }, f.help));
+    return box;
+  },
+  calendars(f, store) {
+    const list = store[f.id] ||= [];
+    const box = el('div', {});
+    list.forEach((c, k) => box.append(el('div', { class: 'item' },
+      el('div', { class: 'grid2' }, fieldEl({ id: 'name', label: 'Name', type: 'text', placeholder: 'Family', required: true }, c), fieldEl({ id: 'color', label: 'Color', type: 'choice', options: COLORS, default: COLORS[k % COLORS.length][0] }, c)),
+      fieldEl({ id: 'url', label: 'Private iCal link', type: 'url', placeholder: 'https://calendar.google.com/calendar/ical/.../basic.ics', required: true }, c),
+      el('div', { class: 'row' }, testEl('calendar', c, 'Check it'), el('button', { type: 'button', class: 'small', onclick: () => { list.splice(k, 1); go(); } }, 'Remove')))));
+    box.append(el('button', { type: 'button', class: 'small', onclick: () => { list.push({ name: list.length ? '' : 'Family', url: '' }); go(); } }, list.length ? 'Add another calendar' : 'Add a calendar'));
+    return box;
+  },
+  teams(f, store) {
+    const teams = store[f.id] ||= [];
+    const box = el('div', {});
+    box.append(el('div', { class: 'chips' }, ...teams.map((t, k) => el('span', { class: 'chip' }, `${t.name} · ${String(t.league).toUpperCase()}`, el('button', { type: 'button', 'aria-label': `Remove ${t.name}`, onclick: () => { teams.splice(k, 1); go(); } }, '×')))));
+    const league = el('select', {}, el('option', { value: '' }, 'League...'));
+    const team = el('select', { disabled: true }, el('option', { value: '' }, 'Team...'));
+    let list = [];
+    api('/api/setup/sports/leagues').then((r) => league.append(...r.leagues.map((l) => el('option', { value: l.id }, l.name)))).catch(() => {});
+    league.onchange = async () => {
+      team.replaceChildren(el('option', { value: '' }, 'Loading...')); team.disabled = true;
+      try { list = (await api(`/api/setup/sports/teams?league=${league.value}`)).teams || []; team.replaceChildren(el('option', { value: '' }, 'Team...'), ...list.map((t) => el('option', { value: t.id }, t.name))); team.disabled = false; }
+      catch (e) { team.replaceChildren(el('option', { value: '' }, `Could not load teams: ${e.message}`)); }
+    };
+    const add = el('button', { type: 'button', class: 'small', onclick: () => { const t = list.find((x) => x.id === team.value); if (!t || teams.some((x) => x.league === league.value && x.id === t.id)) return; teams.push({ league: league.value, id: t.id, name: t.name, abbr: t.abbr || null, logo: t.logo || null }); go(); } }, 'Add team');
+    box.append(el('div', { class: 'grid2' }, league, team), el('div', { class: 'row', style: 'margin-top:8px' }, add), el('p', { class: 'note' }, 'Scores come from ESPN\'s public scoreboard.'));
+    return box;
+  },
+  feeds(f, store) {
+    const picks = new Set(store[f.id] ||= []);
+    const custom = store.custom ||= [];
+    const box = el('div', {}, el('div', { class: 'opts' }));
+    api('/api/setup/news/defaults').then((r) => box.firstChild.append(...r.feeds.map((d) => { const b = el('button', { type: 'button', class: `opt${picks.has(d.id) ? ' on' : ''}`, onclick: () => { picks.has(d.id) ? picks.delete(d.id) : picks.add(d.id); store[f.id] = [...picks]; b.classList.toggle('on'); } }, d.name); return b; }))).catch(() => {});
+    custom.forEach((c, k) => box.append(el('div', { class: 'item' }, el('div', { class: 'grid2' }, fieldEl({ id: 'name', label: 'Name', type: 'text', required: true }, c), fieldEl({ id: 'url', label: 'RSS or Atom feed address', type: 'url', required: true }, c)), el('div', { class: 'row' }, testEl('feed', c, 'Check it'), el('button', { type: 'button', class: 'small', onclick: () => { custom.splice(k, 1); go(); } }, 'Remove')))));
+    box.append(el('div', { class: 'row', style: 'margin-top:10px' }, el('button', { type: 'button', class: 'small', onclick: () => { custom.push({ name: '', url: '' }); go(); } }, 'Add a feed (local news, a blog...)')));
+    return box;
+  },
+  reminders(f, store) {
+    const list = store[f.id] ||= [];
+    const box = el('div', {});
+    list.forEach((r, k) => {
+      const days = new Set(r.days ||= [0, 1, 2, 3, 4, 5, 6]);
+      box.append(el('div', { class: 'item' }, fieldEl({ id: 'title', label: 'Reminder', type: 'text', placeholder: 'Trash night - bins out', required: true }, r),
+        el('div', { class: 'row' }, el('div', { class: 'days' }, ...DAYS.map((d, n) => { const b = el('button', { type: 'button', class: days.has(n) ? 'on' : '', 'aria-label': ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][n], onclick: () => { days.has(n) ? days.delete(n) : days.add(n); r.days = [...days].sort(); b.classList.toggle('on'); } }, d); return b; })),
+          el('input', { type: 'time', value: r.time || '', style: 'width:auto', oninput: (e) => { r.time = e.target.value; } }), el('button', { type: 'button', class: 'small', onclick: () => { list.splice(k, 1); go(); } }, 'Remove'))));
+    });
+    box.append(el('div', { class: 'row' }, el('button', { type: 'button', class: 'small', onclick: () => { list.push({ title: '', days: [0, 1, 2, 3, 4, 5, 6] }); go(); } }, 'Add a reminder'),
+      list.length ? null : el('button', { type: 'button', class: 'small', onclick: () => { list.push({ title: 'Trash night - bins out', days: [2], time: '20:00' }); go(); } }, 'Example: trash night')));
+    return box;
+  },
+};
 
 /* ---------- connection tests ---------- */
 function testEl(kind, store, label = 'Test connection') {
@@ -158,12 +237,61 @@ function flowEl(domain, hint, done, extra) {
   return { el: box, start, render };
 }
 
+/* Gear HouseOS reaches itself vs. through Home Assistant: of each pair, show one. */
+const needsHa = (o) => o.method === 'ha' || o.method === 'ha-ui';
+function shownOptions(list) {
+  return list.filter((o) => {
+    if (o.haTwin && list.some((x) => x.id === o.haTwin)) return !W.ha;   // direct option with an HA twin
+    if (list.some((x) => x.haTwin === o.id)) return !!W.ha;              // HA option with a direct twin
+    return true;
+  });
+}
+function badge(o) {
+  if (o.method === 'ring') return el('span', { class: 'badge pro' }, 'Pro · Labs');
+  if (needsHa(o)) return el('span', { class: 'badge ha' }, W.ha ? 'via Home Assistant' : 'needs Home Assistant');
+  if (o.method === 'direct' || o.method === 'hue') return el('span', { class: 'badge direct' }, 'no Home Assistant needed');
+  return null;
+}
+function hueEl(card) {
+  const st = W.hue ||= { host: '', msg: null };
+  if (st.paired) { card.append(el('div', { class: 'ok' }, `✓ ${st.msg}`)); return card; }
+  const host = el('input', { type: 'text', placeholder: '192.168.1.20', value: st.host, oninput: (e) => { st.host = e.target.value.trim(); } });
+  const out = el('div', { class: 'note' }, st.msg || '');
+  card.append(el('p', { class: 'note' }, '1. Enter the bridge\'s address (or press Find). 2. Press the round button on top of the Hue bridge. 3. Within 30 seconds, press Pair.'),
+    el('div', { class: 'row' }, el('div', { style: 'flex:1;min-width:160px' }, host),
+      el('button', { type: 'button', class: 'small', onclick: async () => { out.textContent = 'Looking...'; const r = await api('/api/setup/hue/discover').catch(() => ({ bridges: [] })); if (r.bridges[0]) { st.host = r.bridges[0]; host.value = st.host; out.textContent = `Found ${r.bridges.join(', ')}`; } else out.textContent = 'Not found automatically - look in your router\'s client list for "Philips-hue".'; } }, 'Find'),
+      el('button', { type: 'button', class: 'primary', onclick: async () => { out.textContent = 'Pairing...'; const r = await api('/api/setup/hue/pair', { body: { host: st.host } }).catch((e) => ({ ok: false, error: e.message })); if (r.ok) { st.paired = true; st.msg = r.message; go(); } else out.replaceChildren(el('span', { class: 'err' }, `✗ ${r.error}`)); } }, 'Pair')), out);
+  return card;
+}
+function ringEl(card) {
+  const st = W.ring ||= { email: '', step: 'login' };
+  if (st.step === 'done') { card.append(el('div', { class: 'ok' }, '✓ Signed in to Ring. Your Ring password was not saved - only a sign-in token.')); return card; }
+  card.append(el('p', { class: 'note' }, 'Ring has no official API. HouseOS signs in the way the Ring app does (the method Homebridge and ring-mqtt use). It works today, but Ring could change it - that\'s why it\'s "Labs". Included with Pro and the free trial.'));
+  const out = el('div', {});
+  const send = async (body) => {
+    out.replaceChildren(el('div', { class: 'note' }, 'Talking to Ring...'));
+    try { const r = await api('/api/setup/ring/login', { body }); if (r.ok) { st.step = 'done'; go(); return; } if (r.needsCode) { st.step = 'code'; st.prompt = r.prompt; go(); return; } out.replaceChildren(el('div', { class: 'err' }, r.error || 'Ring did not accept that')); }
+    catch (e) { out.replaceChildren(el('div', { class: 'err' }, /Pro feature/.test(e.message) ? 'Ring needs HouseOS Pro (the trial has ended).' : e.message)); }
+  };
+  if (st.step === 'code') {
+    const code = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', placeholder: '123456' });
+    card.append(el('div', { class: 'field' }, el('label', {}, st.prompt || 'Enter the code Ring sent you'), code), el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => send({ code: code.value }) }, 'Verify'), el('button', { type: 'button', class: 'small', onclick: () => { st.step = 'login'; go(); } }, 'Start over')), out);
+    return card;
+  }
+  const email = el('input', { type: 'email', value: st.email, autocomplete: 'off', oninput: (e) => { st.email = e.target.value; } }), pw = el('input', { type: 'password', autocomplete: 'off' });
+  card.append(el('div', { class: 'field' }, el('label', {}, 'Ring e-mail'), email), el('div', { class: 'field' }, el('label', {}, 'Ring password'), pw, el('div', { class: 'help' }, 'Sent to Ring once to get a sign-in token; never saved.')),
+    el('button', { type: 'button', class: 'primary', onclick: () => send({ email: st.email, password: pw.value }) }, 'Sign in to Ring'), out);
+  return card;
+}
+
 /* One picked option of a "pick all that apply" list: how it gets set up. */
 function setupFor(stepId, opt) {
   const store = ans(stepId);
-  const card = el('div', { class: 'card' }, el('h3', {}, opt.label));
+  const card = el('div', { class: 'card' }, el('h3', {}, opt.label, badge(opt)));
+  if (opt.method === 'hue') return hueEl(card);
+  if (opt.method === 'ring') return ringEl(card);
   if (opt.method === 'ha' || opt.method === 'ha-ui') {
-    if (!W.ha) { card.append(el('div', { class: 'warn' }, 'Needs Home Assistant - connect it in the Home Assistant step first.')); return card; }
+    if (!W.ha) { card.append(el('div', { class: 'warn' }, 'Needs Home Assistant. Connect it in the Home Assistant step, or add this later from Settings.')); return card; }
     const added = W.added.find((x) => x.domain === opt.domain);
     if (W.haDomains.includes(opt.domain) || added) { card.append(el('div', { class: 'ok' }, added ? `✓ Added to Home Assistant: ${added.title}` : '✓ Already in Home Assistant')); return card; }
     if (opt.method === 'ha-ui') {
@@ -189,9 +317,10 @@ function setupFor(stepId, opt) {
 
 /* ---------- pages ---------- */
 function welcome() {
+  if (W.rerun) { const k = Object.entries(W.keeps).filter(([, v]) => v).map(([n]) => n); return [el('h1', {}, 'Change your setup'), el('p', { class: 'intro' }, `Your current answers are filled in. Anything you don't change is kept${k.length ? `, including what's already connected (${k.join(', ')})` : ''}.`)]; }
   return [el('h1', {}, 'Welcome to HouseOS'),
-    el('p', { class: 'intro' }, 'This takes about 10 minutes. We\'ll ask what you have at home - Home Assistant, cameras, lights and locks, sensors, your network, your power company - and set each one up for you. Anything you skip can be added later.'),
-    el('div', { class: 'card' }, el('h3', {}, 'Just looking?'), el('p', { class: 'note' }, 'See HouseOS with a sample house, no setup needed.'),
+    el('p', { class: 'intro' }, 'About 10 minutes. First the everyday things - your town for the weather, calendars, teams, headlines, reminders. Then your gear: HouseOS connects to Hue, Shelly, YoLink, Frigate, Reolink and Ring itself, and to thousands more through Home Assistant if you have it. Skip anything; add it later.'),
+    el('div', { class: 'card' }, el('h3', {}, 'Just looking?'), el('p', { class: 'note' }, 'See HouseOS with a sample house, including the 3D floor plan. No setup needed.'),
       el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/'; } }, 'Try the demo'))];
 }
 /* Where a step's branch keeps its answers: the network step keeps each kind's own (meraki, unifi). */
@@ -215,14 +344,15 @@ function stepPage(step) {
       if (br.provider) out.push(utilityEl(br.provider, store));
       if (br.pick) {
         const p = br.pick, cur = new Set(store[p.id] || []);
-        out.push(el('div', { class: 'q' }, p.label), el('div', { class: 'opts' }, ...p.options.map((o) => el('button', { type: 'button', class: `opt${cur.has(o.id) ? ' on' : ''}`, onclick: () => { cur.has(o.id) ? cur.delete(o.id) : cur.add(o.id); store[p.id] = [...cur]; go(); } }, o.label, o.desc ? el('small', {}, o.desc) : null))));
-        for (const o of p.options) if (cur.has(o.id)) out.push(setupFor(step.id, o));
+        const shown = shownOptions(p.options);
+        out.push(el('div', { class: 'q' }, p.label), el('div', { class: 'opts' }, ...shown.map((o) => el('button', { type: 'button', class: `opt${cur.has(o.id) ? ' on' : ''}`, onclick: () => { cur.has(o.id) ? cur.delete(o.id) : cur.add(o.id); store[p.id] = [...cur]; go(); } }, o.label, badge(o), o.desc ? el('small', {}, o.desc) : null))));
+        for (const o of shown) if (cur.has(o.id)) out.push(setupFor(step.id, o));
       }
       if (br.fields && late) out.push(...fieldsEl(br.fields, sub, go));
-      if (br.agent) out.push(agentEl(store));
     }
   }
-  if (step.fields) out.push(...fieldsEl(step.fields, store, go));
+  if (step.fields) out.push(...fieldsEl(step.id === 'account' && W.rerun ? step.fields.map((f) => (f.id === 'password' ? { ...f, required: false, label: 'New password (leave empty to keep the current one)' } : f)) : step.fields, store, go));
+  if (step.help) out.push(el('details', { class: 'card' }, el('summary', {}, 'Where do I find the link?'), el('p', { class: 'note' }, step.help)));
   if (step.id === 'network' && ['pihole', 'adguard'].includes(store.dns)) out.push(testEl(store.dns, store, `Test ${store.dns === 'pihole' ? 'Pi-hole' : 'AdGuard'}`));
   return out;
 }
@@ -239,29 +369,24 @@ function utilityEl(p, store) {
   card.append(f.el);
   return card;
 }
-function agentEl(store) {
-  const out = el('div', {});
-  if (store._agent) out.append(el('p', { class: 'note' }, 'Run this once on that server (SSH in, or paste it into its Docker / Container Manager):'), el('pre', {}, store._agent));
-  const btn = el('button', { type: 'button', class: 'small', onclick: async () => {
-    try { const r = await api('/api/setup/agent', { body: { address: store.address } }); store._agent = r.command; go(); }
-    catch (e) { out.replaceChildren(el('div', { class: 'err' }, e.message)); }
-  } }, store._agent ? 'Show it again' : 'Get the install command');
-  return el('div', { class: 'card' }, el('h3', {}, 'The HouseOS agent'), el('p', { class: 'note' }, 'A small helper that lets HouseOS see the server\'s apps, drives, backups and UPS. It only reads, except when you press Restart or Update.'), store._agent ? null : btn, out);
-}
 const labelsOf = (step, ids) => (ids || []).map((id) => W.steps.find((s) => s.id === step)?.branches?.yes?.pick?.options.find((o) => o.id === id)?.label || id).join(', ');
 function review() {
   const a = W.a, dl = el('dl', { class: 'review' });
   const add = (k, v) => dl.append(el('dt', {}, k), el('dd', {}, v || '-'));
   add('Home', `${a.house?.name} · ${a.house?.timezone} · °${a.house?.units} · ${a.house?.currency}`);
-  add('Login', `${a.account?.username}${a.account?.pin ? ' · PIN set' : ''}`);
+  add('Weather for', a.house?.location?.name || 'not set');
+  add('Login', `${a.account?.username}${a.account?.pin ? ' · PIN set' : ''}${a.account?.license ? ' · Pro key entered' : ''}`);
+  add('Calendars', (a.calendars?.list || []).filter((c) => c.url).map((c) => c.name).join(', ') || 'none');
+  add('Teams', (a.sports?.teams || []).map((t) => t.name).join(', ') || 'none');
+  add('Headlines', `${(a.news?.picks || []).length + (a.news?.custom || []).filter((c) => c.url).length} source(s)`);
+  add('Reminders', (a.reminders?.list || []).filter((r) => r.title).map((r) => r.title).join(', ') || 'none');
   add('Home Assistant', W.ha ? W.ha.message : a.homeassistant?.uses === 'yes' ? 'not connected' : 'not used');
-  add('Added to Home Assistant', W.added.length ? W.added.map((x) => x.title).join(', ') : 'nothing new');
+  if (W.added.length) add('Added to Home Assistant', W.added.map((x) => x.title).join(', '));
   add('Cameras', a.cameras?.has === 'yes' ? labelsOf('cameras', a.cameras.kinds) : 'none');
   add('Lights, locks, climate', a.controls?.has === 'yes' ? labelsOf('controls', a.controls.kinds) : 'none');
   add('Sensors', a.sensors?.has === 'yes' ? labelsOf('sensors', a.sensors.kinds) : 'none');
   add('Network', `${W.steps.find((s) => s.id === 'network')?.question.options.find(([v]) => v === a.network?.kind)?.[1] || '-'}${a.network?.dns && a.network.dns !== 'none' ? ` · ${a.network.dns}` : ''}`);
-  add('Energy', a.energy?.track === 'yes' ? `${a.energy.utility === 'other' ? `${a.energy.rate || '?'} per kWh` : a.energy.utility || '-'}${a.energy.budget ? ` · budget ${a.energy.budget}/month` : ''}${a.energy.kinds?.length ? ` · ${labelsOf('energy', a.energy.kinds)}` : ''}` : 'off');
-  add('Servers', a.servers?.has === 'yes' ? `${W.steps.find((s) => s.id === 'servers').branches.yes.fields[0].options.find(([v]) => v === a.servers.kind)?.[1] || a.servers.kind} at ${a.servers.address}` : 'none');
+  add('Energy', a.energy?.track === 'yes' ? `${a.energy.utility === 'other' || !a.energy.utility ? `${a.energy.rate || '?'} per kWh` : a.energy.utility}${a.energy.budget ? ` · budget ${a.energy.budget}/month` : ''}${a.energy.kinds?.length ? ` · ${labelsOf('energy', a.energy.kinds)}` : ''}` : 'off');
   return [el('h1', {}, 'All set?'), el('p', { class: 'intro' }, 'Check this over. Finish saves it and opens your dashboard; you can change anything later in Settings.'), dl, el('div', { id: 'finishMsg' })];
 }
 
@@ -272,12 +397,19 @@ function problems(step) {
   if (step.question && !store[step.question.id]) return 'Pick an answer to continue.';
   const br = step.question ? step.branches?.[store[step.question.id]] : null;
   const sub = br ? branchStore(step, store) : store;
-  for (const [list, src] of [[step.fields, store], [br?.fields, sub]]) for (const f of (list || []).filter((g) => visible(g, src) && g.required)) {
+  for (const [list, src] of [[step.fields, store], [br?.fields, sub]]) for (const f of (list || []).filter((g) => visible(g, src) && g.required && !(W.rerun && step.id === 'account' && g.id === 'password') && !(W.rerun && W.ha && step.id === 'homeassistant' && g.id === 'token'))) {
     const v = src[f.id];
     if (v == null || v === '') return `${f.label} is needed.`;
     if (f.minLength && String(v).length < f.minLength) return `${f.label}: at least ${f.minLength} characters.`;
   }
   if (step.id === 'account' && store.pin && !/^\d{4,8}$/.test(store.pin)) return 'The PIN is 4 to 8 digits.';
+  if (step.id === 'calendars' && (store.list || []).some((c) => !c.url)) return 'Paste a link for each calendar, or remove the empty one.';
+  if (step.id === 'reminders' && (store.list || []).some((r) => !r.title)) return 'Give each reminder a name, or remove the empty one.';
+  if (br?.pick) for (const o of shownOptions(br.pick.options)) if ((store[br.pick.id] || []).includes(o.id) && o.method === 'direct') {
+    const d = store[o.id] || {};
+    for (const f of (o.fields || []).filter((g) => g.required)) if (!d[f.id]) return `${o.label}: ${f.label} is needed.`;
+    if (o.id === 'frigate' && !d._test?.ok) return 'Press "Test connection" for Frigate so HouseOS can find your cameras.';
+  }
   if (step.id === 'homeassistant' && store.uses === 'yes' && !W.ha) return 'Press "Test connection" so we know Home Assistant is reachable.';
   if (step.id === 'energy' && store.track === 'yes' && !store.utility) return 'Find your power company, or choose "Mine isn\'t listed".';
   return null;
@@ -306,6 +438,7 @@ $('#next').onclick = async () => {
   const st = await api('/api/setup/state');
   if (!st.open) { $('#page').replaceChildren(el('h1', {}, 'HouseOS is already set up'), el('p', {}, el('a', { href: '/' }, 'Open the dashboard'))); document.querySelector('footer').hidden = true; return; }
   W.cat = await api('/api/setup/catalog');
+  if (st.configured && !st.demo) { const cur = await api('/api/setup/current').catch(() => null); if (cur?.answers) { W.rerun = true; W.a = cur.answers; W.keeps = cur.keeps || {}; if (cur.ha) { W.ha = cur.ha; W.haDomains = cur.ha.domains || []; W.a.homeassistant._test = cur.ha; } } }
   W.steps = W.cat.steps;
   go();
 })();

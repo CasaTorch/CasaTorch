@@ -2,7 +2,7 @@
 //   node tools/mock-ha.mjs 18123 &  ;  (cd app && HOUSEOS_DATA_DIR=/tmp/hos PORT=18091 node server.js) &
 //   npx -y playwright@1.56.1 install chromium  ;  node tools/test-setup-wizard.cjs
 
-const { chromium } = require('playwright');
+const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined }).catch(() => chromium.launch());
   const p = await b.newPage({ viewport: { width: 900, height: 1000 } });
@@ -16,6 +16,7 @@ const { chromium } = require('playwright');
   await p.getByLabel('Password (8+ characters)').fill('short'); await next();
   console.log('short pw msg:', await p.locator('#navmsg').textContent());
   await p.getByLabel('Password (8+ characters)').fill('longenough1'); await p.getByLabel(/PIN/).fill('1234'); await next();
+  for (let k = 0; k < 4; k++) await next();        // calendars, teams, headlines, reminders: skip
   await btn('Yes').click(); await next(); console.log('no-test msg:', await p.locator('#navmsg').textContent());
   await p.getByLabel('Home Assistant address').fill('http://localhost:18123'); await p.getByLabel('Long-lived access token').fill('test-token');
   await btn('Test connection').click(); await p.waitForSelector('.ok'); console.log('HA:', await p.locator('.ok').first().textContent()); await shot('03-ha'); await next();
@@ -38,10 +39,9 @@ const { chromium } = require('playwright');
   await p.waitForSelector('text=Verification code'); await shot('08-code'); await p.getByLabel(/Verification code/).fill('123456'); await btn('Connect').click();
   await p.waitForSelector('text=connected through Home Assistant'); console.log('utility:', await p.locator('.card .ok').first().textContent());
   await p.getByLabel(/budget/).fill('150'); await shot('09-energy'); await next();
-  await btn('Yes').click(); await p.getByLabel('Its address').fill('192.168.1.10'); await btn('Get the install command').click(); await p.waitForSelector('pre'); await shot('10-servers'); await next();
   await shot('11-alerts'); await next();
   await p.waitForSelector('dl.review'); await shot('12-review'); console.log('review:', (await p.locator('dl.review').innerText()).replace(/\n/g, ' / '));
-  await next(); await p.waitForURL('http://localhost:18091/'); await p.waitForTimeout(500); console.log('landed on:', p.url(), await p.locator('h1').textContent());
+  await next(); await p.waitForURL(/login/); console.log('landed on:', p.url());
   console.log('errors:', errs.length ? errs : 'none');
   await b.close();
 })().catch((e) => { console.error('FAIL', e.message); process.exit(1); });

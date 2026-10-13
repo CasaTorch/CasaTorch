@@ -1,12 +1,17 @@
-# HouseOS - minimal install. Starts in demo mode until /data/config.json exists.
+# HouseOS with Docker Compose.
+#   docker compose up -d        then open http://<this machine>:8090 and follow the setup screens.
+# Settings live in ./data (owner-only files). Back that folder up.
 services:
   houseos:
-    build:
-      context: ..
-      dockerfile: app/Dockerfile
+    image: ghcr.io/houseos/houseos:latest    # or build it yourself: comment this line, uncomment "build"
+    # build: { context: .., dockerfile: app/Dockerfile }
     container_name: houseos
     restart: unless-stopped
-    ports:
-      - "8090:8090"
+    # Linux hosts: "host" networking lets HouseOS see your whole network (device count, Hue/Shelly on the LAN).
+    # Docker Desktop (Mac/Windows): remove network_mode and use the ports mapping below instead.
+    network_mode: host
+    # ports: ["8090:8090"]
+    environment:
+      - TZ=America/New_York   # your time zone
     volumes:
       - ./data:/data

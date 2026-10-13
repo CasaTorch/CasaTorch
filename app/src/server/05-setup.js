@@ -12,15 +12,15 @@
  *                power companies Opower supports), and passes the answers back.
  *                Passwords typed into these go to Home Assistant only; HouseOS
  *                never writes them anywhere.
- *   agent        a token + install command for each server HouseOS watches.
  *   finish       writes data/config.json (owner-only) and closes the wizard.
  *
  * Open only while HouseOS is not set up (or HOUSEOS_SETUP=1). Once finished,
  * every /api/setup route answers 403.
  * ====================================================================== */
 const SETUP_CATALOG = path.join(APP_DIR, 'catalog', 'setup.json');
-const setupOpen = () => !isConfigured() || isDemo() || process.env.HOUSEOS_SETUP === '1';
-const draft = { ha: null, agents: {} };   // what the wizard has proven so far (memory only)
+let setupReopened = false;   // Settings > Run setup again (09-settings.js)
+const setupOpen = () => !isConfigured() || isDemo() || setupReopened || process.env.HOUSEOS_SETUP === '1';
+const draft = { ha: null, hue: null, ring: null };   // what the wizard has proven so far (memory only)
 
 app.use('/api/setup', express.json({ limit: '64kb' }), (req, res, next) => {
   if (req.path === '/state') return next();
@@ -76,7 +76,7 @@ const TESTS = {
     if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
     const stats = await getJson(`${url}/api/stats`).catch(() => null);
     const cams = stats?.cameras ? Object.keys(stats.cameras) : [];
-    return { ok: true, message: `Frigate ${(await r.text()).trim()}${cams.length ? ` with ${cams.length} camera${cams.length === 1 ? '' : 's'}: ${cams.join(', ')}` : ''}` };
+    return { ok: true, cameras: cams, message: `Frigate ${(await r.text()).trim()}${cams.length ? ` with ${cams.length} camera${cams.length === 1 ? '' : 's'}: ${cams.join(', ')}` : ''}` };
   },
   /* Meraki: the key, then which network - the answer feeds a follow-up question. */
   async meraki({ apiKey }) {
@@ -160,41 +160,92 @@ app.get('/api/setup/ha/domains', async (_req, res) => {
   catch (err) { flowErr(res, err); }
 });
 
-/* ---- the server agent: a token per server, and the command that installs it ---- */
-app.post('/api/setup/agent', (req, res) => {
-  const address = String(req.body?.address || '').trim();
-  if (!/^[\w.-]{1,253}$/.test(address)) return res.status(400).json({ error: 'enter the server\'s IP address or name' });
-  const token = draft.agents[address] ||= crypto.randomBytes(24).toString('base64url');
-  res.json({ token, command: `docker run -d --name houseos-agent --restart unless-stopped --network host --pid host -v /var/run/docker.sock:/var/run/docker.sock:ro -v /:/host:ro -e HOUSEOS_MODE=agent -e HOUSEOS_AGENT_TOKEN=${token} ghcr.io/houseos/houseos:latest` });
-});
-
 /* ---- finish ---- */
 /* Answers as saved: the wizard's own bookkeeping (keys starting with _) is dropped. */
 const strip = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? Object.fromEntries(Object.entries(o).filter(([k]) => !k.startsWith('_')).map(([k, v]) => [k, strip(v)])) : o);
 const hashSecret = (s) => { const salt = crypto.randomBytes(16); return `scrypt$${salt.toString('hex')}$${crypto.scryptSync(String(s), salt, 32).toString('hex')}`; };
+/* Run again from Settings: the wizard starts from what is saved (never passwords or keys). */
+const DIRECT_KINDS = new Set(['frigate', 'reolink-local', 'snapshot', 'ring-labs', 'hue-local', 'shelly-local', 'yolink-cloud', 'meraki-mv', 'meraki-mt']);
+const haKinds = (k) => (Array.isArray(k) ? k.filter((x) => !DIRECT_KINDS.has(x)) : []);
+app.get('/api/setup/current', async (_req, res) => {
+  if (!isConfigured() || isDemo()) return res.json({ answers: null });
+  const c = config;
+  let ha = null;
+  if (c.homeAssistant?.url) {   // already connected: carry it into this run without asking for the token again
+    draft.ha = { ...c.homeAssistant };
+    const entries = await haCall('/api/config/config_entries/entry').catch(() => null);
+    ha = { ok: true, message: entries ? `Connected to Home Assistant at ${c.homeAssistant.url}` : `Saved: ${c.homeAssistant.url} (not answering right now)`, domains: [...new Set((entries || []).map((e) => e.domain))] };
+  }
+  const NEWS_IDS = new Set(NEWS_DEFAULTS.map((f) => f.url));
+  res.json({ rerun: true, ha, answers: {
+    house: { ...(c.house || {}), location: c.location || null },
+    homeassistant: c.homeAssistant?.url ? { uses: 'yes', url: c.homeAssistant.url } : { uses: 'no' },
+    account: { username: c.signIn?.username || 'admin' },
+    calendars: { list: (c.calendars || []).map(({ name, url, color }) => ({ name, url, color })) },
+    sports: { teams: c.sports?.teams || [] },
+    news: { picks: NEWS_DEFAULTS.filter((f) => (c.news?.feeds || []).some((x) => x.url === f.url)).map((f) => f.id), custom: (c.news?.feeds || []).filter((x) => !NEWS_IDS.has(x.url)) },
+    reminders: { list: c.reminders || [] },
+    // gear: Home Assistant picks come back ticked; direct gear is kept as is unless set up again here
+    cameras: c.cameraPrefs || (c.cameras || []).length ? { has: 'yes', kinds: haKinds(c.cameraPrefs?.kinds), detect: c.cameraPrefs?.detection === false ? 'no' : 'yes' } : { has: 'no' },
+    controls: c.controls || c.hue || (c.shelly || []).length ? { has: 'yes', kinds: haKinds(c.controls?.kinds), locksNeedPin: c.controls?.locksNeedPin === false ? 'no' : 'yes' } : { has: 'no' },
+    sensors: c.sensors?.kinds || c.yolink ? { has: 'yes', kinds: haKinds(c.sensors?.kinds), alertOn: c.sensors?.alertOn || ['leak', 'smoke', 'battery'] } : { has: 'no' },
+    network: { kind: c.network?.provider || undefined, speedtest: c.network?.speedtest === false ? 'no' : 'yes' },
+    energy: c.energy ? { track: 'yes', utility: c.energy.utility || 'other', rate: c.energy.ratePerKwh ?? '', budget: c.energy.budget ?? '' } : {},
+    alerts: { quiet: c.alerts?.quietHours || '22-7' },
+  }, keeps: { homeAssistant: !!c.homeAssistant, hue: !!c.hue, shelly: (c.shelly || []).length, yolink: !!c.yolink, cameras: (c.cameras || []).length, ring: !!c.ring, license: !!c.license } });
+});
 app.post('/api/setup/finish', (req, res) => {
   const raw = req.body?.answers || {};
   const a = strip(raw);
+  const prev = isDemo() ? {} : config;   // run again: anything not answered now is kept
   const acct = a.account || {};
-  if (!acct.username || String(acct.password || '').length < 8) return res.status(400).json({ error: 'a username and a password of 8+ characters are needed' });
+  const keepPw = !acct.password && prev.signIn?.password;
+  if (!acct.username || (!keepPw && String(acct.password || '').length < 8)) return res.status(400).json({ error: 'a username and a password of 8+ characters are needed' });
   if (acct.pin && !/^\d{4,8}$/.test(String(acct.pin))) return res.status(400).json({ error: 'the PIN is 4 to 8 digits' });
-  const pickId = (step) => (Array.isArray(step?.kinds) ? step.kinds : []);
+  if (acct.license && !checkLicenseKey(acct.license).valid) return res.status(400).json({ error: `license key: ${checkLicenseKey(acct.license).why}` });
+  const picked = (step) => (a[step]?.has === 'yes' || a[step]?.track === 'yes' ? (Array.isArray(a[step].kinds) ? a[step].kinds : []) : []);
+  const opt = (step, id) => (picked(step).includes(id) ? a[step][id] || {} : null);
+  // devices that work without Home Assistant
+  const cams = [];
+  const fr = opt('cameras', 'frigate');
+  if (fr?.url) for (const cam of (Array.isArray(raw.cameras?.frigate?._test?.cameras) ? raw.cameras.frigate._test.cameras : [])) cams.push({ id: `frigate-${cam}`, name: cam.replace(/[_-]+/g, ' ').replace(/^\w/, (x) => x.toUpperCase()), type: 'frigate', url: String(fr.url).replace(/\/+$/, ''), camera: cam });
+  const rl = opt('cameras', 'reolink-local');
+  if (rl?.host) cams.push({ id: 'reolink-1', name: rl.name || 'Reolink camera', type: 'reolink', host: String(rl.host).trim(), username: rl.username || 'admin', password: rl.password || '', channel: Number(rl.channel) || 0 });
+  const sn = opt('cameras', 'snapshot');
+  if (sn?.snapshotUrl) cams.push({ id: 'camera-1', name: sn.name || 'Camera', type: 'snapshot', snapshotUrl: sn.snapshotUrl, username: sn.username || null, password: sn.password || null });
+  const shellyHosts = [...new Set(['controls', 'sensors', 'energy'].flatMap((st) => String(opt(st, 'shelly-local')?.hosts || '').split(/[\s,]+/)).filter(Boolean))];
+  const yl = opt('controls', 'yolink-cloud')?.uaid ? opt('controls', 'yolink-cloud') : opt('sensors', 'yolink-cloud');
+  const feeds = [...NEWS_DEFAULTS.filter((f) => (a.news?.picks || []).includes(f.id)).map(({ name, url }) => ({ name, url })), ...(a.news?.custom || []).filter((f) => f?.url).map((f) => ({ name: f.name || f.url, url: f.url }))];
+  const usesHa = a.homeassistant?.uses === 'yes';
   const next = {
-    version: 1, setupAt: nowIso(), port: PORT,
+    ...prev, version: 2, demo: undefined, setupAt: prev.setupAt || nowIso(), port: PORT,
     house: { name: a.house?.name || 'My House', timezone: a.house?.timezone || 'UTC', units: a.house?.units || 'F', currency: a.house?.currency || 'USD' },
-    signIn: { enabled: true, username: String(acct.username), password: hashSecret(acct.password), pin: acct.pin ? hashSecret(acct.pin) : null },
-    homeAssistant: draft.ha && a.homeassistant?.uses === 'yes' ? { url: draft.ha.url, token: draft.ha.token } : null,
-    cameras: a.cameras?.has === 'yes' ? { kinds: pickId(a.cameras), frigate: a.cameras.frigate || null, detection: a.cameras.detect !== 'no' } : null,
-    controls: a.controls?.has === 'yes' ? { kinds: pickId(a.controls), locksNeedPin: a.controls.locksNeedPin !== 'no' } : null,
-    sensors: a.sensors?.has === 'yes' ? { kinds: pickId(a.sensors), alertOn: a.sensors.alertOn || [] } : null,
+    location: a.house?.location?.lat != null ? { name: a.house.location.name || null, lat: Number(a.house.location.lat), lon: Number(a.house.location.lon) } : prev.location || null,
+    signIn: { enabled: true, username: String(acct.username), password: keepPw ? prev.signIn.password : hashSecret(acct.password), pin: acct.pin ? hashSecret(acct.pin) : prev.signIn?.pin || null },
+    license: acct.license || prev.license || undefined,
+    calendars: (a.calendars?.list || []).filter((c) => c?.url).map((c) => ({ name: c.name || 'Calendar', url: String(c.url).trim(), color: c.color || '#60a5fa' })),
+    sports: { teams: (a.sports?.teams || []).slice(0, 30) },
+    news: { feeds },
+    reminders: (a.reminders?.list || []).filter((r) => r?.title).map((r) => ({ title: r.title, days: Array.isArray(r.days) ? r.days.map(Number) : null, time: r.time || null })),
+    homeAssistant: draft.ha && usesHa ? { url: draft.ha.url, token: draft.ha.token } : usesHa ? prev.homeAssistant || null : null,
+    cameras: cams.length ? cams : prev.cameras || [],
+    cameraPrefs: a.cameras?.has === 'yes' ? { kinds: picked('cameras'), detection: a.cameras.detect !== 'no' } : null,
+    hue: draft.hue || prev.hue || null,
+    shelly: shellyHosts.length ? shellyHosts.map((host) => ({ host })) : prev.shelly || [],
+    yolink: yl?.uaid ? { uaid: String(yl.uaid).trim(), secret: String(yl.secret || '').trim() } : prev.yolink || null,
+    ring: draft.ring || prev.ring || undefined,
+    controls: a.controls?.has === 'yes' ? { kinds: picked('controls'), locksNeedPin: a.controls.locksNeedPin !== 'no' } : null,
+    sensors: a.sensors?.has === 'yes' ? { kinds: picked('sensors'), alertOn: a.sensors.alertOn || [] } : { alertOn: ['leak', 'smoke', 'battery'] },
     network: { provider: a.network?.kind || 'other', meraki: a.network?.meraki || a.cameras?.['meraki-mv'] || a.sensors?.['meraki-mt'] || null, unifi: a.network?.unifi || null,
       dns: a.network?.dns && a.network.dns !== 'none' ? { kind: a.network.dns, url: a.network.dnsUrl || null, key: a.network.dnsKey || null } : null, speedtest: a.network?.speedtest !== 'no' },
-    energy: a.energy?.track === 'yes' ? { utility: a.energy.utility || null, ratePerKwh: Number(a.energy.rate) || null, budget: Number(a.energy.budget) || null, kinds: pickId(a.energy) } : null,
-    servers: a.servers?.has === 'yes' ? [{ kind: a.servers.kind || 'linux', address: a.servers.address, agentToken: draft.agents[a.servers.address] || null }] : [],
-    alerts: { phone: a.alerts?.phone === 'ha' ? 'homeassistant' : null, quietHours: a.alerts?.quiet || '22-7' },
-    addedToHomeAssistant: Array.isArray(raw._added) ? raw._added.slice(0, 50).map((x) => ({ domain: String(x.domain), title: String(x.title) })) : [],
+    energy: a.energy?.track === 'yes' ? { utility: a.energy.utility && a.energy.utility !== 'other' ? a.energy.utility : null, ratePerKwh: Number(a.energy.rate) || null, budget: Number(a.energy.budget) || null, kinds: picked('energy') } : null,
+    alerts: { phone: a.alerts?.phone === 'ha' && usesHa ? 'homeassistant' : null, quietHours: a.alerts?.quiet || '22-7' },
+    addedToHomeAssistant: [...(prev.addedToHomeAssistant || []), ...(Array.isArray(raw._added) ? raw._added.slice(0, 50).map((x) => ({ domain: String(x.domain), title: String(x.title) })) : [])],
   };
+  for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
   try { saveConfig(next); } catch (err) { return res.status(500).json({ error: `could not save the settings: ${err.message}` }); }
+  setupReopened = false; draft.ring = null; draft.hue = null;
+  if (next.ring && typeof ringConnect === 'function' && proStatus().pro) ringConnect();
   console.log(`  setup: done for "${next.house.name}"`);
   res.json({ ok: true });
 });

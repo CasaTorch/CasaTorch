@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/favicon.svg">
+  <title>HouseOS - 3D Home</title>
+  <link rel="stylesheet" href="floorplan.css">
+  <script type="importmap">{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }</script>
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="/">HouseOS</a>
+    <div class="totals" id="totals"></div>
+    <span class="spacer"></span>
+    <div class="floors" id="floors"></div>
+    <button type="button" id="editBtn">Place devices</button>
+    <button type="button" id="setupBtn">Floors</button>
+    <button type="button" id="guideBtn">How to scan</button>
+  </header>
+  <div class="stage"><div id="view"></div><aside id="side" hidden></aside></div>
+  <div id="modal" hidden></div>
+  <script type="module" src="floorplan.js"></script>
+</body>
+</html>

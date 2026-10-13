@@ -1,13 +1,25 @@
 {
-  "demo": true,
-  "items": [
+  "now": [
     {
-      "title": "Backup drive is 91% full",
-      "detail": "warning \u00b7 Servers \u00b7 since Tue 2:45 AM"
+      "id": "battery:yolink",
+      "severity": "notice",
+      "title": "Low battery (12%): Garage motion sensor",
+      "source": "yolink",
+      "since": "2026-10-12T08:00:00.000Z"
+    }
+  ],
+  "recent": [
+    {
+      "at": "2026-10-13T16:58:00.000Z",
+      "severity": "notice",
+      "title": "Someone at the front door",
+      "source": "ring"
     },
     {
-      "title": "Garage motion sensor battery 12%",
-      "detail": "notice \u00b7 Sensors"
+      "at": "2026-10-13T07:12:00.000Z",
+      "severity": "ok",
+      "title": "Cleared: The internet is down",
+      "source": "internet"
     }
   ]
 }

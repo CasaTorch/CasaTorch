@@ -1,6 +1,6 @@
 {
   "name": "houseos",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "HouseOS: a self-hosted wall-panel dashboard for your house and your homelab",
@@ -12,8 +12,12 @@
     "demo": "node build.mjs && HOUSEOS_DEMO=1 node server.js",
     "scrub": "node ../tools/scrub-check.mjs ."
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "ring-client-api": "^14.3.0",
+    "three": "^0.169.0"
   }
 }

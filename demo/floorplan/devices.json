@@ -1,0 +1,115 @@
+[
+  {
+    "id": "hue:1",
+    "provider": "hue",
+    "kind": "light",
+    "name": "Living room",
+    "on": true,
+    "brightness": 80,
+    "online": true
+  },
+  {
+    "id": "hue:2",
+    "provider": "hue",
+    "kind": "light",
+    "name": "Kitchen",
+    "on": false,
+    "online": true
+  },
+  {
+    "id": "hue:3",
+    "provider": "hue",
+    "kind": "light",
+    "name": "Bedroom 1",
+    "on": true,
+    "brightness": 30,
+    "online": true
+  },
+  {
+    "id": "ha:media_player.living_room",
+    "provider": "ha",
+    "kind": "media",
+    "name": "Living room speaker",
+    "on": true,
+    "playing": true,
+    "title": "Fleetwood Mac - Dreams",
+    "online": true
+  },
+  {
+    "id": "ha:media_player.bedroom",
+    "provider": "ha",
+    "kind": "media",
+    "name": "Bedroom TV",
+    "on": false,
+    "playing": false,
+    "online": true
+  },
+  {
+    "id": "shelly:fridge",
+    "provider": "shelly",
+    "kind": "plug",
+    "name": "Fridge",
+    "on": true,
+    "powerW": 96,
+    "online": true
+  },
+  {
+    "id": "shelly:office",
+    "provider": "shelly",
+    "kind": "plug",
+    "name": "Office desk",
+    "on": true,
+    "powerW": 142,
+    "online": true
+  },
+  {
+    "id": "ha:binary_sensor.front_door",
+    "provider": "ha",
+    "kind": "sensor",
+    "name": "Front door",
+    "open": false,
+    "online": true
+  },
+  {
+    "id": "camera:porch",
+    "provider": "camera",
+    "kind": "camera",
+    "name": "Porch",
+    "online": true
+  },
+  {
+    "id": "yolink:leak1",
+    "provider": "yolink",
+    "kind": "sensor",
+    "name": "Laundry leak sensor",
+    "water": false,
+    "battery": 80,
+    "online": true
+  },
+  {
+    "id": "ha:climate.thermostat",
+    "provider": "ha",
+    "kind": "climate",
+    "name": "Thermostat",
+    "mode": "heat",
+    "tempC": 20.5,
+    "online": true,
+    "targetC": 21
+  },
+  {
+    "id": "camera:driveway",
+    "provider": "camera",
+    "kind": "camera",
+    "name": "Driveway",
+    "source": "frigate",
+    "online": true
+  },
+  {
+    "id": "camera:backyard",
+    "provider": "camera",
+    "kind": "camera",
+    "name": "Backyard",
+    "source": "reolink",
+    "online": true
+  }
+]
