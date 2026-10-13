@@ -1,0 +1,19 @@
+{
+  "name": "houseos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HouseOS: a self-hosted wall-panel dashboard for your house and your homelab",
+  "license": "AGPL-3.0-only",
+  "main": "server.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node build.mjs && node server.js",
+    "demo": "node build.mjs && HOUSEOS_DEMO=1 node server.js",
+    "scrub": "node ../tools/scrub-check.mjs ."
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

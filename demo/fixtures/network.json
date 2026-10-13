@@ -1,0 +1,13 @@
+{
+  "demo": true,
+  "items": [
+    {
+      "title": "Internet",
+      "detail": "up \u00b7 940 / 38 Mbps \u00b7 9 ms"
+    },
+    {
+      "title": "42 devices online",
+      "detail": "2 new today"
+    }
+  ]
+}

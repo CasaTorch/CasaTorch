@@ -1,0 +1,13 @@
+{
+  "demo": true,
+  "items": [
+    {
+      "title": "Basement leak sensor",
+      "detail": "dry"
+    },
+    {
+      "title": "Office",
+      "detail": "71\u00b0F \u00b7 44% humidity"
+    }
+  ]
+}

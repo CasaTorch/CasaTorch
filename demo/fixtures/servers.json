@@ -1,0 +1,17 @@
+{
+  "demo": true,
+  "items": [
+    {
+      "title": "NAS",
+      "detail": "RAID 5 healthy \u00b7 27 TB \u00b7 4 drives"
+    },
+    {
+      "title": "21 apps running",
+      "detail": "all healthy"
+    },
+    {
+      "title": "UPS",
+      "detail": "on mains \u00b7 180 W \u00b7 31 min runtime"
+    }
+  ]
+}
