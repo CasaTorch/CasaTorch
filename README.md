@@ -16,7 +16,7 @@ Nothing leaves your house unless you turn on a feature that needs to.
 ## Try it in two minutes (demo house, no setup)
 
 ```bash
-git clone https://github.com/houseos/houseos && cd houseos/app
+git clone https://github.com/gethouseos/houseos && cd houseos/app
 npm install
 npm run demo          # open http://localhost:8090
 ```

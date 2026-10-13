@@ -3,7 +3,7 @@
  * and Nominatim require a real one), timeouts, a small time-to-live cache,
  * and a tolerant XML reader for RSS/Atom.
  * ====================================================================== */
-const UA = `HouseOS/0.2 (+https://github.com/houseos/houseos)`;
+const UA = `HouseOS/0.2 (+https://github.com/gethouseos/houseos)`;
 async function getText(url, { headers = {}, timeout = 12000, method = 'GET', body } = {}) {
   const r = await fetch(url, { method, body, headers: { 'User-Agent': UA, ...headers }, signal: AbortSignal.timeout(timeout) });
   const t = await r.text();

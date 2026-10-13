@@ -1,12 +1,12 @@
 # HouseOS installer for Windows 10/11. Run in PowerShell as Administrator:
 #
-#   irm https://houseos.dev/install.ps1 | iex          # or, from a download:  .\deploy\install.ps1
+#   irm https://gethouseos.com/install.ps1 | iex          # or, from a download:  .\deploy\install.ps1
 #
 # Installs Node.js LTS (winget) if needed, puts HouseOS in C:\ProgramData\HouseOS,
 # starts it at boot (a scheduled task, even before anyone signs in), and opens
 # port 8090 on private networks. Run it again to update; settings are kept.
 $ErrorActionPreference = 'Stop'
-$Repo   = if ($env:HOUSEOS_REPO) { $env:HOUSEOS_REPO } else { 'https://github.com/houseos/houseos' }
+$Repo   = if ($env:HOUSEOS_REPO) { $env:HOUSEOS_REPO } else { 'https://github.com/gethouseos/houseos' }
 $Branch = if ($env:HOUSEOS_BRANCH) { $env:HOUSEOS_BRANCH } else { 'main' }
 $Port   = if ($env:HOUSEOS_PORT) { $env:HOUSEOS_PORT } else { '8090' }
 $Root   = Join-Path $env:ProgramData 'HouseOS'

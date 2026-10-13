@@ -12,7 +12,7 @@ tab({ id: 'settings', label: 'Settings', async render(main) {
   const key = el('textarea', { rows: 3, placeholder: 'Paste your HouseOS license key', spellcheck: 'false', autocomplete: 'off' });
   const save = el('button', { class: 'primary' }, 'Save key');
   save.onclick = async () => { try { await post('/api/license', { key: key.value }); toast('Pro is on. Thank you!'); await loadStatus(); show('settings'); } catch (err) { toast(err.message, 4000); } };
-  const pro = el('div', { class: 'card span2' }, el('h2', {}, 'HouseOS Pro'), el('div', { class: 'row between wrap' }, el('b', {}, status), el('a', { href: 'https://houseos.dev/pro', target: '_blank', rel: 'noopener' }, 'Plans: $5/mo, $49/yr or $129 once')),
+  const pro = el('div', { class: 'card span2' }, el('h2', {}, 'HouseOS Pro'), el('div', { class: 'row between wrap' }, el('b', {}, status), el('a', { href: 'https://gethouseos.com/pro', target: '_blank', rel: 'noopener' }, 'Plans: $5/mo, $49/yr or $129 once')),
     el('div', { class: 'grid', style: 'margin:10px 0;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:4px 14px' }, PRO_FEATURES.map(([t, d, now]) => el('div', { class: 'feature' }, el('b', {}, t), now ? null : el('span', { class: 'pill', style: 'margin-left:6px' }, 'coming'), d ? el('div', { class: 'small muted' }, d) : null))),
     el('label', { class: 'field' }, el('span', {}, 'License key'), key), save);
 
@@ -36,7 +36,7 @@ tab({ id: 'settings', label: 'Settings', async render(main) {
     el('p', { class: 'small muted' }, 'Change devices, calendars, teams and news by running setup again. Your existing settings are kept.'),
     s.demo ? null : el('label', { class: 'field' }, el('span', {}, 'Password (to run setup again)'), pw),
     el('div', { class: 'row wrap' }, rerun, s.signIn ? out : null),
-    el('p', { class: 'small muted' }, `HouseOS ${s.version} \u00B7 open-source core (AGPL-3.0) \u00B7 `, el('a', { href: 'https://houseos.dev', target: '_blank', rel: 'noopener' }, 'houseos.dev')));
+    el('p', { class: 'small muted' }, `HouseOS ${s.version} \u00B7 open-source core (AGPL-3.0) \u00B7 `, el('a', { href: 'https://gethouseos.com', target: '_blank', rel: 'noopener' }, 'gethouseos.com')));
   main.replaceChildren(el('h1', {}, 'Settings'), el('div', { class: 'grid' }, pro, everyday, conn, acct));
   return null;
 } });
