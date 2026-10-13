@@ -1,17 +1,298 @@
 {
-  "demo": true,
-  "items": [
-    {
-      "title": "Good evening - 68\u00b0F, clear",
-      "detail": "Trash night: bins out by 9 PM"
+  "house": "Demo House",
+  "timezone": "America/Los_Angeles",
+  "units": "F",
+  "weather": {
+    "place": "Springfield",
+    "units": "F",
+    "now": {
+      "temp": 68,
+      "symbol": "partlycloudy_day",
+      "words": "Partly cloudy",
+      "wind": 7,
+      "humidity": 54
     },
-    {
-      "title": "Front door locked",
-      "detail": "since 6:12 PM"
+    "hours": [
+      {
+        "at": "2026-10-13T17:00:00.000Z",
+        "temp": 68,
+        "symbol": "partlycloudy_day",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-13T18:00:00.000Z",
+        "temp": 67,
+        "symbol": "partlycloudy_day",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-13T19:00:00.000Z",
+        "temp": 66,
+        "symbol": "partlycloudy_day",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-13T20:00:00.000Z",
+        "temp": 65,
+        "symbol": "clearsky_night",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-13T21:00:00.000Z",
+        "temp": 64,
+        "symbol": "clearsky_night",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-13T22:00:00.000Z",
+        "temp": 63,
+        "symbol": "clearsky_night",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-13T23:00:00.000Z",
+        "temp": 62,
+        "symbol": "clearsky_night",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-14T00:00:00.000Z",
+        "temp": 61,
+        "symbol": "clearsky_night",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-14T01:00:00.000Z",
+        "temp": 60,
+        "symbol": "clearsky_night",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-14T02:00:00.000Z",
+        "temp": 59,
+        "symbol": "clearsky_night",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-14T03:00:00.000Z",
+        "temp": 58,
+        "symbol": "clearsky_night",
+        "rainMm": 0
+      },
+      {
+        "at": "2026-10-14T04:00:00.000Z",
+        "temp": 57,
+        "symbol": "clearsky_night",
+        "rainMm": 0
+      }
+    ],
+    "days": [
+      {
+        "date": "2026-10-13",
+        "hi": 72,
+        "lo": 54,
+        "rainMm": 0,
+        "symbol": "partlycloudy_day",
+        "words": "Partly cloudy"
+      },
+      {
+        "date": "2026-10-14",
+        "hi": 71,
+        "lo": 55,
+        "rainMm": 0,
+        "symbol": "clearsky_day",
+        "words": "Clear"
+      },
+      {
+        "date": "2026-10-15",
+        "hi": 70,
+        "lo": 54,
+        "rainMm": 2.4,
+        "symbol": "rain",
+        "words": "Rain"
+      },
+      {
+        "date": "2026-10-16",
+        "hi": 72,
+        "lo": 55,
+        "rainMm": 0.6,
+        "symbol": "lightrainshowers_day",
+        "words": "Showers"
+      },
+      {
+        "date": "2026-10-17",
+        "hi": 71,
+        "lo": 54,
+        "rainMm": 0,
+        "symbol": "fair_day",
+        "words": "Mostly clear"
+      },
+      {
+        "date": "2026-10-18",
+        "hi": 70,
+        "lo": 55,
+        "rainMm": 0,
+        "symbol": "clearsky_day",
+        "words": "Clear"
+      },
+      {
+        "date": "2026-10-19",
+        "hi": 72,
+        "lo": 54,
+        "rainMm": 0,
+        "symbol": "cloudy",
+        "words": "Cloudy"
+      }
+    ],
+    "credit": "Weather: MET Norway"
+  },
+  "calendar": {
+    "events": [
+      {
+        "title": "Soccer practice",
+        "start": "2026-10-14T01:00:00.000Z",
+        "end": "2026-10-14T02:30:00.000Z",
+        "allDay": false,
+        "calendar": "Kids",
+        "color": "#34d399"
+      },
+      {
+        "title": "Trash night",
+        "start": "2026-10-14T00:00:00.000Z",
+        "end": "2026-10-15T00:00:00.000Z",
+        "allDay": true,
+        "calendar": "House",
+        "color": "#fbbf24"
+      },
+      {
+        "title": "Dentist",
+        "start": "2026-10-15T16:30:00.000Z",
+        "end": "2026-10-15T17:15:00.000Z",
+        "allDay": false,
+        "calendar": "Family",
+        "color": "#60a5fa"
+      },
+      {
+        "title": "Date night",
+        "start": "2026-10-17T02:00:00.000Z",
+        "end": "2026-10-17T05:00:00.000Z",
+        "allDay": false,
+        "calendar": "Family",
+        "color": "#60a5fa"
+      }
+    ],
+    "errors": []
+  },
+  "sports": {
+    "games": [
+      {
+        "id": "1",
+        "league": "nfl",
+        "leagueName": "NFL",
+        "start": "2026-10-13T00:20:00.000Z",
+        "state": "in",
+        "detail": "Q3 4:12",
+        "home": {
+          "name": "49ers",
+          "abbr": "SF",
+          "score": "17"
+        },
+        "away": {
+          "name": "Seahawks",
+          "abbr": "SEA",
+          "score": "10"
+        },
+        "broadcast": "NBC"
+      },
+      {
+        "id": "2",
+        "league": "nba",
+        "leagueName": "NBA",
+        "start": "2026-10-16T02:30:00.000Z",
+        "state": "pre",
+        "detail": "Thu 7:30 PM",
+        "home": {
+          "name": "Warriors",
+          "abbr": "GS",
+          "score": null
+        },
+        "away": {
+          "name": "Lakers",
+          "abbr": "LAL",
+          "score": null
+        },
+        "broadcast": "TNT"
+      },
+      {
+        "id": "3",
+        "league": "mlb",
+        "leagueName": "MLB",
+        "start": "2026-10-12T02:00:00.000Z",
+        "state": "post",
+        "detail": "Final",
+        "home": {
+          "name": "Giants",
+          "abbr": "SF",
+          "score": "5",
+          "winner": true
+        },
+        "away": {
+          "name": "Dodgers",
+          "abbr": "LAD",
+          "score": "3"
+        }
+      }
+    ],
+    "credit": "Scores: ESPN"
+  },
+  "news": {
+    "items": [
+      {
+        "title": "City council approves new bike lanes downtown",
+        "source": "Local News",
+        "at": "2026-10-13T16:40:00.000Z",
+        "link": "https://example.com/1"
+      },
+      {
+        "title": "Storm system expected midweek with heavy rain",
+        "source": "Weather Desk",
+        "at": "2026-10-13T15:10:00.000Z",
+        "link": "https://example.com/2"
+      },
+      {
+        "title": "New phone chips promise twice the battery life",
+        "source": "Tech",
+        "at": "2026-10-13T14:00:00.000Z",
+        "link": "https://example.com/3"
+      }
+    ],
+    "errors": []
+  },
+  "internet": {
+    "online": true,
+    "publicIp": "203.0.113.24",
+    "provider": "Example Fiber",
+    "city": "Springfield, CA",
+    "latencyMs": {
+      "cloudflare": 9,
+      "google": 11,
+      "router": 1
     },
-    {
-      "title": "Everyone is home",
-      "detail": "2 people, 1 car in the driveway"
+    "gateway": "192.168.1.1",
+    "lanDevices": 42,
+    "host": "houseos",
+    "speed": {
+      "at": "2026-10-13T16:00:00.000Z",
+      "downMbps": 938.4,
+      "upMbps": 41.2
     }
-  ]
+  },
+  "reminders": [
+    {
+      "title": "Trash night - bins out by 9 PM",
+      "at": null,
+      "icon": "trash"
+    }
+  ],
+  "note": "Plumber coming Thursday 10-12"
 }

@@ -1,0 +1,7 @@
+.git
+**/node_modules
+data
+app/data
+app/server.js
+app/public/app.js
+tools/private-terms.txt

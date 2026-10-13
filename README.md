@@ -1,87 +1,102 @@
 # HouseOS
 
-**The wall panel for your house and your homelab: one screen, plain-English alerts, and it fixes itself.**
+**One screen for your whole house - with or without Home Assistant.**
 
-HouseOS is a self-hosted dashboard for people who run Home Assistant, a NAS and Docker at home.
-It puts the house (controls, cameras, sensors), the network, the servers and the power bill on one
-screen built for a wall-mounted tablet, and tells you in plain words when something needs you.
+HouseOS is a self-hosted home dashboard built for a wall-mounted tablet (and your phone). Weather,
+family calendars, your teams' scores, headlines, the internet, lights and plugs, cameras, sensors,
+power use - and, with Pro, your house as a live 3D model from an iPhone LiDAR scan.
 
-> **Status: early.** HouseOS is being extracted from a private dashboard that has run one house
-> daily for a year. The tabs are being ported one at a time (see [docs/MODULES.md](docs/MODULES.md)).
-> Today it runs in **demo mode** with sample data.
+It runs on hardware you already have: a Raspberry Pi, a NAS with Docker, an old Windows PC, a mini PC.
+Nothing leaves your house unless you turn on a feature that needs to.
 
-## Try it (demo mode)
+> **Status: 0.2, early.** Everything below marked "now" works today and is tested against sample
+> data and a mock Home Assistant. Some outside services (weather, scores, Ring) still need testing
+> against the real thing on more networks - please open an issue if something doesn't work for you.
+
+## Try it in two minutes (demo house, no setup)
 
 ```bash
-git clone https://github.com/<you>/HouseOS && cd HouseOS/app
+git clone https://github.com/houseos/houseos && cd houseos/app
 npm install
-npm run demo          # → http://localhost:8090
+npm run demo          # open http://localhost:8090
 ```
 
-Or with Docker: `cd deploy && docker compose up -d`.
+## Install it for real
 
-## Setup
+| Runs on | How |
+| --- | --- |
+| Raspberry Pi 4/5, Debian, Ubuntu | `sudo ./deploy/install.sh` - a service that starts at boot |
+| NAS or any Docker host (amd64/arm64) | `cd deploy && docker compose up -d` |
+| Windows 10/11 | `deploy\install.ps1` in PowerShell as Administrator |
+| macOS / anything with Node 20+ | `cd app && npm install && npm start` |
 
-Start HouseOS and open it in a browser: a setup wizard asks what you have and sets it up.
+Then open `http://<that machine>:8090`. Hardware advice and wall-screen picks: [docs/HARDWARE.md](docs/HARDWARE.md).
 
-1. **Your home**: name, time zone, °F/°C, currency
-2. **Your login**: username, password, and a PIN for unlocking doors
-3. **Home Assistant**: connect it (address + admin token), or get help installing it
-4. **Cameras**: Frigate, UniFi Protect, Reolink, Ring, Nest, ONVIF, Meraki MV, Wyze, Arlo/Eufy
-5. **Lights, locks and climate**: Hue, Lutron Caseta, Kasa/Tapo, Shelly, ecobee, Nest, August, Yale, Z-Wave, Zigbee, Matter, Rachio
-6. **Sensors**: Zigbee, Z-Wave, Shelly, SwitchBot, YoLink, Ecowitt, Meraki MT, and which ones should alert you
-7. **Network**: UniFi, Meraki, Omada, OPNsense/pfSense, eero, Google Wifi or your ISP's router; Pi-hole or AdGuard; speed tests
-8. **Energy**: your power company (the list comes from Home Assistant's Opower integration) and its sign-in, or a price per kWh; smart plugs, solar, Powerwall, EV charger, UPS; a monthly budget
-9. **Servers**: your NAS or server, with a one-line command to install the HouseOS agent on it
-10. **Alerts**: phone alerts through the Home Assistant app, quiet hours
+## Setup asks the questions for you
 
-Anything that lives in Home Assistant is added **inside Home Assistant** by running that
-integration's own setup: Home Assistant asks its questions (your power company, your Ring login,
-a verification code) and HouseOS shows them. Passwords you type there go to Home Assistant only.
-Google and Yale sign in on their own pages, so those open in Home Assistant.
+The first time you open HouseOS, a setup wizard walks through:
 
-The questions and the supported gear are in [app/catalog/setup.json](app/catalog/setup.json):
-adding a device that Home Assistant already supports is one entry there, no code.
+1. **Your home** - name, time zone, units, and your town for the weather (rounded position only)
+2. **Your login** - password, a PIN for risky actions, and a Pro key if you have one
+3. **Calendars** - paste Google / iCloud / Outlook private iCal links (no sign-in)
+4. **Your teams** - NFL, NBA, MLB, NHL, MLS, college, Premier League and more: live scores and next game
+5. **Headlines** - AP, NPR, BBC, tech, sports, or any RSS feed
+6. **Reminders** - trash night, meds, feed the fish
+7. **Home Assistant** - optional. If you have it, HouseOS adds integrations *inside* Home Assistant
+   for you (Home Assistant asks its own questions; HouseOS shows them)
+8. **Cameras, lights, sensors** - each brand says whether it needs Home Assistant
+9. **Network, energy, alerts**
 
-## What's in it
+Run it again any time from **Settings > Run setup again**; what you don't change is kept.
 
-| Tab | What it does | Edition |
-| --- | --- | --- |
-| Home | Wall panel: time, weather, calendar, what's happening now, reminders | Free |
-| Alerts | Everything that needs you, in plain words, with what to do | Free |
-| Controls | Lights, locks, climate, covers from Home Assistant; PIN + confirm for locks | Free |
-| Cameras | Frigate + go2rtc live view, detections, cars and people | Free |
-| Sensors | Leak, motion, temperature, batteries | Free |
-| Network | Internet, devices, Wi-Fi, a live network map (Meraki first, UniFi next) | Free |
-| Servers | Docker apps, uptime, drive health, RAID, backups, UPS, one-tap updates | Free |
-| Energy | What every device costs, from smart plugs, PoE, UPS and your meter | Free |
-| 3D floor plan | Your home from an iPhone/iPad LiDAR scan, with live devices in their rooms | **Pro** |
-| Ask the house | Ask questions in plain English (bring your own AI key) | **Pro** |
-| Self-healing | Restarts stuck or unhealthy apps, CPU watchdog | **Pro** |
-| Energy insights | Bill forecast, always-on load, what each degree of heat costs | **Pro** |
+## What works without Home Assistant
 
-**Free** is open source (AGPL-3.0), forever. **Pro** is an optional license key that supports the project.
+| | Now |
+| --- | --- |
+| Weather (MET Norway), calendars (iCal), sports scores (ESPN), news (RSS) | ✓ |
+| Internet: online/offline, public IP, provider, ping, speed tests every 4 h | ✓ |
+| Philips Hue (local, press-the-button pairing) | ✓ |
+| Shelly plugs, relays, meters, sensors (local) | ✓ |
+| YoLink sensors (official API) | ✓ |
+| Cameras: Frigate, Reolink, any camera with a snapshot address | ✓ |
+| Ring doorbells/cameras (Pro, Labs - unofficial API) | ✓ |
+| Energy: live watts per plug, cost at your rate | ✓ |
+| Alerts: leaks, smoke, low batteries, devices offline, internet down | ✓ |
 
-## Works with
+With Home Assistant you also get everything it supports: Z-Wave, Zigbee, Matter, locks, thermostats,
+Nest, your power company's real usage (Opower), and thousands more. The full list, including what
+we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRIX.md).
 
-Home Assistant · Frigate · go2rtc · Docker hosts (Synology, UGREEN, Unraid, TrueNAS, Proxmox) ·
-Pi-hole · NUT/USB UPSs · Cisco Meraki · *coming:* UniFi, AdGuard Home, OPNsense.
+## Free and Pro
 
-## Roadmap
+**Free** is open source (AGPL-3.0) and complete for one house at home. **Pro** ($5/month, $49/year or
+$129 once; 14-day trial for every new install) adds the 3D Home, Ring, and - as they ship - remote
+access, phone alerts, smart alerts, energy insights and more. Details and what ships today:
+[docs/EDITIONS.md](docs/EDITIONS.md).
 
-1. **Foundation**: repo, privacy scan, demo mode *(now)*
-2. **Private alpha**: Home, Alerts, Controls, Cameras, Sensors, Servers
-3. **Public v0.9**: Network (Meraki, UniFi), Energy, docs site
-4. **Pro**: 3D floor plan from LiDAR, license keys
-5. **Grow**: Ask the house, self-healing, energy insights
+### 3D Home (Pro)
 
-## Contributing
+Scan each floor with an iPhone or iPad Pro (Polycam, Scaniverse or 3D Scanner App, LiDAR room mode),
+export **GLB**, and upload it under **3D Home > Floors**. Line the floors up, then **Place devices**:
+pick a light, plug, speaker, camera or sensor and click where it is. Lights glow when on, speakers
+pulse when music plays, leaks and open doors flash, the top bar shows total watts - and tapping a
+pin switches it or opens the camera. The step-by-step guide is built into the page ("How to scan").
 
-Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
-Never include anything from your own house in an issue or PR (IPs, names, serials): the
-pre-commit hook in this repo checks for that.
+## Privacy
+
+Settings are one file (`config.json`, owner-only) on your box. Device passwords you type during
+setup go to that device or to Home Assistant; Ring and power-company passwords are never stored.
+More: [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## Development
+
+`app/src/server/*.js` and `app/src/client/*.js` are joined in file-name order by `app/build.mjs`.
+`node app/test/unit.mjs` runs the unit tests; `tools/test-setup-wizard.cjs` (with `tools/mock-ha.mjs`)
+and `tools/test-setup-noha.cjs` drive the setup wizard end to end with Playwright.
+Never put anything from your own house in an issue or PR - the pre-commit hook checks for that.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## License
 
-HouseOS (this repository) is licensed under the [GNU AGPL-3.0](LICENSE).
-HouseOS Pro is a separate, commercially licensed add-on.
+HouseOS is licensed under the [GNU AGPL-3.0](LICENSE). HouseOS Pro features are unlocked by a
+commercial license key.

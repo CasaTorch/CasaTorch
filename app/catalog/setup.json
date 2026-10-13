@@ -1,15 +1,74 @@
 {
-  "_about": "The setup wizard's questions and the gear HouseOS supports. Each option says how it is set up: 'ha' = HouseOS runs that integration's own setup inside Home Assistant (HA asks its questions, HouseOS shows them); 'ha-ui' = needs a sign-in page that only Home Assistant can show (OAuth), so HouseOS opens it there; 'direct' = HouseOS talks to it itself; 'guide' = instructions only. Add gear here - no code needed for an 'ha' option.",
+  "_about": "The setup wizard's questions and the gear HouseOS supports. Each option says how it is set up: 'ha' = HouseOS runs that integration's own setup inside Home Assistant (HA asks its questions, HouseOS shows them); 'ha-ui' = needs a sign-in page that only Home Assistant can show (OAuth), so HouseOS opens it there; 'direct' = HouseOS talks to it itself; 'guide' = instructions only. Add gear here - no code needed for an 'ha' option. 'hue' / 'ring' = HouseOS's own pairing or sign-in screens. 'haTwin' names the Home Assistant option that does the same job: when Home Assistant is connected the HA one is shown, otherwise this one.",
   "steps": [
     {
       "id": "house",
       "title": "Your home",
-      "intro": "A few basics so times, temperatures and costs show the way you expect.",
+      "intro": "A few basics so times, temperatures, costs and the weather show the way you expect.",
       "fields": [
-        { "id": "name", "label": "What should we call your home?", "type": "text", "placeholder": "My House", "required": true },
-        { "id": "timezone", "label": "Time zone", "type": "timezone", "required": true },
-        { "id": "units", "label": "Temperature", "type": "choice", "options": [["F", "°F"], ["C", "°C"]], "default": "F" },
-        { "id": "currency", "label": "Currency", "type": "choice", "options": [["USD", "$ US dollar"], ["CAD", "$ Canadian dollar"], ["EUR", "€ Euro"], ["GBP", "£ Pound"], ["AUD", "$ Australian dollar"]], "default": "USD" }
+        {
+          "id": "name",
+          "label": "What should we call your home?",
+          "type": "text",
+          "placeholder": "My House",
+          "required": true
+        },
+        {
+          "id": "timezone",
+          "label": "Time zone",
+          "type": "timezone",
+          "required": true
+        },
+        {
+          "id": "location",
+          "label": "Your town (for the weather)",
+          "type": "location",
+          "help": "Only the town's map position is saved - rounded, never your street address."
+        },
+        {
+          "id": "units",
+          "label": "Temperature",
+          "type": "choice",
+          "options": [
+            [
+              "F",
+              "°F"
+            ],
+            [
+              "C",
+              "°C"
+            ]
+          ],
+          "default": "F"
+        },
+        {
+          "id": "currency",
+          "label": "Currency",
+          "type": "choice",
+          "options": [
+            [
+              "USD",
+              "$ US dollar"
+            ],
+            [
+              "CAD",
+              "$ Canadian dollar"
+            ],
+            [
+              "EUR",
+              "€ Euro"
+            ],
+            [
+              "GBP",
+              "£ Pound"
+            ],
+            [
+              "AUD",
+              "$ Australian dollar"
+            ]
+          ],
+          "default": "USD"
+        }
       ]
     },
     {
@@ -17,160 +76,1012 @@
       "title": "Your HouseOS login",
       "intro": "This protects the dashboard. You'll use it to sign in from phones and other screens; the wall panel stays signed in.",
       "fields": [
-        { "id": "username", "label": "Username", "type": "text", "required": true, "default": "admin" },
-        { "id": "password", "label": "Password (8+ characters)", "type": "password", "required": true, "minLength": 8 },
-        { "id": "pin", "label": "PIN for unlocking doors and other risky actions (4-8 digits)", "type": "pin", "required": false, "help": "Leave empty to require a PIN on nothing. You can set it later." }
+        {
+          "id": "username",
+          "label": "Username",
+          "type": "text",
+          "required": true,
+          "default": "admin"
+        },
+        {
+          "id": "password",
+          "label": "Password (8+ characters)",
+          "type": "password",
+          "required": true,
+          "minLength": 8
+        },
+        {
+          "id": "pin",
+          "label": "PIN for unlocking doors and other risky actions (4-8 digits)",
+          "type": "pin",
+          "required": false,
+          "help": "Leave empty to require a PIN on nothing. You can set it later."
+        },
+        {
+          "id": "license",
+          "label": "HouseOS Pro license key (optional)",
+          "type": "textarea",
+          "help": "Every new HouseOS gets 14 days of Pro free. Already bought Pro? Paste the key from your e-mail."
+        }
+      ]
+    },
+    {
+      "id": "calendars",
+      "title": "Calendars",
+      "intro": "Your family calendars on the Home screen. Paste each calendar's private iCal link - no sign-in needed.",
+      "fields": [
+        {
+          "id": "list",
+          "type": "calendars",
+          "label": "Calendars"
+        }
+      ],
+      "help": "Google: calendar.google.com > Settings > your calendar > Integrate calendar > Secret address in iCal format. iCloud: Calendar app > share icon next to the calendar > Public Calendar > copy link. Outlook: Settings > Calendar > Shared calendars > Publish a calendar > ICS link."
+    },
+    {
+      "id": "sports",
+      "title": "Your teams",
+      "intro": "Live scores and the next game for the teams you follow.",
+      "fields": [
+        {
+          "id": "teams",
+          "type": "teams",
+          "label": "Teams"
+        }
+      ]
+    },
+    {
+      "id": "news",
+      "title": "Headlines",
+      "intro": "A few headlines on the Home screen. Pick sources, or add any website's RSS feed.",
+      "fields": [
+        {
+          "id": "picks",
+          "type": "feeds",
+          "label": "Sources"
+        }
+      ]
+    },
+    {
+      "id": "reminders",
+      "title": "Reminders",
+      "intro": "Things that repeat - trash night, meds, feeding the fish. They show on the Home screen on the right days.",
+      "fields": [
+        {
+          "id": "list",
+          "type": "reminders",
+          "label": "Reminders"
+        }
       ]
     },
     {
       "id": "homeassistant",
       "title": "Home Assistant",
-      "intro": "HouseOS uses Home Assistant to talk to your lights, locks, sensors, cameras and power company. Everything you pick in the next steps is set up inside Home Assistant for you.",
-      "question": { "id": "uses", "label": "Do you use Home Assistant?", "options": [["yes", "Yes"], ["not-yet", "Not yet - help me install it"], ["no", "No, and I don't want to"]] },
+      "intro": "Home Assistant is optional. HouseOS talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring with Pro). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.",
+      "question": {
+        "id": "uses",
+        "label": "Do you use Home Assistant?",
+        "options": [
+          [
+            "yes",
+            "Yes"
+          ],
+          [
+            "no",
+            "No - use HouseOS on its own"
+          ],
+          [
+            "not-yet",
+            "Not yet - show me how to install it"
+          ]
+        ]
+      },
       "branches": {
-        "yes": { "fields": [
-          { "id": "url", "label": "Home Assistant address", "type": "url", "placeholder": "http://homeassistant.local:8123", "required": true },
-          { "id": "token", "label": "Long-lived access token", "type": "password", "required": true, "help": "In Home Assistant: your profile (bottom left) > Security > Long-lived access tokens > Create token. It must belong to an administrator so HouseOS can add integrations." }
-        ], "test": "homeassistant" },
-        "not-yet": { "guide": "install-ha" },
-        "no": { "note": "Without Home Assistant, HouseOS can still watch your servers and network. Controls, sensors, cameras (except Frigate and Meraki) and power-company data need it - you can connect it later from Settings." }
+        "yes": {
+          "fields": [
+            {
+              "id": "url",
+              "label": "Home Assistant address",
+              "type": "url",
+              "placeholder": "http://homeassistant.local:8123",
+              "required": true
+            },
+            {
+              "id": "token",
+              "label": "Long-lived access token",
+              "type": "password",
+              "required": true,
+              "help": "In Home Assistant: your profile (bottom left) > Security > Long-lived access tokens > Create token. It must belong to an administrator so HouseOS can add integrations."
+            }
+          ],
+          "test": "homeassistant"
+        },
+        "not-yet": {
+          "guide": "install-ha"
+        },
+        "no": {
+          "note": "No problem. Next you'll see the gear HouseOS connects to directly. Anything marked 'needs Home Assistant' can be added later from Settings > Run setup again."
+        }
       }
     },
     {
       "id": "cameras",
       "title": "Cameras",
-      "question": { "id": "has", "label": "Do you have security cameras or a video doorbell?", "options": [["yes", "Yes"], ["no", "No"]] },
-      "branches": { "yes": {
-        "pick": { "id": "kinds", "label": "Which kinds? Pick all that you have.", "multi": true, "options": [
-          { "id": "frigate", "label": "Frigate NVR", "desc": "Recommended: people, car and plate detection on your own hardware", "method": "direct", "fields": [
-            { "id": "url", "label": "Frigate address", "type": "url", "placeholder": "http://192.168.1.10:5000", "required": true },
-            { "id": "go2rtc", "label": "go2rtc address (for live view, optional)", "type": "url", "placeholder": "http://192.168.1.10:1984" } ], "test": "frigate" },
-          { "id": "unifiprotect", "label": "UniFi Protect", "method": "ha", "domain": "unifiprotect", "hint": "Use a local Protect user (not your Ubiquiti cloud login)." },
-          { "id": "reolink", "label": "Reolink", "method": "ha", "domain": "reolink" },
-          { "id": "ring", "label": "Ring", "method": "ha", "domain": "ring", "hint": "Your Ring app login; you'll get a 2-factor code by text or e-mail." },
-          { "id": "nest-cam", "label": "Google Nest cameras / doorbell", "method": "ha-ui", "domain": "nest", "hint": "Google requires its own sign-in page, so this opens in Home Assistant." },
-          { "id": "onvif", "label": "Other IP camera (ONVIF): Amcrest, Dahua, Hikvision, Lorex, Axis...", "method": "ha", "domain": "onvif" },
-          { "id": "meraki-mv", "label": "Cisco Meraki MV", "method": "direct", "provider": "meraki", "fields": [
-            { "id": "apiKey", "label": "Meraki API key", "type": "password", "required": true, "help": "Meraki dashboard > your profile > API access > Generate key." } ], "test": "meraki" },
-          { "id": "wyze", "label": "Wyze", "method": "guide", "guide": "wyze" },
-          { "id": "arlo-eufy", "label": "Arlo or Eufy", "method": "guide", "guide": "cloud-cams" }
-        ] },
-        "fields": [
-          { "id": "detect", "label": "Do you want alerts for people and cars (not just motion)?", "type": "choice", "options": [["yes", "Yes"], ["no", "No"]], "default": "yes", "help": "Needs Frigate. If you don't have it, HouseOS shows how to add it." }
+      "question": {
+        "id": "has",
+        "label": "Do you have security cameras or a video doorbell?",
+        "options": [
+          [
+            "yes",
+            "Yes"
+          ],
+          [
+            "no",
+            "No"
+          ]
         ]
-      } }
+      },
+      "branches": {
+        "yes": {
+          "pick": {
+            "id": "kinds",
+            "label": "Which kinds? Pick all that you have.",
+            "multi": true,
+            "options": [
+              {
+                "id": "frigate",
+                "label": "Frigate NVR",
+                "desc": "Recommended: people, car and plate detection on your own hardware",
+                "method": "direct",
+                "fields": [
+                  {
+                    "id": "url",
+                    "label": "Frigate address",
+                    "type": "url",
+                    "placeholder": "http://192.168.1.10:5000",
+                    "required": true
+                  },
+                  {
+                    "id": "go2rtc",
+                    "label": "go2rtc address (for live view, optional)",
+                    "type": "url",
+                    "placeholder": "http://192.168.1.10:1984"
+                  }
+                ],
+                "test": "frigate",
+                "badge": "direct"
+              },
+              {
+                "id": "unifiprotect",
+                "label": "UniFi Protect",
+                "method": "ha",
+                "domain": "unifiprotect",
+                "hint": "Use a local Protect user (not your Ubiquiti cloud login)."
+              },
+              {
+                "id": "reolink",
+                "label": "Reolink (through Home Assistant)",
+                "method": "ha",
+                "domain": "reolink"
+              },
+              {
+                "id": "reolink-local",
+                "label": "Reolink",
+                "desc": "Talks to the camera on your network",
+                "method": "direct",
+                "haTwin": "reolink",
+                "fields": [
+                  {
+                    "id": "name",
+                    "label": "Camera name",
+                    "type": "text",
+                    "placeholder": "Driveway",
+                    "required": true
+                  },
+                  {
+                    "id": "host",
+                    "label": "Camera IP address",
+                    "type": "text",
+                    "placeholder": "192.168.1.60",
+                    "required": true
+                  },
+                  {
+                    "id": "username",
+                    "label": "Camera username",
+                    "type": "text",
+                    "default": "admin",
+                    "required": true
+                  },
+                  {
+                    "id": "password",
+                    "label": "Camera password",
+                    "type": "password",
+                    "required": true,
+                    "help": "Tip: make a view-only user for HouseOS in the Reolink app."
+                  }
+                ],
+                "test": "reolink"
+              },
+              {
+                "id": "ring",
+                "label": "Ring (through Home Assistant)",
+                "method": "ha",
+                "domain": "ring",
+                "hint": "Your Ring app login; you'll get a 2-factor code by text or e-mail."
+              },
+              {
+                "id": "ring-labs",
+                "label": "Ring",
+                "desc": "Doorbells and cameras - sign in with your Ring account",
+                "method": "ring",
+                "haTwin": "ring"
+              },
+              {
+                "id": "nest-cam",
+                "label": "Google Nest cameras / doorbell",
+                "method": "ha-ui",
+                "domain": "nest",
+                "hint": "Google requires its own sign-in page, so this opens in Home Assistant."
+              },
+              {
+                "id": "onvif",
+                "label": "Other IP camera (ONVIF): Amcrest, Dahua, Hikvision, Lorex, Axis...",
+                "method": "ha",
+                "domain": "onvif"
+              },
+              {
+                "id": "snapshot",
+                "label": "Any camera with a snapshot address",
+                "desc": "Amcrest, Dahua, Hikvision, Axis, Wyze bridge... (picture refreshes every 30 s)",
+                "method": "direct",
+                "fields": [
+                  {
+                    "id": "name",
+                    "label": "Camera name",
+                    "type": "text",
+                    "placeholder": "Back yard",
+                    "required": true
+                  },
+                  {
+                    "id": "snapshotUrl",
+                    "label": "Snapshot address",
+                    "type": "url",
+                    "placeholder": "http://192.168.1.61/cgi-bin/snapshot.cgi",
+                    "required": true,
+                    "help": "Search '<brand> snapshot URL'. Hikvision: /ISAPI/Streaming/channels/101/picture. Amcrest/Dahua: /cgi-bin/snapshot.cgi."
+                  },
+                  {
+                    "id": "username",
+                    "label": "Username",
+                    "type": "text"
+                  },
+                  {
+                    "id": "password",
+                    "label": "Password",
+                    "type": "password"
+                  }
+                ],
+                "test": "snapshot"
+              },
+              {
+                "id": "meraki-mv",
+                "label": "Cisco Meraki MV",
+                "method": "direct",
+                "provider": "meraki",
+                "fields": [
+                  {
+                    "id": "apiKey",
+                    "label": "Meraki API key",
+                    "type": "password",
+                    "required": true,
+                    "help": "Meraki dashboard > your profile > API access > Generate key."
+                  }
+                ],
+                "test": "meraki"
+              },
+              {
+                "id": "wyze",
+                "label": "Wyze",
+                "method": "guide",
+                "guide": "wyze"
+              },
+              {
+                "id": "arlo-eufy",
+                "label": "Arlo or Eufy",
+                "method": "guide",
+                "guide": "cloud-cams"
+              }
+            ]
+          },
+          "fields": [
+            {
+              "id": "detect",
+              "label": "Do you want alerts for people and cars (not just motion)?",
+              "type": "choice",
+              "options": [
+                [
+                  "yes",
+                  "Yes"
+                ],
+                [
+                  "no",
+                  "No"
+                ]
+              ],
+              "default": "yes",
+              "help": "Needs Frigate. If you don't have it, HouseOS shows how to add it."
+            }
+          ]
+        }
+      }
     },
     {
       "id": "controls",
       "title": "Lights, locks and climate",
-      "question": { "id": "has", "label": "Do you have smart lights, locks, a thermostat or other things to control?", "options": [["yes", "Yes"], ["no", "No"]] },
-      "branches": { "yes": {
-        "pick": { "id": "kinds", "label": "Which do you have? Pick all.", "multi": true, "options": [
-          { "id": "hue", "label": "Philips Hue lights", "method": "ha", "domain": "hue", "hint": "Press the round button on the Hue bridge when asked." },
-          { "id": "lutron", "label": "Lutron Caseta switches", "method": "ha", "domain": "lutron_caseta", "hint": "Press the small button on the back of the Smart Bridge when asked." },
-          { "id": "tplink", "label": "TP-Link Kasa / Tapo plugs and switches", "method": "ha", "domain": "tplink", "hint": "Newer Kasa firmware needs your TP-Link login, and 'Third-Party Compatibility' turned on in the Kasa app." },
-          { "id": "shelly", "label": "Shelly", "method": "ha", "domain": "shelly" },
-          { "id": "ecobee", "label": "ecobee thermostat", "method": "ha", "domain": "ecobee" },
-          { "id": "nest-tstat", "label": "Google Nest thermostat", "method": "ha-ui", "domain": "nest" },
-          { "id": "august", "label": "August locks", "method": "ha", "domain": "august" },
-          { "id": "yale", "label": "Yale locks", "method": "ha-ui", "domain": "yale" },
-          { "id": "zwave", "label": "Z-Wave devices (needs a Z-Wave stick)", "method": "ha", "domain": "zwave_js" },
-          { "id": "zigbee", "label": "Zigbee devices (needs a Zigbee stick)", "method": "ha", "domain": "zha" },
-          { "id": "matter", "label": "Matter devices", "method": "ha", "domain": "matter" },
-          { "id": "rachio", "label": "Rachio sprinklers", "method": "ha", "domain": "rachio" },
-          { "id": "other", "label": "Something else (already in Home Assistant)", "method": "guide", "guide": "already-in-ha" }
-        ] },
-        "fields": [
-          { "id": "locksNeedPin", "label": "Ask for the PIN before unlocking doors?", "type": "choice", "options": [["yes", "Yes (recommended)"], ["no", "No"]], "default": "yes" }
+      "question": {
+        "id": "has",
+        "label": "Do you have smart lights, locks, a thermostat or other things to control?",
+        "options": [
+          [
+            "yes",
+            "Yes"
+          ],
+          [
+            "no",
+            "No"
+          ]
         ]
-      } }
+      },
+      "branches": {
+        "yes": {
+          "pick": {
+            "id": "kinds",
+            "label": "Which do you have? Pick all.",
+            "multi": true,
+            "options": [
+              {
+                "id": "hue",
+                "label": "Philips Hue (through Home Assistant)",
+                "method": "ha",
+                "domain": "hue",
+                "hint": "Press the round button on the Hue bridge when asked."
+              },
+              {
+                "id": "hue-local",
+                "label": "Philips Hue",
+                "desc": "Pairs with the Hue bridge - press its button",
+                "method": "hue",
+                "haTwin": "hue"
+              },
+              {
+                "id": "lutron",
+                "label": "Lutron Caseta switches",
+                "method": "ha",
+                "domain": "lutron_caseta",
+                "hint": "Press the small button on the back of the Smart Bridge when asked."
+              },
+              {
+                "id": "tplink",
+                "label": "TP-Link Kasa / Tapo plugs and switches",
+                "method": "ha",
+                "domain": "tplink",
+                "hint": "Newer Kasa firmware needs your TP-Link login, and 'Third-Party Compatibility' turned on in the Kasa app."
+              },
+              {
+                "id": "shelly",
+                "label": "Shelly (through Home Assistant)",
+                "method": "ha",
+                "domain": "shelly"
+              },
+              {
+                "id": "shelly-local",
+                "label": "Shelly",
+                "desc": "Plugs, relays, meters and sensors on your network",
+                "method": "direct",
+                "haTwin": "shelly",
+                "fields": [
+                  {
+                    "id": "hosts",
+                    "label": "Each Shelly's IP address",
+                    "type": "text",
+                    "placeholder": "192.168.1.40 192.168.1.41",
+                    "required": true,
+                    "help": "Find them in the Shelly app (device > Settings > Device information) or your router's client list. Give them fixed addresses in your router."
+                  }
+                ],
+                "test": "shelly"
+              },
+              {
+                "id": "ecobee",
+                "label": "ecobee thermostat",
+                "method": "ha",
+                "domain": "ecobee"
+              },
+              {
+                "id": "nest-tstat",
+                "label": "Google Nest thermostat",
+                "method": "ha-ui",
+                "domain": "nest"
+              },
+              {
+                "id": "august",
+                "label": "August locks",
+                "method": "ha",
+                "domain": "august"
+              },
+              {
+                "id": "yale",
+                "label": "Yale locks",
+                "method": "ha-ui",
+                "domain": "yale"
+              },
+              {
+                "id": "zwave",
+                "label": "Z-Wave devices (needs a Z-Wave stick)",
+                "method": "ha",
+                "domain": "zwave_js"
+              },
+              {
+                "id": "zigbee",
+                "label": "Zigbee devices (needs a Zigbee stick)",
+                "method": "ha",
+                "domain": "zha"
+              },
+              {
+                "id": "matter",
+                "label": "Matter devices",
+                "method": "ha",
+                "domain": "matter"
+              },
+              {
+                "id": "rachio",
+                "label": "Rachio sprinklers",
+                "method": "ha",
+                "domain": "rachio"
+              },
+              {
+                "id": "yolink-cloud",
+                "label": "YoLink",
+                "desc": "Official YoLink API",
+                "method": "direct",
+                "haTwin": "yolink",
+                "fields": [
+                  {
+                    "id": "uaid",
+                    "label": "UAID",
+                    "type": "text",
+                    "required": true,
+                    "help": "YoLink app > Account > Advanced Settings > User Access Credentials > + . Copy the UAID and Secret Key."
+                  },
+                  {
+                    "id": "secret",
+                    "label": "Secret Key",
+                    "type": "password",
+                    "required": true
+                  }
+                ],
+                "test": "yolink"
+              },
+              {
+                "id": "other",
+                "label": "Something else (already in Home Assistant)",
+                "method": "guide",
+                "guide": "already-in-ha"
+              }
+            ]
+          },
+          "fields": [
+            {
+              "id": "locksNeedPin",
+              "label": "Ask for the PIN before unlocking doors?",
+              "type": "choice",
+              "options": [
+                [
+                  "yes",
+                  "Yes (recommended)"
+                ],
+                [
+                  "no",
+                  "No"
+                ]
+              ],
+              "default": "yes"
+            }
+          ]
+        }
+      }
     },
     {
       "id": "sensors",
       "title": "Sensors",
-      "question": { "id": "has", "label": "Do you have sensors - motion, doors, leaks, temperature, smoke?", "options": [["yes", "Yes"], ["no", "No"]] },
-      "branches": { "yes": {
-        "pick": { "id": "kinds", "label": "Which brands or types? Pick all.", "multi": true, "options": [
-          { "id": "zigbee", "label": "Zigbee (Aqara, IKEA, Sonoff, Third Reality...)", "method": "ha", "domain": "zha" },
-          { "id": "zwave", "label": "Z-Wave (Aeotec, Zooz, Ring Alarm sensors...)", "method": "ha", "domain": "zwave_js" },
-          { "id": "shelly", "label": "Shelly", "method": "ha", "domain": "shelly" },
-          { "id": "switchbot", "label": "SwitchBot", "method": "ha", "domain": "switchbot_cloud" },
-          { "id": "yolink", "label": "YoLink", "method": "ha-ui", "domain": "yolink" },
-          { "id": "ecowitt", "label": "Ecowitt weather station", "method": "ha", "domain": "ecowitt" },
-          { "id": "meraki-mt", "label": "Cisco Meraki MT", "method": "direct", "provider": "meraki", "fields": [
-            { "id": "apiKey", "label": "Meraki API key", "type": "password", "required": true } ], "test": "meraki" },
-          { "id": "other", "label": "Something else (already in Home Assistant)", "method": "guide", "guide": "already-in-ha" }
-        ] },
-        "fields": [
-          { "id": "alertOn", "label": "Which should alert you right away?", "type": "multi", "options": [["leak", "Water leaks"], ["smoke", "Smoke / CO"], ["door", "Doors opened at night"], ["battery", "Low batteries"], ["temp", "Freezing or overheating"]], "default": ["leak", "smoke", "battery"] }
+      "question": {
+        "id": "has",
+        "label": "Do you have sensors - motion, doors, leaks, temperature, smoke?",
+        "options": [
+          [
+            "yes",
+            "Yes"
+          ],
+          [
+            "no",
+            "No"
+          ]
         ]
-      } }
+      },
+      "branches": {
+        "yes": {
+          "pick": {
+            "id": "kinds",
+            "label": "Which brands or types? Pick all.",
+            "multi": true,
+            "options": [
+              {
+                "id": "zigbee",
+                "label": "Zigbee (Aqara, IKEA, Sonoff, Third Reality...)",
+                "method": "ha",
+                "domain": "zha"
+              },
+              {
+                "id": "zwave",
+                "label": "Z-Wave (Aeotec, Zooz, Ring Alarm sensors...)",
+                "method": "ha",
+                "domain": "zwave_js"
+              },
+              {
+                "id": "shelly",
+                "label": "Shelly (through Home Assistant)",
+                "method": "ha",
+                "domain": "shelly"
+              },
+              {
+                "id": "shelly-local",
+                "label": "Shelly",
+                "desc": "Plugs, relays, meters and sensors on your network",
+                "method": "direct",
+                "haTwin": "shelly",
+                "fields": [
+                  {
+                    "id": "hosts",
+                    "label": "Each Shelly's IP address",
+                    "type": "text",
+                    "placeholder": "192.168.1.40 192.168.1.41",
+                    "required": true,
+                    "help": "Find them in the Shelly app (device > Settings > Device information) or your router's client list. Give them fixed addresses in your router."
+                  }
+                ],
+                "test": "shelly"
+              },
+              {
+                "id": "switchbot",
+                "label": "SwitchBot",
+                "method": "ha",
+                "domain": "switchbot_cloud"
+              },
+              {
+                "id": "yolink",
+                "label": "YoLink (through Home Assistant)",
+                "method": "ha-ui",
+                "domain": "yolink"
+              },
+              {
+                "id": "yolink-cloud",
+                "label": "YoLink",
+                "desc": "Official YoLink API",
+                "method": "direct",
+                "haTwin": "yolink",
+                "fields": [
+                  {
+                    "id": "uaid",
+                    "label": "UAID",
+                    "type": "text",
+                    "required": true,
+                    "help": "YoLink app > Account > Advanced Settings > User Access Credentials > + . Copy the UAID and Secret Key."
+                  },
+                  {
+                    "id": "secret",
+                    "label": "Secret Key",
+                    "type": "password",
+                    "required": true
+                  }
+                ],
+                "test": "yolink"
+              },
+              {
+                "id": "ecowitt",
+                "label": "Ecowitt weather station",
+                "method": "ha",
+                "domain": "ecowitt"
+              },
+              {
+                "id": "meraki-mt",
+                "label": "Cisco Meraki MT",
+                "method": "direct",
+                "provider": "meraki",
+                "fields": [
+                  {
+                    "id": "apiKey",
+                    "label": "Meraki API key",
+                    "type": "password",
+                    "required": true
+                  }
+                ],
+                "test": "meraki"
+              },
+              {
+                "id": "other",
+                "label": "Something else (already in Home Assistant)",
+                "method": "guide",
+                "guide": "already-in-ha"
+              }
+            ]
+          },
+          "fields": [
+            {
+              "id": "alertOn",
+              "label": "Which should alert you right away?",
+              "type": "multi",
+              "options": [
+                [
+                  "leak",
+                  "Water leaks"
+                ],
+                [
+                  "smoke",
+                  "Smoke / CO"
+                ],
+                [
+                  "door",
+                  "Doors opened at night"
+                ],
+                [
+                  "battery",
+                  "Low batteries"
+                ],
+                [
+                  "temp",
+                  "Freezing or overheating"
+                ]
+              ],
+              "default": [
+                "leak",
+                "smoke",
+                "battery"
+              ]
+            }
+          ]
+        }
+      }
     },
     {
       "id": "network",
       "title": "Network",
-      "question": { "id": "kind", "label": "What runs your home network?", "options": [["unifi", "UniFi (Ubiquiti)"], ["meraki", "Cisco Meraki"], ["omada", "TP-Link Omada"], ["opnsense", "OPNsense or pfSense"], ["eero", "eero"], ["google", "Google / Nest Wifi"], ["isp", "My internet provider's router"], ["other", "Something else"]] },
+      "question": {
+        "id": "kind",
+        "label": "What runs your home network?",
+        "options": [
+          [
+            "unifi",
+            "UniFi (Ubiquiti)"
+          ],
+          [
+            "meraki",
+            "Cisco Meraki"
+          ],
+          [
+            "omada",
+            "TP-Link Omada"
+          ],
+          [
+            "opnsense",
+            "OPNsense or pfSense"
+          ],
+          [
+            "eero",
+            "eero"
+          ],
+          [
+            "google",
+            "Google / Nest Wifi"
+          ],
+          [
+            "isp",
+            "My internet provider's router"
+          ],
+          [
+            "other",
+            "Something else"
+          ]
+        ]
+      },
       "branches": {
-        "unifi": { "fields": [
-          { "id": "url", "label": "UniFi console address", "type": "url", "placeholder": "https://192.168.1.1", "required": true },
-          { "id": "apiKey", "label": "UniFi API key", "type": "password", "required": true, "help": "UniFi Network > Settings > Control Plane > Integrations > Create API key." } ], "test": "unifi" },
-        "meraki": { "fields": [
-          { "id": "apiKey", "label": "Meraki API key", "type": "password", "required": true, "help": "Meraki dashboard > your profile > API access > Generate key." } ], "test": "meraki", "then": "meraki-network" },
-        "omada": { "note": "Omada support is planned. HouseOS will still show your internet speed and devices from your DNS blocker." },
-        "opnsense": { "note": "OPNsense/pfSense support is planned. You'll get internet status, speed tests and devices from your DNS blocker." },
-        "eero": { "note": "eero has no local API, so HouseOS shows internet status and speed tests." },
-        "google": { "note": "Google Wifi has no local API, so HouseOS shows internet status and speed tests." },
-        "isp": { "note": "HouseOS will show internet status and speed tests." },
-        "other": { "note": "HouseOS will show internet status and speed tests. Tell us what you use on GitHub." }
+        "unifi": {
+          "fields": [
+            {
+              "id": "url",
+              "label": "UniFi console address",
+              "type": "url",
+              "placeholder": "https://192.168.1.1",
+              "required": true
+            },
+            {
+              "id": "apiKey",
+              "label": "UniFi API key",
+              "type": "password",
+              "required": true,
+              "help": "UniFi Network > Settings > Control Plane > Integrations > Create API key."
+            }
+          ],
+          "test": "unifi"
+        },
+        "meraki": {
+          "fields": [
+            {
+              "id": "apiKey",
+              "label": "Meraki API key",
+              "type": "password",
+              "required": true,
+              "help": "Meraki dashboard > your profile > API access > Generate key."
+            }
+          ],
+          "test": "meraki",
+          "then": "meraki-network"
+        },
+        "omada": {
+          "note": "Omada support is planned. HouseOS will still show your internet speed and devices from your DNS blocker."
+        },
+        "opnsense": {
+          "note": "OPNsense/pfSense support is planned. You'll get internet status, speed tests and devices from your DNS blocker."
+        },
+        "eero": {
+          "note": "eero has no local API, so HouseOS shows internet status and speed tests."
+        },
+        "google": {
+          "note": "Google Wifi has no local API, so HouseOS shows internet status and speed tests."
+        },
+        "isp": {
+          "note": "HouseOS will show internet status and speed tests."
+        },
+        "other": {
+          "note": "HouseOS will show internet status and speed tests. Tell us what you use on GitHub."
+        }
       },
       "fields": [
-        { "id": "dns", "label": "Do you run a network-wide ad blocker?", "type": "choice", "options": [["none", "No"], ["pihole", "Pi-hole"], ["adguard", "AdGuard Home"]], "default": "none" },
-        { "id": "dnsUrl", "label": "Its address", "type": "url", "placeholder": "http://192.168.1.2", "showIf": { "dns": ["pihole", "adguard"] } },
-        { "id": "dnsKey", "label": "Its password or API token", "type": "password", "showIf": { "dns": ["pihole", "adguard"] } },
-        { "id": "speedtest", "label": "Run an internet speed test every few hours?", "type": "choice", "options": [["yes", "Yes"], ["no", "No"]], "default": "yes" }
+        {
+          "id": "dns",
+          "label": "Do you run a network-wide ad blocker?",
+          "type": "choice",
+          "options": [
+            [
+              "none",
+              "No"
+            ],
+            [
+              "pihole",
+              "Pi-hole"
+            ],
+            [
+              "adguard",
+              "AdGuard Home"
+            ]
+          ],
+          "default": "none"
+        },
+        {
+          "id": "dnsUrl",
+          "label": "Its address",
+          "type": "url",
+          "placeholder": "http://192.168.1.2",
+          "showIf": {
+            "dns": [
+              "pihole",
+              "adguard"
+            ]
+          }
+        },
+        {
+          "id": "dnsKey",
+          "label": "Its password or API token",
+          "type": "password",
+          "showIf": {
+            "dns": [
+              "pihole",
+              "adguard"
+            ]
+          }
+        },
+        {
+          "id": "speedtest",
+          "label": "Run an internet speed test every few hours?",
+          "type": "choice",
+          "options": [
+            [
+              "yes",
+              "Yes"
+            ],
+            [
+              "no",
+              "No"
+            ]
+          ],
+          "default": "yes"
+        }
       ]
     },
     {
       "id": "energy",
       "title": "Energy",
-      "question": { "id": "track", "label": "Do you want to see what your home's power costs?", "options": [["yes", "Yes"], ["no", "No"]] },
-      "branches": { "yes": {
-        "provider": { "id": "utility", "label": "Who is your power company?", "help": "If it's in the list, sign in with your power company's website login and HouseOS gets your real bill and usage. Your password goes to Home Assistant only; HouseOS never stores it.", "method": "ha", "domain": "opower", "otherLabel": "Mine isn't listed" },
-        "fields": [
-          { "id": "rate", "label": "Price per kWh, if your company isn't listed", "type": "number", "step": "0.001", "placeholder": "0.32", "showIf": { "utility": ["other"] } },
-          { "id": "budget", "label": "Monthly power budget (optional)", "type": "number", "placeholder": "150" }
-        ],
-        "pick": { "id": "kinds", "label": "Anything that measures power at home? Pick all.", "multi": true, "options": [
-          { "id": "tplink", "label": "Kasa / Tapo smart plugs with energy monitoring", "method": "ha", "domain": "tplink" },
-          { "id": "shelly", "label": "Shelly plugs or meters", "method": "ha", "domain": "shelly" },
-          { "id": "sense", "label": "Sense home energy monitor", "method": "ha", "domain": "sense" },
-          { "id": "emporia", "label": "Emporia Vue", "method": "guide", "guide": "emporia" },
-          { "id": "enphase", "label": "Enphase solar", "method": "ha", "domain": "enphase_envoy" },
-          { "id": "solaredge", "label": "SolarEdge solar", "method": "ha", "domain": "solaredge" },
-          { "id": "powerwall", "label": "Tesla Powerwall", "method": "ha", "domain": "powerwall" },
-          { "id": "wallconnector", "label": "Tesla Wall Connector (EV charger)", "method": "ha", "domain": "tesla_wall_connector" },
-          { "id": "ups", "label": "A UPS (battery backup) plugged into a server by USB", "method": "ha", "domain": "nut", "hint": "HouseOS also reads it through its server agent - this just adds it to Home Assistant too." }
-        ] }
-      } }
-    },
-    {
-      "id": "servers",
-      "title": "Servers",
-      "question": { "id": "has", "label": "Do you want HouseOS to watch a NAS or server (apps, drives, backups, UPS)?", "options": [["yes", "Yes"], ["no", "No"]] },
-      "branches": { "yes": {
-        "fields": [
-          { "id": "kind", "label": "What kind?", "type": "choice", "options": [["synology", "Synology"], ["ugreen", "UGREEN"], ["qnap", "QNAP"], ["unraid", "Unraid"], ["truenas", "TrueNAS"], ["proxmox", "Proxmox"], ["pi", "Raspberry Pi"], ["linux", "Other Linux with Docker"]], "default": "linux" },
-          { "id": "address", "label": "Its address", "type": "text", "placeholder": "192.168.1.10", "required": true }
-        ],
-        "agent": true
-      } }
+      "question": {
+        "id": "track",
+        "label": "Do you want to see what your home's power costs?",
+        "options": [
+          [
+            "yes",
+            "Yes"
+          ],
+          [
+            "no",
+            "No"
+          ]
+        ]
+      },
+      "branches": {
+        "yes": {
+          "provider": {
+            "id": "utility",
+            "label": "Who is your power company?",
+            "help": "With Home Assistant, sign in with your power company's website login and HouseOS gets your real bill and usage (your password goes to Home Assistant only). Without it, enter your price per kWh.",
+            "method": "ha",
+            "domain": "opower",
+            "otherLabel": "Mine isn't listed"
+          },
+          "fields": [
+            {
+              "id": "rate",
+              "label": "Price per kWh, if your company isn't listed",
+              "type": "number",
+              "step": "0.001",
+              "placeholder": "0.32",
+              "showIf": {
+                "utility": [
+                  "other"
+                ]
+              }
+            },
+            {
+              "id": "budget",
+              "label": "Monthly power budget (optional)",
+              "type": "number",
+              "placeholder": "150"
+            }
+          ],
+          "pick": {
+            "id": "kinds",
+            "label": "Anything that measures power at home? Pick all.",
+            "multi": true,
+            "options": [
+              {
+                "id": "tplink",
+                "label": "Kasa / Tapo smart plugs with energy monitoring",
+                "method": "ha",
+                "domain": "tplink"
+              },
+              {
+                "id": "shelly",
+                "label": "Shelly (through Home Assistant)",
+                "method": "ha",
+                "domain": "shelly"
+              },
+              {
+                "id": "shelly-local",
+                "label": "Shelly",
+                "desc": "Plugs, relays, meters and sensors on your network",
+                "method": "direct",
+                "haTwin": "shelly",
+                "fields": [
+                  {
+                    "id": "hosts",
+                    "label": "Each Shelly's IP address",
+                    "type": "text",
+                    "placeholder": "192.168.1.40 192.168.1.41",
+                    "required": true,
+                    "help": "Find them in the Shelly app (device > Settings > Device information) or your router's client list. Give them fixed addresses in your router."
+                  }
+                ],
+                "test": "shelly"
+              },
+              {
+                "id": "sense",
+                "label": "Sense home energy monitor",
+                "method": "ha",
+                "domain": "sense"
+              },
+              {
+                "id": "emporia",
+                "label": "Emporia Vue",
+                "method": "guide",
+                "guide": "emporia"
+              },
+              {
+                "id": "enphase",
+                "label": "Enphase solar",
+                "method": "ha",
+                "domain": "enphase_envoy"
+              },
+              {
+                "id": "solaredge",
+                "label": "SolarEdge solar",
+                "method": "ha",
+                "domain": "solaredge"
+              },
+              {
+                "id": "powerwall",
+                "label": "Tesla Powerwall",
+                "method": "ha",
+                "domain": "powerwall"
+              },
+              {
+                "id": "wallconnector",
+                "label": "Tesla Wall Connector (EV charger)",
+                "method": "ha",
+                "domain": "tesla_wall_connector"
+              },
+              {
+                "id": "ups",
+                "label": "A UPS (battery backup) plugged into a server by USB",
+                "method": "ha",
+                "domain": "nut",
+                "hint": "HouseOS also reads it through its server agent - this just adds it to Home Assistant too."
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "id": "alerts",
       "title": "Alerts",
       "fields": [
-        { "id": "phone", "label": "Also send important alerts to your phone?", "type": "choice", "options": [["ha", "Yes, through the Home Assistant app"], ["no", "No, just the dashboard"]], "default": "ha", "showIfStep": { "homeassistant.uses": ["yes"] } },
-        { "id": "quiet", "label": "Quiet hours (no phone alerts except critical)", "type": "choice", "options": [["22-7", "10 PM to 7 AM"], ["23-6", "11 PM to 6 AM"], ["none", "None"]], "default": "22-7" }
+        {
+          "id": "phone",
+          "label": "Also send important alerts to your phone?",
+          "type": "choice",
+          "options": [
+            [
+              "ha",
+              "Yes, through the Home Assistant app"
+            ],
+            [
+              "no",
+              "No, just the dashboard"
+            ]
+          ],
+          "default": "ha",
+          "showIfStep": {
+            "homeassistant.uses": [
+              "yes"
+            ]
+          }
+        },
+        {
+          "id": "quiet",
+          "label": "Quiet hours (no phone alerts except critical)",
+          "type": "choice",
+          "options": [
+            [
+              "22-7",
+              "10 PM to 7 AM"
+            ],
+            [
+              "23-6",
+              "11 PM to 6 AM"
+            ],
+            [
+              "none",
+              "None"
+            ]
+          ],
+          "default": "22-7"
+        }
       ]
     }
   ],
