@@ -1,0 +1,12 @@
+# HouseOS - minimal install. Starts in demo mode until /data/config.json exists.
+services:
+  houseos:
+    build:
+      context: ..
+      dockerfile: app/Dockerfile
+    container_name: houseos
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./data:/data

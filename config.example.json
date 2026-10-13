@@ -1,0 +1,9 @@
+{
+  "port": 8090,
+  "house": { "name": "My House", "timezone": "America/Los_Angeles" },
+  "homeAssistant": { "url": "http://homeassistant.local:8123", "token": "PASTE_A_LONG_LIVED_TOKEN" },
+  "frigate": { "url": "http://192.168.1.10:5000" },
+  "network": { "provider": "none", "meraki": { "apiKey": "", "networkId": "" }, "unifi": { "url": "", "apiKey": "" } },
+  "agent": { "url": "http://192.168.1.10:8091", "token": "" },
+  "signIn": { "enabled": true }
+}

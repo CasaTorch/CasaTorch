@@ -1,0 +1,17 @@
+{
+  "demo": true,
+  "items": [
+    {
+      "title": "Living room lights",
+      "detail": "on \u00b7 60%"
+    },
+    {
+      "title": "Front door",
+      "detail": "locked"
+    },
+    {
+      "title": "Thermostat",
+      "detail": "heat to 68\u00b0F"
+    }
+  ]
+}

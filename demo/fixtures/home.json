@@ -1,0 +1,17 @@
+{
+  "demo": true,
+  "items": [
+    {
+      "title": "Good evening - 68\u00b0F, clear",
+      "detail": "Trash night: bins out by 9 PM"
+    },
+    {
+      "title": "Front door locked",
+      "detail": "since 6:12 PM"
+    },
+    {
+      "title": "Everyone is home",
+      "detail": "2 people, 1 car in the driveway"
+    }
+  ]
+}

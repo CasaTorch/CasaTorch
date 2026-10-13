@@ -1,0 +1,13 @@
+{
+  "demo": true,
+  "items": [
+    {
+      "title": "Backup drive is 91% full",
+      "detail": "warning \u00b7 Servers \u00b7 since Tue 2:45 AM"
+    },
+    {
+      "title": "Garage motion sensor battery 12%",
+      "detail": "notice \u00b7 Sensors"
+    }
+  ]
+}

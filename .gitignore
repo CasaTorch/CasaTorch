@@ -1,0 +1,11 @@
+# Private: never commit
+tools/private-terms.txt
+config.json
+data/
+*.blocked
+.env
+# Build output
+app/server.js
+app/public/app.js
+node_modules/
+.DS_Store

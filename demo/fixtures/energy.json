@@ -1,0 +1,13 @@
+{
+  "demo": true,
+  "items": [
+    {
+      "title": "This bill so far: $84",
+      "detail": "forecast $142 \u00b7 budget $150"
+    },
+    {
+      "title": "Always-on load 310 W",
+      "detail": "$38 a month"
+    }
+  ]
+}

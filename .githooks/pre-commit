@@ -1,0 +1,3 @@
+#!/bin/sh
+# Blocks any commit that would publish something personal (see tools/scrub-check.mjs).
+exec node "$(git rev-parse --show-toplevel)/tools/scrub-check.mjs" --staged
