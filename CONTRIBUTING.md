@@ -10,3 +10,6 @@
    (the tab shows "not set up", never an error).
 5. By sending a pull request you agree your contribution may also be included in HouseOS Pro
    (a short contributor license agreement will be added before the first release).
+6. To work on the setup wizard without a real house: `node tools/mock-ha.mjs` is a pretend
+   Home Assistant (token `test-token`), and `tools/test-setup-wizard.cjs` clicks through the whole
+   wizard against it with Playwright.
