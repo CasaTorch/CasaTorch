@@ -33,5 +33,5 @@ function proStatus() {
   return left > 0 ? { pro: true, plan: 'trial', trialDaysLeft: left } : { pro: false, plan: 'free', trialEnded: true };
 }
 /** Route guard: Pro features answer 402 with what to do. */
-const requirePro = (req, res, next) => (proStatus().pro ? next() : res.status(402).json({ error: 'This is a HouseOS Pro feature.', pro: proStatus(), upgrade: 'https://houseos.dev/pro' }));
+const requirePro = (req, res, next) => (proStatus().pro ? next() : res.status(402).json({ error: 'This is a HouseOS Pro feature.', pro: proStatus(), upgrade: 'https://gethouseos.com/pro' }));
 app.get('/api/license', (_req, res) => res.json(proStatus()));

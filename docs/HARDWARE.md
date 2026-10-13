@@ -10,7 +10,7 @@ any screen. It needs about 300 MB of RAM and almost no CPU (Frigate, if you use 
 | **Raspberry Pi 5 (4 GB+), with an SSD** | Recommended. Quiet, ~5 W, always on | `sudo ./deploy/install.sh` (Raspberry Pi OS 64-bit) |
 | Raspberry Pi 4 (4 GB+) | Fine; use an SSD or a good SD card | Same |
 | Intel N100 mini PC | If you also run Frigate or Home Assistant on it | `sudo ./deploy/install.sh` (Debian/Ubuntu) or Docker |
-| A NAS with Docker (Synology, UGREEN, QNAP, Unraid, TrueNAS) | You already have one | Docker / Container Manager: image `ghcr.io/houseos/houseos`, volume `/data`, port 8090 |
+| A NAS with Docker (Synology, UGREEN, QNAP, Unraid, TrueNAS) | You already have one | Docker / Container Manager: image `ghcr.io/gethouseos/houseos`, volume `/data`, port 8090 |
 | Windows 10/11 PC that stays on | Trying it out, or an old PC | `deploy\install.ps1` in PowerShell (as Administrator) |
 | macOS | Development, trying it out | `cd app && npm install && npm start`, or Docker Desktop |
 | Any Linux with Docker (x86-64 or ARM64) | | `docker compose up -d` |
@@ -40,7 +40,7 @@ Any device with a browser works. Popular choices:
 **Raspberry Pi, Debian, Ubuntu** - a service that starts at boot, settings in `/var/lib/houseos`:
 
 ```bash
-git clone https://github.com/houseos/houseos && cd houseos
+git clone https://github.com/gethouseos/houseos && cd houseos
 sudo ./deploy/install.sh          # run it again later to update
 ```
 

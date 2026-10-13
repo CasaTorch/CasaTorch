@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # HouseOS installer for Raspberry Pi OS (64-bit), Debian and Ubuntu.
 #
-#   curl -fsSL https://houseos.dev/install.sh | sudo bash          # or, from a clone:  sudo ./deploy/install.sh
+#   curl -fsSL https://gethouseos.com/install.sh | sudo bash          # or, from a clone:  sudo ./deploy/install.sh
 #
 # Installs Node.js 22 if needed, puts HouseOS in /opt/houseos, keeps settings in
 # /var/lib/houseos, and runs it as a service (houseos.service) on port 8090.
 # Run it again any time to update; your settings are kept.
 set -euo pipefail
 
-REPO="${HOUSEOS_REPO:-https://github.com/houseos/houseos.git}"
+REPO="${HOUSEOS_REPO:-https://github.com/gethouseos/houseos.git}"
 BRANCH="${HOUSEOS_BRANCH:-main}"
 APP_DIR=/opt/houseos
 DATA_DIR=/var/lib/houseos

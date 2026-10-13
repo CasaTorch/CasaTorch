@@ -3,7 +3,7 @@
 # Settings live in ./data (owner-only files). Back that folder up.
 services:
   houseos:
-    image: ghcr.io/houseos/houseos:latest    # or build it yourself: comment this line, uncomment "build"
+    image: ghcr.io/gethouseos/houseos:latest    # or build it yourself: comment this line, uncomment "build"
     # build: { context: .., dockerfile: app/Dockerfile }
     container_name: houseos
     restart: unless-stopped
