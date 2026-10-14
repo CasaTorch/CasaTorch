@@ -11,14 +11,17 @@
 <body>
   <header class="bar">
     <a class="brand" href="/">HouseOS</a>
+    <div class="seg" id="modeSeg"><button type="button" data-mode="view" class="on">3D</button><button type="button" data-mode="edit">Editor</button></div>
     <div class="totals" id="totals"></div>
     <span class="spacer"></span>
-    <div class="floors" id="floors"></div>
-    <button type="button" id="editBtn">Place devices</button>
-    <button type="button" id="setupBtn">Floors</button>
-    <button type="button" id="guideBtn">How to add floors</button>
+    <div id="themeSeg"></div>
+    <button type="button" id="guideBtn" class="tog">Help</button>
   </header>
-  <div class="stage"><div id="view"></div><aside id="side" hidden></aside></div>
+  <nav class="chips" id="chips" hidden></nav>
+  <div class="stage"><div id="view"></div></div>
+  <aside id="left" class="panel" hidden></aside>
+  <aside id="side" class="panel" hidden></aside>
+  <footer class="tools" id="tools" hidden></footer>
   <div id="modal" hidden></div>
   <script type="module" src="floorplan.js"></script>
 </body>

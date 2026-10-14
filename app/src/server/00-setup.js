@@ -23,13 +23,18 @@ const CONFIG_FILE = process.env.HOUSEOS_CONFIG || path.join(DATA_DIR, 'config.js
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 let config = {};
-const loadConfig = () => { try { config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { config = {}; } };
+/* As a Home Assistant add-on, HouseOS reaches Home Assistant through the Supervisor with the add-on's
+   own token: nothing to paste, and that token is never written to disk. */
+const SUPERVISOR_HA = 'http://supervisor/core';
+const withAddonHa = (c) => (process.env.SUPERVISOR_TOKEN && (!c.homeAssistant?.url || c.homeAssistant.url === SUPERVISOR_HA) ? { ...c, homeAssistant: { ...(c.homeAssistant || {}), url: SUPERVISOR_HA, token: process.env.SUPERVISOR_TOKEN } } : c);
+const loadConfig = () => { try { config = withAddonHa(JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'))); } catch { config = withAddonHa({}); } };
 loadConfig();
 /** Written owner-only: it holds tokens and API keys. */
 function saveConfig(next) {
-  fs.writeFileSync(`${CONFIG_FILE}.tmp`, JSON.stringify(next, null, 2), { mode: 0o600 });
+  const disk = next.homeAssistant?.url === SUPERVISOR_HA ? { ...next, homeAssistant: { ...next.homeAssistant, token: undefined } } : next;
+  fs.writeFileSync(`${CONFIG_FILE}.tmp`, JSON.stringify(disk, null, 2), { mode: 0o600 });
   fs.renameSync(`${CONFIG_FILE}.tmp`, CONFIG_FILE);
-  config = next;
+  config = withAddonHa(next);
 }
 const isConfigured = () => fs.existsSync(CONFIG_FILE) && Object.keys(config).length > 0;
 /** The house's time zone (the demo house is on the US west coast). */

@@ -1,0 +1,5 @@
+# Home Assistant add-on repository. In Home Assistant: Settings > Add-ons > Add-on store > ⋮ > Repositories,
+# add https://github.com/gethouseos/HouseOS - then install "HouseOS".
+name: HouseOS add-ons
+url: https://github.com/gethouseos/HouseOS
+maintainer: HouseOS <support@gethouseos.com>  # scrub-ok: public support address
