@@ -1,6 +1,6 @@
 /* ---- Settings ---- */
 const PRO_FEATURES = [   // [name, what, ships now?]
-  ['3D Home', 'Your home as a live, tappable 3D plan - from a LiDAR scan, or drawn in the app.', true], ['Ask the house', 'Plain-English questions; it can switch things for you.', true], ['Ring (Labs)', 'Ring doorbells and cameras without Home Assistant.', true],
+  ['3D Home', 'Your home as a live, tappable 3D plan - from a LiDAR scan, or drawn in the app.', true], ['Ask the house', 'Plain-English questions; it lines up switches for you to confirm with a tap.', true], ['Ring (Labs)', 'Ring doorbells and cameras without Home Assistant.', true],
   ['Away from home', 'Secure remote access and phone alerts - no port forwarding.'], ['Smart alerts', 'Quiet hours, "only if nobody\'s home", fewer false alarms.'],
   ['Energy insights', 'History, cost by device, and a weekly report.'], ['Self-healing', 'Restarts stuck integrations and tells you what it fixed.'], ['History', '2 years instead of 7 days.'], ['Basic support', 'E-mail and Discord help from the CasaTorch team.', true], ['Multi-home, theme packs, cloud backup', ''],
 ];

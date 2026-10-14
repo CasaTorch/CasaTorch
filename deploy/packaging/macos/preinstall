@@ -1,0 +1,4 @@
+#!/bin/sh
+# Updating: stop the running copy before its files are replaced.
+launchctl bootout system/com.casatorch.server 2>/dev/null || true
+exit 0

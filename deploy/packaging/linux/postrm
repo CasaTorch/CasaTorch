@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+# "Remove" keeps your settings in /var/lib/casatorch; "purge" deletes them too.
+if [ "$1" = purge ]; then rm -rf /var/lib/casatorch; getent passwd casatorch >/dev/null && deluser --system casatorch >/dev/null 2>&1 || true; fi
+[ -d /run/systemd/system ] && systemctl daemon-reload >/dev/null 2>&1 || true
+exit 0

@@ -1,0 +1,23 @@
+[Unit]
+Description=CasaTorch - one screen for your whole house
+Documentation=https://casatorch.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=casatorch
+Group=casatorch
+Environment=CASATORCH_DATA_DIR=/var/lib/casatorch PORT=8090 NODE_ENV=production
+WorkingDirectory=/opt/casatorch/app
+ExecStart=/opt/casatorch/node/node /opt/casatorch/app/server.js
+Restart=always
+RestartSec=5
+StateDirectory=casatorch
+StateDirectoryMode=0700
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

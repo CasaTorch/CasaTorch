@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<!-- Unraid Community Applications template. Until it is listed there, the download page walks
+     Unraid users through Docker > Add Container with these same values. -->
+<Container version="2">
+  <Name>CasaTorch</Name>
+  <Repository>ghcr.io/casatorch/casatorch:latest</Repository>
+  <Registry>https://github.com/casatorch/casatorch/pkgs/container/casatorch</Registry>
+  <Network>host</Network>
+  <Privileged>false</Privileged>
+  <Support>https://casatorch.com/download</Support>
+  <Project>https://casatorch.com</Project>
+  <Overview>One screen for your whole house: dashboard, wall panel, 3D home and AI assistant, with everything from Home Assistant.</Overview>
+  <Category>HomeAutomation: Tools:</Category>
+  <WebUI>http://[IP]:8090/</WebUI>
+  <Icon>https://casatorch.com/favicon.svg</Icon>
+  <Config Name="Settings" Target="/data" Default="/mnt/user/appdata/casatorch" Mode="rw" Description="Where CasaTorch keeps its settings, floors and photos" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/casatorch</Config>
+</Container>
