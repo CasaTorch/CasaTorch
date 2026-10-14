@@ -1,8 +1,8 @@
-# HouseOS
+# CasaTorch
 
 ## Install
 
-1. Install this add-on and press **Start**. The first start builds HouseOS on your machine
+1. Install this add-on and press **Start**. The first start builds CasaTorch on your machine
    (about 3-5 minutes on a Raspberry Pi, under a minute on a PC). Watch the **Log** tab.
 2. Turn on **Start on boot** and **Watchdog**.
 3. Press **Open web UI** (or go to `http://homeassistant.local:8090`) and follow the setup screens.
@@ -12,11 +12,11 @@ long-lived token to create. In the setup's Home Assistant step just press **Next
 
 ## Put it on a Home Assistant dashboard
 
-Install the **HouseOS card** with HACS (HACS > ⋮ > Custom repositories > add
-`https://github.com/gethouseos/HouseOS`, type **Dashboard**), then add a card:
+Install the **CasaTorch card** with HACS (HACS > ⋮ > Custom repositories > add
+`https://github.com/casatorch/casatorch`, type **Dashboard**), then add a card:
 
 ```yaml
-type: custom:houseos-card
+type: custom:casatorch-card
 url: http://homeassistant.local:8090
 view: 3d        # home | panel | 3d | ask
 height: 600
@@ -25,7 +25,7 @@ height: 600
 No HACS? Use Home Assistant's own **Webpage** card with the same address.
 
 If you open Home Assistant over https (Nabu Casa or a reverse proxy), the browser blocks an
-http:// HouseOS inside it. Open Home Assistant on your home network, or put HouseOS behind https too.
+http:// CasaTorch inside it. Open Home Assistant on your home network, or put CasaTorch behind https too.
 
 ## Wall panel
 

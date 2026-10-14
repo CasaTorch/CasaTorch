@@ -20,7 +20,7 @@ function box(P, N, I, [x0, y0, z0], [x1, y1, z1]) {
 }
 /** walls: [x0, z0, x1, z1] centre lines; 0.12 m thick, 2.5 m high, on a slab. Furniture: { Name0: [min, max] }.
     Every part is its own named node, the way Apple RoomPlan names them (Floor0, Wall3, Sofa0...), so
-    HouseOS styles walls, floors and furniture separately. */
+    CasaTorch styles walls, floors and furniture separately. */
 function floorGlb(w, d, walls, furniture = {}) {
   const parts = [['Floor0', [[[0, -0.1, 0], [w, 0, d]]]]];
   walls.forEach(([ax, az, bx, bz], i) => { const t = 0.06; parts.push([`Wall${i}`, [[[Math.min(ax, bx) - (ax === bx ? t : 0), 0, Math.min(az, bz) - (az === bz ? t : 0)], [Math.max(ax, bx) + (ax === bx ? t : 0), 2.5, Math.max(az, bz) + (az === bz ? t : 0)]]]]); });
@@ -39,7 +39,7 @@ function floorGlb(w, d, walls, furniture = {}) {
     nodes.push({ name, mesh: meshes.length - 1 });
   }
   const bin = Buffer.concat(bufs);
-  const gltf = { asset: { version: '2.0', generator: 'HouseOS demo' }, scene: 0, scenes: [{ nodes: [nodes.length] }], nodes: [...nodes, { name: 'house', children: nodes.map((_, i) => i) }], meshes,
+  const gltf = { asset: { version: '2.0', generator: 'CasaTorch demo' }, scene: 0, scenes: [{ nodes: [nodes.length] }], nodes: [...nodes, { name: 'house', children: nodes.map((_, i) => i) }], meshes,
     materials: [{ pbrMetallicRoughness: { baseColorFactor: [0.85, 0.87, 0.9, 1], metallicFactor: 0, roughnessFactor: 0.9 } }],
     buffers: [{ byteLength: bin.length }], bufferViews: views, accessors };
   let json = Buffer.from(JSON.stringify(gltf)); json = Buffer.concat([json, Buffer.alloc((4 - (json.length % 4)) % 4, 0x20)]);

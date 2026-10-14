@@ -1,8 +1,8 @@
-# HouseOS
+# CasaTorch
 
 **One screen for your whole house - with or without Home Assistant.**
 
-HouseOS is a self-hosted home dashboard built for a wall-mounted tablet (and your phone). Weather,
+CasaTorch is a self-hosted home dashboard built for a wall-mounted tablet (and your phone). Weather,
 a family calendar, your teams' scores, headlines, photos, the internet, lights and plugs, cameras,
 sensors and power use - on a Home screen you arrange yourself. With Pro, your house as a live 3D
 model from an iPhone LiDAR scan, and an assistant you can ask anything about your home.
@@ -17,15 +17,15 @@ Nothing leaves your house unless you turn on a feature that needs to.
 ## Try it in two minutes (demo house, no setup)
 
 ```bash
-git clone https://github.com/gethouseos/houseos && cd houseos/app
+git clone https://github.com/casatorch/casatorch && cd casatorch/app
 npm install
 npm run demo          # open http://localhost:8090
 ```
 
-## Get a HouseOS Box
+## Get a CasaTorch Box
 
-Rather not set anything up? Order a **HouseOS Box** - a Raspberry Pi 5 with HouseOS installed, a year
-of Pro included. Plug it into your router and open it on any screen. **[gethouseos.com/box](https://gethouseos.com/box)**
+Rather not set anything up? Order a **CasaTorch Box** - a Raspberry Pi 5 with CasaTorch installed, a year
+of Pro included. Plug it into your router and open it on any screen. **[casatorch.com/box](https://casatorch.com/box)**
 
 ## Install it for real
 
@@ -41,16 +41,16 @@ Then open `http://<that machine>:8090`. Hardware advice and wall-screen picks: [
 
 ### Home Assistant users
 
-[![Add the HouseOS add-on repository to your Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fgethouseos%2FHouseOS)
-[![Open the HouseOS card in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=gethouseos&repository=HouseOS&category=plugin)
+[![Add the CasaTorch add-on repository to your Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fcasatorch%2Fcasatorch)
+[![Open the CasaTorch card in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=casatorch&repository=casatorch&category=plugin)
 
 - **Add-on** (Home Assistant OS / Supervised): add this repository in **Settings > Add-ons > Add-on
-  store > ⋮ > Repositories** - `https://github.com/gethouseos/HouseOS` - and install **HouseOS**.
+  store > ⋮ > Repositories** - `https://github.com/casatorch/casatorch` - and install **CasaTorch**.
   Home Assistant is connected automatically, no token needed. Open it at `http://homeassistant.local:8090`.
-- **HACS card**: **HACS > ⋮ > Custom repositories**, add `https://github.com/gethouseos/HouseOS` as
-  type **Dashboard**, download **HouseOS card**, then add `type: custom:houseos-card` with
+- **HACS card**: **HACS > ⋮ > Custom repositories**, add `https://github.com/casatorch/casatorch` as
+  type **Dashboard**, download **CasaTorch card**, then add `type: custom:casatorch-card` with
   `url: http://homeassistant.local:8090` and `view: home | panel | 3d | ask` to any dashboard.
-- **Container / Core**: run HouseOS with Docker next to Home Assistant and give it a long-lived token.
+- **Container / Core**: run CasaTorch with Docker next to Home Assistant and give it a long-lived token.
 
 Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
 
@@ -61,7 +61,7 @@ Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
 - **14 widgets**: clock, weather, calendar, scores, headlines, internet, today, alerts, energy,
   quick switches, pinned devices (any devices or Home Assistant entities you pick), cameras, photo reel, 3D Home.
 - **Panel mode** for wall tablets (`http://<box>:8090/?panel=1`): a status bar across the top with
-  the time, weather, alerts and everything HouseOS is connected to - green, yellow or red - plus
+  the time, weather, alerts and everything CasaTorch is connected to - green, yellow or red - plus
   the Ask the house bar. Keeps the screen on.
 - **Light or dark**, color schemes or your own colors, and the **menu on any side** of the screen.
 - **Rename anything** - menu items, tiles, devices, the house - and hide what you don't use.
@@ -70,19 +70,19 @@ Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
 
 ## Setup asks the questions for you
 
-The first time you open HouseOS, a setup wizard walks through:
+The first time you open CasaTorch, a setup wizard walks through:
 
 1. **Your home** - name, time zone, units, and your town for the weather (rounded position only)
 2. **Your login** - password, a PIN for risky actions, and a Pro key if you have one
-3. **Calendars** - the built-in HouseOS calendar, plus Google / iCloud / Outlook links if you use them
+3. **Calendars** - the built-in CasaTorch calendar, plus Google / iCloud / Outlook links if you use them
 4. **Your teams** - NFL, NBA, MLB, NHL, MLS, college, Premier League and more
 5. **Headlines** - AP, NPR, BBC, tech, sports, or any RSS feed
 6. **Reminders** - trash night, meds, feed the fish
-7. **Home Assistant** - optional. If you have it, HouseOS adds integrations *inside* Home Assistant
-   for you (Home Assistant asks its own questions; HouseOS shows them)
+7. **Home Assistant** - optional. If you have it, CasaTorch adds integrations *inside* Home Assistant
+   for you (Home Assistant asks its own questions; CasaTorch shows them)
 8. **Cameras, lights, sensors** - each brand says whether it needs Home Assistant
 9. **Network, energy, alerts** - your power company's real usage needs Home Assistant; without it,
-   HouseOS uses your smart plugs and your price per kWh
+   CasaTorch uses your smart plugs and your price per kWh
 
 Run it again any time from **Settings > Run setup again**; what you don't change is kept.
 
@@ -100,7 +100,7 @@ Run it again any time from **Settings > Run setup again**; what you don't change
 | Energy: live watts per plug, cost at your rate | ✓ |
 | Alerts: leaks, smoke, low batteries, devices offline, internet down | ✓ |
 
-With Home Assistant connected, **everything in it shows up in HouseOS** - lights, switches, fans, blinds and
+With Home Assistant connected, **everything in it shows up in CasaTorch** - lights, switches, fans, blinds and
 covers, media, thermostats, locks, cameras, scenes, scripts, buttons, vacuums, alarms, people, and every sensor -
 searchable in Controls and pinnable to any Home screen tile ("Pinned devices"). That brings Z-Wave, Zigbee,
 Matter, Nest, your power company's real usage (Opower) and thousands more. Unlocking doors, opening garage
@@ -134,7 +134,7 @@ Two ways to get your floors in - mix and match per floor:
   doors, windows, furniture and rooms are recognised automatically.
 - **Draw them, on any device.** In **Editor > Floors > Draw a floor**, drag to draw each room on a 1 m
   grid and add walls. Have a floor-plan picture (from the listing, the builder, or a photo of a paper
-  plan)? **Trace a picture**: set how wide it is in meters and draw over it. HouseOS raises the walls.
+  plan)? **Trace a picture**: set how wide it is in meters and draw over it. CasaTorch raises the walls.
 
 **The 3D view** shows your home as a solid, lit model: rooms tinted in their own colours, lights
 glowing where they are, devices showing watts, temperatures and what's playing. Tap a room (or its
@@ -150,7 +150,7 @@ draw, stack and line them up).
 ### Ask the house (Pro)
 
 "Which lights are on?" "What's using the most power?" "Did the Niners win?" Answers come from what
-HouseOS knows right now; when you ask it to switch something it shows a button you tap to confirm.
+CasaTorch knows right now; when you ask it to switch something it shows a button you tap to confirm.
 Bring your own AI - **Claude**, **OpenAI**, any OpenAI-compatible server - or **Ollama** on your
 own network so nothing leaves the house. It never unlocks doors or opens garage doors.
 
@@ -162,10 +162,10 @@ own network so nothing leaves the house. It never unlocks doors or opens garage 
 
 ## Support and services
 
-- **Community** (free): the HouseOS Discord - **[gethouseos.com/discord](https://gethouseos.com/discord)** - and GitHub issues
-- **Basic support** (included with Pro): e-mail and Discord support from the HouseOS team
-- **Service & Developer Access** ($100/year, includes Pro): a direct line to a HouseOS developer for
-  custom features and hands-on help deploying HouseOS in your home
+- **Community** (free): the CasaTorch Discord - **[casatorch.com/discord](https://casatorch.com/discord)** - and GitHub issues
+- **Basic support** (included with Pro): e-mail and Discord support from the CasaTorch team
+- **Service & Developer Access** ($100/year, includes Pro): a direct line to a CasaTorch developer for
+  custom features and hands-on help deploying CasaTorch in your home
 - **Home network planning**: a one-on-one consultation to scope your network, Wi-Fi, cameras and
   sensors, with a written plan
 
@@ -187,5 +187,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/ARCHITECTURE.md](docs/ARCHITECT
 
 ## License
 
-HouseOS is licensed under the [GNU AGPL-3.0](LICENSE). HouseOS Pro features are unlocked by a
+CasaTorch is licensed under the [GNU AGPL-3.0](LICENSE). CasaTorch Pro features are unlocked by a
 commercial license key.

@@ -1,4 +1,4 @@
-# HouseOS add-on
+# CasaTorch add-on
 
 One screen for your whole house: a dashboard you can rearrange, a wall-panel mode, a 3D home
 with your devices on it, a family calendar, photos and an AI assistant (Pro) - with everything

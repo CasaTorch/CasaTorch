@@ -1,15 +1,15 @@
 {
-  "name": "houseos",
+  "name": "casatorch",
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "HouseOS: a self-hosted wall-panel dashboard for your house and your homelab",
+  "description": "CasaTorch: a self-hosted wall-panel dashboard for your house and your homelab",
   "license": "AGPL-3.0-only",
   "main": "server.js",
   "scripts": {
     "build": "node build.mjs",
     "start": "node build.mjs && node server.js",
-    "demo": "node build.mjs && HOUSEOS_DEMO=1 node server.js",
+    "demo": "node build.mjs && CASATORCH_DEMO=1 node server.js",
     "scrub": "node ../tools/scrub-check.mjs ."
   },
   "engines": {

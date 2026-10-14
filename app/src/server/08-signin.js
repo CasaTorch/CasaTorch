@@ -106,7 +106,7 @@ if (Object.values(sessions).some((s) => !s.userId)) sessions = {};   // the old 
 let sessDirty = false;
 const saveSessions = () => { try { writeSecretJson(SESS_FILE, sessions); sessDirty = false; } catch { /* next time */ } };
 setInterval(() => { if (sessDirty) saveSessions(); }, 60_000).unref?.();
-const cookieOf = (req) => (String(req.headers.cookie || '').match(/(?:^|;\s*)houseos_session=([A-Za-z0-9_-]{20,})/) || [])[1];
+const cookieOf = (req) => (String(req.headers.cookie || '').match(/(?:^|;\s*)casatorch_session=([A-Za-z0-9_-]{20,})/) || [])[1];
 const cookieFlags = (req) => `Path=/; HttpOnly; SameSite=Lax${req.secure ? '; Secure' : ''}`;
 function sessionOf(req) {
   const tok = cookieOf(req); if (!tok) return null;
@@ -123,7 +123,7 @@ function startSession(req, res, u, { remember = false, kind = 'browser', mfa = f
   sessions[sha256(tok)] = { id: newId(), userId: u.id, kind, mfa, created: nowIso(), seen: nowIso(), expires: new Date(Date.now() + days * 86400_000).toISOString(), ip: clientIp(req), agent: String(req.headers['user-agent'] || '').slice(0, 160) };
   saveSessions();
   if (!u.panel) { u.lastLogin = nowIso(); saveUsers(); }
-  res.setHeader('Set-Cookie', `houseos_session=${tok}; ${cookieFlags(req)}; Max-Age=${days * 86400}`);
+  res.setHeader('Set-Cookie', `casatorch_session=${tok}; ${cookieFlags(req)}; Max-Age=${days * 86400}`);
 }
 const endSessionsOf = (userId, exceptKey) => { for (const [k, v] of Object.entries(sessions)) if (v.userId === userId && k !== exceptKey) delete sessions[k]; saveSessions(); };
 
@@ -151,8 +151,8 @@ function totpOk(secret, code, lastStep = 0) {
 }
 const recoveryCodes = () => Array.from({ length: 10 }, () => { const r = crypto.randomBytes(5).toString('hex'); return `${r.slice(0, 5)}-${r.slice(5)}`; });
 async function totpEnrolment(u) {
-  const secret = b32enc(crypto.randomBytes(20)), label = encodeURIComponent(`HouseOS (${config.house?.name || 'home'}):${u.username}`);
-  const uri = `otpauth://totp/${label}?secret=${secret}&issuer=HouseOS&algorithm=SHA1&digits=6&period=30`;
+  const secret = b32enc(crypto.randomBytes(20)), label = encodeURIComponent(`CasaTorch (${config.house?.name || 'home'}):${u.username}`);
+  const uri = `otpauth://totp/${label}?secret=${secret}&issuer=CasaTorch&algorithm=SHA1&digits=6&period=30`;
   return { secret, uri, qr: await QRCode.toString(uri, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) };
 }
 /* A second step for a signed-in user: their authenticator code or one recovery code (used up). */
@@ -195,8 +195,8 @@ const SETUP_PATHS = [/^\/setup\.(html|js)$/, /^\/api\/setup\//];
 app.use('/api', (req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const origin = req.headers.origin, site = req.headers['sec-fetch-site'];
-  if (site && !['same-origin', 'none'].includes(site)) return res.status(403).json({ error: 'refused: that request did not come from HouseOS' });
-  if (origin) { try { if (new URL(origin).host !== req.headers.host) return res.status(403).json({ error: 'refused: that request did not come from HouseOS' }); } catch { return res.status(403).json({ error: 'refused' }); } }
+  if (site && !['same-origin', 'none'].includes(site)) return res.status(403).json({ error: 'refused: that request did not come from CasaTorch' });
+  if (origin) { try { if (new URL(origin).host !== req.headers.host) return res.status(403).json({ error: 'refused: that request did not come from CasaTorch' }); } catch { return res.status(403).json({ error: 'refused' }); } }
   next();
 });
 app.use((req, res, next) => {
@@ -260,15 +260,15 @@ app.post('/api/auth/enroll', express.json({ limit: '4kb' }), async (req, res) =>
   res.json({ ok: true, recovery: codes });
 });
 app.post('/api/auth/terms', express.json({ limit: '4kb' }), (req, res) => {
-  if (req.body?.accept !== true) return res.status(400).json({ error: 'Please read and accept the terms to use HouseOS.' });
+  if (req.body?.accept !== true) return res.status(400).json({ error: 'Please read and accept the terms to use CasaTorch.' });
   const t = req.body?.ticket ? ticketOf(req.body.ticket) : null, u = t ? userById(t.userId) : req.user;
   if (!u || u.panel) return res.status(401).json({ error: 'Sign in again.' });
   u.terms = { version: TERMS_VERSION, at: nowIso() }; saveUsers(); audit(req, 'terms-accepted', { user: u.username, version: TERMS_VERSION });
   if (t) { t.passed.add('terms'); return proceed(req, res, t); }
   res.json({ ok: true });
 });
-app.post('/api/auth/logout', (req, res) => { const tok = cookieOf(req); if (tok) { delete sessions[sha256(tok)]; saveSessions(); } if (req.user) audit(req, 'signed-out'); res.setHeader('Set-Cookie', `houseos_session=; ${cookieFlags(req)}; Max-Age=0`); res.json({ ok: true }); });
-app.post('/api/logout', (req, res) => { const tok = cookieOf(req); if (tok) { delete sessions[sha256(tok)]; saveSessions(); } res.setHeader('Set-Cookie', `houseos_session=; ${cookieFlags(req)}; Max-Age=0`); res.json({ ok: true }); });
+app.post('/api/auth/logout', (req, res) => { const tok = cookieOf(req); if (tok) { delete sessions[sha256(tok)]; saveSessions(); } if (req.user) audit(req, 'signed-out'); res.setHeader('Set-Cookie', `casatorch_session=; ${cookieFlags(req)}; Max-Age=0`); res.json({ ok: true }); });
+app.post('/api/logout', (req, res) => { const tok = cookieOf(req); if (tok) { delete sessions[sha256(tok)]; saveSessions(); } res.setHeader('Set-Cookie', `casatorch_session=; ${cookieFlags(req)}; Max-Age=0`); res.json({ ok: true }); });
 app.get('/api/health', (_req, res) => res.json({ ok: true, version: '0.3.0' }));
 
 /* ---- invites: the owner adds someone, they pick their own username and password ---- */
@@ -286,13 +286,13 @@ app.post('/api/auth/invite', express.json({ limit: '4kb' }), (req, res) => {
   if (!/^[a-z0-9._@-]{3,40}$/.test(name)) return res.status(400).json({ error: 'Usernames are 3-40 letters, numbers, dots, dashes or @.' });
   if (users.list.some((x) => x !== u && (x.username === name || (x.email && x.email.toLowerCase() === name)))) return res.status(409).json({ error: 'That username is taken.' });
   const pwErr = passwordProblem(b.password, name); if (pwErr) return res.status(400).json({ error: pwErr });
-  if (b.accept !== true) return res.status(400).json({ error: 'Please read and accept the terms to use HouseOS.' });
+  if (b.accept !== true) return res.status(400).json({ error: 'Please read and accept the terms to use CasaTorch.' });
   Object.assign(u, { username: name, password: hashSecret(b.password), invite: undefined, terms: { version: TERMS_VERSION, at: nowIso() } });
   delete u.invite; saveUsers(); endSessionsOf(u.id); audit(req, 'invite-accepted', { user: name });
   proceed(req, res, newTicket(u, { via: 'invite' }));
 });
 /* Long, not complicated: 10+ characters, not the username, not a well-known one. */
-const COMMON = new Set(['password', 'password1', 'password123', '1234567890', '12345678910', 'qwertyuiop', 'iloveyou12', 'letmein123', 'welcome123', 'houseos123', 'administrator', 'passw0rd!', 'football12', 'baseball12']);
+const COMMON = new Set(['password', 'password1', 'password123', '1234567890', '12345678910', 'qwertyuiop', 'iloveyou12', 'letmein123', 'welcome123', 'casatorch123', 'administrator', 'passw0rd!', 'football12', 'baseball12']);
 function passwordProblem(pw, username) {
   const p = String(pw || '');
   if (p.length < 10) return 'Use at least 10 characters - a short sentence works well.';
@@ -335,7 +335,7 @@ app.post('/api/auth/2fa/enable', express.json({ limit: '4kb' }), (req, res) => {
 });
 app.post('/api/auth/2fa/disable', express.json({ limit: '4kb' }), (req, res) => {
   const u = me(req, res); if (!u) return;
-  if (users.policy?.require2fa) return res.status(403).json({ error: 'Two-step sign-in is required on this HouseOS - an admin can change that.' });
+  if (users.policy?.require2fa) return res.status(403).json({ error: 'Two-step sign-in is required on this CasaTorch - an admin can change that.' });
   if (limited(`pw:${u.id}`, 5)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes.' });
   if (!verifySecret(u.password, req.body?.password || '') || !secondFactorOk(u, req.body?.code)) { failed(`pw:${u.id}`); return res.status(403).json({ error: 'Your password or code is not right.' }); }
   delete u.totp; saveUsers(); audit(req, '2fa-off'); res.json({ ok: true });
@@ -452,11 +452,11 @@ app.get('/api/auth/google/start', (req, res) => {
   googleStates.set(state, { verifier, redirectUri, remember: req.query.remember === '1', exp: Date.now() + 10 * 60_000 });
   for (const [k, v] of googleStates) if (v.exp < Date.now()) googleStates.delete(k);
   const q = new URLSearchParams({ client_id: users.google.clientId, redirect_uri: redirectUri, response_type: 'code', scope: 'openid email profile', state, code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', prompt: 'select_account' });
-  res.setHeader('Set-Cookie', `houseos_gstate=${state}; ${cookieFlags(req)}; Max-Age=600`);
+  res.setHeader('Set-Cookie', `casatorch_gstate=${state}; ${cookieFlags(req)}; Max-Age=600`);
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${q}`);
 });
 app.get('/api/auth/google/callback', async (req, res) => {
-  const state = String(req.query.state || ''), st = googleStates.get(state), cookie = (String(req.headers.cookie || '').match(/(?:^|;\s*)houseos_gstate=([\w-]+)/) || [])[1];
+  const state = String(req.query.state || ''), st = googleStates.get(state), cookie = (String(req.headers.cookie || '').match(/(?:^|;\s*)casatorch_gstate=([\w-]+)/) || [])[1];
   googleStates.delete(state);
   if (!st || st.exp < Date.now() || cookie !== state || !req.query.code) return res.redirect('/login.html?error=google-state');
   try {
@@ -468,7 +468,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
     const u = users.list.find((x) => x.google?.sub && x.google.sub === info.sub) || (info.email_verified === true ? users.list.find((x) => x.email && x.email === email && !x.google?.sub) : null);
     if (!u || u.invite && !u.password) { audit(req, 'google-unknown', { email }); return res.redirect('/login.html?error=google-unknown'); }
     if (!u.google?.sub) { u.google = { sub: info.sub, email, linked: nowIso() }; saveUsers(); audit(req, 'google-linked', { user: u.username }); }
-    res.setHeader('Set-Cookie', `houseos_gstate=; ${cookieFlags(req)}; Max-Age=0`);
+    res.setHeader('Set-Cookie', `casatorch_gstate=; ${cookieFlags(req)}; Max-Age=0`);
     proceed(req, res, newTicket(u, { remember: st.remember, via: 'google' }), { redirect: true });
   } catch (err) { audit(req, 'google-failed', { why: String(err.message).slice(0, 120) }); res.redirect('/login.html?error=google-failed'); }
 });

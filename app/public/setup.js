@@ -1,4 +1,4 @@
-/* HouseOS setup wizard. The questions come from /api/setup/catalog
+/* CasaTorch setup wizard. The questions come from /api/setup/catalog
    (app/catalog/setup.json); this file only knows how to ask them.
    Integrations are added to Home Assistant by running that integration's own
    setup ("config flow"): Home Assistant sends its questions, we show them. */
@@ -240,7 +240,7 @@ function flowEl(domain, hint, done, extra) {
   return { el: box, start, render };
 }
 
-/* Gear HouseOS reaches itself vs. through Home Assistant: of each pair, show one. */
+/* Gear CasaTorch reaches itself vs. through Home Assistant: of each pair, show one. */
 const needsHa = (o) => o.method === 'ha' || o.method === 'ha-ui';
 function shownOptions(list) {
   return list.filter((o) => {
@@ -269,12 +269,12 @@ function hueEl(card) {
 function ringEl(card) {
   const st = W.ring ||= { email: '', step: 'login' };
   if (st.step === 'done') { card.append(el('div', { class: 'ok' }, '✓ Signed in to Ring. Your Ring password was not saved - only a sign-in token.')); return card; }
-  card.append(el('p', { class: 'note' }, 'Ring has no official API. HouseOS signs in the way the Ring app does (the method Homebridge and ring-mqtt use). It works today, but Ring could change it - that\'s why it\'s "Labs". Included with Pro and the free trial.'));
+  card.append(el('p', { class: 'note' }, 'Ring has no official API. CasaTorch signs in the way the Ring app does (the method Homebridge and ring-mqtt use). It works today, but Ring could change it - that\'s why it\'s "Labs". Included with Pro and the free trial.'));
   const out = el('div', {});
   const send = async (body) => {
     out.replaceChildren(el('div', { class: 'note' }, 'Talking to Ring...'));
     try { const r = await api('/api/setup/ring/login', { body }); if (r.ok) { st.step = 'done'; go(); return; } if (r.needsCode) { st.step = 'code'; st.prompt = r.prompt; go(); return; } out.replaceChildren(el('div', { class: 'err' }, r.error || 'Ring did not accept that')); }
-    catch (e) { out.replaceChildren(el('div', { class: 'err' }, /Pro feature/.test(e.message) ? 'Ring needs HouseOS Pro (the trial has ended).' : e.message)); }
+    catch (e) { out.replaceChildren(el('div', { class: 'err' }, /Pro feature/.test(e.message) ? 'Ring needs CasaTorch Pro (the trial has ended).' : e.message)); }
   };
   if (st.step === 'code') {
     const code = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', placeholder: '123456' });
@@ -321,10 +321,10 @@ function setupFor(stepId, opt) {
 /* ---------- pages ---------- */
 function welcome() {
   if (W.rerun) { const k = Object.entries(W.keeps).filter(([, v]) => v).map(([n]) => n); return [el('h1', {}, 'Change your setup'), el('p', { class: 'intro' }, `Your current answers are filled in. Anything you don't change is kept${k.length ? `, including what's already connected (${k.join(', ')})` : ''}.`)]; }
-  return [el('h1', {}, 'Welcome to HouseOS'),
-    el('p', { class: 'intro' }, 'About 10 minutes. First the everyday things - your town for the weather, calendars, teams, headlines, reminders. Then your gear: HouseOS connects to Hue, Shelly, YoLink, Frigate, Reolink and Ring itself, and to thousands more through Home Assistant if you have it. Skip anything; add it later.'),
-    el('p', { class: 'note' }, 'Stuck at any point? Ask in the HouseOS community: ', el('a', { href: 'https://gethouseos.com/discord', target: '_blank', rel: 'noopener' }, 'gethouseos.com/discord'), '.'),
-    el('div', { class: 'card' }, el('h3', {}, 'Just looking?'), el('p', { class: 'note' }, 'See HouseOS with a sample house, including the 3D floor plan. No setup needed.'),
+  return [el('h1', {}, 'Welcome to CasaTorch'),
+    el('p', { class: 'intro' }, 'About 10 minutes. First the everyday things - your town for the weather, calendars, teams, headlines, reminders. Then your gear: CasaTorch connects to Hue, Shelly, YoLink, Frigate, Reolink and Ring itself, and to thousands more through Home Assistant if you have it. Skip anything; add it later.'),
+    el('p', { class: 'note' }, 'Stuck at any point? Ask in the CasaTorch community: ', el('a', { href: 'https://casatorch.com/discord', target: '_blank', rel: 'noopener' }, 'casatorch.com/discord'), '.'),
+    el('div', { class: 'card' }, el('h3', {}, 'Just looking?'), el('p', { class: 'note' }, 'See CasaTorch with a sample house, including the 3D floor plan. No setup needed.'),
       el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/'; } }, 'Try the demo'))];
 }
 /* Where a step's branch keeps its answers: the network step keeps each kind's own (meraki, unifi). */
@@ -365,7 +365,7 @@ function utilityEl(p, store) {
   const card = el('div', { class: 'card' }, el('h3', {}, p.label, el('span', { class: 'badge ha' }, W.ha ? 'via Home Assistant' : 'needs Home Assistant')), W.ha ? el('p', { class: 'note' }, p.help) : null);
   if (store.utility === 'other') { card.append(el('div', { class: 'note' }, 'OK - enter your price per kWh below.'), W.ha ? el('button', { type: 'button', class: 'small', onclick: () => { store.utility = null; go(); } }, 'Look again') : null); return card; }
   if (store.utility) { card.append(el('div', { class: 'ok' }, `✓ ${store.utility} - connected through Home Assistant`)); return card; }
-  if (!W.ha) { store.utility = 'other'; card.append(el('div', { class: 'warn', style: 'margin:6px 0' }, '\u26A0 Needs Home Assistant - you skipped it, so HouseOS can\'t sign in to your power company.'), el('div', { class: 'note' }, 'You can still see costs: HouseOS adds up your smart plugs and uses the price per kWh you enter below (it\'s on your bill). To get your real bill and usage later, connect Home Assistant from Settings > Run setup again.')); return card; }
+  if (!W.ha) { store.utility = 'other'; card.append(el('div', { class: 'warn', style: 'margin:6px 0' }, '\u26A0 Needs Home Assistant - you skipped it, so CasaTorch can\'t sign in to your power company.'), el('div', { class: 'note' }, 'You can still see costs: CasaTorch adds up your smart plugs and uses the price per kWh you enter below (it\'s on your bill). To get your real bill and usage later, connect Home Assistant from Settings > Run setup again.')); return card; }
   if (W.haDomains.includes(p.domain)) { store.utility = 'Your power company'; card.append(el('div', { class: 'ok' }, '✓ Your power company is already connected in Home Assistant')); return card; }
   const f = flowEl(p.domain, null, (title) => { store.utility = title; go(); }, (cancel) => el('button', { type: 'button', class: 'small', onclick: () => { store.utility = 'other'; cancel(); } }, p.otherLabel));
   if (W.flows[p.domain]?.view) f.render();
@@ -412,7 +412,7 @@ function problems(step) {
   if (br?.pick) for (const o of shownOptions(br.pick.options)) if ((store[br.pick.id] || []).includes(o.id) && o.method === 'direct') {
     const d = store[o.id] || {};
     for (const f of (o.fields || []).filter((g) => g.required)) if (!d[f.id]) return `${o.label}: ${f.label} is needed.`;
-    if (o.id === 'frigate' && !d._test?.ok) return 'Press "Test connection" for Frigate so HouseOS can find your cameras.';
+    if (o.id === 'frigate' && !d._test?.ok) return 'Press "Test connection" for Frigate so CasaTorch can find your cameras.';
   }
   if (step.id === 'homeassistant' && store.uses === 'yes' && !W.ha) return 'Press "Test connection" so we know Home Assistant is reachable.';
   if (step.id === 'energy' && store.track === 'yes' && !store.utility) return 'Find your power company, or choose "Mine isn\'t listed".';
@@ -440,7 +440,7 @@ $('#next').onclick = async () => {
 };
 (async () => {
   const st = await api('/api/setup/state');
-  if (!st.open) { $('#page').replaceChildren(el('h1', {}, 'HouseOS is already set up'), el('p', {}, el('a', { href: '/' }, 'Open the dashboard'))); document.querySelector('footer').hidden = true; return; }
+  if (!st.open) { $('#page').replaceChildren(el('h1', {}, 'CasaTorch is already set up'), el('p', {}, el('a', { href: '/' }, 'Open the dashboard'))); document.querySelector('footer').hidden = true; return; }
   W.cat = await api('/api/setup/catalog');
   if (st.configured && !st.demo) { const cur = await api('/api/setup/current').catch(() => null); if (cur?.answers) { W.rerun = true; W.a = cur.answers; W.keeps = cur.keeps || {}; if (cur.ha) { W.ha = cur.ha; W.haDomains = cur.ha.domains || []; W.a.homeassistant._test = cur.ha; } } }
   W.steps = W.cat.steps;

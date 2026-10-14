@@ -1,8 +1,8 @@
 # Roadmap: phones, tablets and away from home
 
-HouseOS runs on a small always-on box in your home (a Raspberry Pi, a NAS, a mini PC or a Windows
+CasaTorch runs on a small always-on box in your home (a Raspberry Pi, a NAS, a mini PC or a Windows
 PC) and every screen in the house opens it in a browser. This page explains what has to stay
-local, and how HouseOS reaches phones, tablets and the outside world.
+local, and how CasaTorch reaches phones, tablets and the outside world.
 
 ## Why there's a box at home
 
@@ -22,18 +22,18 @@ watch your home around the clock. The box does that; your devices are screens fo
 
 ## The plan
 
-1. **Install on your home screen** *(next)* - HouseOS as an installable web app: on iPhone/iPad
+1. **Install on your home screen** *(next)* - CasaTorch as an installable web app: on iPhone/iPad
    Share > Add to Home Screen, on Android "Install app". Full screen, its own icon, no app store.
 2. **Away from home + phone alerts** *(Pro)* - your box keeps one secure, outgoing connection to
-   the HouseOS relay; your phone connects through it. No port forwarding, no VPN to set up. Your
+   the CasaTorch relay; your phone connects through it. No port forwarding, no VPN to set up. Your
    data stays on your box - the relay only passes it through. Push notifications for leaks,
    doorbell and alarms.
 3. **App Store and Play Store apps** *(Pro)* - the same app, with native push notifications and a
    box finder for first setup.
-4. **HouseOS Lite** *(exploring)* - a cloud-only version with no box, for weather, calendars,
-   scores, Ring, YoLink and Ask the house - an easy way to try HouseOS before adding a Raspberry Pi.
+4. **CasaTorch Lite** *(exploring)* - a cloud-only version with no box, for weather, calendars,
+   scores, Ring, YoLink and Ask the house - an easy way to try CasaTorch before adding a Raspberry Pi.
 
 ## Also coming
 
-Smart alerts, energy history and insights, self-healing, the HouseOS agent for watching NAS and
+Smart alerts, energy history and insights, self-healing, the CasaTorch agent for watching NAS and
 Docker hosts (apps, drives, backups, UPS), Green Button energy import, multi-home.

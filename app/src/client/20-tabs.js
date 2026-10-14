@@ -61,7 +61,7 @@ tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
       el('dl', { class: 'kv', style: 'margin-top:12px' }, el('dt', {}, 'Provider'), el('dd', {}, n.provider || '-'), el('dt', {}, 'Public IP'), el('dd', {}, n.publicIp || '-'), el('dt', {}, 'Location'), el('dd', {}, n.city || '-'),
         el('dt', {}, 'Ping'), el('dd', {}, Object.entries(n.latencyMs || {}).map(([k, v]) => `${k} ${v == null ? '-' : `${v} ms`}`).join(' · '))));
     const sp = el('div', { class: 'card' }, el('h2', {}, 'Speed'), n.speed ? el('div', { class: 'row', style: 'gap:30px' }, el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(n.speed.downMbps)), el('span', { class: 'lbl' }, 'Mbps down')), el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(n.speed.upMbps)), el('span', { class: 'lbl' }, 'Mbps up'))) : el('p', { class: 'muted' }, 'No test yet.'),
-      el('p', { class: 'small muted' }, n.speed ? `Tested ${fmtWhen(n.speed.at)}. HouseOS tests every 4 hours.` : 'HouseOS tests every 4 hours.'), btn);
+      el('p', { class: 'small muted' }, n.speed ? `Tested ${fmtWhen(n.speed.at)}. CasaTorch tests every 4 hours.` : 'CasaTorch tests every 4 hours.'), btn);
     const lan = el('div', { class: 'card' }, el('h2', {}, 'Home network'), el('dl', { class: 'kv' }, el('dt', {}, 'Router'), el('dd', {}, n.gateway || '-'), el('dt', {}, 'Devices seen'), el('dd', {}, n.lanDevices ?? '-'), el('dt', {}, 'This box'), el('dd', {}, n.host || '-')),
       el('p', { class: 'small muted' }, 'Per-device traffic and Wi-Fi detail come from a Meraki or UniFi controller (Settings > Run setup again).'));
     main.replaceChildren(el('div', { class: 'cards' }, net, sp, lan));
@@ -88,8 +88,8 @@ tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {
 /* ---- 3D Home (Pro) ---- */
 tab({ id: 'house3d', label: '3D Home', short: '3D', icon: 'cube', pro: true, async render(main) {
   if (!isPro()) {
-    main.replaceChildren(el('div', { class: 'card hero3d' }, el('h2', { style: 'justify-content:center' }, 'HouseOS Pro'), el('div', { style: 'font-size:28px;font-weight:700;margin-bottom:10px' }, 'Your house, in 3D'),
-      el('p', { class: 'muted', style: 'max-width:560px;margin:0 auto 18px' }, 'Scan each floor with a LiDAR iPhone or iPad Pro - or draw your floors right in HouseOS on any device - and pin your devices where they really are. Lights glow when on, speakers pulse with music, leaks and open doors flash - tap a pin to switch it.'),
+    main.replaceChildren(el('div', { class: 'card hero3d' }, el('h2', { style: 'justify-content:center' }, 'CasaTorch Pro'), el('div', { style: 'font-size:28px;font-weight:700;margin-bottom:10px' }, 'Your house, in 3D'),
+      el('p', { class: 'muted', style: 'max-width:560px;margin:0 auto 18px' }, 'Scan each floor with a LiDAR iPhone or iPad Pro - or draw your floors right in CasaTorch on any device - and pin your devices where they really are. Lights glow when on, speakers pulse with music, leaks and open doors flash - tap a pin to switch it.'),
       el('div', { class: 'row', style: 'justify-content:center' }, el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'), el('a', { class: 'btn', href: '/floorplan.html' }, 'Preview'))));
     return null;
   }

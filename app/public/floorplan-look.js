@@ -92,6 +92,6 @@ ${sh.fragmentShader.replace('#include <dithering_fragment>', `{
 }
 #include <dithering_fragment>`)}`;
   };
-  m.customProgramCacheKey = () => 'houseos-fx';
+  m.customProgramCacheKey = () => 'casatorch-fx';
   return m;
 }

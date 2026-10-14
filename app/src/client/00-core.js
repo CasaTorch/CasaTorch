@@ -1,5 +1,5 @@
 /* ======================================================================
- * HouseOS dashboard - the shell: side rail (bottom bar on phones), the
+ * CasaTorch dashboard - the shell: side rail (bottom bar on phones), the
  * page title, the Pro banner, and helpers every tab shares. Tabs are
  * { id, label, icon, pro?, render(main) }; render may return a refresh
  * function (called every 30 s while the tab is open).
@@ -15,7 +15,7 @@ const el = (tag, attrs = {}, ...kids) => {
   for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k)));
   return e;
 };
-/* Icons: 24x24 strokes, drawn here so HouseOS needs nothing from the internet. */
+/* Icons: 24x24 strokes, drawn here so CasaTorch needs nothing from the internet. */
 const ICONS = {
   home: 'M3 11 12 3l9 8M5 9.5V21h14V9.5M10 21v-6h4v6', bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0', sliders: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4',
   camera: 'M3 8h3l2-3h8l2 3h3v11H3zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', wifi: 'M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h0', bolt: 'M13 2 4 14h7l-1 8 9-12h-7z',
@@ -80,7 +80,7 @@ function drawBanner() {
   if (s.demo) b.append('Demo mode - sample data, no real house connected.', el('a', { href: '/setup.html' }, 'Set up my house'));
   else if (p.plan === 'trial') b.append(icon('spark', 16), `Pro trial: ${p.trialDaysLeft} day${p.trialDaysLeft === 1 ? '' : 's'} left - 3D Home, Ask the house and Ring are unlocked.`, el('a', { href: '#settings' }, 'Enter a license key'));
   else if (p.grace) b.append('Your Pro subscription has ended - Pro keeps working for a few more days.', el('a', { href: '#settings' }, 'Renew'));
-  else if (!p.pro) { b.className = 'free'; b.append('HouseOS Free.', el('a', { href: '#settings' }, 'See what Pro adds')); }
+  else if (!p.pro) { b.className = 'free'; b.append('CasaTorch Free.', el('a', { href: '#settings' }, 'See what Pro adds')); }
   b.hidden = !b.textContent;
 }
 function tick() { $('#clock').textContent = fmt(new Date().toISOString(), { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }

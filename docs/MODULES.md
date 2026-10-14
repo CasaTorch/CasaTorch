@@ -1,4 +1,4 @@
-# Module map: homedash → HouseOS
+# Module map: homedash → CasaTorch
 
 Every source file of the private dashboard (`homedash/dashboard/src`) and where it goes.
 Files move **one at a time** with `tools/port.sh`, which refuses to copy anything that
@@ -9,7 +9,7 @@ fails the privacy scan (`tools/scrub-check.mjs`).
 | **core** | Port to `app/` (free, AGPL). Personal values become settings. |
 | **split** | Part core, part dropped or Pro — port only the core part. |
 | **provider** | Becomes a pluggable provider (`app/src/providers/<name>`), off unless configured. |
-| **pro** | Goes to the private `houseos-pro` repo, loaded only with a license key. |
+| **pro** | Goes to the private `casatorch-pro` repo, loaded only with a license key. |
 | **later** | Not in v1; may return as a generic Home Assistant feature. |
 | **drop** | Entertainment / download stack. Never ported. |
 
@@ -139,5 +139,5 @@ fails the privacy scan (`tools/scrub-check.mjs`).
 | 40-netmap.js | core | |
 | 41-home-now.js | core | |
 
-New in HouseOS (no homedash file): `providers/unifi` (network), `demo/` fixtures and demo mode,
+New in CasaTorch (no homedash file): `providers/unifi` (network), `demo/` fixtures and demo mode,
 `pro/floorplan3d` (LiDAR .glb → NeonPlan-style 3D view with live devices), license-key loader.

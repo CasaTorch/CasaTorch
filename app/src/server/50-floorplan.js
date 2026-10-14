@@ -1,9 +1,9 @@
 /* ======================================================================
- * 3D floor plan - HouseOS Pro.
+ * 3D floor plan - CasaTorch Pro.
  *
  * Each floor is either a 3D model from a phone/tablet LiDAR scan (Polycam,
  * Scaniverse, 3D Scanner App - exported as .glb), or a plan drawn in the app
- * (rooms and walls, optionally traced over a floor-plan picture) that HouseOS
+ * (rooms and walls, optionally traced over a floor-plan picture) that CasaTorch
  * turns into 3D. No LiDAR device needed for the drawn kind. People
  * place their devices on it by clicking where they are; the plan then shows
  * them live: lights glowing when on, what is playing, watts per plug and for

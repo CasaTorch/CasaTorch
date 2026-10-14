@@ -1,5 +1,5 @@
 {
-  "_about": "The setup wizard's questions and the gear HouseOS supports. Each option says how it is set up: 'ha' = HouseOS runs that integration's own setup inside Home Assistant (HA asks its questions, HouseOS shows them); 'ha-ui' = needs a sign-in page that only Home Assistant can show (OAuth), so HouseOS opens it there; 'direct' = HouseOS talks to it itself; 'guide' = instructions only. Add gear here - no code needed for an 'ha' option. 'hue' / 'ring' = HouseOS's own pairing or sign-in screens. 'haTwin' names the Home Assistant option that does the same job: when Home Assistant is connected the HA one is shown, otherwise this one.",
+  "_about": "The setup wizard's questions and the gear CasaTorch supports. Each option says how it is set up: 'ha' = CasaTorch runs that integration's own setup inside Home Assistant (HA asks its questions, CasaTorch shows them); 'ha-ui' = needs a sign-in page that only Home Assistant can show (OAuth), so CasaTorch opens it there; 'direct' = CasaTorch talks to it itself; 'guide' = instructions only. Add gear here - no code needed for an 'ha' option. 'hue' / 'ring' = CasaTorch's own pairing or sign-in screens. 'haTwin' names the Home Assistant option that does the same job: when Home Assistant is connected the HA one is shown, otherwise this one.",
   "steps": [
     {
       "id": "house",
@@ -73,8 +73,8 @@
     },
     {
       "id": "account",
-      "title": "Your HouseOS login",
-      "intro": "Your own sign-in for HouseOS. You'll use it on phones and other screens; later you can add family members, turn on two-step sign-in, or connect Google sign-in in Settings > Security.",
+      "title": "Your CasaTorch login",
+      "intro": "Your own sign-in for CasaTorch. You'll use it on phones and other screens; later you can add family members, turn on two-step sign-in, or connect Google sign-in in Settings > Security.",
       "fields": [
         {
           "id": "username",
@@ -99,9 +99,9 @@
         },
         {
           "id": "license",
-          "label": "HouseOS Pro license key (optional)",
+          "label": "CasaTorch Pro license key (optional)",
           "type": "textarea",
-          "help": "Every new HouseOS gets 14 days of Pro free. Already bought Pro? Paste the key from your e-mail."
+          "help": "Every new CasaTorch gets 14 days of Pro free. Already bought Pro? Paste the key from your e-mail."
         },
         {
           "id": "terms",
@@ -114,11 +114,11 @@
     {
       "id": "calendars",
       "title": "Calendars",
-      "intro": "Show your family's schedule on the Home screen. HouseOS has its own calendar you can fill in right in the app - no Google account needed. If you already use Google, iCloud or Outlook, you can also link those.",
+      "intro": "Show your family's schedule on the Home screen. CasaTorch has its own calendar you can fill in right in the app - no Google account needed. If you already use Google, iCloud or Outlook, you can also link those.",
       "fields": [
         {
           "id": "mine",
-          "label": "Use the HouseOS calendar (add events in the app)",
+          "label": "Use the CasaTorch calendar (add events in the app)",
           "type": "choice",
           "options": [
             [
@@ -179,7 +179,7 @@
     {
       "id": "homeassistant",
       "title": "Home Assistant",
-      "intro": "Home Assistant is optional. HouseOS talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring with Pro). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.",
+      "intro": "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring with Pro). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.",
       "question": {
         "id": "uses",
         "label": "Do you use Home Assistant?",
@@ -190,7 +190,7 @@
           ],
           [
             "no",
-            "No - use HouseOS on its own"
+            "No - use CasaTorch on its own"
           ],
           [
             "not-yet",
@@ -213,7 +213,7 @@
               "label": "Long-lived access token",
               "type": "password",
               "required": true,
-              "help": "In Home Assistant: your profile (bottom left) > Security > Long-lived access tokens > Create token. It must belong to an administrator so HouseOS can add integrations."
+              "help": "In Home Assistant: your profile (bottom left) > Security > Long-lived access tokens > Create token. It must belong to an administrator so CasaTorch can add integrations."
             }
           ],
           "test": "homeassistant"
@@ -222,7 +222,7 @@
           "guide": "install-ha"
         },
         "no": {
-          "note": "No problem. Next you'll see the gear HouseOS connects to directly. Anything marked 'needs Home Assistant' can be added later from Settings > Run setup again."
+          "note": "No problem. Next you'll see the gear CasaTorch connects to directly. Anything marked 'needs Home Assistant' can be added later from Settings > Run setup again."
         }
       }
     },
@@ -319,7 +319,7 @@
                     "label": "Camera password",
                     "type": "password",
                     "required": true,
-                    "help": "Tip: make a view-only user for HouseOS in the Reolink app."
+                    "help": "Tip: make a view-only user for CasaTorch in the Reolink app."
                   }
                 ],
                 "test": "reolink"
@@ -431,7 +431,7 @@
                 ]
               ],
               "default": "yes",
-              "help": "Needs Frigate. If you don't have it, HouseOS shows how to add it."
+              "help": "Needs Frigate. If you don't have it, CasaTorch shows how to add it."
             }
           ]
         }
@@ -849,22 +849,22 @@
           "then": "meraki-network"
         },
         "omada": {
-          "note": "Omada support is planned. HouseOS will still show your internet speed and devices from your DNS blocker."
+          "note": "Omada support is planned. CasaTorch will still show your internet speed and devices from your DNS blocker."
         },
         "opnsense": {
           "note": "OPNsense/pfSense support is planned. You'll get internet status, speed tests and devices from your DNS blocker."
         },
         "eero": {
-          "note": "eero has no local API, so HouseOS shows internet status and speed tests."
+          "note": "eero has no local API, so CasaTorch shows internet status and speed tests."
         },
         "google": {
-          "note": "Google Wifi has no local API, so HouseOS shows internet status and speed tests."
+          "note": "Google Wifi has no local API, so CasaTorch shows internet status and speed tests."
         },
         "isp": {
-          "note": "HouseOS will show internet status and speed tests."
+          "note": "CasaTorch will show internet status and speed tests."
         },
         "other": {
-          "note": "HouseOS will show internet status and speed tests. Tell us what you use on GitHub."
+          "note": "CasaTorch will show internet status and speed tests. Tell us what you use on GitHub."
         }
       },
       "fields": [
@@ -951,7 +951,7 @@
           "provider": {
             "id": "utility",
             "label": "Your power company's bill and usage (needs Home Assistant)",
-            "help": "With Home Assistant, sign in with your power company's website login and HouseOS gets your real bill and usage (your password goes to Home Assistant only). Without it, enter your price per kWh.",
+            "help": "With Home Assistant, sign in with your power company's website login and CasaTorch gets your real bill and usage (your password goes to Home Assistant only). Without it, enter your price per kWh.",
             "method": "ha",
             "domain": "opower",
             "otherLabel": "Mine isn't listed"
@@ -1052,13 +1052,13 @@
                 "label": "A UPS (battery backup) plugged into a server by USB",
                 "method": "ha",
                 "domain": "nut",
-                "hint": "HouseOS also reads it through its server agent - this just adds it to Home Assistant too."
+                "hint": "CasaTorch also reads it through its server agent - this just adds it to Home Assistant too."
               }
             ]
           }
         }
       },
-      "intro": "Two ways to see what power costs: (1) your power company's real bill and usage - this needs Home Assistant, which signs in to your utility for you; or (2) HouseOS adds up your smart plugs and multiplies by your price per kWh - no Home Assistant needed."
+      "intro": "Two ways to see what power costs: (1) your power company's real bill and usage - this needs Home Assistant, which signs in to your utility for you; or (2) CasaTorch adds up your smart plugs and multiplies by your price per kWh - no Home Assistant needed."
     },
     {
       "id": "alerts",
@@ -1109,10 +1109,10 @@
     }
   ],
   "guides": {
-    "install-ha": "Home Assistant runs well in Docker on the same machine as HouseOS:\n\n  docker run -d --name homeassistant --restart unless-stopped --network host -v /path/to/ha-config:/config ghcr.io/home-assistant/home-assistant:stable\n\nOpen http://<that machine>:8123, create your account, then come back and choose 'Yes'. Or buy a Home Assistant Green - it works out of the box.",
+    "install-ha": "Home Assistant runs well in Docker on the same machine as CasaTorch:\n\n  docker run -d --name homeassistant --restart unless-stopped --network host -v /path/to/ha-config:/config ghcr.io/home-assistant/home-assistant:stable\n\nOpen http://<that machine>:8123, create your account, then come back and choose 'Yes'. Or buy a Home Assistant Green - it works out of the box.",
     "wyze": "Wyze cameras work through docker-wyze-bridge, which turns them into normal streams. Install it, then pick 'Frigate' or 'Other IP camera'.",
-    "cloud-cams": "Arlo and Eufy are cloud cameras. Add them in Home Assistant with the community integrations (HACS); HouseOS shows them once they're there.",
-    "already-in-ha": "Anything already in Home Assistant shows up in HouseOS automatically - nothing else to do.",
-    "emporia": "Emporia Vue works through a community integration (HACS). Add it in Home Assistant; HouseOS reads it from there."
+    "cloud-cams": "Arlo and Eufy are cloud cameras. Add them in Home Assistant with the community integrations (HACS); CasaTorch shows them once they're there.",
+    "already-in-ha": "Anything already in Home Assistant shows up in CasaTorch automatically - nothing else to do.",
+    "emporia": "Emporia Vue works through a community integration (HACS). Add it in Home Assistant; CasaTorch reads it from there."
   }
 }

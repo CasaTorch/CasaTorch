@@ -31,7 +31,7 @@ const PATTERNS = [
   ['MAC address', /\b([0-9a-f]{2}:){5}[0-9a-f]{2}\b/gi, (m) => !/^(00:00:00|aa:bb:cc|de:ad:be|12:34:56)/i.test(m)],
   ['Meraki serial', /\bQ2[A-Z0-9]{2}-[A-Z0-9]{4}-[A-Z0-9]{4}\b/g, (m) => !/XXXX/.test(m)],
   ['API key / token', /\b(sk-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{30,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}|[a-f0-9]{40})\b/g, () => true],
-  ['e-mail address', /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, (m) => !/@(example\.(com|org)|users\.noreply\.github\.com|houseos\.(dev|app))$/i.test(m)],
+  ['e-mail address', /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, (m) => !/@(example\.(com|org)|users\.noreply\.github\.com|casatorch\.(dev|app))$/i.test(m)],
   ['street address', /\b\d{2,5}\s+[A-Z][a-z]+\s+(St|Street|Ave|Avenue|Rd|Road|Blvd|Dr|Drive|Ln|Lane|Ct|Court|Way)\b/g, () => true],
 ];
 const SKIP = /(^|\/)(node_modules|\.git|vendor)(\/|$)|\.(png|jpe?g|gif|webp|ico|glb|gltf|woff2?|pdf)$|(^|\/)LICENSE$|private-terms\.txt$/;

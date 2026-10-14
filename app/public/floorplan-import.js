@@ -1,4 +1,4 @@
-/* Turn whatever a scanning app exported into one .glb for HouseOS:
+/* Turn whatever a scanning app exported into one .glb for CasaTorch:
    - a .glb                         -> used as is
    - a .gltf (with its .bin and textures picked together, or embedded)
    - a .usdz / .usd (Apple RoomPlan apps - the free export in many scanners)

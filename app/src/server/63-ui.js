@@ -23,7 +23,7 @@ app.put('/api/ui', express.json({ limit: '128kb' }), (req, res) => {
   res.json(next);
 });
 
-/* The status bar: everything HouseOS runs or talks to, and whether it's OK right now. */
+/* The status bar: everything CasaTorch runs or talks to, and whether it's OK right now. */
 app.get('/api/connections', async (_req, res) => {
   const items = [];
   const add = (id, name, state, detail) => items.push({ id, name, state, detail: detail || null });   // state: ok | warn | down | off

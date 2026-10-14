@@ -1,6 +1,6 @@
 /* ======================================================================
  * Home Assistant, when it is connected: EVERY entity becomes a device
- * HouseOS can show - lights, switches, fans, covers, media, climate, locks,
+ * CasaTorch can show - lights, switches, fans, covers, media, climate, locks,
  * cameras, scenes, scripts, buttons, vacuums, alarms, people, and every
  * sensor (power, energy, temperature, humidity, battery, or any value).
  * The things that are safe to switch can be switched from the dashboard;
@@ -10,7 +10,7 @@ async function haStates() {
   const h = config.homeAssistant; if (!h?.url) return [];
   return (await cached('ha:states', 8_000, async () => ({ list: await getJSON(`${h.url}/api/states`, { headers: { Authorization: `Bearer ${h.token}` } }) }))).list || [];
 }
-/* Home Assistant reports temperatures in its own unit system; HouseOS keeps Celsius inside. */
+/* Home Assistant reports temperatures in its own unit system; CasaTorch keeps Celsius inside. */
 const haC = (v, unit) => { if (v == null || v === '' || Number.isNaN(Number(v))) return null; const f = unit ? /F/.test(unit) : config.house?.units === 'F'; return f ? Math.round((Number(v) - 32) * 5 / 9 * 10) / 10 : Number(v); };
 const HA_SKIP = new Set(['zone', 'sun', 'persistent_notification', 'tts', 'stt', 'conversation', 'event', 'wake_word', 'assist_satellite', 'tag', 'image', 'notify', 'ai_task', 'todo', 'calendar']);
 const RISKY_COVERS = new Set(['garage', 'gate', 'door']);

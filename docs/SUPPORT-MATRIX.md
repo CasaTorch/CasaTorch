@@ -1,10 +1,10 @@
-# What HouseOS supports, and how
+# What CasaTorch supports, and how
 
-HouseOS works **without Home Assistant**. Home Assistant is an optional add-on that brings in
+CasaTorch works **without Home Assistant**. Home Assistant is an optional add-on that brings in
 hundreds more devices. Everything below is chosen for one test: *can a normal person connect it
 with a login, a key, or a button press, in under two minutes?*
 
-Legend: **Direct** = HouseOS talks to it itself · **Via HA** = needs Home Assistant ·
+Legend: **Direct** = CasaTorch talks to it itself · **Via HA** = needs Home Assistant ·
 **Labs** = works through an unofficial API that the vendor could change or block (opt-in, Pro) ·
 **No** = not supported, and why.
 
@@ -35,24 +35,24 @@ Legend: **Direct** = HouseOS talks to it itself · **Via HA** = needs Home Assis
 | Lights & switches | Philips Hue | Direct | Press the bridge button |
 | | Shelly | Direct | Local, documented API |
 | | Kasa/Tapo, Lutron, Z-Wave, Zigbee, Matter, everything else | Via HA | |
-| Locks & thermostats | Any | Via HA | Locks need PIN + confirm in HouseOS |
+| Locks & thermostats | Any | Via HA | Locks need PIN + confirm in CasaTorch |
 | Sensors | Shelly (H&T, Flood, Door) | Direct | Local |
 | | YoLink | Direct | Official cloud API (keys from the YoLink app) |
-| | Ecowitt weather stations | Direct | The station pushes to HouseOS |
+| | Ecowitt weather stations | Direct | The station pushes to CasaTorch |
 | | Cisco Meraki MT | Direct | API key |
 | | Zigbee/Z-Wave/others | Via HA | |
 | Network | UniFi | Direct | Local API key |
 | | Cisco Meraki | Direct | API key |
 | | Pi-hole, AdGuard Home | Direct | |
 | | Omada, OPNsense/pfSense | Planned | |
-| | eero, Google Wifi, ISP routers | Basic | Internet status, public IP, ISP, speed, latency, devices seen on the network (ARP scan when HouseOS runs on the network) |
+| | eero, Google Wifi, ISP routers | Basic | Internet status, public IP, ISP, speed, latency, devices seen on the network (ARP scan when CasaTorch runs on the network) |
 | Energy | Price per kWh / time-of-use | Direct | Typed in the wizard |
 | | Utility bill and usage | Via HA (Opower); Green Button upload planned | Green Button "Download My Data" works with most US utilities, no HA needed (0.3) |
 | | Shelly plugs / EM meters | Direct | Local |
-| | UPS | Planned (0.3) | Through the HouseOS agent (NUT/USB); via HA today |
+| | UPS | Planned (0.3) | Through the CasaTorch agent (NUT/USB); via HA today |
 | | Kasa/Tapo plugs, Sense, Enphase, Powerwall, Wall Connector | Via HA | Direct versions planned |
-| Servers | Docker host HouseOS runs on | Planned (0.3) | Docker socket |
-| | Other NAS/servers | Planned (0.3) | HouseOS agent (one command) |
+| Servers | Docker host CasaTorch runs on | Planned (0.3) | Docker socket |
+| | Other NAS/servers | Planned (0.3) | CasaTorch agent (one command) |
 
 ## Why not more "direct" on day one
 

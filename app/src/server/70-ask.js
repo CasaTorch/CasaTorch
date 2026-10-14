@@ -1,6 +1,6 @@
 /* ======================================================================
  * Ask the house (Pro). Questions in plain English, answered from what
- * HouseOS knows right now: devices, power, weather, calendar, scores,
+ * CasaTorch knows right now: devices, power, weather, calendar, scores,
  * headlines, the internet and open alerts.
  *
  * Bring your own AI: Anthropic (Claude), OpenAI, any OpenAI-compatible
@@ -80,7 +80,7 @@ async function houseSnapshot() {
 }
 const SAFE_ACTIONS = new Set(['on', 'off', 'toggle']);
 function systemPrompt(snap) {
-  return `You are the assistant built into HouseOS, the home dashboard for "${snap.house}". Answer the household's questions about their home in plain, friendly English - usually 1-3 sentences, a short list if it helps. Use only the data below; if something isn't there, say you can't see it. Times are in the house's time zone (${snap.timezone}); temperatures in °${snap.temperatureUnit}.
+  return `You are the assistant built into CasaTorch, the home dashboard for "${snap.house}". Answer the household's questions about their home in plain, friendly English - usually 1-3 sentences, a short list if it helps. Use only the data below; if something isn't there, say you can't see it. Times are in the house's time zone (${snap.timezone}); temperatures in °${snap.temperatureUnit}.
 
 You cannot change anything yourself. If the person asks to switch something (lights, plugs, switches, play/pause music), suggest it as an action and they will tap to confirm. Allowed actions: "on", "off", "toggle" (use "toggle" for play/pause on media). Never suggest unlocking doors, opening garage doors or disarming anything - tell them to use the Controls tab with their PIN.
 

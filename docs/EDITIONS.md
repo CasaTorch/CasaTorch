@@ -1,11 +1,11 @@
-# HouseOS Free and Pro
+# CasaTorch Free and Pro
 
 **Free is a complete home dashboard, for good.** Pro adds the showpiece features and, as they
 ship, the things that cost money to run (remote access, phone alerts, backups).
 
 **Pro: $5/month, $49/year, or $129 once** (lifetime, one home). Every new install gets a
 **14-day Pro trial** - no card, nothing to cancel. A Pro key is checked on your box, offline;
-HouseOS never phones home to check it.
+CasaTorch never phones home to check it.
 
 ## What's in each
 
@@ -35,7 +35,7 @@ HouseOS never phones home to check it.
 | **Ring** doorbells and cameras without Home Assistant (Labs - unofficial API) | | ✓ | Now |
 | **Away from home** - secure remote access from your phone, no port forwarding | | ✓ | Coming |
 | **Phone alerts** - push notifications for leaks, doorbell, alarms, with quiet hours | | ✓ | Coming |
-| **HouseOS apps** for iPhone, iPad and Android (App Store / Play Store) | | ✓ | Coming |
+| **CasaTorch apps** for iPhone, iPad and Android (App Store / Play Store) | | ✓ | Coming |
 | **Smart alerts** - "only if nobody's home", escalation, plain-English summaries | | ✓ | Coming |
 | **Energy insights** - history, bill forecast, always-on load, weekly report | | ✓ | Coming |
 | **Self-healing** - restarts stuck integrations and tells you what it fixed | | ✓ | Coming |
@@ -56,7 +56,7 @@ and for the features that took the most work: the 3D Home, Ask the house and Rin
 
 ## Using AI with Ask the house
 
-**What it costs:** HouseOS Pro unlocks Ask the house, but **the AI itself is not included**. You connect
+**What it costs:** CasaTorch Pro unlocks Ask the house, but **the AI itself is not included**. You connect
 your own AI and pay that company for what you use:
 
 | AI | Cost | Privacy |
@@ -72,5 +72,5 @@ spending limit.
 
 Ask the house sends a snapshot of your home (device names and states, the calendar, weather) to
 the AI you choose, only when you ask a question. Choose **Ollama** and it never leaves your
-network. HouseOS only suggests actions - you tap to do them - and it never unlocks doors or opens
+network. CasaTorch only suggests actions - you tap to do them - and it never unlocks doors or opens
 garage doors.

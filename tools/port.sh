@@ -1,5 +1,5 @@
 #!/bin/bash
-# port.sh: bring one homedash module into HouseOS - only if it passes the privacy scan.
+# port.sh: bring one homedash module into CasaTorch - only if it passes the privacy scan.
 #
 #   tools/port.sh server/03-home-assistant.js      copy, then scan; refuses to keep it on a hit
 #   tools/port.sh --force-copy server/x.js         copy anyway, to clean it up by hand (it is
@@ -16,7 +16,7 @@ rel=${1:?usage: tools/port.sh [--force-copy] server/NN-name.js}
 action=$(awk -F'|' -v f="$(basename "$rel")" '$2 ~ " "f" " {gsub(/ /,"",$3); print $3}' "$here/docs/MODULES.md" | head -1)
 case "$action" in
   drop) echo "$rel is marked 'drop' in docs/MODULES.md - not ported."; exit 1 ;;
-  pro) echo "$rel is a Pro module - it belongs in the private houseos-pro repo, not here."; exit 1 ;;
+  pro) echo "$rel is a Pro module - it belongs in the private casatorch-pro repo, not here."; exit 1 ;;
   later) echo "$rel is marked 'later' - not in v1."; exit 1 ;;
   "") echo "$rel is not in docs/MODULES.md - add it there first."; exit 1 ;;
 esac

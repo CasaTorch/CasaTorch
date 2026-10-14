@@ -96,7 +96,7 @@ PROVIDERS.hue = {
 };
 /** Pairing: the user presses the bridge's button, then this asks for a username. */
 async function huePair(host) {
-  const r = await fetch(`http://${host}/api`, { method: 'POST', body: JSON.stringify({ devicetype: 'houseos#panel' }), signal: AbortSignal.timeout(6000) });
+  const r = await fetch(`http://${host}/api`, { method: 'POST', body: JSON.stringify({ devicetype: 'casatorch#panel' }), signal: AbortSignal.timeout(6000) });
   const j = await r.json();
   if (j?.[0]?.success?.username) return { ok: true, username: j[0].success.username };
   if (j?.[0]?.error?.type === 101) return { ok: false, error: 'Press the round button on the Hue bridge, then try again within 30 seconds.' };
@@ -124,7 +124,7 @@ async function fetchImage(url, user, pass) {
 }
 const CAMERA_SNAPSHOT = {
   frigate: (c) => fetchImage(`${String(c.url).replace(/\/+$/, '')}/api/${encodeURIComponent(c.camera)}/latest.jpg?h=720`),
-  reolink: (c) => fetchImage(`http://${c.host}/cgi-bin/api.cgi?cmd=Snap&channel=${c.channel || 0}&rs=houseos${Date.now()}&user=${encodeURIComponent(c.username)}&password=${encodeURIComponent(c.password)}`),
+  reolink: (c) => fetchImage(`http://${c.host}/cgi-bin/api.cgi?cmd=Snap&channel=${c.channel || 0}&rs=casatorch${Date.now()}&user=${encodeURIComponent(c.username)}&password=${encodeURIComponent(c.password)}`),
   snapshot: (c) => fetchImage(c.snapshotUrl, c.username, c.password),
 };
 PROVIDERS.camera = {

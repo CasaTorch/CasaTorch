@@ -1,4 +1,4 @@
-/* ---- Calendar: a month view of every calendar, and the HouseOS calendar you can edit here ---- */
+/* ---- Calendar: a month view of every calendar, and the CasaTorch calendar you can edit here ---- */
 const EV_COLORS = [['#a78bfa', 'Purple'], ['#60a5fa', 'Blue'], ['#34d399', 'Green'], ['#fbbf24', 'Yellow'], ['#fb7185', 'Red'], ['#f472b6', 'Pink'], ['#22d3ee', 'Teal']];
 function eventEditor(ev, done, date) {
   const e = ev ? { ...ev } : { title: '', date: date || dayKey(new Date().toISOString()), time: '18:00', minutes: 60, repeat: 'none', color: '#a78bfa', who: '' };
@@ -47,11 +47,11 @@ tab({ id: 'calendar', label: 'Calendar', icon: 'calendar', async render(main) {
     }
     const title = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(first);
     const step = (n) => { const d = new Date(Date.UTC(y, m - 1 + n, 1)); ym = d.toISOString().slice(0, 7); draw(); };
-    setTop('Calendar', 'Your linked calendars plus the HouseOS calendar', [el('button', { class: 'btn primary', onclick: () => eventEditor(null, draw) }, icon('plus'), 'New event')]);
+    setTop('Calendar', 'Your linked calendars plus the CasaTorch calendar', [el('button', { class: 'btn primary', onclick: () => eventEditor(null, draw) }, icon('plus'), 'New event')]);
     main.replaceChildren(el('div', { class: 'card' },
       el('div', { class: 'row', style: 'margin-bottom:14px' }, el('button', { class: 'btn small', 'aria-label': 'Previous month', onclick: () => step(-1) }, icon('chevl')), el('b', { style: 'font-size:18px;min-width:170px;text-align:center' }, title), el('button', { class: 'btn small', 'aria-label': 'Next month', onclick: () => step(1) }, icon('chevr')), el('button', { class: 'btn small ghost', onclick: () => { ym = today.slice(0, 7); draw(); } }, 'Today')),
       el('div', { class: 'month' }, ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => el('div', { class: 'dow' }, d)), cells),
-      el('p', { class: 'small muted', style: 'margin:14px 0 0' }, 'Tap a day to add an event. Events you add here live on your HouseOS box. Google, iCloud and Outlook calendars linked in setup show here too.'),
+      el('p', { class: 'small muted', style: 'margin:14px 0 0' }, 'Tap a day to add an event. Events you add here live on your CasaTorch box. Google, iCloud and Outlook calendars linked in setup show here too.'),
       ...errors.map((er) => el('p', { class: 'small', style: 'color:var(--warn)' }, `${er.calendar} did not load.`))));
   };
   await draw(); return draw;
@@ -73,7 +73,7 @@ tab({ id: 'photos', label: 'Photos', icon: 'camera', async render(main) {
   setTop('Photos', 'For the Photo reel on your Home screen', [el('button', { class: 'btn primary', onclick: () => input.click() }, icon('plus'), 'Upload photos')]);
   const draw = async () => {
     const { photos = [] } = await api('/api/photos');
-    const drop = el('div', { class: 'card', style: 'border-style:dashed;text-align:center;padding:30px;cursor:pointer', onclick: () => input.click() }, el('div', { style: 'font-weight:600;margin-bottom:4px' }, 'Drop photos here, or tap to choose'), el('div', { class: 'small muted' }, 'JPEG, PNG, WebP, GIF or HEIC, up to 30 MB each. They stay on your HouseOS box.'), status);
+    const drop = el('div', { class: 'card', style: 'border-style:dashed;text-align:center;padding:30px;cursor:pointer', onclick: () => input.click() }, el('div', { style: 'font-weight:600;margin-bottom:4px' }, 'Drop photos here, or tap to choose'), el('div', { class: 'small muted' }, 'JPEG, PNG, WebP, GIF or HEIC, up to 30 MB each. They stay on your CasaTorch box.'), status);
     drop.ondragover = (e) => { e.preventDefault(); drop.style.borderColor = 'var(--accent)'; }; drop.ondragleave = () => { drop.style.borderColor = ''; };
     drop.ondrop = (e) => { e.preventDefault(); drop.style.borderColor = ''; upload(e.dataTransfer.files); };
     const grid = el('div', { style: 'display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-top:14px' }, photos.map((p) => el('div', { style: 'position:relative;border-radius:14px;overflow:hidden;aspect-ratio:1;background:#000' },

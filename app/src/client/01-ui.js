@@ -8,12 +8,12 @@ const PALETTES = [['Ocean', '#5eb8ff', '#8b7bff'], ['Sunset', '#fb923c', '#f43f5
 const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const luminance = (h) => { const [r, g, b] = hexRgb(h).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
 const tabLabel = (t) => S.ui.tabs?.[t.id]?.label || t.label;
-const isPanel = () => { try { return new URLSearchParams(location.search).has('panel') || localStorage.getItem('houseos-panel') === '1'; } catch { return false; } };
+const isPanel = () => { try { return new URLSearchParams(location.search).has('panel') || localStorage.getItem('casatorch-panel') === '1'; } catch { return false; } };
 const darkNow = () => S.ui.theme === 'dark' || (S.ui.theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
 function applyUi() {
   const root = document.documentElement, u = S.ui;
   root.dataset.theme = darkNow() ? 'dark' : 'light';
-  try { localStorage.setItem('houseos-theme', root.dataset.theme); } catch { /* private window */ }
+  try { localStorage.setItem('casatorch-theme', root.dataset.theme); } catch { /* private window */ }
   root.style.setProperty('--accent', u.accent); root.style.setProperty('--accent-2', u.accent2);
   root.style.setProperty('--on-accent', luminance(u.accent) > 0.35 ? '#06101e' : '#ffffff');
   const [r, g, b] = hexRgb(u.accent), [r2, g2, b2] = hexRgb(u.accent2), a = darkNow() ? 0.10 : 0.16;
@@ -29,7 +29,7 @@ async function saveUi(patch) { S.ui = await post('/api/ui', patch, 'PUT'); apply
 /* ---- panel mode (this screen only) ---- */
 let wakeLock = null;
 async function setPanel(on) {
-  try { localStorage.setItem('houseos-panel', on ? '1' : '0'); } catch { /* ignore */ }
+  try { localStorage.setItem('casatorch-panel', on ? '1' : '0'); } catch { /* ignore */ }
   if (!on && new URLSearchParams(location.search).has('panel')) { history.replaceState(null, '', location.pathname + location.hash); }
   applyUi();
   if (on) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* not supported */ } toast('Panel mode - the screen stays on. Tap × in the top bar to leave.'); }

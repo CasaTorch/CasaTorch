@@ -1,10 +1,10 @@
 /* ======================================================================
  * Security headers on every answer, and fast static files.
  *
- *  - Content-Security-Policy: scripts only from this HouseOS (inline
+ *  - Content-Security-Policy: scripts only from this CasaTorch (inline
  *    scripts in our own pages are allowed by their hashes, worked out at
  *    start-up), no plugins, forms only to here, and the page may only be
- *    framed by this HouseOS and your Home Assistant (for the HACS card).
+ *    framed by this CasaTorch and your Home Assistant (for the HACS card).
  *  - No sniffing, no referrer leaks, no camera/geolocation for pages,
  *    HSTS when served over https.
  *  - API answers are never cached by the browser (they can hold home data).
