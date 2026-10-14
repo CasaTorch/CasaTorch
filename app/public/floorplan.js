@@ -168,7 +168,7 @@ function editPanel() {
 /* ---------- floors: upload scans, stack them ---------- */
 function floorsPanel() {
   const side = $('#side'); side.hidden = false;
-  const file = el('input', { type: 'file', multiple: true, accept: '.glb,.gltf,.obj,.mtl,.zip,.bin,.png,.jpg,.jpeg,.webp,model/gltf-binary,model/gltf+json,application/zip', onchange: () => $('#uploadBtn')?.click() }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
+  const file = el('input', { type: 'file', multiple: true, accept: '.usdz,.usd,.usdc,.usda,.glb,.gltf,.obj,.mtl,.zip,.bin,.png,.jpg,.jpeg,.webp,model/gltf-binary,model/gltf+json,application/zip', onchange: () => $('#uploadBtn')?.click() }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
   side.replaceChildren(el('h2', {}, 'Floors'),
     ...S.plan.floors.map((f) => { const box = el('div', { class: 'card' }); const n = (k, label, step) => el('div', { class: 'row' }, el('label', {}, label), el('input', { type: 'number', step, value: k === 'offsetX' ? f.offset[0] : k === 'offsetZ' ? f.offset[1] : f[k], onchange: async (e) => { const v = Number(e.target.value); const body = k === 'offsetX' ? { offset: [v, f.offset[1]] } : k === 'offsetZ' ? { offset: [f.offset[0], v] } : { [k]: v }; try { await api(`/api/floorplan/floors/${f.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); await start(); floorsPanel(); } catch (er) { toast(er.message); } } }));
       box.append(el('h3', {}, f.name), n('level', 'Level', 1), n('heightM', 'Height (m)', 0.1), n('rotationY', 'Turn (°)', 5), n('scale', 'Scale', 0.01), n('offsetX', 'Shift X (m)', 0.1), n('offsetZ', 'Shift Z (m)', 0.1),
@@ -177,7 +177,7 @@ function floorsPanel() {
     el('h3', {}, 'Add a floor'),
     el('p', { class: 'note' }, 'No LiDAR iPhone or iPad? Draw your floor, or trace over a picture of your floor plan (from the listing, the builder, or a photo of a paper plan).'),
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => newDrawnFloor(false) }, 'Draw a floor'), el('button', { type: 'button', onclick: () => newDrawnFloor(true) }, 'Trace a picture')),
-    el('h3', {}, 'Or upload a LiDAR scan (GLB, GLTF, OBJ or .zip)'), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,
+    el('h3', {}, 'Or upload a LiDAR scan (USDZ, GLB, GLTF, OBJ or .zip)'), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,
     el('p', {}, el('button', { type: 'button', class: 'primary', id: 'uploadBtn', onclick: async () => {
       if (!file.files.length) { toast('Choose the file from your scan first.'); return; }
       toast('Preparing the model\u2026');
@@ -188,7 +188,7 @@ function floorsPanel() {
       }
       catch (e) { toast(e.status === 402 ? 'Adding floors is part of HouseOS Pro.' : e.message); }
     } }, 'Upload')),
-    el('p', { class: 'note' }, 'Choosing the file uploads it straight away. GLB, GLTF, OBJ or a .zip of any of them all work. If you have loose files (.obj + .mtl + images, or .gltf + .bin), select them all together.'),
+    el('p', { class: 'note' }, 'Choosing the file uploads it straight away. USDZ, GLB, GLTF, OBJ or a .zip of any of them all work. If you have loose files (.obj + .mtl + images, or .gltf + .bin), select them all together.'),
     el('p', { class: 'note' }, 'Floors stack by Level × Height. If a floor sits crooked or off to the side, adjust Turn and Shift until the walls line up.'));
 }
 function guidePanel() {
@@ -203,9 +203,9 @@ function guidePanel() {
     el('h3', {}, 'B. Scan it (iPhone Pro / iPad Pro with LiDAR)'),
     el('p', { class: 'note' }, 'LiDAR is the small dark circle by the cameras: iPhone 12 Pro and newer Pro models, iPad Pro 2020 and newer. About 10 minutes per floor; the most realistic result.'),
     el('ol', { class: 'guide' },
-      el('li', {}, 'Install a scanning app. Free options: ', el('b', {}, 'Scaniverse'), ' or ', el('b', {}, '3D Scanner App'), '. ', el('b', {}, 'Polycam'), ' also works, but its GLTF/GLB export needs Polycam Pro.'),
+      el('li', {}, 'Install a free room-scanning app that exports ', el('b', {}, 'USDZ'), ' (Apple RoomPlan), e.g. ', el('b', {}, 'KIRI Engine'), ' (Room Scan) or ', el('b', {}, 'Lagarsoft LiDAR Scanner'), '. Polycam, Scaniverse or 3D Scanner App also work if your plan lets you export GLB, GLTF or OBJ.'),
       el('li', {}, 'Turn on the lights, open interior doors, and walk slowly through every room on one floor, pointing at the walls and floor.'),
-      el('li', {}, 'Export the model as ', el('b', {}, 'GLB, GLTF or OBJ'), ' (Scaniverse: Share > Export Model > GLB or OBJ; 3D Scanner App: Share > GLB/GLTF/OBJ; Polycam Pro: Export > GLTF). You may get a single file or a .zip - either works. Send it to the computer you use for HouseOS (AirDrop, e-mail or iCloud Drive).'),
+      el('li', {}, 'Export the 3D model as ', el('b', {}, 'USDZ'), ' (or GLB, GLTF, OBJ). A single file or a .zip both work. Send it to the computer you use for HouseOS (AirDrop, e-mail or iCloud Drive).'),
       el('li', {}, 'Here, open ', el('b', {}, 'Floors'), ' and upload it. Set each floor\'s Level (0 = ground).')),
     el('h3', {}, 'Then: place your devices'),
     el('p', { class: 'note' }, 'Open ', el('b', {}, 'Place devices'), ', pick a light, speaker or sensor, and click where it is. The plan shows them live. Your plans stay on your HouseOS box.'),
