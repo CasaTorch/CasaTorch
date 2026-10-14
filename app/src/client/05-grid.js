@@ -98,7 +98,7 @@ function makeGrid(host, { tiles, ctx, onSave }) {
   return {
     build,
     refresh: () => Promise.all([...live.keys()].map((n) => paint(n, false))),
-    add(id) { const w = WIDGETS[id], t = { id: w.multi ? `${id}:${Math.random().toString(36).slice(2, 8)}` : id, w: w.size?.[0] || 4, h: w.size?.[1] || 3 }; tiles.push(t); const n = tileEl(t); grid.append(n); paint(n, true); n.scrollIntoView({ behavior: 'smooth', block: 'center' }); onSave(); return { t, repaint: () => { onSave(); paint(n, true); } }; },
+    add(id, init = {}) { const w = WIDGETS[id], t = { ...init, id: w.multi ? `${id}:${Math.random().toString(36).slice(2, 8)}` : id, w: w.size?.[0] || 4, h: w.size?.[1] || 3 }; tiles.push(t); const n = tileEl(t); grid.append(n); paint(n, true); n.scrollIntoView({ behavior: 'smooth', block: 'center' }); onSave(); return { t, repaint: () => { onSave(); paint(n, true); } }; },
   };
 }
 

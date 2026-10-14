@@ -6,7 +6,8 @@
     "name": "Living room",
     "on": true,
     "brightness": 80,
-    "online": true
+    "online": true,
+    "area": "Living room"
   },
   {
     "id": "hue:2",
@@ -14,7 +15,8 @@
     "kind": "light",
     "name": "Kitchen",
     "on": false,
-    "online": true
+    "online": true,
+    "area": "Kitchen"
   },
   {
     "id": "hue:3",
@@ -23,7 +25,8 @@
     "name": "Bedroom 1",
     "on": true,
     "brightness": 30,
-    "online": true
+    "online": true,
+    "area": "Bedroom 1"
   },
   {
     "id": "ha:media_player.living_room",
@@ -33,7 +36,8 @@
     "on": true,
     "playing": true,
     "title": "Fleetwood Mac - Dreams",
-    "online": true
+    "online": true,
+    "area": "Living room"
   },
   {
     "id": "ha:media_player.bedroom",
@@ -42,7 +46,8 @@
     "name": "Bedroom TV",
     "on": false,
     "playing": false,
-    "online": true
+    "online": true,
+    "area": "Bedroom 1"
   },
   {
     "id": "shelly:fridge",
@@ -51,7 +56,8 @@
     "name": "Fridge",
     "on": true,
     "powerW": 96,
-    "online": true
+    "online": true,
+    "area": "Kitchen"
   },
   {
     "id": "shelly:office",
@@ -60,7 +66,8 @@
     "name": "Office desk",
     "on": true,
     "powerW": 142,
-    "online": true
+    "online": true,
+    "area": "Office"
   },
   {
     "id": "ha:binary_sensor.front_door",
@@ -68,14 +75,16 @@
     "kind": "sensor",
     "name": "Front door",
     "open": false,
-    "online": true
+    "online": true,
+    "area": "Hall"
   },
   {
     "id": "camera:porch",
     "provider": "camera",
     "kind": "camera",
     "name": "Porch",
-    "online": true
+    "online": true,
+    "area": "Outside"
   },
   {
     "id": "yolink:leak1",
@@ -84,7 +93,8 @@
     "name": "Laundry leak sensor",
     "water": false,
     "battery": 80,
-    "online": true
+    "online": true,
+    "area": "Laundry"
   },
   {
     "id": "ha:climate.thermostat",
@@ -94,7 +104,8 @@
     "mode": "heat",
     "tempC": 20.5,
     "online": true,
-    "targetC": 21
+    "targetC": 21,
+    "area": "Hall"
   },
   {
     "id": "camera:driveway",
@@ -102,7 +113,8 @@
     "kind": "camera",
     "name": "Driveway",
     "source": "frigate",
-    "online": true
+    "online": true,
+    "area": "Outside"
   },
   {
     "id": "camera:backyard",
@@ -110,7 +122,8 @@
     "kind": "camera",
     "name": "Backyard",
     "source": "reolink",
-    "online": true
+    "online": true,
+    "area": "Outside"
   },
   {
     "id": "ha:cover.garage_door",
@@ -122,7 +135,8 @@
     "state": "closed",
     "open": false,
     "risky": true,
-    "online": true
+    "online": true,
+    "area": "Garage"
   },
   {
     "id": "ha:cover.living_room_blinds",
@@ -134,7 +148,8 @@
     "state": "open",
     "open": true,
     "position": 100,
-    "online": true
+    "online": true,
+    "area": "Living room"
   },
   {
     "id": "ha:fan.bedroom_fan",
@@ -145,7 +160,8 @@
     "state": "on",
     "on": true,
     "percent": 40,
-    "online": true
+    "online": true,
+    "area": "Bedroom 1"
   },
   {
     "id": "ha:scene.movie_night",
@@ -172,7 +188,8 @@
     "kind": "vacuum",
     "name": "Robot vacuum",
     "state": "docked",
-    "online": true
+    "online": true,
+    "area": "Hall"
   },
   {
     "id": "ha:alarm_control_panel.home",
@@ -214,7 +231,8 @@
     "state": "32",
     "value": "32",
     "unit": "AQI",
-    "online": true
+    "online": true,
+    "area": "Living room"
   },
   {
     "id": "ha:sensor.washer_status",
@@ -225,6 +243,50 @@
     "state": "Rinse - 18 min left",
     "value": "Rinse - 18 min left",
     "unit": null,
-    "online": true
+    "online": true,
+    "area": "Laundry"
+  },
+  {
+    "id": "ha:sensor.living_room_temperature",
+    "provider": "ha",
+    "domain": "sensor",
+    "haClass": "temperature",
+    "kind": "sensor",
+    "name": "Living room temperature",
+    "tempC": 21.4,
+    "online": true,
+    "area": "Living room"
+  },
+  {
+    "id": "ha:light.kitchen_pendants",
+    "provider": "ha",
+    "domain": "light",
+    "kind": "light",
+    "name": "Kitchen pendants",
+    "on": true,
+    "brightness": 60,
+    "online": true,
+    "area": "Kitchen"
+  },
+  {
+    "id": "ha:lock.front_door",
+    "provider": "ha",
+    "domain": "lock",
+    "kind": "lock",
+    "name": "Front door lock",
+    "locked": true,
+    "online": true,
+    "area": "Hall"
+  },
+  {
+    "id": "ha:sensor.office_humidity",
+    "provider": "ha",
+    "domain": "sensor",
+    "haClass": "humidity",
+    "kind": "sensor",
+    "name": "Office humidity",
+    "humidity": 44,
+    "online": true,
+    "area": "Office"
   }
 ]

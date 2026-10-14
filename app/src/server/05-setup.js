@@ -24,7 +24,7 @@ const draft = { ha: null, hue: null, ring: null };   // what the wizard has prov
 
 app.use('/api/setup', express.json({ limit: '64kb' }), (req, res, next) => {
   if (req.path === '/state') return next();
-  if (!setupOpen()) return res.status(403).json({ error: 'CasaTorch is already set up. Start it with CASATORCH_SETUP=1 to run setup again.' });
+  if (!setupOpen()) return res.status(403).json({ error: 'CasaTorch is already set up. To change it, open Settings > Run setup again, or Connect in the dashboard.' });
   next();
 });
 app.get('/api/setup/state', (_req, res) => res.json({ open: setupOpen(), configured: isConfigured(), demo: isDemo(), ha: draft.ha ? { url: draft.ha.url, version: draft.ha.version } : null }));

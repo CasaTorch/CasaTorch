@@ -332,6 +332,7 @@ const branchStore = (step, store) => (step.id === 'network' && step.branches?.[s
 function stepPage(step) {
   const store = ans(step.id);
   const out = [el('h1', {}, step.title)];
+  if (W.focus?.step === step.id) out.push(el('div', { class: 'focus-note' }, el('b', {}, W.focus.label ? `Adding ${W.focus.label}` : 'Picking up where you left off'), el('span', {}, ' - follow the card below. When you see a green check, press "Review & save". Everything else in your setup stays as it is.')));
   if (step.intro) out.push(el('p', { class: 'intro' }, step.intro));
   if (step.question) {
     const q = step.question;
@@ -424,19 +425,19 @@ function go() {
   $('#progress').replaceChildren(...pages.map((t, k) => el('li', { class: k === W.i ? 'on' : k < W.i ? 'done' : '' }, t)));
   $('#page').replaceChildren(...(W.i === 0 ? welcome() : W.i > W.steps.length ? review() : stepPage(W.steps[W.i - 1])));
   $('#back').disabled = W.i === 0;
-  $('#next').textContent = W.i === 0 ? 'Set up my home' : W.i > W.steps.length ? 'Finish' : 'Next';
+  $('#next').textContent = W.i === 0 ? 'Set up my home' : W.i > W.steps.length ? (W.focus ? 'Save' : 'Finish') : W.focus && W.steps[W.i - 1]?.id === W.focus.step ? 'Review & save' : 'Next';
 }
 $('#back').onclick = () => { if (W.i > 0) { W.i--; go(); scrollTo(0, 0); } };
 $('#next').onclick = async () => {
   if (W.i > W.steps.length) {
     const msg = $('#finishMsg'); msg.replaceChildren('Saving…');
-    try { const r = await api('/api/setup/finish', { body: { answers: { ...W.a, _added: W.added } } }); if (r.ok) { location.href = '/'; return; } msg.replaceChildren(el('div', { class: 'err' }, r.error)); }
+    try { const r = await api('/api/setup/finish', { body: { answers: { ...W.a, _added: W.added } } }); if (r.ok) { location.href = W.focus ? '/#connect' : '/'; return; } msg.replaceChildren(el('div', { class: 'err' }, r.error)); }
     catch (e) { msg.replaceChildren(el('div', { class: 'err' }, e.message)); }
     return;
   }
   const p = problems(W.steps[W.i - 1]);
   if (p) { $('#navmsg').textContent = p; return; }
-  W.i++; go(); scrollTo(0, 0);
+  W.i = W.focus && W.steps[W.i - 1]?.id === W.focus.step ? W.steps.length + 1 : W.i + 1; go(); scrollTo(0, 0);
 };
 (async () => {
   const st = await api('/api/setup/state');
@@ -444,5 +445,29 @@ $('#next').onclick = async () => {
   W.cat = await api('/api/setup/catalog');
   if (st.configured && !st.demo) { const cur = await api('/api/setup/current').catch(() => null); if (cur?.answers) { W.rerun = true; W.a = cur.answers; W.keeps = cur.keeps || {}; if (cur.ha) { W.ha = cur.ha; W.haDomains = cur.ha.domains || []; W.a.homeassistant._test = cur.ha; } } }
   W.steps = W.cat.steps;
+  focusFromLink();
   go();
 })();
+/* Opened from Connect in the dashboard (/setup.html?step=controls&add=hue-local): go straight to that
+   step with that item already picked, then straight to Review & save. */
+function focusFromLink() {
+  const qp = new URLSearchParams(location.search), stepId = qp.get('step'), addId = qp.get('add') || '';
+  const k = W.steps.findIndex((s) => s.id === stepId); if (k < 0) return;
+  const step = W.steps[k], store = ans(step.id), q = step.question;
+  let label = step.title;
+  if (q) {
+    if (step.id === 'network') {
+      if (addId.startsWith('dns:')) { store.dns = addId.slice(4); store.kind ||= 'other'; label = addId.slice(4) === 'pihole' ? 'Pi-hole' : 'AdGuard Home'; }
+      else if (q.options.some(([v]) => v === addId)) { store.kind = addId; label = q.options.find(([v]) => v === addId)[1]; }
+    } else if (step.id === 'homeassistant') { store.uses = 'yes'; label = 'Home Assistant'; }
+    else {
+      const yes = q.options.find(([v]) => v === 'yes')?.[0]; if (yes) store[q.id] = yes;
+      const pick = step.branches?.yes?.pick, opt = pick?.options.find((o) => o.id === addId);
+      if (opt) { const cur = new Set(store[pick.id] || []); cur.add(opt.id); store[pick.id] = [...cur]; label = opt.label.replace(/\s*\(through Home Assistant\)/, ''); }
+      if (addId === 'utility') label = 'your power company';
+    }
+  }
+  W.focus = { step: step.id, label };
+  W.i = k + 1;
+  setTimeout(() => { const card = [...document.querySelectorAll('#page .card h3')].find((h) => h.textContent.startsWith(label)); card?.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
+}
