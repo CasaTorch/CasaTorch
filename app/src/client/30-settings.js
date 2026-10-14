@@ -1,8 +1,8 @@
 /* ---- Settings ---- */
 const PRO_FEATURES = [   // [name, what, ships now?]
-  ['3D Home', 'Your LiDAR scan as a live, tappable floor plan.', true], ['Ask the house', 'Plain-English questions; it can switch things for you.', true], ['Ring (Labs)', 'Ring doorbells and cameras without Home Assistant.', true],
+  ['3D Home', 'Your home as a live, tappable 3D plan - from a LiDAR scan, or drawn in the app.', true], ['Ask the house', 'Plain-English questions; it can switch things for you.', true], ['Ring (Labs)', 'Ring doorbells and cameras without Home Assistant.', true],
   ['Away from home', 'Secure remote access and phone alerts - no port forwarding.'], ['Smart alerts', 'Quiet hours, "only if nobody\'s home", fewer false alarms.'],
-  ['Energy insights', 'History, cost by device, and a weekly report.'], ['Self-healing', 'Restarts stuck integrations and tells you what it fixed.'], ['History', '2 years instead of 7 days.'], ['Multi-home, themes, cloud backup, priority support', ''],
+  ['Energy insights', 'History, cost by device, and a weekly report.'], ['Self-healing', 'Restarts stuck integrations and tells you what it fixed.'], ['History', '2 years instead of 7 days.'], ['Basic support', 'E-mail and Discord help from the HouseOS team.', true], ['Multi-home, theme packs, cloud backup', ''],
 ];
 const AI_PROVIDERS = [['none', 'Not connected'], ['anthropic', 'Anthropic (Claude)'], ['openai', 'OpenAI'], ['ollama', 'Ollama - runs on your own network'], ['compatible', 'Other OpenAI-compatible server (LM Studio, vLLM...)']];
 function aiCard(s) {
@@ -16,7 +16,7 @@ function aiCard(s) {
   const msg = el('div', { class: 'small' });
   const sync = () => {
     const p = prov.value; keyF.hidden = !['anthropic', 'openai', 'compatible'].includes(p); urlF.hidden = !['ollama', 'compatible'].includes(p);
-    help.textContent = { anthropic: 'Get a key at console.anthropic.com > API keys. You pay Anthropic per question (usually well under a cent).', openai: 'Get a key at platform.openai.com > API keys. You pay OpenAI per question.', ollama: 'Free and private: install Ollama on a PC or Mac at home, run "ollama pull llama3.1", and enter its address. Nothing leaves your network.', compatible: 'Any server that speaks the OpenAI API. Enter its base address (ending in /v1).', none: 'Pick an AI to answer questions about your home.' }[p];
+    help.textContent = { anthropic: 'Get a key at console.anthropic.com > API keys. Anthropic bills you directly for what you use - typically a fraction of a cent per question. Not included in HouseOS Pro.', openai: 'Get a key at platform.openai.com > API keys. OpenAI bills you directly for what you use (a ChatGPT Plus subscription does not include API use). Not included in HouseOS Pro.', ollama: 'Free and private: install Ollama on a PC or Mac at home, run "ollama pull llama3.1", and enter its address. Nothing leaves your network.', compatible: 'Any server that speaks the OpenAI API. Enter its base address (ending in /v1).', none: 'Pick an AI to answer questions about your home.' }[p];
   };
   prov.onchange = () => { model.replaceChildren(el('option', { value: '' }, 'Press "Find models" first')); sync(); }; sync();
   const find = el('button', { class: 'btn' }, 'Find models');
@@ -27,6 +27,17 @@ function aiCard(s) {
     el('label', { class: 'field' }, el('span', {}, 'Model'), model), el('div', { class: 'row wrap' }, find, save), msg);
 }
 
+const SITE = 'https://gethouseos.com';
+function helpCard() {
+  const link = (href, label, cls = 'btn') => el('a', { class: cls, href, target: '_blank', rel: 'noopener' }, label);
+  const item = (title, text, price, action) => el('div', { style: 'padding:12px 0;border-top:1px solid var(--line)' }, el('div', { class: 'row between' }, el('b', {}, title), price ? el('span', { class: 'pill' }, price) : null), el('div', { class: 'small muted', style: 'margin:4px 0 8px' }, text), action);
+  return el('div', { class: 'card' }, el('h2', {}, 'Help & services'),
+    el('div', { class: 'row wrap', style: 'margin-bottom:6px' }, link(`${SITE}/discord`, 'Join the Discord', 'btn primary'), link('mailto:support@gethouseos.com', 'E-mail support'), link(`${SITE}/docs`, 'Docs')),   // scrub-ok: the public support address
+    item('Basic support', 'E-mail and Discord help from the HouseOS team, and the members-only Pro channel.', 'Included with Pro'),
+    item('Service & Developer Access', 'A direct line to a HouseOS developer: custom features written for your home, hands-on help installing HouseOS and setting up your wall panels, priority replies. Includes Pro.', '$100 / year', link(`${SITE}/developer`, 'Learn more', 'btn small')),
+    item('Home network planning', 'A one-on-one consultation to plan your Wi-Fi, wiring, cameras, sensors and NAS - with a written plan of what to buy and where it goes.', null, link(`${SITE}/network-planning`, 'Book a consultation', 'btn small')),
+    item('HouseOS Box', 'A Raspberry Pi 5 with HouseOS already installed - for a second home, or a friend. Plug it in and go. A year of Pro included.', null, link(`${SITE}/box`, 'Order a Box', 'btn small')));
+}
 function lookCard() {
   const u = { ...S.ui };
   const seg = (key, opts) => { const box = el('div', { class: 'seg' }); const draw = () => box.replaceChildren(...opts.map(([v, l]) => el('button', { class: u[key] === v ? 'on' : null, onclick: async () => { u[key] = v; draw(); await saveUi({ [key]: v }); } }, l))); draw(); return box; };
@@ -92,7 +103,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
     s.demo ? null : el('label', { class: 'field' }, el('span', {}, 'Password (to run setup again)'), pw),
     el('div', { class: 'row wrap' }, rerun, s.signIn ? out : null),
     el('p', { class: 'small muted' }, `HouseOS ${s.version} · open-source core (AGPL-3.0) · `, el('a', { href: 'https://gethouseos.com', target: '_blank', rel: 'noopener' }, 'gethouseos.com')));
-  main.replaceChildren(el('div', { class: 'cards' }, pro, lookCard(), menuCard(), aiCard(s), homeCard, everyday, conn, acct));
+  main.replaceChildren(el('div', { class: 'cards' }, pro, lookCard(), menuCard(), aiCard(s), homeCard, helpCard(), everyday, conn, acct));
   return null;
 } });
 /* Side-rail order */

@@ -30,8 +30,8 @@ HouseOS never phones home to check it.
 | Controls, cameras, sensors, energy (watts and cost per device), network and speed tests | ✓ | ✓ | Now |
 | Alerts on the dashboard: leaks, smoke, low batteries, devices offline, internet down | ✓ | ✓ | Now |
 | **Pro** | | | |
-| **3D Home** - your iPhone/iPad LiDAR scan as a live floor plan; pin devices where they are; lights glow, music pulses, leaks flash; tap to switch | | ✓ | Now |
-| **Ask the house** - plain-English questions about your home; suggests actions you tap to do; in the panel-mode status bar too. Bring your own AI (Claude, OpenAI) or run it privately with Ollama | | ✓ | Now |
+| **3D Home** - your home as a live 3D plan: **draw your floors in the app** (any device, or trace a floor-plan picture) or **upload a LiDAR scan** (iPhone 12 Pro or newer Pro, iPad Pro 2020 or newer); pin devices where they are; lights glow, music pulses, leaks flash; tap to switch | | ✓ | Now |
+| **Ask the house** - plain-English questions about your home; suggests actions you tap to do; in the panel-mode status bar too. Bring your own AI (Claude, OpenAI - **billed to you by them**) or run it free and privately with Ollama | | ✓ | Now |
 | **Ring** doorbells and cameras without Home Assistant (Labs - unofficial API) | | ✓ | Now |
 | **Away from home** - secure remote access from your phone, no port forwarding | | ✓ | Coming |
 | **Phone alerts** - push notifications for leaks, doorbell, alarms, with quiet hours | | ✓ | Coming |
@@ -43,9 +43,10 @@ HouseOS never phones home to check it.
 | Multiple homes (cabin, parents' house) in one app | | ✓ | Coming |
 | Extra wall-panel layouts and theme packs | | ✓ | Coming |
 | Encrypted backup of your settings | | ✓ | Coming |
-| Priority support | | ✓ | Coming |
+| Basic support: e-mail and Discord, members-only Pro channel | | ✓ | Now |
+| Service & Developer Access: custom features, hands-on deployment help, priority replies ($100/yr, includes Pro) - see [SUPPORT.md](SUPPORT.md) | | add-on | Now |
 
-\* The 3D Home tile needs Pro.
+\* The 3D Home tile needs Pro. 3D Home works with no special hardware if you draw your floors; LiDAR scanning needs an iPhone 12 Pro or newer *Pro* model, or an iPad Pro (2020 or newer).
 
 ## Why it's split this way
 
@@ -54,6 +55,20 @@ Pro pays for what costs money to run - the remote-access relay, push notificatio
 and for the features that took the most work: the 3D Home, Ask the house and Ring.
 
 ## Using AI with Ask the house
+
+**What it costs:** HouseOS Pro unlocks Ask the house, but **the AI itself is not included**. You connect
+your own AI and pay that company for what you use:
+
+| AI | Cost | Privacy |
+| --- | --- | --- |
+| **Claude** (Anthropic API key) | Billed to you by Anthropic, per question - usually a fraction of a cent | Your question + a home snapshot go to Anthropic |
+| **ChatGPT** (OpenAI API key) | Billed to you by OpenAI, per question - usually a fraction of a cent | Your question + a home snapshot go to OpenAI |
+| **Ollama** (on a computer at home) | Free | Nothing leaves your network |
+
+A ChatGPT Plus or Claude Pro *subscription* does not include API use - you need an API key from
+platform.openai.com or console.anthropic.com, with billing set up there. Both let you set a monthly
+spending limit.
+
 
 Ask the house sends a snapshot of your home (device names and states, the calendar, weather) to
 the AI you choose, only when you ask a question. Choose **Ollama** and it never leaves your

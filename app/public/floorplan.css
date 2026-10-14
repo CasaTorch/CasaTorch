@@ -28,3 +28,17 @@ input, select { background: #0b1220; color: var(--text); border: 1px solid var(-
 #modal[hidden], aside[hidden] { display: none !important; }
 #modal img { max-width: 100%; border-radius: 8px; display: block; }
 .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; z-index: 9; }
+/* the floor-plan drawing editor */
+#drawer { position: fixed; inset: 0; z-index: 20; background: #070b14; display: flex; flex-direction: column; }
+#drawer .draw-top { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+#drawer .tools { display: inline-flex; gap: 4px; } #drawer input { width: auto; }
+#drawer .draw-svg { width: 100%; touch-action: none; cursor: crosshair; }
+.draw-svg .gl { stroke: #0f1d2e; stroke-width: 1; } .draw-svg .gl5 { stroke: #16304a; stroke-width: 1; }
+.draw-svg .room { fill: rgba(56, 189, 248, .12); stroke: #38bdf8; stroke-width: 3; cursor: move; } .draw-svg .room.sel { fill: rgba(251, 191, 36, .16); stroke: #fbbf24; }
+.draw-svg .room.ghost, .draw-svg .wall.ghost { stroke-dasharray: 6 4; pointer-events: none; }
+.draw-svg .wall { stroke: #e2e8f0; stroke-width: 6; stroke-linecap: round; cursor: pointer; } .draw-svg .wall.sel { stroke: #fbbf24; }
+.draw-svg .rlabel { fill: #e6edf3; font: 600 14px system-ui; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.draw-svg .rdim { fill: #8b9bb4; font: 12px system-ui; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.roomlab { font-size: 12px; font-weight: 600; color: #e6edf3; background: #05070dcc; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; white-space: nowrap; pointer-events: none; }
+#drawer .draw-stage { position: relative; flex: 1; overflow: hidden; } #drawer .draw-stage .draw-svg { position: absolute; inset: 0; height: 100%; }
+#drawer .draw-bg { position: absolute; pointer-events: none; user-select: none; }
