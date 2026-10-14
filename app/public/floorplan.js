@@ -130,18 +130,19 @@ function editPanel() {
 /* ---------- floors: upload scans, stack them ---------- */
 function floorsPanel() {
   const side = $('#side'); side.hidden = false;
-  const file = el('input', { type: 'file', accept: '.glb,model/gltf-binary' }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
+  const file = el('input', { type: 'file', accept: '.glb,model/gltf-binary', onchange: () => $('#uploadBtn')?.click() }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
   side.replaceChildren(el('h2', {}, 'Floors'),
     ...S.plan.floors.map((f) => { const box = el('div', { class: 'card' }); const n = (k, label, step) => el('div', { class: 'row' }, el('label', {}, label), el('input', { type: 'number', step, value: k === 'offsetX' ? f.offset[0] : k === 'offsetZ' ? f.offset[1] : f[k], onchange: async (e) => { const v = Number(e.target.value); const body = k === 'offsetX' ? { offset: [v, f.offset[1]] } : k === 'offsetZ' ? { offset: [f.offset[0], v] } : { [k]: v }; try { await api(`/api/floorplan/floors/${f.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); await start(); floorsPanel(); } catch (er) { toast(er.message); } } }));
       box.append(el('h3', {}, f.name), n('level', 'Level', 1), n('heightM', 'Height (m)', 0.1), n('rotationY', 'Turn (°)', 5), n('scale', 'Scale', 0.01), n('offsetX', 'Shift X (m)', 0.1), n('offsetZ', 'Shift Z (m)', 0.1),
         el('button', { type: 'button', onclick: async () => { if (!confirm(`Remove ${f.name}?`)) return; await api(`/api/floorplan/floors/${f.id}`, { method: 'DELETE' }); await start(); floorsPanel(); } }, 'Remove floor')); return box; }),
     el('h3', {}, 'Add a floor'), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,
-    el('p', {}, el('button', { type: 'button', class: 'primary', onclick: async () => {
+    el('p', {}, el('button', { type: 'button', class: 'primary', id: 'uploadBtn', onclick: async () => {
       const f = file.files[0]; if (!f) { toast('Choose the .glb file from your scan first.'); return; }
       toast('Uploading…');
       try { await api(`/api/floorplan/floors?name=${encodeURIComponent(name.value || f.name.replace(/\.glb$/i, ''))}`, { method: 'POST', headers: { 'Content-Type': 'model/gltf-binary' }, body: f }); await start(); floorsPanel(); toast('Floor added.'); }
       catch (e) { toast(e.status === 402 ? 'Adding floors is part of HouseOS Pro.' : e.message); }
     } }, 'Upload')),
+    el('p', { class: 'note' }, 'Choosing a .glb file uploads it straight away.'),
     el('p', { class: 'note' }, 'Floors stack by Level × Height. If a floor sits crooked or off to the side, adjust Turn and Shift until the walls line up.'));
 }
 function guidePanel() {
@@ -155,7 +156,8 @@ function guidePanel() {
       el('li', {}, 'Export the scan as ', el('b', {}, 'GLB'), ' (Polycam: Export > GLB; Scaniverse: Share > Export Model > GLB; 3D Scanner App: Share > GLB). Send it to the computer you use for HouseOS (AirDrop, e-mail, or iCloud Drive).'),
       el('li', {}, 'Here, open ', el('b', {}, 'Floors'), ' > Add a floor, name it ("Ground floor") and upload the file. Repeat for each floor and set its Level (0 = ground).'),
       el('li', {}, 'Open ', el('b', {}, 'Place devices'), ': pick a light, speaker or sensor, then click where it is on the model. Done - the plan now shows them live.')),
-    el('p', { class: 'note' }, 'Tips: slow and steady scans line up best; mirrors and big windows can confuse the scanner - scan past them quickly. Your scan stays on your HouseOS box; it is never uploaded anywhere else.'));
+    el('p', { class: 'note' }, 'Tips: slow and steady scans line up best; mirrors and big windows can confuse the scanner - scan past them quickly. Your scan stays on your HouseOS box; it is never uploaded anywhere else.'),
+    el('p', {}, el('button', { type: 'button', class: 'primary', onclick: () => floorsPanel() }, S.plan?.floors?.length ? 'Add another floor' : 'Upload my first floor')));
 }
 
 /* ---------- live data ---------- */

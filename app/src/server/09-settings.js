@@ -30,6 +30,7 @@ app.get('/api/settings', (_req, res) => {
       yolink: !!c.yolink?.uaid, ring: !!c.ring?.refreshToken, meraki: !!c.network?.meraki, unifi: !!c.network?.unifi,
     },
     signIn: !!c.signIn?.password,
+    ai: c.ai ? { provider: c.ai.provider, model: c.ai.model, url: c.ai.url || null, hasKey: !!c.ai.apiKey } : null,
   });
 });
 app.put('/api/settings', express.json(), (req, res) => {

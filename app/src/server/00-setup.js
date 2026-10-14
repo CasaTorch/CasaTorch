@@ -32,6 +32,8 @@ function saveConfig(next) {
   config = next;
 }
 const isConfigured = () => fs.existsSync(CONFIG_FILE) && Object.keys(config).length > 0;
+/** The house's time zone (the demo house is on the US west coast). */
+const houseTz = () => config.house?.timezone || (isDemo() ? 'America/Los_Angeles' : 'UTC');
 const isDemo = () => process.env.HOUSEOS_DEMO === '1' || config.demo === true;
 const PORT = Number(process.env.PORT || config.port || 8090);
 const nowIso = () => new Date().toISOString();

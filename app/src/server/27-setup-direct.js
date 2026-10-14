@@ -20,13 +20,14 @@ const hostOk = (h) => /^[\w.-]{1,253}(:\d{1,5})?$/.test(String(h || '').trim());
 Object.assign(TESTS, {
   async calendar({ url }) {
     const u = String(url || '').trim().replace(/^webcal:/i, 'https:'); if (badUrl(u)) throw new Error('paste the calendar\'s secret address (it starts with https:// or webcal://)');
-    const ev = parseIcs(await getText(u, { timeout: 15000 }));
-    if (!ev.length && !/BEGIN:VCALENDAR/.test(await getText(u))) throw new Error('that link is not a calendar (.ics) address');
+    const { text } = await getText(u, { timeout: 15000 });
+    const ev = parseIcs(text, houseTz());
+    if (!ev.length && !/BEGIN:VCALENDAR/.test(text)) throw new Error('that link is not a calendar (.ics) address');
     return { ok: true, message: `Calendar found - ${ev.length} event${ev.length === 1 ? '' : 's'}` };
   },
   async feed({ url }) {
     const u = String(url || '').trim(); if (badUrl(u)) throw new Error('the address should start with http:// or https://');
-    const f = parseFeed(await getText(u, { timeout: 12000 }));
+    const f = parseFeed((await getText(u, { timeout: 12000 })).text).items || [];
     if (!f.length) throw new Error('no headlines found - is that an RSS or Atom feed?');
     return { ok: true, message: `${f.length} headlines - newest: "${f[0].title.slice(0, 60)}"` };
   },

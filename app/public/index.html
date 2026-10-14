@@ -2,22 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0f17">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#070a12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <link rel="icon" href="/favicon.svg">
   <title>HouseOS</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <div id="banner" hidden></div>
-  <header>
-    <a class="brand" href="/">HouseOS</a>
-    <span id="houseName" class="muted"></span>
-    <nav class="tabs" aria-label="Sections"></nav>
-    <span class="spacer"></span>
-    <span id="clock" class="clock"></span>
-  </header>
-  <main id="view"></main>
+  <div class="shell">
+    <aside class="rail">
+      <a class="logo" href="#home" aria-label="HouseOS home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M3 11 12 3l9 8v10H3z"/><circle cx="12" cy="14.5" r="2.2" fill="currentColor" stroke="none"/></svg></a>
+      <nav class="nav" aria-label="Sections"></nav>
+    </aside>
+    <main class="main">
+      <div id="banner" hidden></div>
+      <div class="top">
+        <div><h1 id="title">Home</h1><div class="sub" id="subtitle"></div></div>
+        <span class="grow"></span>
+        <div class="row" id="actions"></div>
+        <span class="clock" id="clock"></span>
+      </div>
+      <div id="view"></div>
+    </main>
+  </div>
   <div id="toast" class="toast" hidden></div>
   <script src="app.js"></script>
 </body>

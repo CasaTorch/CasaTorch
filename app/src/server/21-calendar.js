@@ -69,7 +69,7 @@ function localParts(t, tz) {
     9 AM meeting stays at 9 AM across daylight-saving changes and evening events keep their day. */
 function expandEvents(events, from, to, tz) {
   const out = [];
-  const push = (ev, t, dur) => { if (t + dur > from && t < to) out.push({ title: ev.title || '(no title)', location: ev.location || null, start: new Date(t).toISOString(), end: new Date(t + dur).toISOString(), allDay: !!ev.start.allDay }); };
+  const push = (ev, t, dur) => { if (t + dur > from && t < to) out.push({ uid: ev.uid || null, title: ev.title || '(no title)', location: ev.location || null, start: new Date(t).toISOString(), end: new Date(t + dur).toISOString(), allDay: !!ev.start.allDay }); };
   const moved = new Set(events.filter((e) => e.recurrenceId).map((e) => `${e.uid}|${e.recurrenceId}`));
   for (const ev of events) {
     const dur = durationMs(ev);
@@ -104,9 +104,9 @@ function expandEvents(events, from, to, tz) {
   }
   return out.sort((a, b) => a.start.localeCompare(b.start));
 }
-async function calendarEvents(days = 14) {
-  const tz = config.house?.timezone || 'UTC';
-  const from = Date.now() - 6 * 3600_000, to = Date.now() + days * 86400_000;
+async function calendarEvents(days = 14, fromMs = null) {
+  const tz = houseTz();
+  const from = fromMs || Date.now() - 6 * 3600_000, to = from + days * 86400_000;
   const all = [], errors = [];
   for (const c of config.calendars || []) {
     try {
@@ -115,6 +115,9 @@ async function calendarEvents(days = 14) {
       for (const e of expandEvents(evs.events, from, to, tz)) all.push({ ...e, calendar: c.name, color: c.color || null });
     } catch (err) { errors.push({ calendar: c.name, error: String(err.message) }); }
   }
-  return { events: all.sort((a, b) => a.start.localeCompare(b.start)).slice(0, 200), errors };
+  if (typeof myCalendarEvents === 'function') all.push(...myCalendarEvents(from, to));
+  return { events: all.sort((a, b) => a.start.localeCompare(b.start)).slice(0, 300), errors };
 }
-app.get('/api/calendar', async (req, res) => { try { res.json(await calendarEvents(Math.min(60, Number(req.query.days) || 14))); } catch (err) { res.status(502).json({ error: String(err.message) }); } });
+app.get('/api/calendar', async (req, res) => { try {
+  if (isDemo()) { const from = req.query.from ? Date.parse(req.query.from) : Date.now() - 6 * 3600_000, to = from + Math.min(400, Number(req.query.days) || 14) * 86400_000; return res.json({ events: [...(demoFixture('home').calendar?.events || []), ...myCalendarEvents(from, to)].sort((a, b) => a.start.localeCompare(b.start)), errors: [] }); }
+  res.json(await calendarEvents(Math.min(400, Number(req.query.days) || 14), req.query.from ? Date.parse(req.query.from) : null)); } catch (err) { res.status(502).json({ error: String(err.message) }); } });
