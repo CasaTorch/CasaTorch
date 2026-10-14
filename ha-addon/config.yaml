@@ -1,0 +1,23 @@
+name: HouseOS
+version: "0.3.0"
+slug: houseos
+description: One screen for your whole house - dashboard, wall panel, 3D home and AI assistant, with everything from Home Assistant.
+url: https://github.com/gethouseos/HouseOS
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+init: false
+# Host networking lets HouseOS find Hue bridges, Shelly plugs and count devices on your network.
+host_network: true
+webui: "http://[HOST]:[PORT:8090]"
+ports:
+  8090/tcp: 8090
+ports_description:
+  8090/tcp: HouseOS (dashboard, wall panel, 3D home)
+# Talk to Home Assistant through the Supervisor - no long-lived token to create or paste.
+homeassistant_api: true
+environment:
+  HOUSEOS_DATA_DIR: /data
+  PORT: "8090"

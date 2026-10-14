@@ -32,11 +32,27 @@ of Pro included. Plug it into your router and open it on any screen. **[gethouse
 | Runs on | How |
 | --- | --- |
 | Raspberry Pi 4/5, Debian, Ubuntu | `sudo ./deploy/install.sh` - a service that starts at boot |
+| Home Assistant OS / Supervised | Add-on - see [Home Assistant users](#home-assistant-users) |
 | NAS or any Docker host (amd64/arm64) | `cd deploy && docker compose up -d` |
 | Windows 10/11 | `deploy\install.ps1` in PowerShell as Administrator |
 | macOS / anything with Node 20+ | `cd app && npm install && npm start` |
 
 Then open `http://<that machine>:8090`. Hardware advice and wall-screen picks: [docs/HARDWARE.md](docs/HARDWARE.md).
+
+### Home Assistant users
+
+[![Add the HouseOS add-on repository to your Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fgethouseos%2FHouseOS)
+[![Open the HouseOS card in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=gethouseos&repository=HouseOS&category=plugin)
+
+- **Add-on** (Home Assistant OS / Supervised): add this repository in **Settings > Add-ons > Add-on
+  store > ⋮ > Repositories** - `https://github.com/gethouseos/HouseOS` - and install **HouseOS**.
+  Home Assistant is connected automatically, no token needed. Open it at `http://homeassistant.local:8090`.
+- **HACS card**: **HACS > ⋮ > Custom repositories**, add `https://github.com/gethouseos/HouseOS` as
+  type **Dashboard**, download **HouseOS card**, then add `type: custom:houseos-card` with
+  `url: http://homeassistant.local:8090` and `view: home | panel | 3d | ask` to any dashboard.
+- **Container / Core**: run HouseOS with Docker next to Home Assistant and give it a long-lived token.
+
+Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
 
 ## Make it yours
 
@@ -111,18 +127,25 @@ Full comparison: [docs/EDITIONS.md](docs/EDITIONS.md). Where phones, tablets and
 
 Two ways to get your floors in - mix and match per floor:
 
-- **Draw them, on any device.** In **3D Home > Floors > Draw a floor**, drag to draw each room on a 1 m
-  grid and add walls. Have a floor-plan picture (from the listing, the builder, or a photo of a paper
-  plan)? **Trace a picture**: set how wide it is in meters and draw over it. HouseOS raises the walls
-  into 3D.
 - **Scan them with LiDAR** for the most realistic result. This needs an iPhone or iPad **with a LiDAR
-  sensor** - iPhone 12 Pro and newer *Pro* models, iPad Pro 2020 and newer - and a free scanning app
-  Free RoomPlan apps such as KIRI Engine (Room Scan) export **USDZ**, which HouseOS reads directly; GLB, GLTF, OBJ or a .zip also work (Polycam, Scaniverse and 3D Scanner App may need a paid plan to export). Upload it under **Floors**.
+  sensor** (iPhone 12 Pro and newer *Pro* models, iPad Pro 2020 and newer) and a free app built on
+  Apple RoomPlan - **LiDarPlan**, **KIRI Engine** (Room Scan) or **Lagarsoft LiDAR Scanner**. Export
+  **GLB** or **USDZ** (GLTF, OBJ or a .zip work too) and upload it in **3D > Editor > Floors**. Walls,
+  doors, windows, furniture and rooms are recognised automatically.
+- **Draw them, on any device.** In **Editor > Floors > Draw a floor**, drag to draw each room on a 1 m
+  grid and add walls. Have a floor-plan picture (from the listing, the builder, or a photo of a paper
+  plan)? **Trace a picture**: set how wide it is in meters and draw over it. HouseOS raises the walls.
 
-Line the floors up, then **Place devices**:
-pick a light, plug, speaker, camera or sensor and click where it is. Lights glow when on, speakers
-pulse when music plays, leaks and open doors flash, the top bar shows total watts - and tapping a
-pin switches it or opens the camera. The step-by-step guide is built into the page ("How to scan").
+**The 3D view** shows your home as a solid, lit model: rooms tinted in their own colours, lights
+glowing where they are, devices showing watts, temperatures and what's playing. Tap a room (or its
+button) to fly to it and open its controls - lights with dimmers, plugs, speakers, sensors and camera
+pictures. Switch floors, **Tall walls / Cut** walls, **Stacked / Apart / Alone** floors, room names,
+values and cameras, and pick a look: **Neon**, **Blueprint** or **Day**.
+
+**The Editor** is where you make it yours: **Devices** (pick one, click where it is, rename it, set a
+light's glow colour), **Rooms** (rename, recolour, move, add your own, or use the rooms from the scan),
+**Colours** (change any theme colour, or paint a single wall, floor or sofa) and **Floors** (upload,
+draw, stack and line them up).
 
 ### Ask the house (Pro)
 

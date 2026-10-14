@@ -11,9 +11,12 @@
  *
  * Stored in data/floorplan/: one .glb per floor + floorplan.json
  *   { floors: [{ id, name, kind: scan|drawn, file?, plan?: { rooms, walls, bg, bgW, bgOpacity }, level, heightM, rotationY, scale, offset: [x,z] }],
- *     pins:   [{ deviceId, floor, pos: [x, y, z], label? }] }
+ *       + rooms?: [{ name, color, pos: [x, z] }], paint?: { item: '#hex' }, look?: auto|styled|original
+ *     pins:   [{ deviceId, floor, pos: [x, y, z], label?, color? }], style?: { theme, colors: { theme: { key: '#hex' } } } }
  * ====================================================================== */
 const FP_DIR = path.join(DATA_DIR, 'floorplan');
+const FP_HEX = /^#[0-9a-f]{6}$/i;
+const fin = (v, lo, hi) => Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi;
 const FP_FILE = path.join(FP_DIR, 'floorplan.json');
 fs.mkdirSync(FP_DIR, { recursive: true });
 const fpRead = () => { try { return JSON.parse(fs.readFileSync(FP_FILE, 'utf8')); } catch { return { floors: [], pins: [] }; } };
@@ -47,6 +50,10 @@ app.put('/api/floorplan/floors/:id', requirePro, express.json(), (req, res) => {
   const b = req.body || {}, num = (v, lo, hi, dflt) => (Number.isFinite(Number(v)) ? Math.max(lo, Math.min(hi, Number(v))) : dflt);
   Object.assign(f, { name: b.name ? String(b.name).slice(0, 40) : f.name, level: num(b.level, 0, 9, f.level), heightM: num(b.heightM, 1.5, 10, f.heightM), rotationY: num(b.rotationY, -360, 360, f.rotationY), scale: num(b.scale, 0.01, 100, f.scale),
     offset: Array.isArray(b.offset) ? [num(b.offset[0], -1000, 1000, 0), num(b.offset[1], -1000, 1000, 0)] : f.offset });
+  if (['auto', 'styled', 'original'].includes(b.look)) f.look = b.look;
+  if (Array.isArray(b.rooms)) f.rooms = b.rooms.filter((r) => Array.isArray(r?.pos) && r.pos.length === 2 && r.pos.every((v) => fin(v, -1000, 1000))).slice(0, 60)
+    .map((r) => ({ name: String(r.name || 'Room').slice(0, 30), color: FP_HEX.test(r.color) ? r.color : '#38bdf8', pos: r.pos.map((v) => +(+v).toFixed(2)) }));
+  if (b.paint && typeof b.paint === 'object') f.paint = Object.fromEntries(Object.entries(b.paint).filter(([k, v]) => k.length <= 120 && FP_HEX.test(v)).slice(0, 800));
   fpWrite(d); res.json({ ok: true, floor: f });
 });
 app.delete('/api/floorplan/floors/:id', requirePro, (req, res) => {
@@ -54,7 +61,7 @@ app.delete('/api/floorplan/floors/:id', requirePro, (req, res) => {
   fpWrite(d); res.json({ ok: true });   // the .glb stays on disk until a cleanup; nothing is lost by a mis-tap
 });
 /* ---- drawn floors: rooms + walls (meters), optionally over a floor-plan picture ---- */
-const fin = (v, lo, hi) => Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi;
+(v, lo, hi) => Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi;
 app.post('/api/floorplan/floors/drawn', requirePro, express.json(), (req, res) => {
   const d = fpData(), id = `d${Date.now().toString(36)}`, level = d.floors.length;
   const f = { id, kind: 'drawn', name: String(req.body?.name || `Floor ${level + 1}`).slice(0, 40), level, heightM: 2.7, rotationY: 0, scale: 1, offset: [0, 0], plan: { rooms: [], walls: [], bg: null, bgW: 15, bgOpacity: 0.6 } };
@@ -85,10 +92,18 @@ app.get('/api/floorplan/floors/:id/background', (req, res) => {
   if (!f?.plan?.bg || !/^[\w-]+\.(png|jpg|webp)$/.test(f.plan.bg)) return res.status(404).end();
   res.setHeader('X-Content-Type-Options', 'nosniff'); res.sendFile(path.join(FP_DIR, f.plan.bg));
 });
+/* How the 3D home looks for everyone: theme (neon/blueprint/day) and any colours changed per theme. */
+app.put('/api/floorplan/style', requirePro, express.json(), (req, res) => {
+  const d = fpData(), b = req.body || {}, KEYS = ['bg', 'wall', 'floor', 'furniture', 'edge', 'door', 'window'];
+  const colors = {};
+  for (const t of ['neon', 'blueprint', 'day']) { const c = b.colors?.[t]; if (c && typeof c === 'object') { const ok = Object.fromEntries(KEYS.filter((k) => FP_HEX.test(c[k])).map((k) => [k, c[k]])); if (Object.keys(ok).length) colors[t] = ok; } }
+  d.style = { theme: ['neon', 'blueprint', 'day'].includes(b.theme) ? b.theme : 'neon', colors };
+  fpWrite(d); res.json({ ok: true, style: d.style });
+});
 app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req, res) => {
   const d = fpData(), floors = new Set(d.floors.map((f) => f.id));
   d.pins = (Array.isArray(req.body?.pins) ? req.body.pins : []).filter((p) => floors.has(p.floor) && Array.isArray(p.pos) && p.pos.length === 3 && p.pos.every(Number.isFinite))
-    .slice(0, 500).map((p) => ({ deviceId: String(p.deviceId).slice(0, 200), floor: p.floor, pos: p.pos.map((n) => Math.round(n * 1000) / 1000), label: p.label ? String(p.label).slice(0, 40) : null }));
+    .slice(0, 500).map((p) => ({ deviceId: String(p.deviceId).slice(0, 200), floor: p.floor, pos: p.pos.map((n) => Math.round(n * 1000) / 1000), label: p.label ? String(p.label).slice(0, 40) : null, color: FP_HEX.test(p.color) ? p.color : null }));
   fpWrite(d); res.json({ ok: true, pins: d.pins.length });
 });
 /* Live: every placed device's state + the house totals shown on top of the plan. */
