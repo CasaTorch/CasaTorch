@@ -33,10 +33,11 @@ function makeGrid(host, { tiles, ctx, onSave }) {
     try { await L.widget.render(L.body, ctx, sizeOf(L.t)); } catch (err) { L.body.replaceChildren(el('div', { class: 'muted small' }, `Could not load: ${err.message}`)); }
   }
   function tileEl(t) {
-    const w = WIDGETS[t.id]; if (!w) return null;
+    const w = WIDGETS[t.id.split(':')[0]]; if (!w) return null;
     const body = el('div', { class: 'tile-b' });
+    body._t = t; body._saved = () => { onSave(); paint(node, true); };
     const node = el('section', { class: 'tile', 'data-id': t.id, 'aria-label': w.title },
-      w.bare ? null : el('div', { class: 'tile-h' }, icon(w.icon), el('span', { class: 'ttl' }, t.title || w.title), w.pro && !isPro() ? el('span', { class: 'pill pro' }, 'PRO') : null, el('span', { class: 'grow' }), w.headerExtra ? w.headerExtra(ctx) : null),
+      w.bare ? null : el('div', { class: 'tile-h' }, icon(w.icon), el('span', { class: 'ttl' }, t.title || w.title), w.pro && !isPro() ? el('span', { class: 'pill pro' }, 'PRO') : null, el('span', { class: 'grow' }), w.headerExtra ? w.headerExtra(ctx, t, () => { onSave(); paint(node, true); }) : null),
       body,
       el('div', { class: 'tools' }, el('button', { class: 'grip', title: 'Drag to move', 'aria-label': `Move ${w.title}` }, icon('grip')),
         el('button', { title: 'Rename', 'aria-label': `Rename ${w.title}`, onclick: () => renameBox(`Rename "${t.title || w.title}"`, t.title || w.title, w.title, (v) => { t.title = v && v !== w.title ? v : undefined; const ttl = node.querySelector('.ttl'); if (ttl) ttl.textContent = t.title || w.title; onSave(); }) }, icon('edit')), el('button', { title: 'Remove', 'aria-label': `Remove ${w.title}`, onclick: () => { tiles.splice(tiles.indexOf(t), 1); live.delete(node); node.remove(); onSave(); } }, icon('x'))),
@@ -97,7 +98,7 @@ function makeGrid(host, { tiles, ctx, onSave }) {
   return {
     build,
     refresh: () => Promise.all([...live.keys()].map((n) => paint(n, false))),
-    add(id) { const w = WIDGETS[id], t = { id, w: w.size?.[0] || 4, h: w.size?.[1] || 3 }; tiles.push(t); const n = tileEl(t); grid.append(n); paint(n, true); n.scrollIntoView({ behavior: 'smooth', block: 'center' }); onSave(); },
+    add(id) { const w = WIDGETS[id], t = { id: w.multi ? `${id}:${Math.random().toString(36).slice(2, 8)}` : id, w: w.size?.[0] || 4, h: w.size?.[1] || 3 }; tiles.push(t); const n = tileEl(t); grid.append(n); paint(n, true); n.scrollIntoView({ behavior: 'smooth', block: 'center' }); onSave(); return { t, repaint: () => { onSave(); paint(n, true); } }; },
   };
 }
 

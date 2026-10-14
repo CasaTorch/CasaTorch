@@ -64,7 +64,7 @@ async function houseSnapshot() {
     }))(),
     demo ? demoFixture('alerts') : { now: Object.values(alerts.open || {}) },
   ]);
-  const devices = (dev?.devices || []).map((d) => Object.fromEntries(Object.entries({ id: d.id, name: d.name, kind: d.kind, on: d.on, brightness: d.brightness, watts: d.powerW, playing: d.playing, nowPlaying: d.title, temperature: temp(d.tempC), target: temp(d.targetC), humidity: d.humidity, open: d.open, water: d.water, motion: d.motion, locked: d.locked, battery: d.battery, online: d.online }).filter(([, v]) => v !== undefined && v !== null)));
+  const devices = (dev?.devices || []).map((d) => Object.fromEntries(Object.entries({ id: d.id, name: d.name, kind: d.kind, on: d.on, brightness: d.brightness, watts: d.powerW, playing: d.playing, nowPlaying: d.title, temperature: temp(d.tempC), target: temp(d.targetC), humidity: d.humidity, open: d.open, water: d.water, motion: d.motion, locked: d.locked, battery: d.battery, online: d.online, home: d.home, armed: d.armed, fanPercent: d.percent, state: ['value', 'presence', 'alarm', 'vacuum', 'cover', 'action'].includes(d.kind) ? d.state : undefined, value: d.value, unit: d.unit || undefined }).filter(([, v]) => v !== undefined && v !== null)));
   const watts = devices.reduce((t, d) => t + (d.watts || 0), 0), rate = config.energy?.ratePerKwh ?? (demo ? 0.17 : null);
   return {
     house: config.house?.name || (demo ? 'Demo House' : 'Home'), now: new Intl.DateTimeFormat('en-US', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(new Date()), timezone: tz, temperatureUnit: units,
@@ -97,7 +97,7 @@ function parseReply(text, snap) {
   if (m) { try { j = JSON.parse(m[0]); } catch { j = null; } }
   if (!j || typeof j.answer !== 'string') return { answer: String(text).trim() || 'Sorry - I could not answer that.', actions: [] };
   const byId = new Map(snap.devices.map((d) => [d.id, d]));
-  const actions = (Array.isArray(j.actions) ? j.actions : []).filter((a) => byId.has(a?.deviceId) && SAFE_ACTIONS.has(a.action) && !['lock', 'camera', 'sensor', 'climate'].includes(byId.get(a.deviceId).kind))
+  const actions = (Array.isArray(j.actions) ? j.actions : []).filter((a) => byId.has(a?.deviceId) && SAFE_ACTIONS.has(a.action) && ['light', 'switch', 'plug', 'media', 'fan'].includes(byId.get(a.deviceId).kind))
     .slice(0, 12).map((a) => ({ deviceId: a.deviceId, action: a.action, label: String(a.label || `${a.action} ${byId.get(a.deviceId).name}`).slice(0, 60) }));
   return { answer: j.answer.trim(), actions };
 }

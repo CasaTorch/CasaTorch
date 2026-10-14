@@ -4,15 +4,15 @@ async function homeData() {
   return { home, alerts, devices, settings };
 }
 function widgetPicker(have, onPick) {
-  const list = Object.values(WIDGETS).filter((w) => !have.has(w.id));
+  const list = Object.values(WIDGETS).filter((w) => w.multi || !have.has(w.id));
   const m = modal(list.length ? el('div', { class: 'picker' }, list.map((w) => el('button', { onclick: () => { m.remove(); onPick(w.id); } }, icon(w.icon), el('div', {}, el('b', {}, w.title, w.pro ? el('span', { class: 'pill pro', style: 'margin-left:6px' }, 'PRO') : null), el('div', { class: 'tiny muted' }, WIDGET_BLURB[w.id] || ''))))) : el('p', { class: 'muted' }, 'Every widget is already on your Home screen.'), { title: 'Add a widget', wide: true });
 }
 const WIDGET_BLURB = { clock: 'Big time and date', weather: 'Now, the next hours, the week', calendar: 'What\'s next on your calendars', sports: 'Scores and next games', news: 'Headlines from your sources', internet: 'Online, speed, ping', today: 'Reminders and the house note',
-  alerts: 'What needs you', energy: 'Watts now and what it costs', lights: 'Tap to switch lights and plugs', camera: 'Live snapshots', photos: 'Your photos on a slow loop', ask: 'Ask anything about your home', house3d: 'Your LiDAR floor plan, live' };
+  alerts: 'What needs you', energy: 'Watts now and what it costs', lights: 'Tap to switch lights and plugs', camera: 'Live snapshots', photos: 'Your photos on a slow loop', entities: 'Any devices or Home Assistant entities you pick - add as many as you like', ask: 'Ask anything about your home', house3d: 'Your LiDAR floor plan, live' };
 tab({ id: 'home', label: 'Home', icon: 'home', async render(main) {
   const ctx = { data: await homeData() };
   const saved = (await api('/api/layout').catch(() => ({}))).layout?.tiles;
-  const tiles = (saved || DEFAULT_LAYOUT).filter((t) => WIDGETS[t.id]).map((t) => ({ ...t }));
+  const tiles = (saved || DEFAULT_LAYOUT).filter((t) => WIDGETS[t.id.split(':')[0]]).map((t) => ({ ...t }));
   let saveT = null;
   const save = () => { clearTimeout(saveT); saveT = setTimeout(() => post('/api/layout', { tiles }, 'PUT').catch((e) => toast(`Layout not saved: ${e.message}`)), 400); };
   const editBtn = el('button', { class: 'btn' }, icon('edit'), 'Edit layout');
@@ -26,7 +26,7 @@ tab({ id: 'home', label: 'Home', icon: 'home', async render(main) {
   main.append(bar);
   const g = makeGrid(main, { tiles, ctx, onSave: save });
   const grid = main.querySelector('.grid');
-  addBtn.onclick = () => widgetPicker(new Set(tiles.map((t) => t.id)), (id) => { g.add(id); setEdit(true); });
+  addBtn.onclick = () => widgetPicker(new Set(tiles.map((t) => t.id.split(':')[0])), (id) => { const added = g.add(id); if (id === 'entities') pickDevices([], (ids) => { added.t.ids = ids; added.repaint(); }); else setEdit(true); });
   await g.build();
   return async () => { ctx.data = await homeData(); g.refresh(); };
 } });

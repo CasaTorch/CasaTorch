@@ -1,34 +1,61 @@
-# HouseOS Free vs Pro
+# HouseOS Free and Pro
 
-**Free is a complete product.** Pro is for people who want HouseOS away from home, smarter alerts,
-and the showpiece features. Pro: **$5/month, $49/year, or $129 once** (lifetime, one home).
-14-day trial, no card needed.
+**Free is a complete home dashboard, for good.** Pro adds the showpiece features and, as they
+ship, the things that cost money to run (remote access, phone alerts, backups).
 
-The last column is honest about today: "yes" ships in 0.2; "planned" is on the roadmap and is
-what Pro buyers fund. Don't charge for Pro until remote access + push notifications ship (see the business plan).
+**Pro: $5/month, $49/year, or $129 once** (lifetime, one home). Every new install gets a
+**14-day Pro trial** - no card, nothing to cancel. A Pro key is checked on your box, offline;
+HouseOS never phones home to check it.
 
-| | Free | Pro | In 0.2 |
-| --- | --- | --- | --- |
-| Setup wizard, all tabs, unlimited screens at home | ✓ | ✓ | yes |
-| Weather, calendars, sports, news, reminders | ✓ | ✓ | yes |
-| Direct integrations (Hue, Shelly, Reolink, RTSP/ONVIF, UniFi, Meraki, Frigate, YoLink, Pi-hole) | ✓ | ✓ | yes (UniFi/Meraki/Pi-hole: tested in setup, tabs in progress) |
-| Home Assistant (every device it supports) | ✓ | ✓ | yes |
-| Alerts on the dashboard | ✓ | ✓ | yes |
-| History | 7 days | 2 years | planned |
-| **Remote access** from anywhere, no port forwarding (secure relay) | | ✓ | planned |
-| **Push notifications** to your phone (alerts, doorbell, leaks) with quiet hours | | ✓ | planned |
-| **Smart alerts**: plain-English summaries, unusual activity on the network, energy and sensors | | ✓ | planned |
-| **3D floor plan** from an iPhone/iPad LiDAR scan, devices live in their rooms | | ✓ | yes |
-| **Ask the house**: questions in plain English (bring your own AI key, or included credits) | | ✓ | planned |
-| **Ring cameras and doorbells** (Labs) | | ✓ | yes |
-| **Self-healing**: restarts stuck apps, CPU watchdog, safe one-tap updates with rollback | | ✓ | planned |
-| **Energy insights**: bill forecast, always-on load, rate-plan comparison, Green Button import | | ✓ | planned |
-| Weekly house report by e-mail | | ✓ | planned |
-| Multiple homes (cabin, parents' house) in one app | | ✓ | planned |
-| Themes, multiple wall-panel layouts | | ✓ | planned |
-| Encrypted cloud backup of your settings | | ✓ | planned |
-| Priority support | | ✓ | planned |
+## What's in each
 
-Why this split: Free has to make people install it and tell friends. Pro sells what costs us
-money to run (relay, push, backups, AI credits) or took the most work (3D, Ring, self-healing,
-insights), so paying feels fair. Remote access + push alone is what most people will pay for.
+✓ = included · **Now** = in the current release · **Coming** = on the roadmap (Pro buyers get it when it ships, no extra cost)
+
+| | Free | Pro | |
+| --- | :---: | :---: | --- |
+| **The dashboard** | | | |
+| Home screen of widgets you drag, resize, add and remove - tiles show more as they grow | ✓ | ✓ | Now |
+| 14 widgets: clock, weather, calendar, scores, headlines, internet, today, alerts, energy, quick switches, pinned devices (add as many as you like), cameras, photo reel, 3D Home* | ✓ | ✓ | Now |
+| Panel mode for wall tablets: status bar of everything connected, keeps the screen on, full screen | ✓ | ✓ | Now |
+| Light and dark mode, color schemes and custom colors, menu on any side of the screen | ✓ | ✓ | Now |
+| Rename anything: menu items, tiles, devices, the house; hide what you don't use | ✓ | ✓ | Now |
+| Unlimited screens at home; sign-in with a password, PIN for risky actions | ✓ | ✓ | Now |
+| **Your day** | | | |
+| Weather, family calendar (built in - no Google needed - plus Google/iCloud/Outlook links), sports scores, news, reminders | ✓ | ✓ | Now |
+| Photo reel: upload photos from any phone or computer, slideshow on the wall | ✓ | ✓ | Now |
+| **Your home** | | | |
+| Setup that asks the questions and connects everything for you | ✓ | ✓ | Now |
+| Without Home Assistant: Hue, Shelly, YoLink, Frigate, Reolink, any snapshot camera | ✓ | ✓ | Now |
+| With Home Assistant: everything in it - lights, fans, covers, media, climate, locks, cameras, scenes, scripts, vacuums, alarms, people, every sensor - searchable and pinnable to tiles | ✓ | ✓ | Now |
+| Controls, cameras, sensors, energy (watts and cost per device), network and speed tests | ✓ | ✓ | Now |
+| Alerts on the dashboard: leaks, smoke, low batteries, devices offline, internet down | ✓ | ✓ | Now |
+| **Pro** | | | |
+| **3D Home** - your iPhone/iPad LiDAR scan as a live floor plan; pin devices where they are; lights glow, music pulses, leaks flash; tap to switch | | ✓ | Now |
+| **Ask the house** - plain-English questions about your home; suggests actions you tap to do; in the panel-mode status bar too. Bring your own AI (Claude, OpenAI) or run it privately with Ollama | | ✓ | Now |
+| **Ring** doorbells and cameras without Home Assistant (Labs - unofficial API) | | ✓ | Now |
+| **Away from home** - secure remote access from your phone, no port forwarding | | ✓ | Coming |
+| **Phone alerts** - push notifications for leaks, doorbell, alarms, with quiet hours | | ✓ | Coming |
+| **HouseOS apps** for iPhone, iPad and Android (App Store / Play Store) | | ✓ | Coming |
+| **Smart alerts** - "only if nobody's home", escalation, plain-English summaries | | ✓ | Coming |
+| **Energy insights** - history, bill forecast, always-on load, weekly report | | ✓ | Coming |
+| **Self-healing** - restarts stuck integrations and tells you what it fixed | | ✓ | Coming |
+| History | 7 days | 2 years | Coming |
+| Multiple homes (cabin, parents' house) in one app | | ✓ | Coming |
+| Extra wall-panel layouts and theme packs | | ✓ | Coming |
+| Encrypted backup of your settings | | ✓ | Coming |
+| Priority support | | ✓ | Coming |
+
+\* The 3D Home tile needs Pro.
+
+## Why it's split this way
+
+Everything you need to run your house from a wall screen is free and open source (AGPL-3.0).
+Pro pays for what costs money to run - the remote-access relay, push notifications, backups -
+and for the features that took the most work: the 3D Home, Ask the house and Ring.
+
+## Using AI with Ask the house
+
+Ask the house sends a snapshot of your home (device names and states, the calendar, weather) to
+the AI you choose, only when you ask a question. Choose **Ollama** and it never leaves your
+network. HouseOS only suggests actions - you tap to do them - and it never unlocks doors or opens
+garage doors.
