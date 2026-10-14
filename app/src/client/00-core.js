@@ -33,6 +33,7 @@ const api = async (url, opts = {}) => {
   const r = await fetch(url, o);
   if (r.status === 401) { location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.hash)}`; throw new Error('sign in first'); }
   const j = await r.json().catch(() => ({}));
+  if (r.status === 403 && j.terms) { location.href = '/login.html?step=terms'; throw new Error(j.error); }
   if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status, body: j });
   return j;
 };

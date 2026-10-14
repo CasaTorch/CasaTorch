@@ -143,3 +143,7 @@ input[type=color] { width: 34px; height: 30px; padding: 2px; flex: none; } input
 .draw-svg .rdim { fill: #8b9bb4; font: 12px system-ui; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
 #drawer .draw-stage { position: relative; flex: 1; overflow: hidden; } #drawer .draw-stage .draw-svg { position: absolute; inset: 0; height: 100%; }
 #drawer .draw-bg { position: absolute; pointer-events: none; user-select: none; }
+
+.sunrow { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; margin: -4px 0 12px; } .sunrow input { accent-color: var(--warm); } .sunrow b { font-size: 13px; min-width: 62px; text-align: right; }
+.tools .seg button { padding: 5px 10px; }
+.tools { position: fixed; } .morepop { position: absolute; bottom: calc(100% + 10px); right: 0; display: flex; flex-wrap: wrap; gap: 6px; width: min(420px, 92vw); padding: 10px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: var(--blur); box-shadow: 0 20px 50px #0007; }

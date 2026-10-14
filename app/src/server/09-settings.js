@@ -29,7 +29,7 @@ app.get('/api/settings', (_req, res) => {
       homeAssistant: !!c.homeAssistant?.url, hue: !!c.hue?.username, shelly: (c.shelly || []).length, cameras: Array.isArray(c.cameras) ? c.cameras.length : 0,
       yolink: !!c.yolink?.uaid, ring: !!c.ring?.refreshToken, meraki: !!c.network?.meraki, unifi: !!c.network?.unifi,
     },
-    signIn: !!c.signIn?.password,
+    signIn: signInOn(),
     ai: c.ai ? { provider: c.ai.provider, model: c.ai.model, url: c.ai.url || null, hasKey: !!c.ai.apiKey } : null,
   });
 });
@@ -44,6 +44,6 @@ app.put('/api/settings', express.json(), (req, res) => {
 });
 /* Re-open the setup wizard from the app (asks for the password again). */
 app.post('/api/settings/rerun-setup', express.json(), (req, res) => {
-  if (!isDemo() && config.signIn?.password && !verifySecret(config.signIn.password, req.body?.password || '')) return res.status(403).json({ error: 'that password is not right' });
+  if (signInOn() && (!req.user || rank(req.user.role) < rank('admin') || !verifySecret(req.user.password, req.body?.password || ''))) return res.status(403).json({ error: 'that password is not right' });
   setupReopened = true; res.json({ ok: true, url: '/setup.html' });
 });

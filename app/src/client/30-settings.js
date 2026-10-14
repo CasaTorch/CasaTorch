@@ -100,10 +100,11 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
   out.onclick = async () => { await fetch('/api/logout', { method: 'POST' }); location.href = '/login.html'; };
   const acct = el('div', { class: 'card' }, el('h2', {}, 'This HouseOS'), el('dl', { class: 'kv' }, el('dt', {}, 'House'), el('dd', {}, s.house?.name || '-'), el('dt', {}, 'Time zone'), el('dd', {}, s.house?.timezone || '-'), el('dt', {}, 'Version'), el('dd', {}, s.version)),
     el('p', { class: 'small muted' }, 'Change devices, calendars, teams and news by running setup again. Your existing settings are kept.'),
-    s.demo ? null : el('label', { class: 'field' }, el('span', {}, 'Password (to run setup again)'), pw),
-    el('div', { class: 'row wrap' }, rerun, s.signIn ? out : null),
+    s.demo ? null : el('label', { class: 'field' }, el('span', {}, 'Your password (admins only)'), pw),
+    el('div', { class: 'row wrap' }, rerun),
     el('p', { class: 'small muted' }, `HouseOS ${s.version} · open-source core (AGPL-3.0) · `, el('a', { href: 'https://gethouseos.com', target: '_blank', rel: 'noopener' }, 'gethouseos.com')));
-  main.replaceChildren(el('div', { class: 'cards' }, pro, lookCard(), menuCard(), aiCard(s), homeCard, helpCard(), everyday, conn, acct));
+  const security = await securityCards();
+  main.replaceChildren(el('div', { class: 'cards' }, ...security, pro, lookCard(), menuCard(), aiCard(s), homeCard, helpCard(), everyday, conn, acct));
   return null;
 } });
 /* Side-rail order */
