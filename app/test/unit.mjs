@@ -42,5 +42,23 @@ t('rss + atom', () => {
   const a = H.parseFeed(rss), b = H.parseFeed(atom);
   assert.equal(a.items[0].title, 'Big & news'); assert.equal(a.items[0].at, '2026-10-13T18:00:00.000Z'); assert.equal(b.items[0].link, 'https://example.com/b'); assert.equal(b.title, 'Verge');
 });
+t('home assistant: every kind of entity becomes a device', () => {
+  const S = (entity_id, state, attributes = {}) => H.haDevice({ entity_id, state, attributes });
+  assert.equal(S('light.k', 'on', { brightness: 255 }).brightness, 100);
+  assert.equal(S('switch.p', 'on', { device_class: 'outlet' }).kind, 'plug');
+  assert.equal(S('fan.f', 'on', { percentage: 40 }).percent, 40);
+  const g = S('cover.garage', 'closed', { device_class: 'garage' }); assert.equal(g.kind, 'cover'); assert.equal(g.risky, true);
+  assert.equal(S('cover.blinds', 'open', { current_position: 70 }).position, 70);
+  assert.equal(S('scene.movie', 'scening').kind, 'action'); assert.equal(S('script.bed', 'off').kind, 'action'); assert.equal(S('button.ring', 'unknown').kind, 'action');
+  assert.equal(S('vacuum.v', 'docked').kind, 'vacuum'); assert.equal(S('alarm_control_panel.a', 'armed_away').armed, true);
+  assert.equal(S('person.alex', 'home').home, true);
+  assert.equal(S('sensor.p', '1.2', { unit_of_measurement: 'kW' }).powerW, 1200);
+  assert.equal(S('sensor.t', '68', { device_class: 'temperature', unit_of_measurement: '\u00B0F' }).tempC, 20);
+  const v = S('sensor.aqi', '32', { unit_of_measurement: 'AQI' }); assert.equal(v.kind, 'value'); assert.equal(v.value, '32');
+  assert.equal(S('binary_sensor.leak', 'on', { device_class: 'moisture' }).water, true);
+  assert.equal(S('binary_sensor.x', 'on', { device_class: 'vibration' }).on, true);
+  assert.equal(S('update.core', 'off').kind, 'value');
+  assert.equal(S('sun.sun', 'above_horizon'), null);
+});
 console.log(`\n${n} passed`);
 process.exit(0);

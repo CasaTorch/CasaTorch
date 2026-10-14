@@ -119,8 +119,10 @@ async function savePins() {
 function editPanel() {
   const side = $('#side'); side.hidden = false;
   const placed = new Set(S.pins.map((p) => p.deviceId));
-  const devs = (S.live?.devices || []).slice().sort((a, b) => Number(placed.has(a.id)) - Number(placed.has(b.id)) || a.name.localeCompare(b.name));
+  const q = (S.q || '').toLowerCase();
+  const devs = (S.live?.devices || []).filter((d) => !q || `${d.name} ${d.id}`.toLowerCase().includes(q)).slice().sort((a, b) => Number(placed.has(a.id)) - Number(placed.has(b.id)) || a.name.localeCompare(b.name));
   side.replaceChildren(el('h2', {}, 'Place devices'), el('p', { class: 'note' }, S.pick ? `Now click on the model where "${S.pick.name}" is.` : 'Pick a device, then click on the model where it is. Click a placed pin to remove it.'),
+    (() => { const i = el('input', { type: 'search', placeholder: 'Search devices', value: S.q || '' }); i.oninput = () => { S.q = i.value; editPanel(); const n = $('#side input[type=search]'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }; return i; })(),
     el('h3', {}, `Not placed (${devs.filter((d) => !placed.has(d.id)).length})`), ...devs.filter((d) => !placed.has(d.id)).map(row),
     el('h3', {}, `On the plan (${placed.size})`), ...devs.filter((d) => placed.has(d.id)).map(row),
     el('p', {}, el('button', { type: 'button', class: 'primary', onclick: () => { S.edit = false; S.pick = null; $('#editBtn').classList.remove('on'); side.hidden = true; } }, 'Done')));

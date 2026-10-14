@@ -100,15 +100,49 @@ widget({ id: 'energy', title: 'Energy', icon: 'bolt', min: [2, 2], size: [3, 3],
 } });
 
 async function toggleDevice(d) { await post(`/api/devices/${encodeURIComponent(d.id)}/toggle`); if (d.kind === 'media') d.playing = !d.playing; else d.on = !d.on; }
-function devButton(d, compact) {
-  const cls = ['dev', d.online === false && 'offline', (d.water || d.smoke) && 'alarm', d.playing && 'playing', !d.playing && d.on && d.kind !== 'sensor' && 'on'].filter(Boolean).join(' ');
-  const meta = [d.on != null && !['sensor', 'climate'].includes(d.kind) ? (d.kind === 'media' ? (d.playing ? (d.title || 'Playing') : d.on ? 'Paused' : 'Off') : d.on ? 'On' : 'Off') : null, d.brightness && d.on ? `${d.brightness}%` : null, d.powerW != null ? `${Math.round(d.powerW)} W` : null,
-    d.tempC != null ? tempOf(d.tempC) : null, d.targetC != null ? `set ${tempOf(d.targetC)}` : null, d.humidity != null ? `${d.humidity}%` : null, d.open != null ? (d.open ? 'Open' : 'Closed') : null, d.water != null ? (d.water ? 'WATER!' : 'Dry') : null,
+const TOGGLES = new Set(['light', 'switch', 'plug', 'media', 'fan']);
+const pretty = (s) => String(s || '').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+function devMeta(d, compact) {
+  if (d.kind === 'presence') return d.home ? 'Home' : pretty(d.state === 'not_home' ? 'Away' : d.state);
+  if (d.kind === 'value') return `${d.value ?? '-'}${d.unit ? ` ${d.unit}` : ''}`;
+  if (d.kind === 'alarm') return pretty(d.state);
+  if (d.kind === 'vacuum' || d.kind === 'action') return d.kind === 'action' ? (d.domain === 'scene' ? 'Scene' : d.domain === 'script' ? 'Script' : 'Button') : pretty(d.state);
+  if (d.kind === 'cover') return `${d.open ? 'Open' : pretty(d.state)}${d.position != null && d.open ? ` · ${d.position}%` : ''}`;
+  return [d.on != null && !['sensor', 'climate'].includes(d.kind) ? (d.kind === 'media' ? (d.playing ? (d.title || 'Playing') : d.on ? 'Paused' : 'Off') : d.on ? 'On' : 'Off') : null, d.brightness && d.on ? `${d.brightness}%` : null, d.percent && d.on ? `${d.percent}%` : null,
+    d.powerW != null ? `${Math.round(d.powerW)} W` : null, d.tempC != null ? tempOf(d.tempC) : null, d.targetC != null ? `set ${tempOf(d.targetC)}` : null, d.humidity != null ? `${d.humidity}%` : null,
+    d.open != null ? (d.open ? 'Open' : 'Closed') : null, d.water != null ? (d.water ? 'WATER!' : 'Dry') : null, d.motion != null ? (d.motion ? 'Motion' : 'Clear') : null, d.smoke != null ? (d.smoke ? 'SMOKE!' : 'Clear') : null,
     d.locked != null ? (d.locked ? 'Locked' : 'Unlocked') : null, d.battery != null && !compact ? `battery ${d.battery}%` : null, d.online === false ? 'offline' : null].filter(Boolean).join(' · ');
-  const b = el('button', { class: cls }, el('span', { class: 'ic' }, icon(devIconName(d))), el('div', { style: 'min-width:0' }, el('div', { class: 'ellipsis' }, d.name), el('div', { class: 'meta ellipsis' }, meta)));
-  if (['light', 'switch', 'plug', 'media'].includes(d.kind) && d.online !== false) b.onclick = async () => { try { await toggleDevice(d); b.replaceWith(devButton(d, compact)); } catch (err) { toast(err.message); } };
+}
+function devButton(d, compact) {
+  const cls = ['dev', d.online === false && 'offline', (d.water || d.smoke || d.triggered) && 'alarm', d.playing && 'playing', !d.playing && (d.on || (d.kind === 'presence' && d.home) || (d.kind === 'cover' && d.open)) && !['sensor'].includes(d.kind) && 'on'].filter(Boolean).join(' ');
+  const act = async (action, label) => { try { await post(`/api/devices/${encodeURIComponent(d.id)}/${action}`); toast(`${d.name}: ${label}`); } catch (err) { toast(err.message, 4000); } };
+  const mini = (label, action) => el('button', { class: 'btn small', style: 'padding:3px 9px', onclick: (e) => { e.stopPropagation(); act(action, label); } }, label);
+  const extra = d.kind === 'cover' ? (d.risky ? [mini('Close', 'close')] : [mini('Open', 'open'), mini('Close', 'close')]) : d.kind === 'vacuum' ? [mini('Start', 'start'), mini('Dock', 'dock')] : d.kind === 'action' ? [mini('Run', 'run')] : null;
+  const b = el(extra ? 'div' : 'button', { class: cls, role: extra ? 'group' : null, title: d.name }, el('span', { class: 'ic' }, icon(devIconName(d))), el('div', { style: 'min-width:0;flex:1' }, el('div', { class: 'ellipsis' }, d.name), el('div', { class: 'meta ellipsis' }, devMeta(d, compact))), extra ? el('div', { class: 'row', style: 'gap:4px;flex:none' }, extra) : null);
+  if (TOGGLES.has(d.kind) && d.online !== false) b.onclick = async () => { try { await toggleDevice(d); b.replaceWith(devButton(d, compact)); } catch (err) { toast(err.message); } };
   return b;
 }
+/* Pinned devices: any devices you pick - including anything from Home Assistant. You can add several of these tiles. */
+function pickDevices(selected, done) {
+  const sel = new Set(selected || []);
+  api('/api/devices').then(({ devices = [] }) => {
+    const q = el('input', { type: 'search', placeholder: 'Search devices and Home Assistant entities…' });
+    const list = el('div', { style: 'max-height:55vh;overflow:auto;margin-top:10px' });
+    const draw = () => { const t = q.value.toLowerCase(); list.replaceChildren(...devices.filter((d) => !t || `${d.name} ${d.id}`.toLowerCase().includes(t)).slice(0, 300).map((d) => el('label', { class: 'tab-row', style: 'cursor:pointer' }, icon(devIconName(d)), el('div', { style: 'min-width:0' }, el('div', { class: 'ellipsis' }, d.name), el('div', { class: 'tiny faint ellipsis' }, `${d.id} · ${devMeta(d, true)}`)), el('input', { type: 'checkbox', checked: sel.has(d.id), style: 'width:auto', onchange: (e) => { if (e.target.checked) sel.add(d.id); else sel.delete(d.id); } })))); };
+    q.oninput = draw; draw();
+    const m = modal(el('div', {}, q, list, el('div', { class: 'row', style: 'justify-content:flex-end;margin-top:12px' }, el('span', { class: 'small muted grow' }, `${devices.length} devices available`), el('button', { class: 'btn ghost', onclick: () => m.remove() }, 'Cancel'), el('button', { class: 'btn primary', onclick: () => { m.remove(); done([...sel]); } }, 'Done'))), { title: 'Choose devices', wide: true });
+    setTimeout(() => q.focus(), 50);
+  });
+}
+widget({ id: 'entities', title: 'Pinned devices', icon: 'sliders', multi: true, min: [2, 2], size: [4, 3],
+  headerExtra: (ctx, t, saved) => el('button', { class: 'btn ghost small', title: 'Choose devices', 'aria-label': 'Choose devices', onclick: () => pickDevices(t.ids, (ids) => { t.ids = ids; saved(); }) }, icon('gear')),
+  render(b, ctx, { w, h }) {
+    const all = ctx.data.devices?.devices || [];
+    const ds = (b._t?.ids || []).map((id) => all.find((d) => d.id === id)).filter(Boolean);
+    if (!ds.length) return b.replaceChildren(empty('Pick any devices or Home Assistant entities to keep here.', null, null), el('div', { style: 'text-align:center' }, el('button', { class: 'btn small primary', onclick: () => pickDevices([], (picked) => { b._t.ids = picked; b._saved(); }) }, 'Choose devices')));
+    const perRow = Math.max(1, Math.floor(w / 2));
+    b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr));overflow:auto` }, ds.map((d) => devButton(d, true))));
+  } });
 widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', min: [2, 2], size: [4, 3], render(b, ctx, { w, h }) {
   const ds = (ctx.data.devices?.devices || []).filter((d) => ['light', 'switch', 'plug', 'media'].includes(d.kind));
   if (!ds.length) return b.replaceChildren(empty('No lights or plugs yet.'));
@@ -116,7 +150,7 @@ widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', min: [2, 2], size:
   b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr))` }, ds.slice(0, perRow * rows).map((d) => devButton(d, true))));
 } });
 
-const snapUrl = (d) => `/api/${d.provider === 'ring' ? 'ring' : 'cameras'}/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`;
+const snapUrl = (d) => (d.provider === 'ha' ? `/api/ha/camera/${encodeURIComponent(d.id.slice(3))}` : `/api/${d.provider === 'ring' ? 'ring' : 'cameras'}/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`);
 function camView(d) {
   const img = el('img', { alt: d.name, src: `${snapUrl(d)}?t=${Date.now()}`, onclick: () => modal(el('img', { src: `${snapUrl(d)}?t=${Date.now()}`, alt: d.name }), { wide: true, title: d.name }) });
   return el('div', { class: 'cam' }, img, el('div', { class: 'cap' }, el('span', {}, d.name), el('span', { class: 'tiny muted' }, d.source || d.provider)));

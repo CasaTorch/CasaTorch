@@ -3,8 +3,9 @@
 **One screen for your whole house - with or without Home Assistant.**
 
 HouseOS is a self-hosted home dashboard built for a wall-mounted tablet (and your phone). Weather,
-family calendars, your teams' scores, headlines, the internet, lights and plugs, cameras, sensors,
-power use - and, with Pro, your house as a live 3D model from an iPhone LiDAR scan.
+a family calendar, your teams' scores, headlines, photos, the internet, lights and plugs, cameras,
+sensors and power use - on a Home screen you arrange yourself. With Pro, your house as a live 3D
+model from an iPhone LiDAR scan, and an assistant you can ask anything about your home.
 
 It runs on hardware you already have: a Raspberry Pi, a NAS with Docker, an old Windows PC, a mini PC.
 Nothing leaves your house unless you turn on a feature that needs to.
@@ -32,20 +33,35 @@ npm run demo          # open http://localhost:8090
 
 Then open `http://<that machine>:8090`. Hardware advice and wall-screen picks: [docs/HARDWARE.md](docs/HARDWARE.md).
 
+## Make it yours
+
+- **Drag, resize, add and remove tiles** on the Home screen (Edit layout). Tiles show more as they
+  grow: a small weather tile is the temperature; a big one adds the hours and the week.
+- **14 widgets**: clock, weather, calendar, scores, headlines, internet, today, alerts, energy,
+  quick switches, pinned devices (any devices or Home Assistant entities you pick), cameras, photo reel, 3D Home.
+- **Panel mode** for wall tablets (`http://<box>:8090/?panel=1`): a status bar across the top with
+  the time, weather, alerts and everything HouseOS is connected to - green, yellow or red - plus
+  the Ask the house bar. Keeps the screen on.
+- **Light or dark**, color schemes or your own colors, and the **menu on any side** of the screen.
+- **Rename anything** - menu items, tiles, devices, the house - and hide what you don't use.
+- **A family calendar built in** (no Google account needed) and a **photo reel** you upload to from
+  any phone or computer. Everything stays on your box.
+
 ## Setup asks the questions for you
 
 The first time you open HouseOS, a setup wizard walks through:
 
 1. **Your home** - name, time zone, units, and your town for the weather (rounded position only)
 2. **Your login** - password, a PIN for risky actions, and a Pro key if you have one
-3. **Calendars** - paste Google / iCloud / Outlook private iCal links (no sign-in)
-4. **Your teams** - NFL, NBA, MLB, NHL, MLS, college, Premier League and more: live scores and next game
+3. **Calendars** - the built-in HouseOS calendar, plus Google / iCloud / Outlook links if you use them
+4. **Your teams** - NFL, NBA, MLB, NHL, MLS, college, Premier League and more
 5. **Headlines** - AP, NPR, BBC, tech, sports, or any RSS feed
 6. **Reminders** - trash night, meds, feed the fish
 7. **Home Assistant** - optional. If you have it, HouseOS adds integrations *inside* Home Assistant
    for you (Home Assistant asks its own questions; HouseOS shows them)
 8. **Cameras, lights, sensors** - each brand says whether it needs Home Assistant
-9. **Network, energy, alerts**
+9. **Network, energy, alerts** - your power company's real usage needs Home Assistant; without it,
+   HouseOS uses your smart plugs and your price per kWh
 
 Run it again any time from **Settings > Run setup again**; what you don't change is kept.
 
@@ -63,16 +79,28 @@ Run it again any time from **Settings > Run setup again**; what you don't change
 | Energy: live watts per plug, cost at your rate | ✓ |
 | Alerts: leaks, smoke, low batteries, devices offline, internet down | ✓ |
 
-With Home Assistant you also get everything it supports: Z-Wave, Zigbee, Matter, locks, thermostats,
-Nest, your power company's real usage (Opower), and thousands more. The full list, including what
+With Home Assistant connected, **everything in it shows up in HouseOS** - lights, switches, fans, blinds and
+covers, media, thermostats, locks, cameras, scenes, scripts, buttons, vacuums, alarms, people, and every sensor -
+searchable in Controls and pinnable to any Home screen tile ("Pinned devices"). That brings Z-Wave, Zigbee,
+Matter, Nest, your power company's real usage (Opower) and thousands more. Unlocking doors, opening garage
+doors and disarming alarms stay in Home Assistant. The full list, including what
 we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRIX.md).
 
 ## Free and Pro
 
-**Free** is open source (AGPL-3.0) and complete for one house at home. **Pro** ($5/month, $49/year or
-$129 once; 14-day trial for every new install) adds the 3D Home, Ring, and - as they ship - remote
-access, phone alerts, smart alerts, energy insights and more. Details and what ships today:
-[docs/EDITIONS.md](docs/EDITIONS.md).
+**Free** is open source (AGPL-3.0) and everything above - the whole dashboard, for good.
+
+**Pro** - $5/month, $49/year or $129 once, with a 14-day trial on every new install:
+
+| Pro, available now | Pro, coming (included when it ships) |
+| --- | --- |
+| **3D Home** - your LiDAR scan as a live floor plan | **Away from home** - secure remote access, no port forwarding |
+| **Ask the house** - plain-English answers about your home, tap-to-do actions | **Phone alerts** - push notifications with quiet hours |
+| **Ring** doorbells and cameras (Labs) | **iPhone, iPad and Android apps** |
+| | Smart alerts, energy insights, self-healing, 2-year history, multi-home, backups |
+
+Full comparison: [docs/EDITIONS.md](docs/EDITIONS.md). Where phones, tablets and the cloud fit in:
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 ### 3D Home (Pro)
 
@@ -81,6 +109,13 @@ export **GLB**, and upload it under **3D Home > Floors**. Line the floors up, th
 pick a light, plug, speaker, camera or sensor and click where it is. Lights glow when on, speakers
 pulse when music plays, leaks and open doors flash, the top bar shows total watts - and tapping a
 pin switches it or opens the camera. The step-by-step guide is built into the page ("How to scan").
+
+### Ask the house (Pro)
+
+"Which lights are on?" "What's using the most power?" "Did the Niners win?" Answers come from what
+HouseOS knows right now; when you ask it to switch something it shows a button you tap to confirm.
+Bring your own AI - **Claude**, **OpenAI**, any OpenAI-compatible server - or **Ollama** on your
+own network so nothing leaves the house. It never unlocks doors or opens garage doors.
 
 ## Privacy
 

@@ -30,12 +30,13 @@ async function houseDevices() {
 }
 app.get('/api/devices', async (_req, res) => res.json(await houseDevices()));
 app.post('/api/devices/:id/:action', express.json(), async (req, res) => {
-  if (isDemo()) return res.json({ ok: true, demo: true });
+  if (isDemo()) { const d = (await houseDevices()).devices.find((x) => x.id === req.params.id); if (d?.risky && ['open', 'toggle'].includes(req.params.action)) return res.status(403).json({ error: 'opening garage doors and gates stays in Home Assistant' }); return res.json({ ok: true, demo: true }); }
   const id = String(req.params.id), prov = PROVIDERS[id.split(':')[0]];
   if (!prov?.act) return res.status(404).json({ error: 'that device cannot be controlled from here' });
   const { devices } = await allDevices(); const d = devices.find((x) => x.id === id);
   if (!d) return res.status(404).json({ error: 'device not found' });
   if (d.kind === 'lock' && req.params.action === 'unlock') return res.status(403).json({ error: 'unlocking goes through the PIN check' });
+  if (d.kind === 'alarm') return res.status(403).json({ error: 'arm and disarm the alarm in Home Assistant' });
   try { await prov.act(d, req.params.action, req.body?.value); CACHE.delete(`dev:${id.split(':')[0]}`); res.json({ ok: true }); }
   catch (err) { res.status(502).json({ error: String(err.message) }); }
 });

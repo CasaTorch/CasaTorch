@@ -13,16 +13,32 @@ tab({ id: 'alerts', label: 'Alerts', icon: 'bell', async render(main) {
 } });
 
 /* ---- Controls: everything that switches, plus sensors ---- */
-const GROUPS = [['Lights', (d) => d.kind === 'light'], ['Plugs & switches', (d) => d.kind === 'plug' || d.kind === 'switch'], ['Media', (d) => d.kind === 'media'], ['Climate', (d) => d.kind === 'climate'], ['Locks', (d) => d.kind === 'lock'], ['Sensors', (d) => d.kind === 'sensor']];
+const GROUPS = [['Lights', (d) => d.kind === 'light'], ['Plugs & switches', (d) => d.kind === 'plug' || d.kind === 'switch'], ['Fans', (d) => d.kind === 'fan'], ['Media', (d) => d.kind === 'media'],
+  ['Climate', (d) => d.kind === 'climate'], ['Blinds, doors & covers', (d) => d.kind === 'cover'], ['Locks & alarm', (d) => d.kind === 'lock' || d.kind === 'alarm'], ['Scenes & scripts', (d) => d.kind === 'action'],
+  ['Vacuums', (d) => d.kind === 'vacuum'], ['People', (d) => d.kind === 'presence'], ['Sensors', (d) => d.kind === 'sensor'], ['Everything else', (d) => d.kind === 'value']];
 tab({ id: 'controls', label: 'Controls', icon: 'sliders', async render(main) {
-  const draw = async () => {
-    const { devices = [], errors = [] } = await api('/api/devices');
-    const out = [];
-    setTop(tabLabel({ id: 'controls', label: 'Controls' }), '', [el('button', { class: 'btn', onclick: () => renameDevices(devices, draw) }, icon('edit'), 'Rename devices')]);
-    for (const [name, f] of GROUPS) { const ds = devices.filter(f); if (ds.length) out.push(el('div', { class: 'section-title' }, name), el('div', { class: 'devs' }, ds.map((d) => devButton(d)))); }
+  let query = '';
+  const search = el('input', { type: 'search', placeholder: 'Search everything - lights, sensors, Home Assistant entities…', style: 'max-width:520px' });
+  let devicesCache = [];
+  const paint = (devices, errors = []) => {
+    const t = query.toLowerCase(), list = devices.filter((d) => d.kind !== 'camera' && (!t || `${d.name} ${d.id} ${d.domain || ''}`.toLowerCase().includes(t)));
+    const out = [el('div', { class: 'row wrap', style: 'margin-bottom:6px' }, search, el('span', { class: 'small muted' }, `${list.length} of ${devices.filter((d) => d.kind !== 'camera').length}`))];
+    for (const [name, f] of GROUPS) {
+      const ds = list.filter(f); if (!ds.length) continue;
+      const grid = el('div', { class: 'devs' }, ds.slice(0, name === 'Everything else' && !t ? 60 : 500).map((d) => devButton(d)));
+      if (name === 'Everything else' && !t && ds.length > 12) out.push(el('details', {}, el('summary', { class: 'section-title', style: 'cursor:pointer' }, `${name} (${ds.length})`), grid));
+      else out.push(el('div', { class: 'section-title' }, `${name} (${ds.length})`), grid);
+    }
     if (!devices.filter((d) => d.kind !== 'camera').length) out.push(el('div', { class: 'card empty' }, 'No devices yet. Connect Hue, Shelly, YoLink or Home Assistant in setup.'));
+    else if (!list.length) out.push(el('p', { class: 'muted' }, 'Nothing matches that search.'));
     for (const e of errors) out.push(el('p', { class: 'small muted' }, `${e.provider}: ${e.error}`));
-    main.replaceChildren(...out);
+    const focused = document.activeElement === search; main.replaceChildren(...out); if (focused) { search.focus(); }
+  };
+  search.oninput = () => { query = search.value; paint(devicesCache); };
+  const draw = async () => {
+    const { devices = [], errors = [] } = await api('/api/devices'); devicesCache = devices;
+    setTop(tabLabel({ id: 'controls', label: 'Controls' }), `${devices.filter((d) => d.provider === 'ha').length ? 'Includes everything from Home Assistant' : ''}`, [el('button', { class: 'btn', onclick: () => renameDevices(devices, draw) }, icon('edit'), 'Rename devices')]);
+    paint(devices, errors);
   };
   await draw(); return draw;
 } });

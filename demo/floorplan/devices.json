@@ -111,5 +111,120 @@
     "name": "Backyard",
     "source": "reolink",
     "online": true
+  },
+  {
+    "id": "ha:cover.garage_door",
+    "provider": "ha",
+    "domain": "cover",
+    "haClass": "garage",
+    "kind": "cover",
+    "name": "Garage door",
+    "state": "closed",
+    "open": false,
+    "risky": true,
+    "online": true
+  },
+  {
+    "id": "ha:cover.living_room_blinds",
+    "provider": "ha",
+    "domain": "cover",
+    "haClass": "blind",
+    "kind": "cover",
+    "name": "Living room blinds",
+    "state": "open",
+    "open": true,
+    "position": 100,
+    "online": true
+  },
+  {
+    "id": "ha:fan.bedroom_fan",
+    "provider": "ha",
+    "domain": "fan",
+    "kind": "fan",
+    "name": "Bedroom fan",
+    "state": "on",
+    "on": true,
+    "percent": 40,
+    "online": true
+  },
+  {
+    "id": "ha:scene.movie_night",
+    "provider": "ha",
+    "domain": "scene",
+    "kind": "action",
+    "name": "Movie night",
+    "state": "scening",
+    "online": true
+  },
+  {
+    "id": "ha:script.goodnight",
+    "provider": "ha",
+    "domain": "script",
+    "kind": "action",
+    "name": "Goodnight",
+    "state": "off",
+    "online": true
+  },
+  {
+    "id": "ha:vacuum.roborock",
+    "provider": "ha",
+    "domain": "vacuum",
+    "kind": "vacuum",
+    "name": "Robot vacuum",
+    "state": "docked",
+    "online": true
+  },
+  {
+    "id": "ha:alarm_control_panel.home",
+    "provider": "ha",
+    "domain": "alarm_control_panel",
+    "kind": "alarm",
+    "name": "House alarm",
+    "state": "armed_home",
+    "armed": true,
+    "online": true
+  },
+  {
+    "id": "ha:person.alex",
+    "provider": "ha",
+    "domain": "person",
+    "kind": "presence",
+    "name": "Alex",
+    "state": "home",
+    "home": true,
+    "online": true
+  },
+  {
+    "id": "ha:person.sam",
+    "provider": "ha",
+    "domain": "person",
+    "kind": "presence",
+    "name": "Sam",
+    "state": "Work",
+    "home": false,
+    "online": true
+  },
+  {
+    "id": "ha:sensor.air_quality",
+    "provider": "ha",
+    "domain": "sensor",
+    "haClass": "aqi",
+    "kind": "value",
+    "name": "Air quality index",
+    "state": "32",
+    "value": "32",
+    "unit": "AQI",
+    "online": true
+  },
+  {
+    "id": "ha:sensor.washer_status",
+    "provider": "ha",
+    "domain": "sensor",
+    "kind": "value",
+    "name": "Washer",
+    "state": "Rinse - 18 min left",
+    "value": "Rinse - 18 min left",
+    "unit": null,
+    "online": true
   }
 ]
