@@ -108,12 +108,28 @@
     {
       "id": "calendars",
       "title": "Calendars",
-      "intro": "Your family calendars on the Home screen. Paste each calendar's private iCal link - no sign-in needed.",
+      "intro": "Show your family's schedule on the Home screen. HouseOS has its own calendar you can fill in right in the app - no Google account needed. If you already use Google, iCloud or Outlook, you can also link those.",
       "fields": [
+        {
+          "id": "mine",
+          "label": "Use the HouseOS calendar (add events in the app)",
+          "type": "choice",
+          "options": [
+            [
+              "yes",
+              "Yes"
+            ],
+            [
+              "no",
+              "No"
+            ]
+          ],
+          "default": "yes"
+        },
         {
           "id": "list",
           "type": "calendars",
-          "label": "Calendars"
+          "label": "Linked calendars (optional)"
         }
       ],
       "help": "Google: calendar.google.com > Settings > your calendar > Integrate calendar > Secret address in iCal format. iCloud: Calendar app > share icon next to the calendar > Public Calendar > copy link. Outlook: Settings > Calendar > Shared calendars > Publish a calendar > ICS link."
@@ -928,7 +944,7 @@
         "yes": {
           "provider": {
             "id": "utility",
-            "label": "Who is your power company?",
+            "label": "Your power company's bill and usage (needs Home Assistant)",
             "help": "With Home Assistant, sign in with your power company's website login and HouseOS gets your real bill and usage (your password goes to Home Assistant only). Without it, enter your price per kWh.",
             "method": "ha",
             "domain": "opower",
@@ -1035,7 +1051,8 @@
             ]
           }
         }
-      }
+      },
+      "intro": "Two ways to see what power costs: (1) your power company's real bill and usage - this needs Home Assistant, which signs in to your utility for you; or (2) HouseOS adds up your smart plugs and multiplies by your price per kWh - no Home Assistant needed."
     },
     {
       "id": "alerts",

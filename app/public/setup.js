@@ -358,10 +358,10 @@ function stepPage(step) {
 }
 /* "Who is your power company?" - Home Assistant's own list (Opower), then its sign-in. */
 function utilityEl(p, store) {
-  const card = el('div', { class: 'card' }, el('h3', {}, p.label), el('p', { class: 'note' }, p.help));
+  const card = el('div', { class: 'card' }, el('h3', {}, p.label, el('span', { class: 'badge ha' }, W.ha ? 'via Home Assistant' : 'needs Home Assistant')), W.ha ? el('p', { class: 'note' }, p.help) : null);
   if (store.utility === 'other') { card.append(el('div', { class: 'note' }, 'OK - enter your price per kWh below.'), W.ha ? el('button', { type: 'button', class: 'small', onclick: () => { store.utility = null; go(); } }, 'Look again') : null); return card; }
   if (store.utility) { card.append(el('div', { class: 'ok' }, `✓ ${store.utility} - connected through Home Assistant`)); return card; }
-  if (!W.ha) { store.utility = 'other'; card.append(el('div', { class: 'note' }, 'Without Home Assistant, enter your price per kWh below.')); return card; }
+  if (!W.ha) { store.utility = 'other'; card.append(el('div', { class: 'warn', style: 'margin:6px 0' }, '\u26A0 Needs Home Assistant - you skipped it, so HouseOS can\'t sign in to your power company.'), el('div', { class: 'note' }, 'You can still see costs: HouseOS adds up your smart plugs and uses the price per kWh you enter below (it\'s on your bill). To get your real bill and usage later, connect Home Assistant from Settings > Run setup again.')); return card; }
   if (W.haDomains.includes(p.domain)) { store.utility = 'Your power company'; card.append(el('div', { class: 'ok' }, '✓ Your power company is already connected in Home Assistant')); return card; }
   const f = flowEl(p.domain, null, (title) => { store.utility = title; go(); }, (cancel) => el('button', { type: 'button', class: 'small', onclick: () => { store.utility = 'other'; cancel(); } }, p.otherLabel));
   if (W.flows[p.domain]?.view) f.render();

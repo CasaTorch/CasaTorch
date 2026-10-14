@@ -1,0 +1,150 @@
+/* ---- Home widgets. render(body, ctx, { w, h, narrow }) draws for that size. ---- */
+function wxIcon(sym) {
+  const s = String(sym || '');
+  if (/thunder/.test(s)) return '⛈️'; if (/snow|sleet/.test(s)) return '❄️'; if (/rain|shower/.test(s)) return '\u{1F327}️';
+  if (/fog/.test(s)) return '\u{1F32B}️'; if (/partlycloudy|fair/.test(s)) return /night/.test(s) ? '☁️' : '⛅'; if (/cloudy/.test(s)) return '☁️';
+  if (/clearsky/.test(s)) return /night/.test(s) ? '\u{1F319}' : '☀️'; return '·';
+}
+const dayName = (ymd) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short' }).format(new Date(`${ymd}T12:00:00Z`));
+const fits = (h, per, head = 46) => Math.max(1, Math.floor((h * ROW_PX + (h - 1) * GAP_PX - head) / per));
+const empty = (text, link, label) => el('div', { class: 'allclear' }, el('div', {}, el('div', { class: 'small' }, text), link ? el('a', { class: 'btn small', href: link, style: 'margin-top:10px' }, label) : null));
+
+widget({ id: 'clock', title: 'Clock', icon: 'clock', bare: true, min: [2, 1], size: [4, 2], render(b, ctx, { w, h }) {
+  const now = new Date().toISOString(), hr = Number(fmt(now, { hour: 'numeric', hour12: false }));
+  const greet = hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+  const wx = ctx.data.home?.weather?.now;
+  b.replaceChildren(el('div', { style: 'margin:auto 0' },
+    h >= 2 && w >= 3 ? el('div', { class: 'muted small', style: 'margin-bottom:6px' }, `${greet}${ctx.data.home?.house ? ` · ${ctx.data.home.house}` : ''}`) : null,
+    el('div', { class: 'clock-big', style: h === 1 ? 'font-size:36px' : null }, fmt(now, { hour: 'numeric', minute: '2-digit' })),
+    h >= 2 ? el('div', { class: 'row', style: 'margin-top:8px;gap:12px' }, el('span', { class: 'muted' }, fmt(now, { weekday: 'long', month: 'long', day: 'numeric' })), wx && w >= 4 ? el('span', { class: 'muted' }, `${wxIcon(wx.symbol)} ${wx.temp}°`) : null) : null));
+} });
+
+widget({ id: 'weather', title: 'Weather', icon: 'sun', min: [2, 2], size: [5, 4], render(b, ctx, { w, h }) {
+  const wx = ctx.data.home?.weather;
+  if (!wx || wx.error || !wx.now) return b.replaceChildren(empty(wx?.error ? 'Weather is not loading right now.' : 'Add your town in setup to see the weather.'));
+  const today = wx.days?.[0];
+  const parts = [el('div', { class: 'wx-now' }, el('span', { class: 'wx-ic', style: w <= 2 ? 'font-size:30px' : null }, wxIcon(wx.now.symbol)),
+    el('div', {}, el('div', { class: 'big', style: w <= 2 ? 'font-size:34px' : null }, `${wx.now.temp}°`), w >= 3 ? el('div', { class: 'muted small' }, `${wx.now.words}${today ? ` · H ${today.hi}° L ${today.lo}°` : ''}`) : null),
+    w >= 5 ? el('div', { class: 'small muted', style: 'margin-left:auto;text-align:right' }, wx.place || '', el('br'), `Wind ${wx.now.wind ?? '-'} ${wx.units === 'C' ? 'km/h' : 'mph'} · ${wx.now.humidity ?? '-'}%`) : null)];
+  if (h >= 3 && w >= 3) parts.push(el('div', { class: 'hours' }, (wx.hours || []).slice(0, Math.max(3, Math.floor(w * 1.1))).map((x) => el('div', {}, fmt(x.at, { hour: 'numeric' }), el('i', {}, wxIcon(x.symbol)), el('b', {}, `${x.temp}°`)))));
+  if (h >= 5 || (h >= 4 && w >= 4)) {
+    const days = (wx.days || []).slice(0, Math.min(7, fits(h - 3, 32, 0) + 1));
+    const lo = Math.min(...days.map((d) => d.lo)), hi = Math.max(...days.map((d) => d.hi));
+    parts.push(el('ul', { class: 'list days' }, days.map((d) => el('li', {}, el('b', {}, dayName(d.date)), el('span', {}, wxIcon(d.symbol)),
+      w >= 5 ? el('div', { style: 'padding:0 12px;align-self:center' }, el('div', { class: 'temp-bar', style: `margin-left:${((d.lo - lo) / Math.max(1, hi - lo)) * 100}%;width:${((d.hi - d.lo) / Math.max(1, hi - lo)) * 100}%` })) : el('span', { class: 'muted small ellipsis' }, d.words || ''),
+      el('span', { class: 'num' }, `${d.hi}° `, el('span', { class: 'muted' }, `${d.lo}°`))))));
+  }
+  if (h >= 4) parts.push(el('div', { class: 'tiny faint', style: 'margin-top:auto' }, wx.credit || ''));
+  b.replaceChildren(...parts);
+} });
+
+widget({ id: 'calendar', title: 'Coming up', icon: 'calendar', min: [3, 2], size: [4, 4],
+  headerExtra: () => el('button', { class: 'btn ghost small', title: 'Add an event', 'aria-label': 'Add an event', onclick: () => eventEditor(null, () => show(current)) }, icon('plus')),
+  render(b, ctx, { w, h }) {
+    const cal = ctx.data.home?.calendar;
+    const ev = (cal?.events || []).filter((e) => Date.parse(e.end || e.start) > Date.now()).slice(0, fits(h, 52));
+    if (!ev.length) return b.replaceChildren(empty('Nothing coming up.', '#calendar', 'Open the calendar'));
+    b.replaceChildren(...ev.map((e) => el('div', { class: 'ev' }, el('span', { class: 'bar', style: `background:${e.color || 'var(--accent)'}` }),
+      el('div', { class: 'grow' }, el('div', { class: 'ellipsis' }, e.title), el('div', { class: 'when' }, e.allDay ? `${fmt(e.start, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })} · all day` : fmtWhen(e.start), w >= 4 && e.calendar ? ` · ${e.calendar}` : '')))));
+  } });
+
+function gameRow(g, w) {
+  const side = (t, o) => el('div', { class: 'team' }, t.logo && w >= 3 ? el('img', { src: t.logo, alt: '', loading: 'lazy' }) : null, el('span', { class: `ellipsis${g.state === 'post' && !t.winner && o.winner ? ' lost' : ''}` }, w >= 4 ? t.name || t.abbr : t.abbr || t.name));
+  const sc = (t, o) => el('div', { class: `score${g.state === 'post' && !t.winner && o.winner ? ' lost' : ''}` }, g.state === 'pre' ? '' : t.score ?? '');
+  return el('div', { class: 'game' }, side(g.away, g.home), sc(g.away, g.home), side(g.home, g.away), sc(g.home, g.away),
+    el('div', { class: 'tiny muted', style: 'grid-column:1/-1;margin-top:2px' }, el('span', { class: `pill${g.state === 'in' ? ' live' : ''}` }, g.state === 'in' ? 'LIVE' : g.state === 'post' ? 'Final' : fmtWhen(g.start)), ` ${g.leagueName || ''}${g.state === 'in' ? ` · ${g.detail}` : ''}${g.broadcast && w >= 4 ? ` · ${g.broadcast}` : ''}`));
+}
+widget({ id: 'sports', title: 'Your teams', icon: 'trophy', min: [2, 2], size: [3, 4], render(b, ctx, { w, h }) {
+  const sp = ctx.data.home?.sports;
+  if (!sp) return b.replaceChildren(empty('Pick your teams in setup.'));
+  const games = (sp.games || []).slice(0, fits(h, 84));
+  b.replaceChildren(...(games.length ? games.map((g) => gameRow(g, w)) : [empty('No games this week.')]));
+} });
+
+widget({ id: 'news', title: 'Headlines', icon: 'news', min: [3, 2], size: [4, 4], render(b, ctx, { w, h }) {
+  const n = ctx.data.home?.news;
+  if (!n) return b.replaceChildren(empty('Pick news sources in setup.'));
+  const items = (n.items || []).slice(0, fits(h, w >= 5 ? 50 : 62));
+  b.replaceChildren(...(items.length ? [el('ul', { class: 'list' }, items.map((i) => el('li', { style: 'display:block' }, el('a', { href: i.link, target: '_blank', rel: 'noopener noreferrer', style: 'color:inherit;text-decoration:none;display:block' }, el('div', { class: w >= 5 ? 'ellipsis' : null }, i.title), el('div', { class: 'tiny muted' }, `${i.source}${i.at ? ` · ${ago(i.at)}` : ''}`)))))] : [empty('Headlines are not loading right now.')]));
+} });
+
+widget({ id: 'internet', title: 'Internet', icon: 'wifi', min: [2, 2], size: [3, 2], render(b, ctx, { w, h }) {
+  const n = ctx.data.home?.internet;
+  if (!n || n.error) return b.replaceChildren(el('div', { class: 'muted' }, 'Checking...'));
+  const parts = [el('div', { class: 'row' }, el('span', { class: `dot ${n.online ? 'good' : 'bad'}` }), el('b', {}, n.online ? 'Online' : 'Down'), w >= 3 ? el('span', { class: 'muted small ellipsis' }, n.provider || '') : null)];
+  if (n.speed) parts.push(el('div', { class: 'row', style: 'gap:22px;margin-top:10px' }, el('div', { class: 'stat' }, el('span', { class: 'big', style: 'font-size:30px' }, Math.round(n.speed.downMbps)), el('span', { class: 'lbl' }, 'Mbps down')), w >= 3 ? el('div', { class: 'stat' }, el('span', { class: 'big', style: 'font-size:30px' }, Math.round(n.speed.upMbps)), el('span', { class: 'lbl' }, 'Mbps up')) : null));
+  if (h >= 3) parts.push(el('dl', { class: 'kv small', style: 'margin-top:14px' }, el('dt', {}, 'Ping'), el('dd', {}, `${n.latencyMs?.cloudflare ?? '-'} ms`), el('dt', {}, 'Devices'), el('dd', {}, n.lanDevices ?? '-'), el('dt', {}, 'Public IP'), el('dd', {}, n.publicIp || '-')));
+  b.replaceChildren(...parts);
+} });
+
+widget({ id: 'today', title: 'Today', icon: 'list', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
+  const d = ctx.data.home || {};
+  const items = [d.note ? el('div', { style: 'margin-bottom:8px' }, d.note) : null, ...(d.reminders || []).slice(0, fits(h, 34)).map((r) => el('div', { class: 'row', style: 'padding:4px 0' }, el('span', { class: 'dot warn' }), el('span', { class: 'grow ellipsis' }, r.title), r.at ? el('span', { class: 'tiny muted' }, hm(r.at)) : null))].filter(Boolean);
+  b.replaceChildren(...(items.length ? items : [empty('No reminders today.')]));
+} });
+
+widget({ id: 'alerts', title: 'Alerts', icon: 'bell', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
+  const now = ctx.data.alerts?.now || [];
+  if (!now.length) return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('checkc'), el('div', { style: 'margin-top:6px' }, 'All clear'))));
+  b.replaceChildren(...now.slice(0, fits(h, 66)).map((a) => el('a', { href: '#alerts', class: `alert ${a.severity}` }, el('div', { class: 'grow' }, el('div', { class: 'ellipsis' }, a.title), el('div', { class: 'tiny muted' }, a.since ? `since ${fmtWhen(a.since)}` : a.source || '')))));
+} });
+
+widget({ id: 'energy', title: 'Energy', icon: 'bolt', min: [2, 2], size: [3, 3], render(b, ctx, { w, h }) {
+  const ds = (ctx.data.devices?.devices || []).filter((d) => typeof d.powerW === 'number').sort((a, c) => c.powerW - a.powerW);
+  const total = ds.reduce((s, d) => s + d.powerW, 0), rate = ctx.data.settings?.energy?.ratePerKwh;
+  if (!ds.length) return b.replaceChildren(empty('No power-metering plugs yet.'));
+  const parts = [el('div', { class: 'row', style: 'gap:22px;align-items:flex-end' }, el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(total), el('span', { style: 'font-size:18px;color:var(--muted)' }, ' W')), el('span', { class: 'lbl' }, 'using now')),
+    rate && (w >= 4 || h >= 3) ? el('div', { class: 'stat' }, el('span', { style: 'font-size:22px;font-weight:700' }, `$${(total / 1000 * 24 * rate).toFixed(2)}`), el('span', { class: 'lbl' }, 'a day at this rate')) : null)];
+  if (h >= 3) { const max = ds[0].powerW || 1; parts.push(el('div', { class: 'bars', style: 'margin-top:14px' }, ds.slice(0, fits(h - 1, 26, 30)).map((d) => el('div', { class: 'bar-row', style: w < 4 ? 'grid-template-columns:1fr 50px' : null }, el('span', { class: 'ellipsis small' }, d.name), w >= 4 ? el('div', { class: 'track' }, el('div', { class: 'fill', style: `width:${(d.powerW / max) * 100}%` })) : null, el('span', { class: 'small num', style: 'text-align:right' }, `${Math.round(d.powerW)} W`))))); }
+  b.replaceChildren(...parts);
+} });
+
+async function toggleDevice(d) { await post(`/api/devices/${encodeURIComponent(d.id)}/toggle`); if (d.kind === 'media') d.playing = !d.playing; else d.on = !d.on; }
+function devButton(d, compact) {
+  const cls = ['dev', d.online === false && 'offline', (d.water || d.smoke) && 'alarm', d.playing && 'playing', !d.playing && d.on && d.kind !== 'sensor' && 'on'].filter(Boolean).join(' ');
+  const meta = [d.on != null && !['sensor', 'climate'].includes(d.kind) ? (d.kind === 'media' ? (d.playing ? (d.title || 'Playing') : d.on ? 'Paused' : 'Off') : d.on ? 'On' : 'Off') : null, d.brightness && d.on ? `${d.brightness}%` : null, d.powerW != null ? `${Math.round(d.powerW)} W` : null,
+    d.tempC != null ? tempOf(d.tempC) : null, d.targetC != null ? `set ${tempOf(d.targetC)}` : null, d.humidity != null ? `${d.humidity}%` : null, d.open != null ? (d.open ? 'Open' : 'Closed') : null, d.water != null ? (d.water ? 'WATER!' : 'Dry') : null,
+    d.locked != null ? (d.locked ? 'Locked' : 'Unlocked') : null, d.battery != null && !compact ? `battery ${d.battery}%` : null, d.online === false ? 'offline' : null].filter(Boolean).join(' · ');
+  const b = el('button', { class: cls }, el('span', { class: 'ic' }, icon(devIconName(d))), el('div', { style: 'min-width:0' }, el('div', { class: 'ellipsis' }, d.name), el('div', { class: 'meta ellipsis' }, meta)));
+  if (['light', 'switch', 'plug', 'media'].includes(d.kind) && d.online !== false) b.onclick = async () => { try { await toggleDevice(d); b.replaceWith(devButton(d, compact)); } catch (err) { toast(err.message); } };
+  return b;
+}
+widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', min: [2, 2], size: [4, 3], render(b, ctx, { w, h }) {
+  const ds = (ctx.data.devices?.devices || []).filter((d) => ['light', 'switch', 'plug', 'media'].includes(d.kind));
+  if (!ds.length) return b.replaceChildren(empty('No lights or plugs yet.'));
+  const perRow = Math.max(1, Math.floor(w / 2)), rows = fits(h, 66);
+  b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr))` }, ds.slice(0, perRow * rows).map((d) => devButton(d, true))));
+} });
+
+const snapUrl = (d) => `/api/${d.provider === 'ring' ? 'ring' : 'cameras'}/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`;
+function camView(d) {
+  const img = el('img', { alt: d.name, src: `${snapUrl(d)}?t=${Date.now()}`, onclick: () => modal(el('img', { src: `${snapUrl(d)}?t=${Date.now()}`, alt: d.name }), { wide: true, title: d.name }) });
+  return el('div', { class: 'cam' }, img, el('div', { class: 'cap' }, el('span', {}, d.name), el('span', { class: 'tiny muted' }, d.source || d.provider)));
+}
+widget({ id: 'camera', title: 'Cameras', icon: 'camera', min: [3, 2], size: [4, 3], render(b, ctx, { w, h }) {
+  const cams = (ctx.data.devices?.devices || []).filter((d) => d.kind === 'camera');
+  if (!cams.length) return b.replaceChildren(empty('No cameras yet.'));
+  const across = w >= 8 ? 2 : 1, down = h >= 6 ? 2 : 1;
+  b.replaceChildren(el('div', { class: 'tile-cams', style: `grid-template-columns:repeat(${across},1fr);grid-template-rows:repeat(${down},1fr)` }, cams.slice(0, across * down).map(camView)));
+} });
+
+widget({ id: 'photos', title: 'Photo reel', icon: 'camera', bare: true, live: true, min: [2, 2], size: [5, 4], async render(b) {
+  const { photos = [] } = await api('/api/photos').catch(() => ({}));
+  clearInterval(b._reel);
+  if (!photos.length) { b.parentElement.style.padding = ''; return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('camera'), el('div', { style: 'margin:8px 0' }, 'Your photos, on a slow loop'), el('a', { class: 'btn small primary', href: '#photos' }, 'Add photos')))); }
+  const order = [...photos].sort(() => Math.random() - 0.5);
+  const mk = () => el('img', { alt: '', style: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity 1.4s' });
+  let front = mk(), back = mk(), i = 0; front.src = order[0].url; back.style.opacity = 0;
+  b.replaceChildren(el('div', { style: 'position:absolute;inset:0;overflow:hidden;background:#000' }, front, back)); b.parentElement.style.padding = '0';
+  if (order.length > 1) b._reel = setInterval(() => { if (!b.isConnected) return clearInterval(b._reel); i = (i + 1) % order.length; back.onload = () => { back.style.opacity = 1; front.style.opacity = 0; [front, back] = [back, front]; }; back.src = order[i].url; }, 9000);
+} });
+
+widget({ id: 'ask', title: 'Ask the house', icon: 'spark', pro: true, live: true, min: [3, 2], size: [5, 3], render(b) {
+  if (!isPro()) return b.replaceChildren(empty('Ask anything about your home - included with Pro.', '#settings', 'See Pro'));
+  b.replaceChildren(askBox({ compact: true }));
+} });
+
+widget({ id: 'house3d', title: '3D Home', icon: 'cube', pro: true, live: true, min: [4, 3], size: [6, 5], render(b) {
+  if (!isPro()) return b.replaceChildren(empty('Your LiDAR scan as a live floor plan - included with Pro.', '#house3d', 'Learn more'));
+  b.replaceChildren(el('iframe', { src: '/floorplan.html?embed=1', title: '3D floor plan', style: 'flex:1;border:0;border-radius:14px;background:#05070d;width:100%' }));
+} });

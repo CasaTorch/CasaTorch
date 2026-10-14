@@ -7,6 +7,10 @@ app.get('/api/status', (_req, res) => res.json({ name: 'HouseOS', version: '0.2.
 app.get('/api/:tab', (req, res, next) => {
   if (!TABS.includes(req.params.tab)) return next();
   if (!isDemo()) return res.status(501).json({ error: `the ${req.params.tab} tab is not ported yet - run in demo mode (HOUSEOS_DEMO=1)` });
-  try { res.json(JSON.parse(fs.readFileSync(path.join(FIXTURES, `${req.params.tab}.json`), 'utf8'))); }
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(FIXTURES, `${req.params.tab}.json`), 'utf8'));
+    if (req.params.tab === 'home' && j.calendar && myEvents.length) j.calendar.events = [...j.calendar.events, ...myCalendarEvents(Date.now() - 6 * 3600_000, Date.now() + 7 * 86400_000)].sort((a, b) => a.start.localeCompare(b.start));
+    res.json(j);
+  }
   catch { res.json({ demo: true, items: [] }); }
 });

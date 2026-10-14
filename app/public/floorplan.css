@@ -25,5 +25,6 @@ input, select { background: #0b1220; color: var(--text); border: 1px solid var(-
 .pin.off .dot { opacity: .7; } .pin.offline { opacity: .45; }
 @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 #c084fc66; } 50% { box-shadow: 0 0 0 10px #c084fc00; } }
 #modal { position: fixed; inset: 0; background: #000a; display: grid; place-items: center; z-index: 10; } #modal .box { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; max-width: min(900px, 94vw); }
+#modal[hidden], aside[hidden] { display: none !important; }
 #modal img { max-width: 100%; border-radius: 8px; display: block; }
 .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; z-index: 9; }
