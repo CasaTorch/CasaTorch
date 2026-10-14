@@ -7,6 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { openDrawer } from './floorplan-draw.js';
+import { toGlb } from './floorplan-import.js';
 
 const S = { plan: null, live: null, floorView: 'all', edit: false, pick: null, pins: [], groups: {}, pinObjs: [], lights: {} };
 const $ = (s) => document.querySelector(s);
@@ -167,7 +168,7 @@ function editPanel() {
 /* ---------- floors: upload scans, stack them ---------- */
 function floorsPanel() {
   const side = $('#side'); side.hidden = false;
-  const file = el('input', { type: 'file', accept: '.glb,model/gltf-binary', onchange: () => $('#uploadBtn')?.click() }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
+  const file = el('input', { type: 'file', multiple: true, accept: '.glb,.gltf,.obj,.mtl,.zip,.bin,.png,.jpg,.jpeg,.webp,model/gltf-binary,model/gltf+json,application/zip', onchange: () => $('#uploadBtn')?.click() }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
   side.replaceChildren(el('h2', {}, 'Floors'),
     ...S.plan.floors.map((f) => { const box = el('div', { class: 'card' }); const n = (k, label, step) => el('div', { class: 'row' }, el('label', {}, label), el('input', { type: 'number', step, value: k === 'offsetX' ? f.offset[0] : k === 'offsetZ' ? f.offset[1] : f[k], onchange: async (e) => { const v = Number(e.target.value); const body = k === 'offsetX' ? { offset: [v, f.offset[1]] } : k === 'offsetZ' ? { offset: [f.offset[0], v] } : { [k]: v }; try { await api(`/api/floorplan/floors/${f.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); await start(); floorsPanel(); } catch (er) { toast(er.message); } } }));
       box.append(el('h3', {}, f.name), n('level', 'Level', 1), n('heightM', 'Height (m)', 0.1), n('rotationY', 'Turn (°)', 5), n('scale', 'Scale', 0.01), n('offsetX', 'Shift X (m)', 0.1), n('offsetZ', 'Shift Z (m)', 0.1),
@@ -176,14 +177,18 @@ function floorsPanel() {
     el('h3', {}, 'Add a floor'),
     el('p', { class: 'note' }, 'No LiDAR iPhone or iPad? Draw your floor, or trace over a picture of your floor plan (from the listing, the builder, or a photo of a paper plan).'),
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => newDrawnFloor(false) }, 'Draw a floor'), el('button', { type: 'button', onclick: () => newDrawnFloor(true) }, 'Trace a picture')),
-    el('h3', {}, 'Or upload a LiDAR scan (.glb)'), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,
+    el('h3', {}, 'Or upload a LiDAR scan (GLB, GLTF, OBJ or .zip)'), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,
     el('p', {}, el('button', { type: 'button', class: 'primary', id: 'uploadBtn', onclick: async () => {
-      const f = file.files[0]; if (!f) { toast('Choose the .glb file from your scan first.'); return; }
-      toast('Uploading…');
-      try { await api(`/api/floorplan/floors?name=${encodeURIComponent(name.value || f.name.replace(/\.glb$/i, ''))}`, { method: 'POST', headers: { 'Content-Type': 'model/gltf-binary' }, body: f }); await start(); floorsPanel(); toast('Floor added.'); }
+      if (!file.files.length) { toast('Choose the file from your scan first.'); return; }
+      toast('Preparing the model\u2026');
+      try {
+        const m = await toGlb(file.files);
+        toast(`Uploading (${Math.round(m.blob.size / 1e6)} MB)\u2026`);
+        await api(`/api/floorplan/floors?name=${encodeURIComponent(name.value || m.name)}`, { method: 'POST', headers: { 'Content-Type': 'model/gltf-binary' }, body: m.blob }); await start(); floorsPanel(); toast('Floor added.');
+      }
       catch (e) { toast(e.status === 402 ? 'Adding floors is part of HouseOS Pro.' : e.message); }
     } }, 'Upload')),
-    el('p', { class: 'note' }, 'Choosing a .glb file uploads it straight away.'),
+    el('p', { class: 'note' }, 'Choosing the file uploads it straight away. GLB, GLTF, OBJ or a .zip of any of them all work. If you have loose files (.obj + .mtl + images, or .gltf + .bin), select them all together.'),
     el('p', { class: 'note' }, 'Floors stack by Level × Height. If a floor sits crooked or off to the side, adjust Turn and Shift until the walls line up.'));
 }
 function guidePanel() {
@@ -198,9 +203,9 @@ function guidePanel() {
     el('h3', {}, 'B. Scan it (iPhone Pro / iPad Pro with LiDAR)'),
     el('p', { class: 'note' }, 'LiDAR is the small dark circle by the cameras: iPhone 12 Pro and newer Pro models, iPad Pro 2020 and newer. About 10 minutes per floor; the most realistic result.'),
     el('ol', { class: 'guide' },
-      el('li', {}, 'Install a free scanning app: ', el('b', {}, 'Polycam'), ', ', el('b', {}, 'Scaniverse'), ' or ', el('b', {}, '3D Scanner App'), '. In Polycam choose "Room" mode (Apple RoomPlan) for clean walls.'),
+      el('li', {}, 'Install a scanning app. Free options: ', el('b', {}, 'Scaniverse'), ' or ', el('b', {}, '3D Scanner App'), '. ', el('b', {}, 'Polycam'), ' also works, but its GLTF/GLB export needs Polycam Pro.'),
       el('li', {}, 'Turn on the lights, open interior doors, and walk slowly through every room on one floor, pointing at the walls and floor.'),
-      el('li', {}, 'Export as ', el('b', {}, 'GLB'), ' (Polycam: Export > GLB; Scaniverse: Share > Export Model > GLB; 3D Scanner App: Share > GLB) and send it to the computer you use for HouseOS.'),
+      el('li', {}, 'Export the model as ', el('b', {}, 'GLB, GLTF or OBJ'), ' (Scaniverse: Share > Export Model > GLB or OBJ; 3D Scanner App: Share > GLB/GLTF/OBJ; Polycam Pro: Export > GLTF). You may get a single file or a .zip - either works. Send it to the computer you use for HouseOS (AirDrop, e-mail or iCloud Drive).'),
       el('li', {}, 'Here, open ', el('b', {}, 'Floors'), ' and upload it. Set each floor\'s Level (0 = ground).')),
     el('h3', {}, 'Then: place your devices'),
     el('p', { class: 'note' }, 'Open ', el('b', {}, 'Place devices'), ', pick a light, speaker or sensor, and click where it is. The plan shows them live. Your plans stay on your HouseOS box.'),
