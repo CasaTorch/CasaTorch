@@ -117,7 +117,7 @@ Two ways to get your floors in - mix and match per floor:
   into 3D.
 - **Scan them with LiDAR** for the most realistic result. This needs an iPhone or iPad **with a LiDAR
   sensor** - iPhone 12 Pro and newer *Pro* models, iPad Pro 2020 and newer - and a free scanning app
-  (Polycam, Scaniverse or 3D Scanner App, room mode). Export **GLB** and upload it under **Floors**.
+  (Scaniverse or 3D Scanner App are free; Polycam needs its paid plan to export). Export **GLB, GLTF or OBJ** (a .zip is fine) and upload it under **Floors**.
 
 Line the floors up, then **Place devices**:
 pick a light, plug, speaker, camera or sensor and click where it is. Lights glow when on, speakers
