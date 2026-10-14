@@ -15,6 +15,21 @@ const haC = (v, unit) => { if (v == null || v === '' || Number.isNaN(Number(v)))
 const HA_SKIP = new Set(['zone', 'sun', 'persistent_notification', 'tts', 'stt', 'conversation', 'event', 'wake_word', 'assist_satellite', 'tag', 'image', 'notify', 'ai_task', 'todo', 'calendar']);
 const RISKY_COVERS = new Set(['garage', 'gate', 'door']);
 const num = (v) => (v === '' || v == null || Number.isNaN(Number(v)) ? null : Number(v));
+/* Smart plugs show up in Home Assistant as a switch plus separate sensors (switch.kitchen_kettle,
+   sensor.kitchen_kettle_power, sensor.kitchen_kettle_today_s_consumption...). Put the watts and today's
+   kWh on the switch itself, so the plug is one device that knows it is on and what it is pulling. */
+function haPairPlugs(list) {
+  const key = (d) => d.id.split('.').slice(1).join('.');
+  const sensors = list.filter((d) => d.domain === 'sensor');
+  for (const sw of list.filter((d) => d.domain === 'switch')) {
+    const k = key(sw), mine = sensors.filter((x) => key(x).startsWith(`${k}_`));
+    const p = mine.find((x) => x.powerW != null);
+    const e = mine.find((x) => x.kind === 'value' && /kwh/i.test(x.unit || '') && /today|daily|day/.test(key(x))) || mine.find((x) => x.kind === 'value' && /kwh/i.test(x.unit || ''));
+    if (p) Object.assign(sw, { powerW: sw.on ? p.powerW : 0, kind: 'plug' });
+    if (e && num(e.value) != null) sw.energyKWh = num(e.value);
+  }
+  return list;
+}
 function haDevice(s) {
   const [domain] = s.entity_id.split('.'), a = s.attributes || {};
   if (HA_SKIP.has(domain) || a.hidden) return null;
@@ -59,7 +74,7 @@ const HA_SERVICES = {
   lock: { lock: 'lock' },
 };
 PROVIDERS.ha = {
-  async list() { return (await haStates()).map(haDevice).filter(Boolean); },
+  async list() { return haPairPlugs((await haStates()).map(haDevice).filter(Boolean)); },
   async act(d, action, value) {
     const h = config.homeAssistant, ent = d.id.slice(3), domain = ent.split('.')[0];
     if (d.risky && ['open', 'toggle'].includes(action)) throw new Error('opening garage doors and gates stays in Home Assistant');

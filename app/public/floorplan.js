@@ -21,6 +21,7 @@ const send = (url, method, body) => api(url, { method, headers: { 'Content-Type'
 const toast = (t) => { const x = el('div', { class: 'toast' }, t); document.body.append(x); setTimeout(() => x.remove(), 3500); };
 const proErr = (e) => toast(e.status === 402 ? 'Editing the 3D home is part of HouseOS Pro.' : e.message);
 const V3 = THREE.Vector3, deg = THREE.MathUtils.degToRad;
+const fill = (node, ...kids) => { node.replaceChildren(...kids.flat().filter((k) => k != null && k !== false)); return node; };
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
 /* ---------- icons (simple line icons, our own) ---------- */
@@ -175,7 +176,7 @@ function fitView() {
   for (const F of Object.values(S.F)) if (F.G.visible && (!cur || F === cur)) box.expandByObject(F.inner);
   if (box.isEmpty()) return;
   const c = box.getCenter(new V3()), len = Math.max(6, box.getSize(new V3()).length());
-  flyTo(c, new V3(c.x + len * 0.45, c.y + len * 0.75, c.z + len * 0.8));
+  flyTo(c, new V3(c.x + len * 0.5, c.y + len * 0.9, c.z + len * 0.95));
 }
 function pickFloor(id) { S.floorView = id; S.room = null; layout(true); }
 function focusRoom(fid, i) {
@@ -183,7 +184,7 @@ function focusRoom(fid, i) {
   S.floorView = fid; S.room = { floor: fid, i }; layout(false);
   const w = F.G.localToWorld(new V3(r.pos[0], F.minY + 0.6, r.pos[1]));
   const near = F.rooms.filter((_, j) => j !== i).reduce((m, o) => Math.min(m, Math.hypot(o.pos[0] - r.pos[0], o.pos[1] - r.pos[1])), 8);
-  const dist = Math.max(5, Math.min(11, near * 1.9)), dir = camera.position.clone().sub(controls.target).setY(0).normalize();
+  const dist = Math.max(7, Math.min(13, near * 2.1)), dir = camera.position.clone().sub(controls.target).setY(0).normalize();
   if (!dir.lengthSq()) dir.set(0.5, 0, 0.8).normalize();
   flyTo(w, w.clone().add(dir.multiplyScalar(dist * 0.75)).add(new V3(0, dist, 0)));
 }
@@ -234,7 +235,7 @@ function drawPins() {
     const by = pinsByRoom(F);
     F.roomLabs.forEach((l, i) => { const on = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length, t = by[i].find((p) => p.device.tempC != null); l.element.querySelector('small').textContent = [t ? temp(t.device.tempC) : '', on ? `${on} on` : ''].filter(Boolean).join(' · '); });
     const lightsOn = (S.live?.pins || []).filter((p) => p.floor === F.f.id && p.device.kind === 'light' && p.device.on).length;
-    F.label.element.replaceChildren(el('b', {}, F.f.name), el('small', {}, `${F.rooms.length} rooms · ${lightsOn} lights on`));
+    fill(F.label.element, el('b', {}, F.f.name), el('small', {}, `${F.rooms.length} rooms · ${lightsOn} lights on`));
   }
   layout(false);
 }
@@ -257,7 +258,7 @@ function modal(content) { const m = $('#modal'); m.replaceChildren(content); m.h
 function drawChips() {
   const cur = curF(), multi = Object.keys(S.F).length > 1, chip = (txt, on, fn, color) => el('button', { type: 'button', class: `chip${on ? ' on' : ''}`, onclick: fn, style: color ? `--rc:${color}` : null }, color ? el('i', { class: 'swatch' }) : null, txt);
   const rooms = (F) => F.rooms.map((r, i) => chip(r.name, S.room?.floor === F.f.id && S.room.i === i, () => focusRoom(F.f.id, i), r.color));
-  $('#chips').replaceChildren(
+  fill($('#chips'), 
     ...(multi ? [chip('All floors', !cur, () => pickFloor('all')), ...Object.values(S.F).sort((a, b) => b.f.level - a.f.level).map((F) => chip(F.f.name, cur === F, () => pickFloor(F.f.id)))] : []),
     ...(multi ? [el('span', { class: 'sep' })] : []),
     ...(cur ? rooms(cur) : multi ? Object.values(S.F).flatMap((F) => (F.rooms.length ? [el('span', { class: 'chiphead' }, F.f.name), ...rooms(F)] : [])) : []));
@@ -268,7 +269,7 @@ const toggle = (label, key) => el('button', { type: 'button', class: `tog${prefs
 function drawTools() {
   const t = $('#tools'); t.hidden = S.mode !== 'view' || !Object.keys(S.F).length;
   const set = (k) => (v) => { prefs[k] = v; savePrefs(); layout(k === 'stack'); };
-  t.replaceChildren(
+  fill(t, 
     seg([['tall', 'Tall walls'], ['cut', 'Cut']], prefs.walls, set('walls')),
     Object.keys(S.F).length > 1 ? seg([['stacked', 'Stacked'], ['apart', 'Apart'], ['alone', 'Alone']], prefs.stack, set('stack')) : null,
     toggle('Room names', 'names'), toggle('Values', 'values'), toggle('Cameras', 'cameras'),
@@ -283,11 +284,11 @@ function drawSummary() {
   const cur = curF(), Fs = cur ? [cur] : Object.values(S.F), pins = (S.live.pins || []).filter((p) => Fs.some((F) => F.f.id === p.floor));
   const lights = lightsIn(pins), on = lights.filter((p) => p.device.on).length, open = pins.filter((p) => p.device.open), wet = pins.filter((p) => p.device.water || p.device.smoke);
   box.hidden = false;
-  box.replaceChildren(el('div', { class: 'eyebrow' }, cur ? cur.f.name : Object.keys(S.F).length > 1 ? 'Whole home' : 'Home'),
+  fill(box, el('div', { class: 'eyebrow' }, cur ? cur.f.name : Object.keys(S.F).length > 1 ? 'Whole home' : 'Home'),
     lights.length ? el('div', { class: 'srow' }, el('span', {}, 'Lights ', el('b', {}, `${on}/${lights.length}`)), el('button', { type: 'button', class: 'mini', onclick: () => allLights(pins, true) }, 'On'), el('button', { type: 'button', class: 'mini', onclick: () => allLights(pins, false) }, 'Off')) : null,
     ...wet.map((p) => el('div', { class: 'srow bad' }, ic('drop'), `${pinName(p)}: ${devState(p.device).val}`)),
     ...open.map((p) => el('div', { class: 'srow warn' }, ic('door'), `${pinName(p)} is open`)),
-    ...Fs.flatMap((F) => { const by = pinsByRoom(F); return F.rooms.map((r, i) => { const n = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length; return el('button', { type: 'button', class: 'sroom', onclick: () => focusRoom(F.f.id, i) }, el('i', { class: 'swatch', style: `--rc:${r.color}` }), r.name, el('small', {}, n ? `${n} on` : by[i].length ? `${by[i].length}` : '')); }); }),
+    ...Fs.flatMap((F) => { const by = pinsByRoom(F); return F.rooms.map((r, i) => { const n = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length; return el('button', { type: 'button', class: 'sroom', onclick: () => focusRoom(F.f.id, i) }, el('i', { class: 'swatch', style: `--rc:${r.color}` }), r.name, el('small', {}, n ? `${n} on` : '')); }); }),
     !Fs.some((F) => F.rooms.length) ? el('p', { class: 'note' }, 'No rooms yet. Open Editor > Rooms to add them.') : null);
 }
 function drawRoomPanel() {
@@ -303,7 +304,7 @@ function drawRoomPanel() {
   const lights = kinds((d) => d.kind === 'light'), ctl = kinds((d) => ['plug', 'switch', 'fan', 'media'].includes(d.kind)), cams = kinds((d) => d.kind === 'camera');
   const other = pins.filter((p) => !lights.includes(p) && !ctl.includes(p) && !cams.includes(p));
   side.hidden = false; side.dataset.kind = 'room';
-  side.replaceChildren(
+  fill(side, 
     el('div', { class: 'rhead' }, el('i', { class: 'swatch big', style: `--rc:${r.color}` }), el('div', {}, el('h2', {}, r.name), el('small', {}, [t ? temp(t.device.tempC) : '', F.f.name].filter(Boolean).join(' · '))), el('button', { type: 'button', class: 'iconbtn', title: 'Close', onclick: () => { S.room = null; layout(true); } }, ic('close'))),
     lights.length ? el('div', { class: 'sechead' }, 'Lights', el('button', { type: 'button', class: 'mini', onclick: () => allLights(lights, false) }, 'All off')) : null,
     ...lights.map((p) => { const d = p.device, x = row(p, sw(d)); if (d.brightness != null || d.on) x.append(el('input', { type: 'range', min: 1, max: 100, value: d.brightness ?? 100, class: 'bri', 'aria-label': 'Brightness', onchange: (e) => act(d, 'brightness', Number(e.target.value)) })); return x; }),
@@ -396,7 +397,7 @@ function editor() {
   const tabs = [['devices', 'Devices'], ['rooms', 'Rooms'], ['colors', 'Colours'], ['floors', 'Floors']];
   const body = { devices: edDevices, rooms: edRooms, colors: edColors, floors: edFloors }[S.tab]();
   const hint = S.tool?.type === 'device' ? `Click on the model where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
-  box.replaceChildren(el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { S.tab = k; S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
+  fill(box, el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { S.tab = k; S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
     hint ? el('div', { class: 'hint' }, hint, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; editor(); drawPins(); } }, 'Cancel')) : null, body);
 }
 function floorPicker() {
@@ -483,7 +484,7 @@ async function newDrawnFloor(withPicture) {
 }
 function guidePanel() {
   const side = $('#side'); side.hidden = false; side.dataset.kind = 'guide';
-  side.replaceChildren(el('div', { class: 'rhead' }, el('h2', {}, 'Your home in 3D'), el('button', { type: 'button', class: 'iconbtn', onclick: () => { side.hidden = true; side.dataset.kind = ''; } }, ic('close'))),
+  fill(side, el('div', { class: 'rhead' }, el('h2', {}, 'Your home in 3D'), el('button', { type: 'button', class: 'iconbtn', onclick: () => { side.hidden = true; side.dataset.kind = ''; } }, ic('close'))),
     el('p', { class: 'note' }, 'Two ways - pick whichever suits you. You can mix them: scan one floor, draw another.'),
     el('h3', {}, 'A. Scan it (iPhone Pro / iPad Pro with LiDAR)'),
     el('ol', { class: 'guide' },
@@ -501,7 +502,7 @@ function guidePanel() {
 /* ---------- live data ---------- */
 function drawTotals() {
   const t = S.live?.totals || {};
-  $('#totals').replaceChildren(el('span', { class: 'stat' }, el('small', {}, 'Power'), `${t.powerW ?? 0} W`), el('span', { class: 'stat warm' }, el('small', {}, 'Lights'), `${t.lightsOn ?? 0} on`),
+  fill($('#totals'), el('span', { class: 'stat' }, el('small', {}, 'Power'), `${t.powerW ?? 0} W`), el('span', { class: 'stat warm' }, el('small', {}, 'Lights'), `${t.lightsOn ?? 0} on`),
     ...(t.playing || []).slice(0, 1).map((p) => el('span', { class: 'stat music' }, el('small', {}, 'Playing'), p.title || p.name)),
     ...(t.openDoors ? [el('span', { class: 'stat bad' }, el('small', {}, 'Open'), `${t.openDoors}`)] : []), ...(t.leaks ? [el('span', { class: 'stat bad' }, el('small', {}, 'Leak'), '!')] : []));
 }
