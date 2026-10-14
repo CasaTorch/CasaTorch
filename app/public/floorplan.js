@@ -8,12 +8,14 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { openDrawer } from './floorplan-draw.js';
 import { toGlb } from './floorplan-import.js';
+import { buildRoof, PowerNet, weatherIcon } from './floorplan-house.js';
 import { THEMES, COLOR_KEYS, ROOM_COLORS, lookOf, classify, guessCats, itemOf, prettyItem, sectionRooms, makeFx, fxMaterial, MAX_GLOW, MAX_ROOMS } from './floorplan-look.js';
 
 const S = { plan: null, live: null, mode: 'view', floorView: 'all', room: null, tool: null, sel: null, F: {}, pins: [], pinObjs: [], q: '', tab: 'devices' };
 let card = null;   // the open device card: { id, o }
 const PREF_KEY = 'houseos-3d';
-const prefs = { walls: 'tall', stack: 'stacked', names: true, values: false, cameras: true, theme: null, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
+const prefs = { walls: 'auto', stack: 'stacked', names: true, values: false, cameras: true, roof: true, power: true, hidden: {}, theme: null, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
+if (prefs.v !== 2) Object.assign(prefs, { v: 2, walls: 'auto', roof: true, power: true, hidden: {} });   // the dollhouse view is the new default
 const savePrefs = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* private window */ } };
 const $ = (s) => document.querySelector(s);
 const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (v == null || v === false) continue; if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'value') e.value = v; else e.setAttribute(k, v === true ? '' : v); } for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k))); return e; };
@@ -45,15 +47,21 @@ const controls = new OrbitControls(camera, renderer.domElement); controls.enable
 const hemi = new THREE.HemisphereLight('#fff', '#000', 1); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#ffffff', 0.6); sun.position.set(12, 30, 18); scene.add(sun);
 let grid = new THREE.Group(); scene.add(grid);
-const resize = () => { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); labels.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+/* On a wide screen the house is framed in the space right of the control panel, not behind it. */
+const resize = () => { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); labels.setSize(w, h); camera.aspect = w / h; if (w > 900) camera.setViewOffset(w, h, -150, 0, w, h); else camera.clearViewOffset(); camera.updateProjectionMatrix(); };
 addEventListener('resize', resize); resize();
-let tween = null;
+let tween = null, wallsDirty = true, wallsAt = 0;
+controls.addEventListener('change', () => { wallsDirty = true; });
+const power = new PowerNet(scene);
 const flyTo = (target, pos, ms = 750) => { tween = { t0: performance.now(), ms, ft: controls.target.clone(), fp: camera.position.clone(), tt: target, tp: pos }; };
 (function loop(now) {
   requestAnimationFrame(loop);
   if (document.getElementById('drawer')) return;   // drawing on top: let the 3D rest
   if (tween) { const k = Math.min(1, (now - tween.t0) / tween.ms), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; controls.target.lerpVectors(tween.ft, tween.tt, e); camera.position.lerpVectors(tween.fp, tween.tp, e); if (k >= 1) tween = null; }
-  controls.update(); renderer.render(scene, camera); labels.render(scene, camera);
+  controls.update();
+  if (wallsDirty && now - wallsAt > 120) { wallsDirty = false; wallsAt = now; for (const F of Object.values(S.F)) applyWalls(F); }
+  power.tick(now / 1000);
+  renderer.render(scene, camera); labels.render(scene, camera);
   if (card) card.o.element.style.zIndex = '100000';   // the open card stays above every pin
 })(0);
 
@@ -66,6 +74,7 @@ function applyLook() {
   hemi.color.set(L.hemi[0]); hemi.groundColor.set(L.hemi[1]); hemi.intensity = L.hemi[2]; sun.intensity = L.sun;
   const y = grid.position.y; scene.remove(grid); grid = new THREE.GridHelper(140, 140, L.grid[0], L.grid[1]); grid.position.y = y; scene.add(grid);
   for (const F of Object.values(S.F)) styleFloor(F);
+  buildRoofs();
   document.documentElement.dataset.theme = curTheme();
   drawPins();
 }
@@ -74,16 +83,42 @@ function styleFloor(F) {
   const L = look(), M = F.mats;
   M.wall.color.set(L.wall); M.wall.opacity = L.wallOpacity; M.wall.transparent = L.wallOpacity < 1; M.wall.depthWrite = L.wallOpacity >= 1;
   M.floor.color.set(L.floor); M.floor.userData.tint.value = L.tint; M.furniture.color.set(L.furniture); M.door.color.set(L.door); M.window.color.set(L.window);
-  for (const m of Object.values(M)) m.needsUpdate = true;
-  F.edgeMat.color.set(L.edge); F.furnEdgeMat.color.set(L.furnEdge); F.doorEdge.color.set(L.door);
+  const W = F.low; W.wall.color.set(L.wall); W.wall.opacity = L.wallOpacity; W.wall.transparent = L.wallOpacity < 1; W.wall.depthWrite = L.wallOpacity >= 1; W.door.color.set(L.door); W.window.color.set(L.window);
+  for (const m of [...Object.values(M), ...Object.values(W)]) m.needsUpdate = true;
+  F.edgeMat.color.set(L.edge); F.furnEdgeMat.color.set(L.furnEdge); F.doorEdge.color.set(L.door); F.edgeLow.color.set(L.edge); F.doorEdgeLow.color.set(L.door);
   for (const [key, meshes] of F.items) {
     const hex = F.f.paint?.[key];
     for (const m of meshes) {
       const cat = m.userData.cat;
       if (hex) { m.userData.own ||= Object.assign(fxMaterial({}, F.fx, cat === 'floor' ? L.tint : 0), { clippingPlanes: cat === 'floor' || cat === 'furniture' ? [] : [F.clip] }); m.userData.own.color.set(hex); m.material = m.userData.own; }
       else m.material = M[cat] || M.furniture;
+      m.userData.full = m.material;
     }
   }
+  applyWalls(F);
+}
+/* Walls: "Dollhouse" lowers the walls on the side facing you (like a cutaway drawing) and keeps the
+   far ones full height; "Cut" lowers them all; "Tall" keeps them all. Follows the camera as you turn. */
+const WALLISH = new Set(['wall', 'door', 'window', 'opening']);
+function applyWalls(F) {
+  if (F.original || !F.wallMeshes) return;
+  const mode = prefs.walls, dir = camera.position.clone().sub(controls.target).setY(0);
+  if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1); dir.normalize();
+  for (const m of F.wallMeshes) {
+    const full = m.userData.full; if (!full) continue;
+    let low = mode === 'cut';
+    if (mode === 'auto') { const w = m.userData.wc; low = (w.x - F.center.x) * dir.x + (w.z - F.center.z) * dir.z > F.r * 0.2; }
+    const want = low ? lowOf(F, m, full) : full;
+    if (m.material !== want) m.material = want;
+    const e = m.userData.edge, door = m.userData.cat === 'door';
+    if (e) e.material = low ? (door ? F.doorEdgeLow : F.edgeLow) : (door ? F.doorEdge : F.edgeMat);
+  }
+}
+function lowOf(F, m, full) {
+  const cat = m.userData.cat;
+  if (full === F.mats[cat] && F.low[cat]) return F.low[cat];
+  m.userData.ownLow ||= Object.assign(fxMaterial({}, F.fx), { clippingPlanes: [F.clipLow] });
+  m.userData.ownLow.color.copy(full.color); return m.userData.ownLow;
 }
 
 /* ---------- floors ---------- */
@@ -101,9 +136,10 @@ async function loadFloors() {
     if (!inner) { toast(`Could not load ${f.name}`); continue; }
     if (f.kind !== 'drawn') { inner.scale.setScalar(f.scale || 1); inner.rotation.y = deg(f.rotationY || 0); }
     const G = new THREE.Group(); G.userData.floor = f.id; G.add(inner); G.position.set(f.offset?.[0] || 0, 0, f.offset?.[1] || 0); scene.add(G); G.updateMatrixWorld(true);
-    const fx = makeFx(), clip = new THREE.Plane(new V3(0, -1, 0), 1e6);
-    const F = { f, G, inner, fx, clip, mats: floorMats(fx, clip), items: new Map(), roomLabs: [],
-      edgeMat: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, clippingPlanes: [clip] }), furnEdgeMat: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35 }), doorEdge: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, clippingPlanes: [clip] }) };
+    const fx = makeFx(), clip = new THREE.Plane(new V3(0, -1, 0), 1e6), clipLow = new THREE.Plane(new V3(0, -1, 0), 1e6);
+    const F = { f, G, inner, fx, clip, clipLow, mats: floorMats(fx, clip), low: floorMats(fx, clipLow), items: new Map(), roomLabs: [], wallMeshes: [],
+      edgeMat: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, clippingPlanes: [clip] }), furnEdgeMat: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35 }), doorEdge: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, clippingPlanes: [clip] }),
+      edgeLow: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, clippingPlanes: [clipLow] }), doorEdgeLow: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, clippingPlanes: [clipLow] }) };
     const meshes = []; inner.traverse((o) => { if (o.isMesh && !o.userData.keep) meshes.push(o); });
     for (const m of meshes) { m.userData.cat ||= classify(m); m.userData.floor = f.id; }
     F.original = f.look === 'original' || (f.look !== 'styled' && f.kind !== 'drawn' && !guessCats(meshes, inner));
@@ -112,9 +148,20 @@ async function loadFloors() {
       m.userData.key = key; m.material = F.mats[cat] || F.mats.furniture;
       if (!F.items.has(key)) F.items.set(key, []); F.items.get(key).push(m);
       const em = cat === 'furniture' ? F.furnEdgeMat : cat === 'door' ? F.doorEdge : cat === 'opening' || cat === 'floor' ? null : F.edgeMat;
-      if (em && m.geometry.attributes.position.count < 80000) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, cat === 'furniture' ? 40 : 25), em); e.raycast = () => {}; m.add(e); }
+      if (em && m.geometry.attributes.position.count < 80000) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, cat === 'furniture' ? 40 : 25), em); e.raycast = () => {}; m.add(e); m.userData.edge = e; }
+      m.userData.full = m.material;
+      if (WALLISH.has(cat)) { const c = new THREE.Box3().setFromObject(m).getCenter(new V3()); m.userData.wc = { x: c.x, z: c.z }; F.wallMeshes.push(m); }
     }
-    const box = new THREE.Box3().setFromObject(inner); F.minY = box.min.y; F.box = box;
+    /* The house itself = walls and floors. Scans can carry stray bits far outside it, which must not
+       size the roof, place the panel or frame the view. */
+    let box = new THREE.Box3(); for (const m of meshes) if (m.userData.cat === 'wall') box.expandByObject(m);
+    if (box.isEmpty()) for (const m of meshes) if (m.userData.cat === 'floor') box.expandByObject(m);
+    if (box.isEmpty()) box = new THREE.Box3().setFromObject(inner);
+    { const all = new THREE.Box3().setFromObject(inner); box.min.y = Math.min(box.min.y, all.min.y); }   // floors sit a touch below the walls
+    F.minY = box.min.y; F.box = box;
+    const fb = new THREE.Box3(); for (const m of meshes) if (m.userData.cat === 'floor') fb.expandByObject(m);
+    F.floorY = fb.isEmpty() ? box.min.y : Math.min(box.min.y + 0.3, fb.max.y);   // the walking surface: power lines run just above it
+    F.center = box.getCenter(new V3()); F.r = Math.max(1, Math.hypot(box.max.x - box.min.x, box.max.z - box.min.z) / 2);
     F.detected = f.kind === 'drawn' ? drawnRooms(f, inner, G) : sectionRooms(inner, (p) => G.worldToLocal(p.clone()));
     F.rooms = Array.isArray(f.rooms) ? f.rooms : F.detected;
     F.label = new CSS2DObject(el('button', { class: 'floorlab', type: 'button', onclick: () => pickFloor(f.id) }));
@@ -124,6 +171,14 @@ async function loadFloors() {
   if (S.plan.floors.length === 1 && S.F[S.plan.floors[0].id]) S.floorView = S.plan.floors[0].id;
   if (S.floorView !== 'all' && !S.F[S.floorView]) S.floorView = 'all';
   applyLook(); buildRoomLabels(); layout(true);
+}
+/* The roof sits on the top floor (and lifts away when you pick a floor or a room). */
+function buildRoofs() {
+  for (const F of Object.values(S.F)) if (F.roof) { F.roof.parent?.remove(F.roof); F.roof = null; }
+  const top = Object.values(S.F).sort((a, b) => (b.f.level || 0) - (a.f.level || 0))[0];
+  if (!top || top.original) return;
+  const b = top.box.clone(); b.min.x -= top.G.position.x; b.max.x -= top.G.position.x; b.min.z -= top.G.position.z; b.max.z -= top.G.position.z;
+  top.roof = buildRoof(b, curTheme()); top.G.add(top.roof);
 }
 /* A drawn floor: a slab per room, walls raised from the room edges and drawn walls, the picture underneath. */
 async function drawnFloor(f) {
@@ -154,10 +209,11 @@ function layout(fit) {
   for (const F of Object.values(S.F)) {
     const f = F.f, lvl = f.level || 0, isCur = !cur || F === cur;
     F.G.position.y = lvl * (f.heightM || 3) + (prefs.stack === 'apart' && !cur ? lvl * 3 : 0);
-    F.G.visible = isCur || (prefs.stack !== 'alone' && lvl < curLevel);
+    F.G.visible = (isCur || (prefs.stack !== 'alone' && lvl < curLevel)) && !prefs.hidden?.[f.id];
     F.fx.uDim.value = isCur ? 1 : 0.28; F.edgeMat.opacity = isCur ? 0.9 : 0.12; F.furnEdgeMat.opacity = isCur ? 0.35 : 0.05; F.doorEdge.opacity = F.edgeMat.opacity;
     F.G.updateMatrixWorld(true);
-    F.clip.constant = prefs.walls === 'cut' ? F.G.position.y + F.minY + 1.15 : 1e6;
+    F.clipLow.constant = F.G.position.y + F.minY + 1.1;
+    if (F.roof) F.roof.visible = prefs.roof && (!cur || !multi) && !S.room && F.G.visible;
     if (F.G.visible) minY = Math.min(minY, F.G.position.y + F.minY);
     roomUniforms(F);
     F.label.visible = multi && !cur && F.G.visible;
@@ -166,7 +222,8 @@ function layout(fit) {
   grid.position.y = (Number.isFinite(minY) ? minY : 0) - 0.05;
   if (card) { const F = S.F[card.o.userData.floor]; card.o.visible = !!F && F.G.visible && (!cur || F === cur); }
   for (const o of S.pinObjs) { const F = S.F[o.userData.floor]; o.visible = !!F && F.G.visible && (!cur || F === cur) && (prefs.cameras || o.userData.kind !== 'camera'); }
-  drawChips(); drawTools(); drawSummary(); drawRoomPanel();
+  wallsDirty = true;
+  drawChips(); drawTools(); drawLeft(); drawPower();
   if (fit) fitView();
 }
 function roomUniforms(F) {
@@ -176,10 +233,12 @@ function roomUniforms(F) {
 }
 function fitView() {
   const cur = curF(), box = new THREE.Box3();
-  for (const F of Object.values(S.F)) if (F.G.visible && (!cur || F === cur)) box.expandByObject(F.inner);
+  for (const F of Object.values(S.F)) if (F.G.visible && (!cur || F === cur)) box.union(F.box.clone().translate(new V3(0, F.G.position.y, 0)));
   if (box.isEmpty()) return;
+  /* From the front of the house, a little to one side and above - like looking into a dollhouse. */
   const c = box.getCenter(new V3()), len = Math.max(6, box.getSize(new V3()).length());
-  flyTo(c, new V3(c.x + len * 0.5, c.y + len * 0.9, c.z + len * 0.95));
+  const dir = new V3(0.32, 0, 1).applyAxisAngle(new V3(0, 1, 0), deg(S.plan?.settings?.frontDeg || 0)).normalize();
+  flyTo(c, c.clone().add(dir.multiplyScalar(len * 1.02)).add(new V3(0, len * 0.66, 0)));
 }
 function pickFloor(id) { S.floorView = id; S.room = null; layout(true); }
 function focusRoom(fid, i) {
@@ -338,48 +397,102 @@ function drawTools() {
   const t = $('#tools'); t.hidden = S.mode !== 'view' || !Object.keys(S.F).length;
   const set = (k) => (v) => { prefs[k] = v; savePrefs(); layout(k === 'stack'); };
   fill(t, 
-    seg([['tall', 'Tall walls'], ['cut', 'Cut']], prefs.walls, set('walls')),
+    seg([['auto', 'Dollhouse'], ['tall', 'Tall walls'], ['cut', 'Cut']], prefs.walls, set('walls')),
     Object.keys(S.F).length > 1 ? seg([['stacked', 'Stacked'], ['apart', 'Apart'], ['alone', 'Alone']], prefs.stack, set('stack')) : null,
-    toggle('Room names', 'names'), toggle('Values', 'values'), toggle('Cameras', 'cameras'),
+    Object.values(S.F).some((F) => F.roof) ? toggle('Roof', 'roof') : null, toggle('Power', 'power'), toggle('Room names', 'names'), toggle('Values', 'values'), toggle('Cameras', 'cameras'),
     el('button', { type: 'button', class: 'tog', onclick: () => { S.room = null; layout(true); } }, 'Reset view'),
     S.room ? el('button', { type: 'button', class: 'tog on', onclick: () => { S.room = null; layout(true); } }, ic('back'), 'Back') : null);
 }
 const lightsIn = (pins) => pins.filter((p) => p.device.kind === 'light');
 async function allLights(pins, on) { await Promise.all(lightsIn(pins).filter((p) => !!p.device.on !== on).map((p) => send(`/api/devices/${encodeURIComponent(p.device.id)}/${on ? 'on' : 'off'}`, 'POST', pin ? { pin } : {}).catch(() => {}))); setTimeout(refresh, 700); }
-function drawSummary() {
+/* ---------- the control panel on the left: time, weather, the house, then the room you pick ---------- */
+const tz = () => S.live?.weather?.tz || undefined;
+function clockText() {
+  const now = new Date();
+  try { return [now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz() }), now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric', timeZone: tz() })]; }
+  catch { return [now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })]; }
+}
+setInterval(() => { const c = document.querySelector('#left .clock'); if (c) { const [t, d] = clockText(); c.firstChild.textContent = t; c.lastChild.textContent = d; } }, 10000);
+const wIcon = (kind) => { const s = el('span', { class: 'wi' }); s.innerHTML = weatherIcon(kind); return s; };
+function weatherBlock() {
+  const w = S.live?.weather; if (!w || w.temp == null) return null;
+  return el('div', { class: 'weather' },
+    el('div', { class: 'wnow' }, wIcon(w.kind), el('b', {}, `${Math.round(w.temp)}°`), el('div', {}, el('span', {}, w.words || ''), el('small', {}, [w.place, w.hi != null ? `H ${Math.round(w.hi)}° · L ${Math.round(w.lo)}°` : ''].filter(Boolean).join(' · ')))),
+    (w.days || []).length ? el('div', { class: 'wdays' }, ...w.days.slice(0, 5).map((d) => el('div', {}, el('small', {}, d.label), wIcon(d.kind), el('span', {}, d.hi != null ? `${Math.round(d.hi)}°` : ''), el('small', {}, d.lo != null ? `${Math.round(d.lo)}°` : '')))) : null);
+}
+function drawLeft() {
   const box = $('#left');
-  if (S.mode !== 'view' || !Object.keys(S.F).length || !S.live) { if (S.mode === 'view') box.hidden = true; return; }
-  const cur = curF(), Fs = cur ? [cur] : Object.values(S.F), pins = (S.live.pins || []).filter((p) => Fs.some((F) => F.f.id === p.floor));
-  const lights = lightsIn(pins), on = lights.filter((p) => p.device.on).length, open = pins.filter((p) => p.device.open), wet = pins.filter((p) => p.device.water || p.device.smoke);
-  box.hidden = false;
-  fill(box, el('div', { class: 'eyebrow' }, cur ? cur.f.name : Object.keys(S.F).length > 1 ? 'Whole home' : 'Home'),
-    lights.length ? el('div', { class: 'srow' }, el('span', {}, 'Lights ', el('b', {}, `${on}/${lights.length}`)), el('button', { type: 'button', class: 'mini', onclick: () => allLights(pins, true) }, 'On'), el('button', { type: 'button', class: 'mini', onclick: () => allLights(pins, false) }, 'Off')) : null,
+  if (S.mode !== 'view') return;
+  if (!S.live && !Object.keys(S.F).length) { box.hidden = true; return; }
+  if (box.contains(document.activeElement) && document.activeElement.type === 'range') return;   // don't redraw under a dragging slider
+  const [t, d] = clockText();
+  box.hidden = false; box.classList.toggle('roomopen', !!S.room);
+  fill(box, el('div', { class: 'clock' }, el('b', {}, t), el('small', {}, d)), weatherBlock(), S.room ? roomBlock() : homeBlock());
+}
+function homeBlock() {
+  const cur = curF(), Fs = cur ? [cur] : Object.values(S.F), pins = (S.live?.pins || []).filter((p) => Fs.some((F) => F.f.id === p.floor));
+  const lights = lightsIn(pins), on = lights.filter((p) => p.device.on).length, open = pins.filter((p) => p.device.open && p.device.kind !== 'cover'), wet = pins.filter((p) => p.device.water || p.device.smoke);
+  const watts = pins.filter((p) => p.device.powerW != null && (p.device.on ?? true)).reduce((a, p) => a + p.device.powerW, 0) || S.live?.totals?.powerW || 0;
+  const all = Object.values(S.F).sort((a, b) => (b.f.level || 0) - (a.f.level || 0)), hasRoof = all.some((F) => F.roof);
+  const eye = (on, fn, label) => el('button', { type: 'button', class: `eye${on ? ' on' : ''}`, title: on ? `Hide ${label}` : `Show ${label}`, onclick: fn }, on ? '◉' : '○');
+  return el('div', {},
+    el('div', { class: 'eyebrow' }, cur ? cur.f.name : all.length > 1 ? 'Whole home' : 'Home'),
+    el('div', { class: 'kpis' }, el('div', {}, el('small', {}, 'Using now'), el('b', { class: 'good' }, fmtW(watts))), el('div', {}, el('small', {}, 'Lights on'), el('b', { class: 'warm' }, `${on}/${lights.length}`))),
+    lights.length ? el('div', { class: 'srow' }, el('span', {}, 'All lights'), el('button', { type: 'button', class: 'mini', onclick: () => allLights(pins, true) }, 'On'), el('button', { type: 'button', class: 'mini', onclick: () => allLights(pins, false) }, 'Off')) : null,
     ...wet.map((p) => el('div', { class: 'srow bad' }, ic('drop'), `${pinName(p)}: ${devState(p.device).val}`)),
     ...open.map((p) => el('div', { class: 'srow warn' }, ic('door'), `${pinName(p)} is open`)),
-    ...Fs.flatMap((F) => { const by = pinsByRoom(F); return F.rooms.map((r, i) => { const n = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length; return el('button', { type: 'button', class: 'sroom', onclick: () => focusRoom(F.f.id, i) }, el('i', { class: 'swatch', style: `--rc:${r.color}` }), r.name, el('small', {}, n ? `${n} on` : '')); }); }),
+    all.length > 1 || hasRoof ? el('div', { class: 'sechead' }, 'Layers') : null,
+    hasRoof ? el('div', { class: 'layer' }, eye(prefs.roof, () => { prefs.roof = !prefs.roof; savePrefs(); layout(false); }, 'the roof'), el('span', {}, 'Roof')) : null,
+    ...(all.length > 1 || hasRoof ? all.map((F) => el('div', { class: `layer${cur === F ? ' cur' : ''}` }, eye(!prefs.hidden?.[F.f.id], () => { prefs.hidden = { ...(prefs.hidden || {}), [F.f.id]: !prefs.hidden?.[F.f.id] }; savePrefs(); layout(false); }, F.f.name),
+      el('button', { type: 'button', class: 'lname', onclick: () => pickFloor(cur === F ? 'all' : F.f.id) }, F.f.name), el('small', {}, `${F.rooms.length} rooms`))) : []),
+    el('div', { class: 'sechead' }, 'Rooms'),
+    ...Fs.flatMap((F) => { const by = pinsByRoom(F); return F.rooms.map((r, i) => { const n = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length, w = by[i].filter((p) => p.device.powerW != null && p.device.on !== false).reduce((a, p) => a + p.device.powerW, 0);
+      return el('button', { type: 'button', class: 'sroom', onclick: () => focusRoom(F.f.id, i) }, el('i', { class: 'swatch', style: `--rc:${r.color}` }), r.name, el('small', {}, [n ? `${n} on` : '', w ? fmtW(w) : ''].filter(Boolean).join(' · '))); }); }),
     !Fs.some((F) => F.rooms.length) ? el('p', { class: 'note' }, 'No rooms yet. Open Editor > Rooms to add them.') : null);
 }
-function drawRoomPanel() {
-  const side = $('#side');
-  if (S.mode !== 'view') return;
-  if (!S.room) { if (side.dataset.kind === 'room') { side.hidden = true; side.dataset.kind = ''; } return; }
-  if (side.contains(document.activeElement) && document.activeElement.type === 'range') return;   // don't redraw under a dragging slider
-  const F = S.F[S.room.floor], r = F?.rooms[S.room.i]; if (!r) return;
+function roomBlock() {
+  const F = S.F[S.room.floor], r = F?.rooms[S.room.i]; if (!r) return null;
   const pins = pinsByRoom(F)[S.room.i] || [], kinds = (k) => pins.filter((p) => k(p.device));
   const t = pins.find((p) => p.device.tempC != null);
-  const sw = (d) => el('label', { class: 'switch' }, el('input', { type: 'checkbox', checked: d.on || d.playing ? true : null, onchange: () => act(d, 'toggle') }), el('span'));
-  const row = (p, extra) => { const d = p.device, st = devState(d); return el('div', { class: `drow${st.act ? ' act' : ''}` }, el('div', { class: 'dtop' }, ic(iconOf(d)), el('span', { class: 'dn' }, pinName(p)), el('small', {}, st.val ?? ''), extra), ...(p.more || [])); };
+  const sw = (d) => el('label', { class: 'switch' }, el('input', { type: 'checkbox', checked: d.on || d.playing ? true : null, onchange: () => { d.on = !d.on; act(d, d.kind === 'media' ? 'toggle' : d.on ? 'on' : 'off'); drawPinsSoon(); } }), el('span'));
+  const row = (p, extra) => { const d = p.device, st = devState(d); return el('div', { class: `drow${st.act ? ' act' : ''}` }, el('div', { class: 'dtop' }, ic(iconOf(d)), el('span', { class: 'dn' }, pinName(p)), el('small', {}, st.val ?? ''), extra)); };
   const lights = kinds((d) => d.kind === 'light'), ctl = kinds((d) => ['plug', 'switch', 'fan', 'media'].includes(d.kind)), cams = kinds((d) => d.kind === 'camera');
   const other = pins.filter((p) => !lights.includes(p) && !ctl.includes(p) && !cams.includes(p));
-  side.hidden = false; side.dataset.kind = 'room';
-  fill(side, 
-    el('div', { class: 'rhead' }, el('i', { class: 'swatch big', style: `--rc:${r.color}` }), el('div', {}, el('h2', {}, r.name), el('small', {}, [t ? temp(t.device.tempC) : '', F.f.name].filter(Boolean).join(' · '))), el('button', { type: 'button', class: 'iconbtn', title: 'Close', onclick: () => { S.room = null; layout(true); } }, ic('close'))),
-    lights.length ? el('div', { class: 'sechead' }, 'Lights', el('button', { type: 'button', class: 'mini', onclick: () => allLights(lights, false) }, 'All off')) : null,
-    ...lights.map((p) => { const d = p.device, x = row(p, sw(d)); if (d.brightness != null || d.on) x.append(el('input', { type: 'range', min: 1, max: 100, value: d.brightness ?? 100, class: 'bri', 'aria-label': 'Brightness', onchange: (e) => act(d, 'brightness', Number(e.target.value)) })); return x; }),
-    ctl.length ? el('div', { class: 'sechead' }, 'Devices') : null, ...ctl.map((p) => row(p, sw(p.device))),
+  const w = pins.filter((p) => p.device.powerW != null && p.device.on !== false).reduce((a, p) => a + p.device.powerW, 0);
+  return el('div', {},
+    el('div', { class: 'rhead' }, el('button', { type: 'button', class: 'iconbtn', title: 'Back to the house', onclick: () => { S.room = null; layout(true); } }, ic('back')), el('i', { class: 'swatch big', style: `--rc:${r.color}` }),
+      el('div', {}, el('h2', {}, r.name), el('small', {}, [t ? temp(t.device.tempC) : '', w ? `${fmtW(w)} now` : '', F.f.name].filter(Boolean).join(' · ')))),
+    lights.length ? el('div', { class: 'sechead' }, `Lights · ${lights.filter((p) => p.device.on).length} on`, el('button', { type: 'button', class: 'mini', onclick: () => allLights(lights, false) }, 'All off')) : null,
+    ...lights.map((p) => { const d = p.device, x = row(p, sw(d)); if (d.brightness != null || d.on) x.append(el('input', { type: 'range', min: 1, max: 100, value: d.brightness ?? 100, class: 'bri', 'aria-label': 'Brightness', onchange: (e) => { d.on = true; d.brightness = Number(e.target.value); act(d, 'brightness', d.brightness); drawPinsSoon(); } })); return x; }),
+    ctl.length ? el('div', { class: 'sechead' }, 'Plugs & devices') : null,
+    ...ctl.map((p) => { const d = p.device, x = row(p, sw(d)); if (d.powerW != null || d.energyKWh != null) x.append(el('div', { class: 'meter' }, d.powerW != null ? el('span', {}, el('b', {}, d.on === false ? '0 W' : fmtW(d.powerW)), ' now') : null, d.energyKWh != null ? el('span', {}, el('b', {}, `${(+d.energyKWh).toFixed(2)} kWh`), ' today') : null)); return x; }),
     other.length ? el('div', { class: 'sechead' }, 'Sensors') : null, ...other.map((p) => row(p)),
-    cams.length ? el('div', { class: 'sechead' }, 'Cameras') : null, ...cams.map((p) => el('button', { type: 'button', class: 'camthumb', onclick: () => cameraModal(p.device, pinName(p)) }, el('img', { src: `${snapUrl(p.device)}?t=${Math.floor(Date.now() / 30000)}`, alt: pinName(p), loading: 'lazy' }), el('span', {}, pinName(p)))),
+    cams.length ? el('div', { class: 'sechead' }, 'Cameras') : null, ...cams.map((p) => el('button', { type: 'button', class: 'camthumb', onclick: () => cameraModal(p.device, pinName(p)) }, el('img', { src: `${snapUrl(p.device)}${snapUrl(p.device).includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 30000)}`, alt: pinName(p), loading: 'lazy' }), el('span', {}, pinName(p)))),
     !pins.length ? el('p', { class: 'note' }, 'Nothing placed in this room yet. Open ', el('b', {}, 'Editor > Devices'), ' and click where each device is.') : null);
+}
+
+/* ---------- power: from the panel, along the floor, up to every device ---------- */
+const POWERED = new Set(['light', 'plug', 'switch', 'media', 'fan', 'climate']);
+function panelSpot() {
+  const st = S.plan?.settings?.panel, list = Object.values(S.F).sort((a, b) => (a.f.level || 0) - (b.f.level || 0));
+  const F = (st && S.F[st.floor]) || list[0]; if (!F) return null;
+  const local = st && S.F[st.floor] ? new V3(st.pos[0], F.minY, st.pos[2]) : new V3(F.box.min.x - F.G.position.x + 0.4, F.minY, F.box.max.z - F.G.position.z - 0.4);
+  const w = F.G.localToWorld(local); w.y = F.G.position.y + F.floorY + 0.03; return { w, F };
+}
+function drawPower() {
+  if (!S.live) return;
+  const cur = curF(), spot = panelSpot();
+  if (!spot || S.mode === 'edit' && S.tab !== 'devices') { power.clear(); return; }
+  const lines = []; let i = 0;
+  for (const p of S.live.pins || []) {
+    const d = p.device, F = S.F[p.floor];
+    if (!F || !F.G.visible || (cur && F !== cur) || !POWERED.has(d.kind)) continue;
+    const on = !!(d.on || d.playing) && d.online !== false, P0 = spot.w, yb = F.G.position.y + F.floorY + 0.03, Pd = F.G.localToWorld(new V3(...p.pos)), o = ((i++ % 9) - 4) * 0.05;
+    lines.push({ on, watts: d.powerW ?? (d.kind === 'light' ? 10 : 40), color: d.kind === 'light' && on ? '#fbbf24' : null,
+      pts: [P0.clone(), new V3(P0.x, yb, P0.z), new V3(P0.x, yb, P0.z + o), new V3(Pd.x, yb, P0.z + o), new V3(Pd.x, yb, Pd.z), new V3(Pd.x, Math.max(yb, Pd.y - 0.15), Pd.z)] });
+  }
+  power.update(lines, spot.w, S.live.totals?.powerW ?? 0, el, look());
+  power.visible = prefs.power && (spot.F.G.visible || !!cur);
 }
 
 /* ---------- clicking the model ---------- */
@@ -407,6 +520,9 @@ renderer.domElement.addEventListener('click', (e) => {
     const old = S.pins.find((p) => p.deviceId === S.tool.dev.id);
     S.pins = S.pins.filter((p) => p.deviceId !== S.tool.dev.id).concat({ ...(old || {}), deviceId: S.tool.dev.id, floor: F.f.id, pos: [local.x, local.y, local.z] });
     S.tool = null; savePins();
+  } else if (S.tool.type === 'panel') {
+    const l = F.G.worldToLocal(hit.point.clone());
+    S.tool = null; saveSettings({ panel: { floor: F.f.id, pos: [+l.x.toFixed(3), +l.y.toFixed(3), +l.z.toFixed(3)] } });
   } else if (S.tool.type === 'room') {
     const l = F.G.worldToLocal(hit.point.clone()), rooms = F.rooms.map((x) => ({ ...x }));
     if (S.tool.i >= 0 && S.tool.floor === F.f.id) rooms[S.tool.i].pos = [+l.x.toFixed(2), +l.z.toFixed(2)];
@@ -417,7 +533,7 @@ renderer.domElement.addEventListener('click', (e) => {
     S.sel = { floor: F.f.id, key: hit.object.userData.key }; showSel(); editor();
   }
 });
-const isClipped = (h) => prefs.walls === 'cut' && ['wall', 'door', 'window', 'opening'].includes(h.object.userData.cat) && h.point.y > S.F[h.object.userData.floor].clip.constant;
+const isClipped = (h) => h.point.y > (h.object.material?.clippingPlanes?.[0]?.constant ?? Infinity);
 function showSel() {
   const F = S.F[S.sel?.floor], ms = F?.items.get(S.sel?.key);
   scene.children.filter((o) => o.userData.sel).forEach((o) => scene.remove(o));
@@ -443,6 +559,10 @@ async function saveFloor(F, body) {
   catch (e) { proErr(e); }
 }
 const savePaintSoon = debounce((F) => saveFloor(F, { paint: F.f.paint || {} }), 500);
+async function saveSettings(body) {
+  try { const r = await send('/api/floorplan/settings', 'PUT', body); S.plan.settings = r.settings; layout(false); editor(); }
+  catch (e) { proErr(e); }
+}
 async function saveStyle() {
   try { await send('/api/floorplan/style', 'PUT', S.plan.style); }
   catch (e) { proErr(e); }
@@ -465,7 +585,7 @@ function editor() {
   const box = $('#left'); box.hidden = false;
   const tabs = [['devices', 'Devices'], ['rooms', 'Rooms'], ['colors', 'Colours'], ['floors', 'Floors']];
   const body = { devices: edDevices, rooms: edRooms, colors: edColors, floors: edFloors }[S.tab]();
-  const hint = S.tool?.type === 'device' ? `Click on the model where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
+  const hint = S.tool?.type === 'panel' ? 'Click where the electrical panel is (a wall or the floor next to it).' : S.tool?.type === 'device' ? `Click on the model where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
   fill(box, el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { S.tab = k; S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
     hint ? el('div', { class: 'hint' }, hint, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; editor(); drawPins(); } }, 'Cancel')) : null, body);
 }
@@ -485,7 +605,11 @@ function edDevices() {
       d.kind === 'light' ? el('input', { type: 'color', value: p.color || '#ffc477', title: 'Glow colour', oninput: (e) => { p.color = e.target.value; savePinsSoon(); } }) : null),
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => pick(d) }, 'Move'), el('button', { type: 'button', class: 'mini', onclick: () => { S.pins = S.pins.filter((x) => x.deviceId !== d.id); savePins(); } }, 'Remove'), el('small', {}, S.F[p.floor]?.f.name || ''))); };
   const free = devs.filter((d) => !placed.has(d.id)), on = devs.filter((d) => placed.has(d.id));
-  return el('div', {}, el('p', { class: 'note' }, 'Pick a device, then click where it really is. Lights glow on the plan when they are on.'), search,
+  return el('div', {}, el('p', { class: 'note' }, 'Pick a device, then click where it really is. Lights glow on the plan when they are on; power lines run to everything that uses electricity.'), search,
+    el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, ic('plug'), el('b', {}, 'Electrical panel'), el('small', {}, S.plan.settings?.panel ? 'placed' : 'front corner')),
+      el('p', { class: 'note' }, 'Where the power comes into the house. The power lines start here.'),
+      el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'panel', dev: { id: '_panel', name: 'the electrical panel' } }; editor(); } }, S.plan.settings?.panel ? 'Move' : 'Place it'),
+        S.plan.settings?.panel ? el('button', { type: 'button', class: 'mini', onclick: () => saveSettings({ panel: null }) }, 'Reset') : null)),
     el('h3', {}, `On the plan (${on.length})`), ...on.map(placedRow),
     el('h3', {}, `Not placed (${free.length})`), ...free.map((d) => el('button', { type: 'button', class: `edrow pick${S.tool?.dev?.id === d.id ? ' sel' : ''}`, onclick: () => pick(d) }, ic(iconOf(d)), d.name, el('small', {}, d.provider))));
 }
@@ -537,6 +661,9 @@ function edFloors() {
         F?.original && f.look !== 'original' ? el('p', { class: 'note' }, 'This scan has no named walls or furniture, so it shows in its own colours.') : null,
         el('div', { class: 'row' }, f.kind === 'drawn' ? el('button', { type: 'button', class: 'primary', onclick: () => openDrawer(f, drawOpts()) }, 'Edit drawing') : null,
           el('button', { type: 'button', onclick: async () => { if (!confirm(`Remove ${f.name}?`)) return; await api(`/api/floorplan/floors/${f.id}`, { method: 'DELETE' }).catch(proErr); await reload(); } }, 'Remove floor'))); }),
+    el('h3', {}, 'Front of the house'),
+    el('p', { class: 'note' }, 'Which way the 3D view looks into the house when it opens.'),
+    seg([[0, 'Front'], [90, 'Right'], [180, 'Back'], [270, 'Left']], S.plan.settings?.frontDeg || 0, (v) => saveSettings({ frontDeg: v }).then(() => fitView())),
     el('h3', {}, 'Add a floor'),
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => newDrawnFloor(false) }, 'Draw a floor'), el('button', { type: 'button', onclick: () => newDrawnFloor(true) }, 'Trace a picture')),
     el('h3', {}, 'Or upload a LiDAR scan'), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,

@@ -4,9 +4,9 @@
 import * as THREE from 'three';
 
 export const THEMES = {
-  neon: { label: 'Neon', bg: '#070b16', grid: ['#13304d', '#0b1a2b'], wall: '#1b2644', wallOpacity: 1, floor: '#121a30', furniture: '#2a3760', edge: '#38bdf8', door: '#f59e0b', window: '#38bdf8', furnEdge: '#5b78c0', hemi: ['#a9c8ff', '#0b1220', 1.1], sun: 0.7, tint: 0.5, glow: 1.25 },
-  blueprint: { label: 'Blueprint', bg: '#0b2a5b', grid: ['#2f5da0', '#1b4280'], wall: '#1d4a8f', wallOpacity: 0.45, floor: '#123a75', furniture: '#2a5aa5', edge: '#e8f1ff', door: '#ffd166', window: '#a5d8ff', furnEdge: '#cfe0ff', hemi: ['#ffffff', '#0b2a5b', 1.2], sun: 0.3, tint: 0.25, glow: 0.8 },
-  day: { label: 'Day', bg: '#dfe6ee', grid: ['#c3ccd8', '#cfd7e2'], wall: '#f3f0e9', wallOpacity: 1, floor: '#d9c8ac', furniture: '#97a3bb', edge: '#8a99b0', door: '#b7791f', window: '#7dd3fc', furnEdge: '#6b7280', hemi: ['#ffffff', '#aab4c4', 1.25], sun: 1.3, tint: 0.3, glow: 0.55 },
+  neon: { label: 'Neon', bg: '#070b16', grid: ['#13304d', '#0b1a2b'], wall: '#1b2644', wallOpacity: 1, floor: '#121a30', furniture: '#2a3760', edge: '#38bdf8', door: '#f59e0b', window: '#38bdf8', furnEdge: '#5b78c0', hemi: ['#a9c8ff', '#0b1220', 1.1], sun: 0.7, tint: 0.45, glow: 1.8, flow: '#38bdf8', idleLine: '#1e3a5f' },
+  blueprint: { label: 'Blueprint', bg: '#0b2a5b', grid: ['#2f5da0', '#1b4280'], wall: '#1d4a8f', wallOpacity: 0.45, floor: '#123a75', furniture: '#2a5aa5', edge: '#e8f1ff', door: '#ffd166', window: '#a5d8ff', furnEdge: '#cfe0ff', hemi: ['#ffffff', '#0b2a5b', 1.2], sun: 0.3, tint: 0.25, glow: 0.8, flow: '#ffffff', idleLine: '#5b86c5' },
+  day: { label: 'Day', bg: '#dfe6ee', grid: ['#c3ccd8', '#cfd7e2'], wall: '#f3f0e9', wallOpacity: 1, floor: '#d9c8ac', furniture: '#97a3bb', edge: '#8a99b0', door: '#b7791f', window: '#7dd3fc', furnEdge: '#6b7280', hemi: ['#ffffff', '#aab4c4', 1.25], sun: 1.3, tint: 0.3, glow: 0.55, flow: '#0ea5e9', idleLine: '#94a3b8' },
 };
 export const COLOR_KEYS = [['bg', 'Background'], ['wall', 'Walls'], ['floor', 'Floors'], ['furniture', 'Furniture'], ['edge', 'Wall lines'], ['door', 'Doors'], ['window', 'Windows']];
 export const ROOM_COLORS = ['#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#fbbf24', '#fb7185', '#22d3ee', '#c084fc', '#4ade80', '#f97316', '#60a5fa', '#e879f9'];

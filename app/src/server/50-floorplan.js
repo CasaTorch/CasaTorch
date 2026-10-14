@@ -106,14 +106,33 @@ app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req,
     .slice(0, 500).map((p) => ({ deviceId: String(p.deviceId).slice(0, 200), floor: p.floor, pos: p.pos.map((n) => Math.round(n * 1000) / 1000), label: p.label ? String(p.label).slice(0, 40) : null, color: FP_HEX.test(p.color) ? p.color : null }));
   fpWrite(d); res.json({ ok: true, pins: d.pins.length });
 });
+/* Where the electrical panel is (the power lines start there) and which side is the front of the house. */
+app.put('/api/floorplan/settings', requirePro, express.json(), (req, res) => {
+  const d = fpData(), b = req.body || {}, st = { ...(d.settings || {}) };
+  if (b.panel === null) delete st.panel;
+  else if (b.panel && d.floors.some((f) => f.id === b.panel.floor) && Array.isArray(b.panel.pos) && b.panel.pos.length === 3 && b.panel.pos.every((v) => fin(v, -1000, 1000))) st.panel = { floor: b.panel.floor, pos: b.panel.pos.map((v) => +(+v).toFixed(3)) };
+  if ([0, 90, 180, 270].includes(Number(b.frontDeg))) st.frontDeg = Number(b.frontDeg);
+  d.settings = st; fpWrite(d); res.json({ ok: true, settings: st });
+});
+/* The weather for the 3D page's control panel, in one small shape (same as the personal dashboard's). */
+const fpKind = (sym) => (!sym ? 'cloud' : /thunder/.test(sym) ? 'storm' : /snow|sleet/.test(sym) ? 'snow' : /rain|shower/.test(sym) ? 'rain' : /fog/.test(sym) ? 'fog' : /clearsky/.test(sym) ? (/night/.test(sym) ? 'moon' : 'sun') : /fair|partlycloudy/.test(sym) ? 'partly' : 'cloud');
+async function fpWeather() {
+  try {
+    const w = isDemo() ? JSON.parse(fs.readFileSync(path.join(DEMO_FP, '..', 'fixtures', 'home.json'), 'utf8')).weather : config.location ? await weatherNow() : null;
+    if (!w?.now) return null;
+    const d0 = w.days?.[0];
+    return { temp: w.now.temp, words: w.now.words, kind: fpKind(w.now.symbol), place: w.place || null, hi: d0?.hi ?? null, lo: d0?.lo ?? null, tz: houseTz(),
+      days: (w.days || []).slice(0, 5).map((x) => ({ label: new Date(`${x.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' }), hi: x.hi, lo: x.lo, kind: fpKind(x.symbol) })) };
+  } catch { return null; }
+}
 /* Live: every placed device's state + the house totals shown on top of the plan. */
 app.get('/api/floorplan/live', async (_req, res) => {
   const d = fpData();
-  const { devices } = await houseDevices();
+  const [{ devices }, weather] = await Promise.all([houseDevices(), fpWeather()]);
   const byId = new Map(devices.map((x) => [x.id, x]));
   const powerW = devices.filter((x) => x.powerW != null).reduce((a, x) => a + x.powerW, 0);
   res.json({
-    pins: d.pins.map((p) => ({ ...p, device: byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })),
+    pins: d.pins.map((p) => ({ ...p, device: byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })), weather,
     devices: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider })),
     totals: { powerW: Math.round(powerW), lightsOn: devices.filter((x) => x.kind === 'light' && x.on).length, playing: devices.filter((x) => x.playing).map((x) => ({ name: x.name, title: x.title })), openDoors: devices.filter((x) => x.open).length, leaks: devices.filter((x) => x.water).length },
   });

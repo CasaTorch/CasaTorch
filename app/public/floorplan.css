@@ -33,7 +33,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .stage { position: fixed; inset: 0; } #view { position: absolute; inset: 0; } .labels { position: absolute; inset: 0; pointer-events: none; }
 /* side panels */
 .panel { position: fixed; top: 100px; bottom: 70px; width: 300px; max-width: calc(100% - 28px); z-index: 5; background: var(--panel); backdrop-filter: var(--blur); border: 1px solid var(--line); border-radius: 16px; padding: 14px; overflow-y: auto; box-shadow: 0 20px 50px #0006; }
-#left { left: 14px; bottom: auto; max-height: calc(100% - 180px); width: 240px; }
+#left { left: 14px; bottom: 70px; width: 300px; }
 body.editing #left { width: 340px; bottom: 14px; max-height: none; }
 #side { right: 14px; }
 body.editing #side { top: 64px; }
@@ -86,18 +86,49 @@ input, select { background: color-mix(in srgb, var(--panel-solid) 70%, #000 10%)
 input[type=color] { width: 34px; height: 30px; padding: 2px; flex: none; } input[type=range] { padding: 0; border: 0; background: none; }
 .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; flex-wrap: wrap; } .row label { width: 84px; color: var(--muted); font-size: 13px; } .row label + * { flex: 1; }
 .row input[type=color] { flex: none; }
-.panel button:not(.mini):not(.iconbtn):not(.sroom):not(.edrow):not(.camthumb):not(.tabs button) { border: 1px solid var(--line); background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 9px; padding: 7px 12px; }
+.panel button:not(.mini):not(.iconbtn):not(.sroom):not(.edrow):not(.camthumb):not(.tabs button):not(.eye):not(.lname) { border: 1px solid var(--line); background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 9px; padding: 7px 12px; }
 .panel button.primary, button.primary { background: var(--neon) !important; color: var(--neon-ink); border: 0 !important; font-weight: 650; }
 .panel .seg { display: flex; } .panel .seg button { flex: 1; border: 0 !important; background: none !important; padding: 5px 8px !important; } .panel .seg button.on { background: var(--neon) !important; }
 #modal { position: fixed; inset: 0; background: #000a; display: grid; place-items: center; z-index: 10; } #modal .box { background: var(--panel-solid); border: 1px solid var(--line); border-radius: 14px; padding: 14px; max-width: min(900px, 94vw); }
 #modal img { max-width: 100%; border-radius: 8px; display: block; } #modal h2 { margin: 0 0 10px; font-size: 16px; }
 .toast { position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); background: var(--panel-solid); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; z-index: 30; box-shadow: 0 10px 30px #0006; }
 @media (max-width: 760px) {
-  body:not(.editing) #left { display: none; } body.editing #left { width: auto; right: 14px; top: auto; height: 46%; bottom: 14px; }
+  body:not(.editing) #left:not(.roomopen) { display: none; } body:not(.editing) #left.roomopen { top: auto; height: 55%; bottom: 14px; right: 14px; width: auto; } body.editing #left { width: auto; right: 14px; top: auto; height: 46%; bottom: 14px; }
   #side { top: auto; height: 55%; bottom: 14px; left: 14px; right: 14px; width: auto; }
   .totals .stat:nth-child(n+3) { display: none; } #themeSeg { display: none; }
   .tools { bottom: 8px; gap: 4px; } .tools .tog { padding: 5px 9px; font-size: 12px; }
 }
+
+
+/* left control panel */
+.clock { display: flex; flex-direction: column; line-height: 1.1; margin-bottom: 10px; } .clock b { font-size: 34px; font-weight: 750; letter-spacing: -.02em; } .clock small { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.weather { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; background: color-mix(in srgb, var(--neon) 6%, transparent); }
+.wnow { display: flex; align-items: center; gap: 10px; } .wnow > b { font-size: 28px; font-weight: 700; } .wnow > div { display: flex; flex-direction: column; min-width: 0; } .wnow small { color: var(--muted); font-size: 12px; }
+.wi { display: inline-grid; width: 34px; height: 34px; color: var(--warm); flex: none; } .wi svg { width: 100%; height: 100%; }
+.wdays { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 10px; text-align: center; font-size: 12px; }
+.wdays > div { display: flex; flex-direction: column; align-items: center; gap: 2px; } .wdays .wi { width: 20px; height: 20px; } .wdays small { color: var(--muted); font-size: 11px; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; } .kpis > div { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; }
+.kpis small { color: var(--muted); font-size: 11px; } .kpis b { font-size: 20px; } .kpis b.good { color: var(--good); } .kpis b.warm { color: var(--warm); }
+.layer { display: flex; align-items: center; gap: 8px; padding: 4px 2px; } .layer.cur .lname { color: var(--neon); font-weight: 650; } .layer small { margin-left: auto; color: var(--muted); }
+.eye { border: 0; background: none; color: var(--muted); font-size: 15px; width: 24px; padding: 0; } .eye.on { color: var(--neon); }
+.lname { border: 0 !important; background: none !important; padding: 0 !important; text-align: left; }
+.meter { display: flex; gap: 14px; margin-top: 6px; font-size: 12px; color: var(--muted); } .meter b { color: var(--good); font-size: 15px; }
+.panellab { pointer-events: none; display: flex; flex-direction: column; align-items: center; padding: 6px 12px; border-radius: 12px; background: color-mix(in srgb, var(--panel-solid) 80%, transparent); border: 1px solid var(--neon); box-shadow: 0 0 20px color-mix(in srgb, var(--neon) 45%, transparent); line-height: 1.15; }
+.panellab small { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; } .panellab b { font-size: 18px; color: var(--neon); }
+/* device control card, anchored to the device on the model */
+.devcard-wrap { padding-bottom: 22px; pointer-events: none; }
+.devcard { pointer-events: auto; width: 230px; background: var(--panel-solid); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px 12px; box-shadow: 0 16px 40px #000a, 0 0 0 1px color-mix(in srgb, var(--neon) 25%, transparent); display: flex; flex-direction: column; gap: 6px; font-size: 13px; position: relative; }
+.devcard::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 12px; height: 12px; background: var(--panel-solid); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); transform: translateX(-50%) rotate(45deg); }
+.devcard-wrap.below { padding: 22px 0 0; } .devcard-wrap.below .devcard::after { bottom: auto; top: -7px; transform: translateX(-50%) rotate(225deg); }
+.chead { display: flex; align-items: center; gap: 8px; } .chead b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iconbtn.sm { width: 24px; height: 24px; } .iconbtn.sm .ic { width: 14px; height: 14px; }
+.cbig { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 22px; font-weight: 700; }
+.cbig .title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cstat { display: flex; align-items: baseline; gap: 6px; } .cstat b { font-size: 18px; color: var(--good); } .cstat small, .devcard > small { color: var(--muted); }
+.mini.wide { width: 100%; padding: 6px; margin-top: 2px; }
+#modal .box.cam { width: min(960px, 94vw); padding: 12px; } #modal .box.cam h2 { margin: 0; }
+.feed { width: 100%; aspect-ratio: 16/9; object-fit: contain; background: #000; border-radius: 10px; display: block; margin-top: 8px; }
+.livebadge { font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--bad); }
 /* the floor-plan drawing editor */
 #drawer button { border: 1px solid var(--line); background: color-mix(in srgb, var(--text) 6%, transparent); border-radius: 9px; padding: 6px 12px; } #drawer button.on { border-color: var(--neon); color: var(--neon); } #drawer button.primary { background: var(--neon); color: var(--neon-ink); border: 0; font-weight: 650; }
 #drawer { position: fixed; inset: 0; z-index: 20; background: #070b14; display: flex; flex-direction: column; }
