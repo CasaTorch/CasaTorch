@@ -1,5 +1,5 @@
 /* ======================================================================
- * The HouseOS calendar - for families without Google/iCloud/Outlook.
+ * The CasaTorch calendar - for families without Google/iCloud/Outlook.
  * Events live in data/events.json and show up next to any linked
  * calendars. Times are the house's local time.
  *   { id, title, date: 'YYYY-MM-DD', time: 'HH:MM' | null (all day), minutes, days (all-day length),

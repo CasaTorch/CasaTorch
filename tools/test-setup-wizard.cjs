@@ -1,5 +1,5 @@
 // End-to-end test of the setup wizard against tools/mock-ha.mjs. Needs Playwright:
-//   node tools/mock-ha.mjs 18123 &  ;  (cd app && HOUSEOS_DATA_DIR=/tmp/hos PORT=18091 node server.js) &
+//   node tools/mock-ha.mjs 18123 &  ;  (cd app && CASATORCH_DATA_DIR=/tmp/hos PORT=18091 node server.js) &
 //   npx -y playwright@1.56.1 install chromium  ;  node tools/test-setup-wizard.cjs
 
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');

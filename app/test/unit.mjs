@@ -1,8 +1,8 @@
 /* Unit tests for the parts that read other people's data formats. Run: node test/unit.mjs */
 import assert from 'node:assert/strict';
-process.env.HOUSEOS_TEST = '1'; process.env.HOUSEOS_DATA_DIR = '/tmp/houseos-unit';
+process.env.CASATORCH_TEST = '1'; process.env.CASATORCH_DATA_DIR = '/tmp/casatorch-unit';
 await import('../server.js');
-const H = globalThis.__houseos;
+const H = globalThis.__casatorch;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('ok', name); };
 const TZ = 'America/Los_Angeles';
 
@@ -63,7 +63,7 @@ t('home assistant: every kind of entity becomes a device', () => {
 
 t('totp: RFC 6238 test vector (T=59s -> 287082)', () => assert.equal(H.totpAt(H.b32enc(Buffer.from('12345678901234567890')), 1), '287082'));
 t('totp: RFC 6238 test vector (T=1111111109 -> 081804)', () => assert.equal(H.totpAt(H.b32enc(Buffer.from('12345678901234567890')), Math.floor(1111111109 / 30)), '081804'));
-t('totp: base32 round trip', () => assert.equal(H.b32dec(H.b32enc(Buffer.from('hello houseos'))).toString(), 'hello houseos'));
+t('totp: base32 round trip', () => assert.equal(H.b32dec(H.b32enc(Buffer.from('hello casatorch'))).toString(), 'hello casatorch'));
 t('totp: a code is accepted once (no replay)', () => { const sec = H.b32enc(Buffer.from('abcdefghijabcdefghij')), step = Math.floor(Date.now() / 30000), code = H.totpAt(sec, step); const used = H.totpOk(sec, code, 0); assert.ok(used); assert.equal(H.totpOk(sec, code, used), 0); });
 t('secrets: sealed at rest and back; tampering is caught', () => { const s = H.seal('JBSWY3DPEHPK3PXP'); assert.notEqual(s, 'JBSWY3DPEHPK3PXP'); assert.equal(H.unseal(s), 'JBSWY3DPEHPK3PXP'); assert.equal(H.unseal(`${s.slice(0, -3)}AAA`), null); });
 t('passwords: short, common or username-based ones are refused', () => { assert.ok(H.passwordProblem('short', 'robin')); assert.ok(H.passwordProblem('password123', 'x')); assert.ok(H.passwordProblem('robin-is-great-1', 'robin')); assert.equal(H.passwordProblem('blue kettle on the porch', 'robin'), null); });

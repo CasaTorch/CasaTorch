@@ -2,4 +2,4 @@ build_from:
   aarch64: node:22-bookworm-slim
   amd64: node:22-bookworm-slim
 args:
-  HOUSEOS_REF: main
+  CASATORCH_REF: main

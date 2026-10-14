@@ -1,6 +1,6 @@
 // End-to-end test of the setup wizard WITHOUT Home Assistant: the everyday
 // steps, direct gear (snapshot camera, Shelly), then sign-in and the dashboard.
-//   (cd app && HOUSEOS_DATA_DIR=/tmp/hos PORT=18091 node server.js) &  ;  node tools/test-setup-noha.cjs
+//   (cd app && CASATORCH_DATA_DIR=/tmp/hos PORT=18091 node server.js) &  ;  node tools/test-setup-noha.cjs
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined });
@@ -20,7 +20,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   await shot('n04-sports'); await next();
   await p.waitForSelector('text=NPR'); await btn('NPR').click(); await shot('n05-news'); await next();
   await btn('Example: trash night').click(); await shot('n06-reminders'); await next();
-  await btn('No - use HouseOS on its own').click(); await shot('n07-ha'); await next();
+  await btn('No - use CasaTorch on its own').click(); await shot('n07-ha'); await next();
   await btn('Yes').click(); await shot('n08-cameras-list');
   console.log('camera options:', (await p.locator('.opts .opt').allTextContents()).join(' | '));
   await p.getByRole('button', { name: /^Any camera with a snapshot address/ }).click();

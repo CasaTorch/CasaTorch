@@ -7,24 +7,24 @@
  *   tests        "is this address and key right?" for Home Assistant, Frigate,
  *                Meraki, UniFi, Pi-hole, AdGuard - before anything is saved.
  *   HA flows     adding an integration to Home Assistant the way its own UI
- *                does: HouseOS starts the integration's config flow, shows the
+ *                does: CasaTorch starts the integration's config flow, shows the
  *                questions Home Assistant asks (its own field list - e.g. the
  *                power companies Opower supports), and passes the answers back.
- *                Passwords typed into these go to Home Assistant only; HouseOS
+ *                Passwords typed into these go to Home Assistant only; CasaTorch
  *                never writes them anywhere.
  *   finish       writes data/config.json (owner-only) and closes the wizard.
  *
- * Open only while HouseOS is not set up (or HOUSEOS_SETUP=1). Once finished,
+ * Open only while CasaTorch is not set up (or CASATORCH_SETUP=1). Once finished,
  * every /api/setup route answers 403.
  * ====================================================================== */
 const SETUP_CATALOG = path.join(APP_DIR, 'catalog', 'setup.json');
 let setupReopened = false;   // Settings > Run setup again (09-settings.js)
-const setupOpen = () => !isConfigured() || isDemo() || setupReopened || process.env.HOUSEOS_SETUP === '1';
+const setupOpen = () => !isConfigured() || isDemo() || setupReopened || process.env.CASATORCH_SETUP === '1';
 const draft = { ha: null, hue: null, ring: null };   // what the wizard has proven so far (memory only)
 
 app.use('/api/setup', express.json({ limit: '64kb' }), (req, res, next) => {
   if (req.path === '/state') return next();
-  if (!setupOpen()) return res.status(403).json({ error: 'HouseOS is already set up. Start it with HOUSEOS_SETUP=1 to run setup again.' });
+  if (!setupOpen()) return res.status(403).json({ error: 'CasaTorch is already set up. Start it with CASATORCH_SETUP=1 to run setup again.' });
   next();
 });
 app.get('/api/setup/state', (_req, res) => res.json({ open: setupOpen(), configured: isConfigured(), demo: isDemo(), ha: draft.ha ? { url: draft.ha.url, version: draft.ha.version } : null }));
@@ -65,7 +65,7 @@ const TESTS = {
     const cfg = await getJson(`${url}/api/config`, { headers: H });
     let entries = [];
     try { entries = await getJson(`${url}/api/config/config_entries/entry`, { headers: H }); }
-    catch (err) { if (err.status === 401 || err.status === 403) throw new Error('the token works, but its user is not an administrator - HouseOS needs an admin token to add integrations'); }
+    catch (err) { if (err.status === 401 || err.status === 403) throw new Error('the token works, but its user is not an administrator - CasaTorch needs an admin token to add integrations'); }
     draft.ha = { url, token: String(token).trim(), version: cfg?.version || null };
     const domains = [...new Set((entries || []).map((e) => e.domain))];
     return { ok: true, message: `Connected to Home Assistant ${cfg?.version || ''} at "${cfg?.location_name || 'Home'}"`, version: cfg?.version, timeZone: cfg?.time_zone, units: cfg?.unit_system?.temperature, domains };

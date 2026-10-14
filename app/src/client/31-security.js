@@ -30,7 +30,7 @@ function accountCard(me) {
       el('button', { class: 'btn primary', onclick: async () => {
         try {
           const e = await post('/api/auth/2fa/start', {});
-          const qr = el('div', { class: 'qr' }); qr.innerHTML = e.qr;   // SVG made by this HouseOS
+          const qr = el('div', { class: 'qr' }); qr.innerHTML = e.qr;   // SVG made by this CasaTorch
           const code = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, placeholder: '123456', class: 'code' });
           tsa.replaceChildren(el('p', { class: 'small' }, '1. Scan this with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy…).'), qr,
             el('p', { class: 'small muted mono' }, `Can't scan? Enter: ${e.secret.replace(/(.{4})/g, '$1 ').trim()}`),

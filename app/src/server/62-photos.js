@@ -15,7 +15,7 @@ app.post('/api/photos', express.raw({ type: '*/*', limit: '30mb' }), (req, res) 
   const b = req.body;
   if (!Buffer.isBuffer(b) || b.length < 16) return res.status(400).json({ error: 'no file received' });
   const t = PHOTO_TYPES.find(([, , ok]) => ok(b));
-  if (!t) return res.status(415).json({ error: 'that is not a photo HouseOS can show (JPEG, PNG, WebP, GIF or HEIC)' });
+  if (!t) return res.status(415).json({ error: 'that is not a photo CasaTorch can show (JPEG, PNG, WebP, GIF or HEIC)' });
   if (photoList().length >= 2000) return res.status(409).json({ error: 'the photo reel is full (2000 photos) - remove some first' });
   const id = `${crypto.randomBytes(8).toString('hex')}.${t[0]}`;
   fs.writeFileSync(path.join(PHOTO_DIR, id), b, { mode: 0o600 });
@@ -33,7 +33,7 @@ app.delete('/api/photos/:id', (req, res) => {
   try { fs.unlinkSync(path.join(PHOTO_DIR, req.params.id)); } catch { /* gone already */ }
   res.json({ ok: true });
 });
-/* Demo: painted stand-ins (no real photos ship with HouseOS). */
+/* Demo: painted stand-ins (no real photos ship with CasaTorch). */
 const DEMO_SCENES = [['#f97316', '#7c2d12', 'Beach sunset'], ['#22c55e', '#14532d', 'Hiking trip'], ['#60a5fa', '#1e3a8a', 'Lake day'], ['#e879f9', '#581c87', 'Birthday'], ['#facc15', '#713f12', 'Fall leaves']];
 const demoPhotos = () => DEMO_SCENES.map((_, i) => ({ id: `demo-${i}`, at: nowIso(), url: `/api/photos/demo-${i}`, demo: true }));
 function demoPhotoSvg(id) {

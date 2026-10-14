@@ -1,4 +1,4 @@
-/* HouseOS Pro - 3D Home.
+/* CasaTorch Pro - 3D Home.
    View: your floors as a solid, lit model. Rooms tint, lights glow where they are, devices show
    their state. Tap a room for its controls; switch floors, walls (tall/cut), stacking and look.
    Editor: place devices, name and colour rooms, paint walls/floors/furniture, manage floors. */
@@ -13,7 +13,7 @@ import { THEMES, COLOR_KEYS, ROOM_COLORS, lookOf, classify, guessCats, itemOf, p
 
 const S = { plan: null, live: null, mode: 'view', floorView: 'all', room: null, tool: null, sel: null, F: {}, pins: [], pinObjs: [], q: '', tab: 'devices' };
 let card = null;   // the open device card: { id, o }
-const PREF_KEY = 'houseos-3d';
+const PREF_KEY = 'casatorch-3d';
 const prefs = { walls: 'auto', stack: 'stacked', names: true, values: false, cameras: true, roof: true, power: true, hidden: {}, theme: null, sun: true, weatherFx: true, overlay: 'rooms', spin: false, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
 if (prefs.v !== 2) Object.assign(prefs, { v: 2, walls: 'auto', roof: true, power: true, hidden: {} });   // the dollhouse view is the new default
 const savePrefs = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* private window */ } };
@@ -22,7 +22,7 @@ const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag)
 const api = async (url, opts = {}) => { const r = await fetch(url, opts); const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status, body: j }); return j; };
 const send = (url, method, body) => api(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const toast = (t) => { const x = el('div', { class: 'toast' }, t); document.body.append(x); setTimeout(() => x.remove(), 3500); };
-const proErr = (e) => toast(e.status === 402 ? 'Editing the 3D home is part of HouseOS Pro.' : e.message);
+const proErr = (e) => toast(e.status === 402 ? 'Editing the 3D home is part of CasaTorch Pro.' : e.message);
 const V3 = THREE.Vector3, deg = THREE.MathUtils.degToRad;
 const fill = (node, ...kids) => { node.replaceChildren(...kids.flat().filter((k) => k != null && k !== false)); return node; };
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
@@ -356,11 +356,11 @@ function drawPins() {
   layout(false);
 }
 /* Some dashboards ask for a PIN before switching anything: asked once, kept for this tab only. */
-let pin = (() => { try { return sessionStorage.getItem('houseos-pin') || ''; } catch { return ''; } })();
+let pin = (() => { try { return sessionStorage.getItem('casatorch-pin') || ''; } catch { return ''; } })();
 async function act(d, action, value, retry = true) {
   try { await send(`/api/devices/${encodeURIComponent(d.id)}/${action}`, 'POST', { ...(value != null ? { value } : {}), ...(pin ? { pin } : {}) }); setTimeout(refresh, 700); }
   catch (e) {
-    if (e.status === 401 && retry) { const v = prompt('PIN to control devices'); if (v) { pin = v; try { sessionStorage.setItem('houseos-pin', v); } catch { /* fine */ } return act(d, action, value, false); } }
+    if (e.status === 401 && retry) { const v = prompt('PIN to control devices'); if (v) { pin = v; try { sessionStorage.setItem('casatorch-pin', v); } catch { /* fine */ } return act(d, action, value, false); } }
     toast(e.message); setTimeout(refresh, 300);
   }
 }
@@ -644,7 +644,7 @@ const saveStyleSoon = debounce(saveStyle, 500);
 
 /* ---------- editor ---------- */
 function setMode(m) {
-  if (m === 'edit' && !S.plan.pro?.pro) { toast('The editor is part of HouseOS Pro.'); return; }
+  if (m === 'edit' && !S.plan.pro?.pro) { toast('The editor is part of CasaTorch Pro.'); return; }
   S.mode = m; S.tool = null; clearSel(); S.room = null; closeCard();
   document.body.classList.toggle('editing', m === 'edit');
   $('#side').hidden = true; $('#side').dataset.kind = '';
@@ -772,7 +772,7 @@ function guidePanel() {
     el('ol', { class: 'guide' }, el('li', {}, el('b', {}, 'Editor > Floors > Draw a floor'), '. Drag to draw each room (grid squares are 1 m), or trace over a picture of your floor plan.')),
     el('h3', {}, 'Then make it yours'),
     el('ol', { class: 'guide' }, el('li', {}, el('b', {}, 'Devices'), ': pick one, click where it is.'), el('li', {}, el('b', {}, 'Rooms'), ': rename and colour them, or add your own.'), el('li', {}, el('b', {}, 'Colours'), ': choose Neon, Blueprint or Day, change any colour, or paint a single wall or sofa.')),
-    S.plan.pro?.pro ? el('p', {}, el('button', { type: 'button', class: 'primary', onclick: () => { setMode('edit'); S.tab = 'floors'; editor(); } }, 'Open the editor')) : el('p', { class: 'note' }, 'The editor is part of HouseOS Pro.'));
+    S.plan.pro?.pro ? el('p', {}, el('button', { type: 'button', class: 'primary', onclick: () => { setMode('edit'); S.tab = 'floors'; editor(); } }, 'Open the editor')) : el('p', { class: 'note' }, 'The editor is part of CasaTorch Pro.'));
 }
 
 /* ---------- live data ---------- */
@@ -797,7 +797,7 @@ async function start() {
   if (!S.plan.floors.length || location.hash === '#guide') guidePanel();
   if (location.hash === '#edit') setMode('edit');
   if (new URLSearchParams(location.search).has('embed')) document.querySelector('.brand').target = '_top';
-  if (!S.plan.pro?.pro) toast('3D Home is part of HouseOS Pro - look around the demo, then upgrade to use your own home.');
+  if (!S.plan.pro?.pro) toast('3D Home is part of CasaTorch Pro - look around the demo, then upgrade to use your own home.');
 }
 for (const b of document.querySelectorAll('#modeSeg button')) b.onclick = () => setMode(b.dataset.mode);
 $('#guideBtn').onclick = guidePanel;

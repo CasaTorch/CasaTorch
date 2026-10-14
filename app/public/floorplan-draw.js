@@ -1,7 +1,7 @@
-/* HouseOS 3D Home - draw a floor plan, for anyone without a LiDAR iPhone/iPad.
+/* CasaTorch 3D Home - draw a floor plan, for anyone without a LiDAR iPhone/iPad.
    Drag to draw rooms, click-click to draw walls, optionally over a picture of
    your floor plan (from the listing, the builder, or a photo of a paper plan).
-   Units are meters; HouseOS raises the walls into 3D. */
+   Units are meters; CasaTorch raises the walls into 3D. */
 const SNAP = 0.25;
 const snap = (v, on) => (on ? Math.round(v / SNAP) * SNAP : Math.round(v * 100) / 100);
 const svgEl = (tag, attrs = {}) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v); return e; };

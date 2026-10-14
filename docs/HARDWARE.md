@@ -1,16 +1,16 @@
-# What to run HouseOS on
+# What to run CasaTorch on
 
-HouseOS is bring-your-own-hardware: install it on something that is always on, then open it on
+CasaTorch is bring-your-own-hardware: install it on something that is always on, then open it on
 any screen. It needs about 300 MB of RAM and almost no CPU (Frigate, if you use it, is separate).
 
-## The box that runs HouseOS
+## The box that runs CasaTorch
 
 | Option | Good for | Install |
 | --- | --- | --- |
 | **Raspberry Pi 5 (4 GB+), with an SSD** | Recommended. Quiet, ~5 W, always on | `sudo ./deploy/install.sh` (Raspberry Pi OS 64-bit) |
 | Raspberry Pi 4 (4 GB+) | Fine; use an SSD or a good SD card | Same |
 | Intel N100 mini PC | If you also run Frigate or Home Assistant on it | `sudo ./deploy/install.sh` (Debian/Ubuntu) or Docker |
-| A NAS with Docker (Synology, UGREEN, QNAP, Unraid, TrueNAS) | You already have one | Docker / Container Manager: image `ghcr.io/gethouseos/houseos`, volume `/data`, port 8090 |
+| A NAS with Docker (Synology, UGREEN, QNAP, Unraid, TrueNAS) | You already have one | Docker / Container Manager: image `ghcr.io/casatorch/casatorch`, volume `/data`, port 8090 |
 | Windows 10/11 PC that stays on | Trying it out, or an old PC | `deploy\install.ps1` in PowerShell (as Administrator) |
 | macOS | Development, trying it out | `cd app && npm install && npm start`, or Docker Desktop |
 | Any Linux with Docker (x86-64 or ARM64) | | `docker compose up -d` |
@@ -25,22 +25,22 @@ Any device with a browser works. Popular choices:
 | --- | --- |
 | Amazon Fire HD 10 + Fully Kiosk Browser | Cheapest wall panel; motion wake, keeps the screen on |
 | Lenovo Tab M10 / Samsung Galaxy Tab A | Android + Fully Kiosk |
-| An old iPad | Guided Access keeps it on HouseOS |
-| A Raspberry Pi with the official 7"/10" touchscreen | HouseOS and the screen in one box (kiosk mode) |
+| An old iPad | Guided Access keeps it on CasaTorch |
+| A Raspberry Pi with the official 7"/10" touchscreen | CasaTorch and the screen in one box (kiosk mode) |
 | An old laptop | Chrome in kiosk mode |
 
 ## Optional add-ons
 
 - **Home Assistant** (on the same Pi 5/N100, or a Home Assistant Green) for locks, Zigbee/Z-Wave and the long tail of devices.
 - **Frigate + a Coral or Intel N100** for people/car/package detection.
-- **A UPS** with USB, so HouseOS can shut servers down cleanly and track power cuts.
+- **A UPS** with USB, so CasaTorch can shut servers down cleanly and track power cuts.
 
 ## Installing
 
-**Raspberry Pi, Debian, Ubuntu** - a service that starts at boot, settings in `/var/lib/houseos`:
+**Raspberry Pi, Debian, Ubuntu** - a service that starts at boot, settings in `/var/lib/casatorch`:
 
 ```bash
-git clone https://github.com/gethouseos/houseos && cd houseos
+git clone https://github.com/casatorch/casatorch && cd casatorch
 sudo ./deploy/install.sh          # run it again later to update
 ```
 
@@ -52,7 +52,7 @@ cd deploy && docker compose up -d
 
 Images are multi-arch (amd64 + arm64), published by `.github/workflows/release.yml` when a version is tagged.
 
-**Windows 10/11** - starts at boot as a scheduled task, settings in `C:\ProgramData\HouseOS\data`.
+**Windows 10/11** - starts at boot as a scheduled task, settings in `C:\ProgramData\CasaTorch\data`.
 Download the repo (Code > Download ZIP), unzip, then in PowerShell **as Administrator**:
 
 ```powershell

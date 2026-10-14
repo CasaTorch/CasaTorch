@@ -1,15 +1,15 @@
-# HouseOS installer for Windows 10/11. Run in PowerShell as Administrator:
+# CasaTorch installer for Windows 10/11. Run in PowerShell as Administrator:
 #
-#   irm https://gethouseos.com/install.ps1 | iex          # or, from a download:  .\deploy\install.ps1
+#   irm https://casatorch.com/install.ps1 | iex          # or, from a download:  .\deploy\install.ps1
 #
-# Installs Node.js LTS (winget) if needed, puts HouseOS in C:\ProgramData\HouseOS,
+# Installs Node.js LTS (winget) if needed, puts CasaTorch in C:\ProgramData\CasaTorch,
 # starts it at boot (a scheduled task, even before anyone signs in), and opens
 # port 8090 on private networks. Run it again to update; settings are kept.
 $ErrorActionPreference = 'Stop'
-$Repo   = if ($env:HOUSEOS_REPO) { $env:HOUSEOS_REPO } else { 'https://github.com/gethouseos/houseos' }
-$Branch = if ($env:HOUSEOS_BRANCH) { $env:HOUSEOS_BRANCH } else { 'main' }
-$Port   = if ($env:HOUSEOS_PORT) { $env:HOUSEOS_PORT } else { '8090' }
-$Root   = Join-Path $env:ProgramData 'HouseOS'
+$Repo   = if ($env:CASATORCH_REPO) { $env:CASATORCH_REPO } else { 'https://github.com/casatorch/casatorch' }
+$Branch = if ($env:CASATORCH_BRANCH) { $env:CASATORCH_BRANCH } else { 'main' }
+$Port   = if ($env:CASATORCH_PORT) { $env:CASATORCH_PORT } else { '8090' }
+$Root   = Join-Path $env:ProgramData 'CasaTorch'
 $App    = Join-Path $Root 'app'
 $Data   = Join-Path $Root 'data'
 function Say($m) { Write-Host "==> $m" -ForegroundColor Cyan }
@@ -29,17 +29,17 @@ Say "Node.js $(& node -v)"
 
 New-Item -ItemType Directory -Force -Path $Root, $Data | Out-Null
 # Updating: stop the running copy first so its files are not in use.
-Stop-ScheduledTask -TaskName 'HouseOS' -ErrorAction SilentlyContinue
+Stop-ScheduledTask -TaskName 'CasaTorch' -ErrorAction SilentlyContinue
 Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like "*$App\app\server.js*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 if ($here -and (Test-Path (Join-Path $here '..\app\package.json'))) {
-  Say 'Copying HouseOS from this folder'
+  Say 'Copying CasaTorch from this folder'
   $src = Resolve-Path (Join-Path $here '..')
   if (Test-Path $App) { Remove-Item -Recurse -Force (Join-Path $App 'app\src'), (Join-Path $App 'app\public') -ErrorAction SilentlyContinue }
   robocopy $src $App /E /XD node_modules data .git /NFL /NDL /NJH /NJS | Out-Null
 } else {
-  Say 'Downloading HouseOS'
-  $zip = Join-Path $env:TEMP 'houseos.zip'; $tmp = Join-Path $env:TEMP 'houseos-src'
+  Say 'Downloading CasaTorch'
+  $zip = Join-Path $env:TEMP 'casatorch.zip'; $tmp = Join-Path $env:TEMP 'casatorch-src'
   Invoke-WebRequest "$Repo/archive/refs/heads/$Branch.zip" -OutFile $zip -UseBasicParsing
   Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue; Expand-Archive $zip $tmp
   $top = Get-ChildItem $tmp | Select-Object -First 1
@@ -58,24 +58,24 @@ icacls $Data /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)
 $run = Join-Path $Root 'run.cmd'
 @"
 @echo off
-set HOUSEOS_DATA_DIR=$Data
+set CASATORCH_DATA_DIR=$Data
 set PORT=$Port
 set NODE_ENV=production
 cd /d "$App\app"
-"$NodeExe" "$App\app\server.js" >> "$Data\houseos.log" 2>&1
+"$NodeExe" "$App\app\server.js" >> "$Data\casatorch.log" 2>&1
 "@ | Set-Content -Encoding ASCII $run
 
-Say 'Starting HouseOS at boot'
+Say 'Starting CasaTorch at boot'
 $action   = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c `"$run`""
 $trigger  = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-Register-ScheduledTask -TaskName 'HouseOS' -Action $action -Trigger $trigger -Settings $settings -User 'SYSTEM' -RunLevel Highest -Force | Out-Null
-Start-ScheduledTask -TaskName 'HouseOS'
+Register-ScheduledTask -TaskName 'CasaTorch' -Action $action -Trigger $trigger -Settings $settings -User 'SYSTEM' -RunLevel Highest -Force | Out-Null
+Start-ScheduledTask -TaskName 'CasaTorch'
 
-if (-not (Get-NetFirewallRule -DisplayName 'HouseOS' -ErrorAction SilentlyContinue)) {
-  New-NetFirewallRule -DisplayName 'HouseOS' -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Private | Out-Null
+if (-not (Get-NetFirewallRule -DisplayName 'CasaTorch' -ErrorAction SilentlyContinue)) {
+  New-NetFirewallRule -DisplayName 'CasaTorch' -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow -Profile Private | Out-Null
 }
 Start-Sleep 3
 $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback|vEthernet' -and $_.PrefixOrigin -ne 'WellKnown' } | Select-Object -First 1).IPAddress
-Say "HouseOS is running. Open http://${ip}:$Port on any screen at home to set it up."
-Say "Log: $Data\houseos.log   Update: run this installer again."
+Say "CasaTorch is running. Open http://${ip}:$Port on any screen at home to set it up."
+Say "Log: $Data\casatorch.log   Update: run this installer again."

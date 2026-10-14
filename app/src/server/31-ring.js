@@ -1,5 +1,5 @@
 /* ======================================================================
- * Ring cameras and doorbells - HouseOS Pro, Labs.
+ * Ring cameras and doorbells - CasaTorch Pro, Labs.
  *
  * Ring has no public API. This uses ring-client-api (MIT), the same library
  * behind ring-mqtt and the Homebridge plugin: it signs in the way the Ring app
@@ -18,7 +18,7 @@ const ring = { api: null, cameras: [], pending: null, events: [], error: null };
 async function ringConnect() {
   if (!config.ring?.refreshToken || ring.api) return;
   try {
-    ring.api = new RingApi({ refreshToken: config.ring.refreshToken, controlCenterDisplayName: 'HouseOS', cameraStatusPollingSeconds: 60 });
+    ring.api = new RingApi({ refreshToken: config.ring.refreshToken, controlCenterDisplayName: 'CasaTorch', cameraStatusPollingSeconds: 60 });
     ring.api.onRefreshTokenUpdated.subscribe(({ newRefreshToken }) => { saveConfig({ ...config, ring: { ...config.ring, refreshToken: newRefreshToken } }); });
     ring.cameras = await ring.api.getCameras();
     for (const cam of ring.cameras) {
@@ -51,7 +51,7 @@ app.post(['/api/ring/login', '/api/setup/ring/login'], express.json(), requirePr
       ring.pending = null;
       return res.json({ ok: true, cameras: await ringSave(auth.refresh_token) });
     }
-    const rc = new RingRestClient({ email: String(email || ''), password: String(password || ''), controlCenterDisplayName: 'HouseOS' });
+    const rc = new RingRestClient({ email: String(email || ''), password: String(password || ''), controlCenterDisplayName: 'CasaTorch' });
     try {
       if (isDemo()) return res.json({ ok: true, demo: true, cameras: [] });
       const auth = await rc.getAuth();   // accounts without 2-factor

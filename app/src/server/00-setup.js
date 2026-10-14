@@ -1,5 +1,5 @@
 /* ======================================================================
- * HouseOS - setup: config, data folder, demo mode.
+ * CasaTorch - setup: config, data folder, demo mode.
  *
  * The server is built from src/server/*.js in name order into one module
  * (build.mjs). Every house-specific value lives in data/config.json, written
@@ -7,8 +7,8 @@
  *
  *   no config.json         -> the setup wizard (/setup)
  *   config.demo = true     -> demo mode: sample data from ../demo/fixtures
- *   HOUSEOS_DEMO=1         -> demo mode regardless
- *   HOUSEOS_SETUP=1        -> re-open the wizard on a configured install
+ *   CASATORCH_DEMO=1         -> demo mode regardless
+ *   CASATORCH_SETUP=1        -> re-open the wizard on a configured install
  * ====================================================================== */
 import express from 'express';
 import fs from 'node:fs';
@@ -16,14 +16,16 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import https from 'node:https';
 import { fileURLToPath } from 'node:url';
+/* CasaTorch was called HouseOS: its old HOUSEOS_* settings still work. */
+for (const [k, v] of Object.entries(process.env)) if (k.startsWith('HOUSEOS_') && process.env[`CASATORCH_${k.slice(8)}`] === undefined) process.env[`CASATORCH_${k.slice(8)}`] = v;
 
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.HOUSEOS_DATA_DIR || path.join(APP_DIR, '..', 'data');
-const CONFIG_FILE = process.env.HOUSEOS_CONFIG || path.join(DATA_DIR, 'config.json');
+const DATA_DIR = process.env.CASATORCH_DATA_DIR || path.join(APP_DIR, '..', 'data');
+const CONFIG_FILE = process.env.CASATORCH_CONFIG || path.join(DATA_DIR, 'config.json');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 let config = {};
-/* As a Home Assistant add-on, HouseOS reaches Home Assistant through the Supervisor with the add-on's
+/* As a Home Assistant add-on, CasaTorch reaches Home Assistant through the Supervisor with the add-on's
    own token: nothing to paste, and that token is never written to disk. */
 const SUPERVISOR_HA = 'http://supervisor/core';
 const withAddonHa = (c) => (process.env.SUPERVISOR_TOKEN && (!c.homeAssistant?.url || c.homeAssistant.url === SUPERVISOR_HA) ? { ...c, homeAssistant: { ...(c.homeAssistant || {}), url: SUPERVISOR_HA, token: process.env.SUPERVISOR_TOKEN } } : c);
@@ -39,7 +41,7 @@ function saveConfig(next) {
 const isConfigured = () => fs.existsSync(CONFIG_FILE) && Object.keys(config).length > 0;
 /** The house's time zone (the demo house is on the US west coast). */
 const houseTz = () => config.house?.timezone || (isDemo() ? 'America/Los_Angeles' : 'UTC');
-const isDemo = () => process.env.HOUSEOS_DEMO === '1' || config.demo === true;
+const isDemo = () => process.env.CASATORCH_DEMO === '1' || config.demo === true;
 const PORT = Number(process.env.PORT || config.port || 8090);
 const nowIso = () => new Date().toISOString();
 

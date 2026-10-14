@@ -1,6 +1,6 @@
 # Keeping a real house out of this repo
 
-HouseOS comes from a dashboard that ran one real home. Before any of its code lands here:
+CasaTorch comes from a dashboard that ran one real home. Before any of its code lands here:
 
 1. Port with `tools/port.sh <server|client>/<file>.js`: it refuses files marked drop/pro/later in
    `docs/MODULES.md` and anything that fails the privacy scan.
