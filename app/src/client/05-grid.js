@@ -36,9 +36,10 @@ function makeGrid(host, { tiles, ctx, onSave }) {
     const w = WIDGETS[t.id]; if (!w) return null;
     const body = el('div', { class: 'tile-b' });
     const node = el('section', { class: 'tile', 'data-id': t.id, 'aria-label': w.title },
-      w.bare ? null : el('div', { class: 'tile-h' }, icon(w.icon), w.title, w.pro && !isPro() ? el('span', { class: 'pill pro' }, 'PRO') : null, el('span', { class: 'grow' }), w.headerExtra ? w.headerExtra(ctx) : null),
+      w.bare ? null : el('div', { class: 'tile-h' }, icon(w.icon), el('span', { class: 'ttl' }, t.title || w.title), w.pro && !isPro() ? el('span', { class: 'pill pro' }, 'PRO') : null, el('span', { class: 'grow' }), w.headerExtra ? w.headerExtra(ctx) : null),
       body,
-      el('div', { class: 'tools' }, el('button', { class: 'grip', title: 'Drag to move', 'aria-label': `Move ${w.title}` }, icon('grip')), el('button', { title: 'Remove', 'aria-label': `Remove ${w.title}`, onclick: () => { tiles.splice(tiles.indexOf(t), 1); live.delete(node); node.remove(); onSave(); } }, icon('x'))),
+      el('div', { class: 'tools' }, el('button', { class: 'grip', title: 'Drag to move', 'aria-label': `Move ${w.title}` }, icon('grip')),
+        el('button', { title: 'Rename', 'aria-label': `Rename ${w.title}`, onclick: () => renameBox(`Rename "${t.title || w.title}"`, t.title || w.title, w.title, (v) => { t.title = v && v !== w.title ? v : undefined; const ttl = node.querySelector('.ttl'); if (ttl) ttl.textContent = t.title || w.title; onSave(); }) }, icon('edit')), el('button', { title: 'Remove', 'aria-label': `Remove ${w.title}`, onclick: () => { tiles.splice(tiles.indexOf(t), 1); live.delete(node); node.remove(); onSave(); } }, icon('x'))),
       el('div', { class: 'sizer', title: 'Drag to resize' }), el('div', { class: 'size-tag' }));
     live.set(node, { t, body, widget: w });
     place(node, t);
@@ -98,4 +99,13 @@ function makeGrid(host, { tiles, ctx, onSave }) {
     refresh: () => Promise.all([...live.keys()].map((n) => paint(n, false))),
     add(id) { const w = WIDGETS[id], t = { id, w: w.size?.[0] || 4, h: w.size?.[1] || 3 }; tiles.push(t); const n = tileEl(t); grid.append(n); paint(n, true); n.scrollIntoView({ behavior: 'smooth', block: 'center' }); onSave(); },
   };
+}
+
+/* A small "rename" dialog used everywhere (tiles, devices, menu items). Empty = back to the original name. */
+function renameBox(title, value, original, done) {
+  const input = el('input', { value: value || '', placeholder: original, maxlength: 60 });
+  const ok = () => { m.remove(); done(input.value.trim()); };
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') ok(); });
+  const m = modal(el('div', {}, input, el('p', { class: 'small muted' }, `Leave empty to use "${original}".`), el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { class: 'btn ghost', onclick: () => m.remove() }, 'Cancel'), el('button', { class: 'btn primary', onclick: ok }, 'Save'))), { title });
+  setTimeout(() => { input.focus(); input.select(); }, 50);
 }

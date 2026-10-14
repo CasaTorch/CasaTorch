@@ -65,12 +65,12 @@ async function show(id) {
   current = t.id; document.body.classList.remove('editing-on');
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.tab === t.id));
   const main = el('div'); $('#view').replaceChildren(main); refresher = null;   // a fresh box per visit: a slow, older render can't write into the new page
-  setTop(t.label);
+  setTop(tabLabel(t));
   try { const r = (await t.render(main)) || null; if (main.isConnected) refresher = r; }
   catch (err) { main.append(el('div', { class: 'card empty' }, `Could not load this: ${err.message}`)); }
 }
 function drawNav() {
-  $('.nav').replaceChildren(...TABS.map((t) => el('a', { href: `#${t.id}`, 'data-tab': t.id, class: t.id === current ? 'on' : null, title: t.label }, icon(t.icon), t.short || t.label,
+  $('.nav').replaceChildren(...TABS.filter((t) => !S.ui.tabs?.[t.id]?.hidden).map((t) => el('a', { href: `#${t.id}`, 'data-tab': t.id, class: t.id === current ? 'on' : null, title: tabLabel(t) }, icon(t.icon), S.ui.tabs?.[t.id]?.label || t.short || t.label,
     t.pro && !isPro() ? el('span', { class: 'pro' }, 'PRO') : null, t.id === 'alerts' && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : null)));
 }
 function drawBanner() {
@@ -85,10 +85,12 @@ function drawBanner() {
 function tick() { $('#clock').textContent = fmt(new Date().toISOString(), { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 async function loadStatus() {
   try { S.status = await api('/api/status'); S.units = S.status.units || 'F'; const a = await api('/api/alerts').catch(() => null); S.alertsOpen = a?.now?.length || 0; } catch { /* offline: keep what we had */ }
-  drawBanner(); drawNav();
+  drawBanner(); drawNav(); statusBar.draw();
 }
 async function boot() {
   try { S.settings = await api('/api/settings'); S.tz = S.settings.house?.timezone || undefined; } catch { /* default zone */ }
+  try { S.ui = { ...S.ui, ...(await api('/api/ui')) }; } catch { /* defaults */ }
+  applyUi();
   await loadStatus();
   tick(); setInterval(tick, 15_000);
   window.addEventListener('hashchange', () => show(location.hash.slice(1)));

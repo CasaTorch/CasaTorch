@@ -19,7 +19,8 @@ tab({ id: 'home', label: 'Home', icon: 'home', async render(main) {
   const addBtn = el('button', { class: 'btn primary' }, icon('plus'), 'Add widget');
   const setEdit = (on) => { document.body.classList.toggle('editing-on', on); grid.classList.toggle('editing', on); editBtn.replaceChildren(icon(on ? 'check' : 'edit'), on ? 'Done' : 'Edit layout'); editBtn.classList.toggle('primary', on); };
   editBtn.onclick = () => setEdit(!grid.classList.contains('editing'));
-  setTop('Home', fmt(new Date().toISOString(), { weekday: 'long', month: 'long', day: 'numeric' }), [addBtn, editBtn]);
+  const panelBtn = el('button', { class: 'btn', title: 'Wall-screen mode for this screen', onclick: () => setPanel(true) }, icon('expand'), 'Panel mode');
+  setTop(tabLabel({ id: 'home', label: 'Home' }), fmt(new Date().toISOString(), { weekday: 'long', month: 'long', day: 'numeric' }), [addBtn, editBtn, panelBtn]);
   const bar = el('div', { class: 'editbar' }, icon('grip', 18), el('span', { class: 'grow' }, 'Drag a tile by its handle to move it. Drag the corner to resize - tiles show more as they grow.'),
     el('button', { class: 'btn small', onclick: async () => { await post('/api/layout', { reset: true }, 'PUT'); show('home'); } }, icon('reset'), 'Reset'));
   main.append(bar);

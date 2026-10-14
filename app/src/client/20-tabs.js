@@ -18,6 +18,7 @@ tab({ id: 'controls', label: 'Controls', icon: 'sliders', async render(main) {
   const draw = async () => {
     const { devices = [], errors = [] } = await api('/api/devices');
     const out = [];
+    setTop(tabLabel({ id: 'controls', label: 'Controls' }), '', [el('button', { class: 'btn', onclick: () => renameDevices(devices, draw) }, icon('edit'), 'Rename devices')]);
     for (const [name, f] of GROUPS) { const ds = devices.filter(f); if (ds.length) out.push(el('div', { class: 'section-title' }, name), el('div', { class: 'devs' }, ds.map((d) => devButton(d)))); }
     if (!devices.filter((d) => d.kind !== 'camera').length) out.push(el('div', { class: 'card empty' }, 'No devices yet. Connect Hue, Shelly, YoLink or Home Assistant in setup.'));
     for (const e of errors) out.push(el('p', { class: 'small muted' }, `${e.provider}: ${e.error}`));
@@ -80,3 +81,13 @@ tab({ id: 'house3d', label: '3D Home', short: '3D', icon: 'cube', pro: true, asy
   main.replaceChildren(el('iframe', { class: 'plan', src: '/floorplan.html?embed=1', title: '3D floor plan' }));
   return null;
 } });
+
+/* Give devices the names your household uses ("Kitchen island" instead of "hue:7"). Saved on the box, used everywhere - Home, 3D, alerts, Ask. */
+function renameDevices(devices, done) {
+  const names = { ...(S.ui.deviceNames || {}) };
+  const rows = devices.map((d) => { const inp = el('input', { value: names[d.id] || '', placeholder: d.originalName || d.name, maxlength: 60, oninput: (e) => { names[d.id] = e.target.value.trim(); } });
+    return el('div', { class: 'tab-row' }, icon(devIconName(d)), inp, el('span', { class: 'tiny faint ellipsis', style: 'max-width:140px' }, d.provider)); });
+  const m = modal(el('div', {}, el('p', { class: 'small muted', style: 'margin-top:0' }, 'Type a new name, or leave a box empty to keep the name from the device.'), el('div', { style: 'max-height:55vh;overflow:auto;padding-right:6px' }, rows),
+    el('div', { class: 'row', style: 'justify-content:flex-end;margin-top:14px' }, el('button', { class: 'btn ghost', onclick: () => m.remove() }, 'Cancel'),
+      el('button', { class: 'btn primary', onclick: async () => { try { await saveUi({ deviceNames: Object.fromEntries(Object.entries(names).filter(([, v]) => v)) }); m.remove(); toast('Names saved'); done?.(); } catch (err) { toast(err.message); } } }, 'Save names'))), { title: 'Rename devices', wide: true });
+}
