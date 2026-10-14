@@ -8,13 +8,13 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { openDrawer } from './floorplan-draw.js';
 import { toGlb } from './floorplan-import.js';
-import { buildRoof, PowerNet, weatherIcon } from './floorplan-house.js';
+import { buildRoof, PowerNet, weatherIcon, sunPosition, nightness, kelvinToHex, WeatherFx } from './floorplan-house.js';
 import { THEMES, COLOR_KEYS, ROOM_COLORS, lookOf, classify, guessCats, itemOf, prettyItem, sectionRooms, makeFx, fxMaterial, MAX_GLOW, MAX_ROOMS } from './floorplan-look.js';
 
 const S = { plan: null, live: null, mode: 'view', floorView: 'all', room: null, tool: null, sel: null, F: {}, pins: [], pinObjs: [], q: '', tab: 'devices' };
 let card = null;   // the open device card: { id, o }
 const PREF_KEY = 'houseos-3d';
-const prefs = { walls: 'auto', stack: 'stacked', names: true, values: false, cameras: true, roof: true, power: true, hidden: {}, theme: null, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
+const prefs = { walls: 'auto', stack: 'stacked', names: true, values: false, cameras: true, roof: true, power: true, hidden: {}, theme: null, sun: true, weatherFx: true, overlay: 'rooms', spin: false, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
 if (prefs.v !== 2) Object.assign(prefs, { v: 2, walls: 'auto', roof: true, power: true, hidden: {} });   // the dollhouse view is the new default
 const savePrefs = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* private window */ } };
 const $ = (s) => document.querySelector(s);
@@ -39,20 +39,22 @@ const iconOf = (d) => d.water != null || d.kind === 'leak' ? 'drop' : d.kind ===
 /* ---------- scene ---------- */
 const view = $('#view');
 const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.localClippingEnabled = true;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setPixelRatio(Math.min(2, devicePixelRatio)); view.append(renderer.domElement);
 const labels = new CSS2DRenderer(); labels.domElement.className = 'labels'; view.append(labels.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 600); camera.position.set(14, 16, 22);
 const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.47; controls.minDistance = 2; controls.maxDistance = 150;
 const hemi = new THREE.HemisphereLight('#fff', '#000', 1); scene.add(hemi);
-const sun = new THREE.DirectionalLight('#ffffff', 0.6); sun.position.set(12, 30, 18); scene.add(sun);
+const sun = new THREE.DirectionalLight('#ffffff', 0.6); sun.position.set(12, 30, 18); scene.add(sun); scene.add(sun.target);
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
 let grid = new THREE.Group(); scene.add(grid);
 /* On a wide screen the house is framed in the space right of the control panel, not behind it. */
 const resize = () => { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); labels.setSize(w, h); camera.aspect = w / h; if (w > 900) camera.setViewOffset(w, h, -150, 0, w, h); else camera.clearViewOffset(); camera.updateProjectionMatrix(); };
 addEventListener('resize', resize); resize();
-let tween = null, wallsDirty = true, wallsAt = 0;
+let tween = null, wallsDirty = true, wallsAt = 0, lastT = 0, skyAt = 0, flash = 0, flashWas = 0;
 controls.addEventListener('change', () => { wallsDirty = true; });
-const power = new PowerNet(scene);
+const power = new PowerNet(scene), weather = new WeatherFx(scene);
 const flyTo = (target, pos, ms = 750) => { tween = { t0: performance.now(), ms, ft: controls.target.clone(), fp: camera.position.clone(), tt: target, tp: pos }; };
 (function loop(now) {
   requestAnimationFrame(loop);
@@ -61,17 +63,41 @@ const flyTo = (target, pos, ms = 750) => { tween = { t0: performance.now(), ms, 
   controls.update();
   if (wallsDirty && now - wallsAt > 120) { wallsDirty = false; wallsAt = now; for (const F of Object.values(S.F)) applyWalls(F); }
   power.tick(now / 1000);
+  const dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
+  flash = weather.tick(dt, now / 1000);
+  if (now - skyAt > 2000 || flash || flashWas) { skyAt = now; updateSky(); } flashWas = flash;
   renderer.render(scene, camera); labels.render(scene, camera);
   if (card) card.o.element.style.zIndex = '100000';   // the open card stays above every pin
 })(0);
 
 /* ---------- look ---------- */
 const curTheme = () => (THEMES[prefs.theme] ? prefs.theme : S.plan?.style?.theme in THEMES ? S.plan.style.theme : 'neon');
-const look = () => lookOf(curTheme(), S.plan?.style?.colors);
+const look = () => { const L = lookOf(curTheme(), S.plan?.style?.colors), ex = S.plan?.style?.extras || {}; return { ...L, ...(ex.flow ? { flow: ex.flow } : {}), glow: L.glow * (ex.glow || 1) * (S.glowBoost || 1) }; };
+/* ---------- sun, sky and night: the house lit as it is outside right now (or at the time you pick) ---------- */
+function updateSky() {
+  const L = look(), w = S.live?.weather, theme = curTheme();
+  let k = 0, el = 0.9, az = 2.4;
+  if (prefs.sun && w?.lat != null && w?.lon != null) { const sp = sunPosition(S.timeAt || new Date(), w.lat, w.lon); el = sp.el; az = sp.az; k = nightness(el); }
+  const north = deg(S.plan?.settings?.northDeg || 0), dir = new V3(Math.sin(az) * Math.cos(Math.max(el, 0.05)), Math.sin(Math.max(el, 0.05)), -Math.cos(az) * Math.cos(Math.max(el, 0.05))).applyAxisAngle(new V3(0, 1, 0), -north);
+  const c = S.houseBox ? S.houseBox.getCenter(new V3()) : new V3(), R = S.houseBox ? S.houseBox.getSize(new V3()).length() * 0.6 + 4 : 20;
+  sun.position.copy(c).add(dir.multiplyScalar(R * 2)); sun.target.position.copy(c); sun.target.updateMatrixWorld();
+  const cam = sun.shadow.camera; if (cam.right !== R) { cam.left = -R; cam.right = R; cam.top = R; cam.bottom = -R; cam.near = 0.5; cam.far = R * 4; cam.updateProjectionMatrix(); }
+  const lowSun = Math.min(1, Math.max(0, el / 0.45)), day = 1 - k;
+  sun.color.set('#ffb36b').lerp(new THREE.Color('#ffffff'), lowSun);
+  sun.intensity = prefs.sun ? L.sun * 1.7 * Math.min(1, Math.max(0, Math.sin(el) * 2.4)) : L.sun;
+  sun.castShadow = prefs.sun && sun.intensity > 0.05;
+  hemi.intensity = L.hemi[2] * (0.32 + 0.68 * day) + flash * 2.5;
+  const nightMix = { day: 0.92, neon: 0.55, blueprint: 0.35 }[theme] ?? 0.5;
+  scene.background = new THREE.Color(L.bg).lerp(new THREE.Color('#04060d'), k * nightMix); scene.fog.color.copy(scene.background);
+  for (const m of [grid.material].flat()) { m.transparent = true; m.opacity = 1 - k * 0.75; }
+  const boost = 1 + k * 0.9;
+  if (Math.abs(boost - (S.glowBoost || 1)) > 0.05) { S.glowBoost = boost; drawPins(); }
+  document.documentElement.dataset.night = k > 0.5 ? '1' : '0';
+}
 function applyLook() {
   const L = look();
   scene.background = new THREE.Color(L.bg); scene.fog = new THREE.Fog(L.bg, 70, 180);
-  hemi.color.set(L.hemi[0]); hemi.groundColor.set(L.hemi[1]); hemi.intensity = L.hemi[2]; sun.intensity = L.sun;
+  hemi.color.set(L.hemi[0]); hemi.groundColor.set(L.hemi[1]); hemi.intensity = L.hemi[2]; sun.intensity = L.sun; skyAt = 0;
   const y = grid.position.y; scene.remove(grid); grid = new THREE.GridHelper(140, 140, L.grid[0], L.grid[1]); grid.position.y = y; scene.add(grid);
   for (const F of Object.values(S.F)) styleFloor(F);
   buildRoofs();
@@ -110,6 +136,7 @@ function applyWalls(F) {
     if (mode === 'auto') { const w = m.userData.wc; low = (w.x - F.center.x) * dir.x + (w.z - F.center.z) * dir.z > F.r * 0.2; }
     const want = low ? lowOf(F, m, full) : full;
     if (m.material !== want) m.material = want;
+    if (m.userData.cat === 'wall') m.castShadow = !low;
     const e = m.userData.edge, door = m.userData.cat === 'door';
     if (e) e.material = low ? (door ? F.doorEdgeLow : F.edgeLow) : (door ? F.doorEdge : F.edgeMat);
   }
@@ -149,7 +176,7 @@ async function loadFloors() {
       if (!F.items.has(key)) F.items.set(key, []); F.items.get(key).push(m);
       const em = cat === 'furniture' ? F.furnEdgeMat : cat === 'door' ? F.doorEdge : cat === 'opening' || cat === 'floor' ? null : F.edgeMat;
       if (em && m.geometry.attributes.position.count < 80000) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, cat === 'furniture' ? 40 : 25), em); e.raycast = () => {}; m.add(e); m.userData.edge = e; }
-      m.userData.full = m.material;
+      m.userData.full = m.material; m.castShadow = cat === 'wall' || cat === 'furniture'; m.receiveShadow = true;
       if (WALLISH.has(cat)) { const c = new THREE.Box3().setFromObject(m).getCenter(new V3()); m.userData.wc = { x: c.x, z: c.z }; F.wallMeshes.push(m); }
     }
     /* The house itself = walls and floors. Scans can carry stray bits far outside it, which must not
@@ -170,6 +197,7 @@ async function loadFloors() {
   }
   if (S.plan.floors.length === 1 && S.F[S.plan.floors[0].id]) S.floorView = S.plan.floors[0].id;
   if (S.floorView !== 'all' && !S.F[S.floorView]) S.floorView = 'all';
+  S.houseBox = new THREE.Box3(); for (const F of Object.values(S.F)) S.houseBox.union(F.box.clone().translate(new V3(0, (F.f.level || 0) * (F.f.heightM || 3), 0)));
   applyLook(); buildRoomLabels(); layout(true);
 }
 /* The roof sits on the top floor (and lifts away when you pick a floor or a room). */
@@ -178,7 +206,7 @@ function buildRoofs() {
   const top = Object.values(S.F).sort((a, b) => (b.f.level || 0) - (a.f.level || 0))[0];
   if (!top || top.original) return;
   const b = top.box.clone(); b.min.x -= top.G.position.x; b.max.x -= top.G.position.x; b.min.z -= top.G.position.z; b.max.z -= top.G.position.z;
-  top.roof = buildRoof(b, curTheme()); top.G.add(top.roof);
+  top.roof = buildRoof(b, curTheme(), S.plan?.style?.extras?.roof); top.roof.castShadow = true; top.G.add(top.roof);
 }
 /* A drawn floor: a slab per room, walls raised from the room edges and drawn walls, the picture underneath. */
 async function drawnFloor(f) {
@@ -223,12 +251,35 @@ function layout(fit) {
   if (card) { const F = S.F[card.o.userData.floor]; card.o.visible = !!F && F.G.visible && (!cur || F === cur); }
   for (const o of S.pinObjs) { const F = S.F[o.userData.floor]; o.visible = !!F && F.G.visible && (!cur || F === cur) && (prefs.cameras || o.userData.kind !== 'camera'); }
   wallsDirty = true;
+  if (S.houseBox) { weather.set(prefs.weatherFx ? S.live?.weather?.kind : null, S.houseBox); weather.visible = prefs.weatherFx && !S.room; }
+  controls.autoRotate = !!prefs.spin && !S.tour; controls.autoRotateSpeed = 0.45;
   drawChips(); drawTools(); drawLeft(); drawPower();
   if (fit) fitView();
 }
+/* Overlays colour each room by what is happening in it, instead of its own colour. */
+const ramp = (stops, v) => { if (v <= stops[0][0]) return new THREE.Color(stops[0][1]); for (let i = 1; i < stops.length; i++) if (v <= stops[i][0]) return new THREE.Color(stops[i - 1][1]).lerp(new THREE.Color(stops[i][1]), (v - stops[i - 1][0]) / (stops[i][0] - stops[i - 1][0])); return new THREE.Color(stops[stops.length - 1][1]); };
+function roomStats(F) {
+  return pinsByRoom(F).map((pins) => {
+    const temps = pins.map((p) => p.device.tempC).filter((x) => x != null);
+    return { temp: temps.length ? temps.reduce((a, b) => a + b, 0) / temps.length : null, watts: pins.filter((p) => p.device.powerW != null && p.device.on !== false).reduce((a, p) => a + p.device.powerW, 0),
+      lights: pins.filter((p) => p.device.kind === 'light' && p.device.on).length, motion: pins.some((p) => p.device.motion), any: pins.length };
+  });
+}
+function overlayColor(st) {
+  const none = new THREE.Color('#3b4559');
+  switch (prefs.overlay) {
+    case 'temp': return st.temp == null ? none : ramp([[16, '#3b82f6'], [19, '#22d3ee'], [21.5, '#34d399'], [24, '#fbbf24'], [27, '#ef4444']], st.temp);
+    case 'energy': return st.watts <= 1 ? none : ramp([[5, '#22c55e'], [300, '#fbbf24'], [1200, '#f97316'], [2500, '#ef4444']], st.watts);
+    case 'lights': return st.lights ? new THREE.Color('#fbbf24') : none;
+    case 'presence': return st.motion ? new THREE.Color('#22c55e') : none;
+    default: return null;
+  }
+}
+const overlayText = (st) => ({ temp: st.temp != null ? temp(st.temp) : '', energy: st.watts > 1 ? fmtW(st.watts) : '', lights: st.lights ? `${st.lights} on` : '', presence: st.motion ? 'motion' : '' }[prefs.overlay] ?? null);
 function roomUniforms(F) {
-  const n = Math.min(F.rooms.length, MAX_ROOMS);
-  for (let i = 0; i < n; i++) { const r = F.rooms[i], w = F.G.localToWorld(new V3(r.pos[0], 0, r.pos[1])), c = new THREE.Color(r.color || ROOM_COLORS[i % ROOM_COLORS.length]); F.fx.uRoomPos.value[i].set(w.x, w.z); F.fx.uRoomCol.value[i].set(c.r, c.g, c.b); }
+  const n = Math.min(F.rooms.length, MAX_ROOMS), stats = prefs.overlay !== 'rooms' && S.live ? roomStats(F) : null;
+  F.mats.floor.userData.tint.value = stats ? 0.75 : look().tint;
+  for (let i = 0; i < n; i++) { const r = F.rooms[i], w = F.G.localToWorld(new V3(r.pos[0], 0, r.pos[1])), c = (stats && overlayColor(stats[i])) || new THREE.Color(r.color || ROOM_COLORS[i % ROOM_COLORS.length]); F.fx.uRoomPos.value[i].set(w.x, w.z); F.fx.uRoomCol.value[i].set(c.r, c.g, c.b); }
   F.fx.uRoomN.value = n; F.fx.uRoomSel.value = S.room?.floor === F.f.id ? S.room.i : -1;
 }
 function fitView() {
@@ -289,7 +340,7 @@ function drawPins() {
     const div = el('button', { type: 'button', class: `pin${st.act ? ' act' : ''}${st.alarm ? ' alarm' : ''}${d.online === false ? ' offline' : ''}${sel ? ' sel' : ''}`, title: `${pinName(p)}${st.val ? ` - ${st.val}` : ''}`, onclick: () => pinClick(p) },
       ic(iconOf(d)), (st.act || prefs.values) && st.val ? el('span', { class: 'val' }, prefs.values && !st.act ? `${pinName(p)} · ${st.val}` : st.val) : null);
     const o = new CSS2DObject(div); o.position.set(...p.pos); o.userData = { floor: p.floor, kind: d.kind }; F.G.add(o); S.pinObjs.push(o);
-    const glow = d.kind === 'light' && d.on ? [p.color || '#ffc477', (0.35 + 0.65 * ((d.brightness ?? 100) / 100)) * L.glow] : d.kind === 'media' && d.playing ? ['#c084fc', 0.45 * L.glow] : st.alarm ? ['#ef4444', 0.9 * L.glow] : d.open ? ['#f59e0b', 0.35 * L.glow] : ['plug', 'switch'].includes(d.kind) && d.on && d.powerW > 5 ? ['#34d399', Math.min(0.5, 0.15 + d.powerW / 2000) * L.glow] : null;
+    const glow = d.kind === 'light' && d.on ? [p.color || d.rgb || (d.kelvin ? kelvinToHex(d.kelvin) : '#ffc477'), (0.35 + 0.65 * ((d.brightness ?? 100) / 100)) * L.glow] : d.kind === 'media' && d.playing ? ['#c084fc', 0.45 * L.glow] : st.alarm ? ['#ef4444', 0.9 * L.glow] : d.open ? ['#f59e0b', 0.35 * L.glow] : ['plug', 'switch'].includes(d.kind) && d.on && d.powerW > 5 ? ['#34d399', Math.min(0.5, 0.15 + d.powerW / 2000) * L.glow] : null;
     if (glow) (glows[p.floor] ||= []).push({ p, color: glow[0], k: glow[1] });
   }
   for (const F of Object.values(S.F)) {
@@ -297,7 +348,7 @@ function drawPins() {
     list.forEach((g, i) => { const w = F.G.localToWorld(new V3(...g.p.pos)), c = new THREE.Color(g.color); F.fx.uGlowPos.value[i].copy(w); F.fx.uGlowCol.value[i].set(c.r * g.k, c.g * g.k, c.b * g.k); F.fx.uGlowRoom.value[i] = roomAt(F, g.p.pos[0], g.p.pos[2]); });
     F.fx.uGlowN.value = list.length;
     const by = pinsByRoom(F);
-    F.roomLabs.forEach((l, i) => { const on = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length, t = by[i].find((p) => p.device.tempC != null); l.element.querySelector('small').textContent = [t ? temp(t.device.tempC) : '', on ? `${on} on` : ''].filter(Boolean).join(' · '); });
+    F.roomLabs.forEach((l, i) => { const on = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length, t = by[i].find((p) => p.device.tempC != null); l.element.querySelector('small').textContent = prefs.overlay !== 'rooms' ? overlayText(roomStats(F)[i]) || '' : [t ? temp(t.device.tempC) : '', on ? `${on} on` : ''].filter(Boolean).join(' · '); });
     const lightsOn = (S.live?.pins || []).filter((p) => p.floor === F.f.id && p.device.kind === 'light' && p.device.on).length;
     fill(F.label.element, el('b', {}, F.f.name), el('small', {}, `${F.rooms.length} rooms · ${lightsOn} lights on`));
   }
@@ -392,16 +443,21 @@ function drawChips() {
   $('#chips').hidden = !$('#chips').children.length;
 }
 function seg(options, value, onpick) { return el('div', { class: 'seg' }, ...options.map(([v, label]) => el('button', { type: 'button', class: v === value ? 'on' : '', onclick: () => onpick(v) }, label))); }
-const toggle = (label, key) => el('button', { type: 'button', class: `tog${prefs[key] ? ' on' : ''}`, onclick: () => { prefs[key] = !prefs[key]; savePrefs(); drawPins(); } }, label);
+const toggle = (label, key) => el('button', { type: 'button', class: `tog${prefs[key] ? ' on' : ''}`, onclick: () => { prefs[key] = !prefs[key]; savePrefs(); skyAt = 0; drawPins(); } }, label);
 function drawTools() {
   const t = $('#tools'); t.hidden = S.mode !== 'view' || !Object.keys(S.F).length;
   const set = (k) => (v) => { prefs[k] = v; savePrefs(); layout(k === 'stack'); };
-  fill(t, 
-    seg([['auto', 'Dollhouse'], ['tall', 'Tall walls'], ['cut', 'Cut']], prefs.walls, set('walls')),
-    Object.keys(S.F).length > 1 ? seg([['stacked', 'Stacked'], ['apart', 'Apart'], ['alone', 'Alone']], prefs.stack, set('stack')) : null,
-    Object.values(S.F).some((F) => F.roof) ? toggle('Roof', 'roof') : null, toggle('Power', 'power'), toggle('Room names', 'names'), toggle('Values', 'values'), toggle('Cameras', 'cameras'),
-    el('button', { type: 'button', class: 'tog', onclick: () => { S.room = null; layout(true); } }, 'Reset view'),
-    S.room ? el('button', { type: 'button', class: 'tog on', onclick: () => { S.room = null; layout(true); } }, ic('back'), 'Back') : null);
+  const more = S.moreOpen ? el('div', { class: 'morepop' },
+    Object.values(S.F).some((F) => F.roof) ? toggle('Roof', 'roof') : null, toggle('Power lines', 'power'), toggle('Sun & shadows', 'sun'), toggle('Weather', 'weatherFx'),
+    toggle('Room names', 'names'), toggle('Values', 'values'), toggle('Cameras', 'cameras'), toggle('Spin', 'spin'),
+    Object.keys(S.F).length > 1 ? seg([['stacked', 'Stacked'], ['apart', 'Apart'], ['alone', 'Alone']], prefs.stack, set('stack')) : null) : null;
+  fill(t,
+    seg([['auto', 'Dollhouse'], ['tall', 'Tall'], ['cut', 'Cut']], prefs.walls, set('walls')),
+    seg([['rooms', 'Rooms'], ['temp', 'Temp'], ['energy', 'Energy'], ['lights', 'Lights'], ['presence', 'Motion']], prefs.overlay, (v) => { prefs.overlay = v; savePrefs(); drawPins(); }),
+    el('button', { type: 'button', class: `tog${S.tour ? ' on' : ''}`, onclick: () => (S.tour ? stopTour() : startTour()) }, S.tour ? '■ Stop' : '▶ Tour'),
+    el('button', { type: 'button', class: `tog${S.moreOpen ? ' on' : ''}`, onclick: () => { S.moreOpen = !S.moreOpen; drawTools(); } }, 'View ▾'),
+    el('button', { type: 'button', class: 'tog', title: 'Reset view', onclick: () => { S.room = null; layout(true); } }, '⟲'),
+    S.room ? el('button', { type: 'button', class: 'tog on', onclick: () => { S.room = null; layout(true); } }, ic('back'), 'Back') : null, more);
 }
 const lightsIn = (pins) => pins.filter((p) => p.device.kind === 'light');
 async function allLights(pins, on) { await Promise.all(lightsIn(pins).filter((p) => !!p.device.on !== on).map((p) => send(`/api/devices/${encodeURIComponent(p.device.id)}/${on ? 'on' : 'off'}`, 'POST', pin ? { pin } : {}).catch(() => {}))); setTimeout(refresh, 700); }
@@ -420,6 +476,23 @@ function weatherBlock() {
     el('div', { class: 'wnow' }, wIcon(w.kind), el('b', {}, `${Math.round(w.temp)}°`), el('div', {}, el('span', {}, w.words || ''), el('small', {}, [w.place, w.hi != null ? `H ${Math.round(w.hi)}° · L ${Math.round(w.lo)}°` : ''].filter(Boolean).join(' · ')))),
     (w.days || []).length ? el('div', { class: 'wdays' }, ...w.days.slice(0, 5).map((d) => el('div', {}, el('small', {}, d.label), wIcon(d.kind), el('span', {}, d.hi != null ? `${Math.round(d.hi)}°` : ''), el('small', {}, d.lo != null ? `${Math.round(d.lo)}°` : '')))) : null);
 }
+/* Scrub through today to see where the sun falls in each room. */
+function sunBlock() {
+  const w = S.live?.weather; if (!prefs.sun || w?.lat == null) return null;
+  const at = S.timeAt || new Date(), mins = at.getHours() * 60 + at.getMinutes();
+  const lab = el('b', {}, S.timeAt ? at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Now');
+  const r = el('input', { type: 'range', min: 0, max: 1439, step: 15, value: mins, 'aria-label': 'Time of day for sunlight', oninput: (e) => { const x = new Date(); x.setHours(0, Number(e.target.value), 0, 0); S.timeAt = x; lab.textContent = x.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); updateSky(); } });
+  return el('div', { class: 'sunrow' }, el('span', { class: 'small' }, '☀ Sunlight'), r, lab, S.timeAt ? el('button', { type: 'button', class: 'mini', onclick: () => { S.timeAt = null; updateSky(); drawLeft(); } }, 'Now') : null);
+}
+/* ---------- tour: a slow fly-through of every room, for wall panels and showing off ---------- */
+function startTour() {
+  const stops = [null, ...Object.values(S.F).sort((a, b) => (a.f.level || 0) - (b.f.level || 0)).flatMap((F) => F.rooms.map((_, i) => [F.f.id, i]))];
+  if (stops.length < 2) { toast('Add rooms first (Editor > Rooms).'); return; }
+  let n = 0; const step = () => { const s = stops[n++ % stops.length]; if (!s) { S.room = null; S.floorView = Object.keys(S.F).length > 1 ? 'all' : S.floorView; layout(true); } else focusRoom(s[0], s[1]); };
+  S.tour = setInterval(step, 7000); step(); layout(false);
+  renderer.domElement.addEventListener('pointerdown', stopTour, { once: true });
+}
+function stopTour() { if (!S.tour) return; clearInterval(S.tour); S.tour = null; layout(false); }
 function drawLeft() {
   const box = $('#left');
   if (S.mode !== 'view') return;
@@ -427,7 +500,7 @@ function drawLeft() {
   if (box.contains(document.activeElement) && document.activeElement.type === 'range') return;   // don't redraw under a dragging slider
   const [t, d] = clockText();
   box.hidden = false; box.classList.toggle('roomopen', !!S.room);
-  fill(box, el('div', { class: 'clock' }, el('b', {}, t), el('small', {}, d)), weatherBlock(), S.room ? roomBlock() : homeBlock());
+  fill(box, el('div', { class: 'clock' }, el('b', {}, t), el('small', {}, d)), weatherBlock(), sunBlock(), S.room ? roomBlock() : homeBlock());
 }
 function homeBlock() {
   const cur = curF(), Fs = cur ? [cur] : Object.values(S.F), pins = (S.live?.pins || []).filter((p) => Fs.some((F) => F.f.id === p.floor));
@@ -637,6 +710,10 @@ function edColors() {
     el('h3', {}, `${THEMES[theme].label} colours`),
     ...COLOR_KEYS.map(([k, label]) => el('div', { class: 'row' }, el('label', {}, label), el('input', { type: 'color', value: L[k], oninput: (e) => { (style.colors[theme] ||= {})[k] = e.target.value; applyLook(); saveStyleSoon(); } }))),
     el('button', { type: 'button', class: 'mini', onclick: () => { delete style.colors[theme]; applyLook(); saveStyleSoon(); editor(); } }, 'Reset to defaults'),
+    el('h3', {}, 'Roof, power and glow'),
+    el('div', { class: 'row' }, el('label', {}, 'Roof'), el('input', { type: 'color', value: style.extras?.roof || (theme === 'day' ? '#8a5a44' : '#1e2b4f'), oninput: (e) => { (style.extras ||= {}).roof = e.target.value; buildRoofs(); layout(false); saveStyleSoon(); } })),
+    el('div', { class: 'row' }, el('label', {}, 'Power lines'), el('input', { type: 'color', value: style.extras?.flow || L.flow, oninput: (e) => { (style.extras ||= {}).flow = e.target.value; drawPower(); saveStyleSoon(); } })),
+    el('div', { class: 'row' }, el('label', {}, 'Light glow'), el('input', { type: 'range', min: 0.3, max: 2.5, step: 0.1, value: style.extras?.glow || 1, oninput: (e) => { (style.extras ||= {}).glow = Number(e.target.value); drawPins(); saveStyleSoon(); } })),
     el('h3', {}, 'Paint one thing'),
     el('button', { type: 'button', class: S.tool?.type === 'paint' ? 'primary' : '', onclick: () => { S.tool = S.tool?.type === 'paint' ? null : { type: 'paint' }; if (!S.tool) clearSel(); editor(); } }, S.tool?.type === 'paint' ? 'Painting - click things on the model' : 'Pick something to paint'),
     F ? el('div', { class: 'edrow sel' }, el('div', { class: 'dtop' }, el('b', {}, selName), el('small', {}, `${F.items.get(S.sel.key)?.[0]?.userData.cat || ''} · ${F.f.name}`)),
@@ -661,6 +738,9 @@ function edFloors() {
         F?.original && f.look !== 'original' ? el('p', { class: 'note' }, 'This scan has no named walls or furniture, so it shows in its own colours.') : null,
         el('div', { class: 'row' }, f.kind === 'drawn' ? el('button', { type: 'button', class: 'primary', onclick: () => openDrawer(f, drawOpts()) }, 'Edit drawing') : null,
           el('button', { type: 'button', onclick: async () => { if (!confirm(`Remove ${f.name}?`)) return; await api(`/api/floorplan/floors/${f.id}`, { method: 'DELETE' }).catch(proErr); await reload(); } }, 'Remove floor'))); }),
+    el('h3', {}, 'Which way is north'),
+    el('p', { class: 'note' }, 'So sunlight and shadows fall the way they really do. Pick the direction north is in, looking at the view as it opens.'),
+    seg([[0, 'Ahead'], [90, 'Right'], [180, 'Behind'], [270, 'Left']], S.plan.settings?.northDeg || 0, (v) => saveSettings({ northDeg: v }).then(() => { skyAt = 0; })),
     el('h3', {}, 'Front of the house'),
     el('p', { class: 'note' }, 'Which way the 3D view looks into the house when it opens.'),
     seg([[0, 'Front'], [90, 'Right'], [180, 'Back'], [270, 'Left']], S.plan.settings?.frontDeg || 0, (v) => saveSettings({ frontDeg: v }).then(() => fitView())),

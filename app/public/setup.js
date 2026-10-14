@@ -43,6 +43,9 @@ function fieldEl(f, store, onChange) {
       const b = el('button', { type: 'button', class: `opt${cur.has(v) ? ' on' : ''}`, onclick: () => { cur.has(v) ? cur.delete(v) : cur.add(v); store[f.id] = [...cur]; b.classList.toggle('on'); } }, l);
       return b;
     })));
+  } else if (f.type === 'consent') {
+    return el('div', { class: 'field' }, el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: store[f.id] === true, onchange: (e) => set(e.target.checked) }),
+      el('span', {}, f.label, ' ', el('a', { href: '/terms.html', target: '_blank', rel: 'noopener' }, 'Terms'), ' · ', el('a', { href: '/privacy.html', target: '_blank', rel: 'noopener' }, 'Privacy'))));
   } else if (f.type === 'textarea') {
     input = el('textarea', { id, rows: 3, spellcheck: 'false', oninput: (e) => set(e.target.value.trim()) }, store[f.id] || '');
   } else if (f.type === 'timezone') {

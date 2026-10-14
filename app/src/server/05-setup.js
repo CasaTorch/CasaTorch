@@ -180,7 +180,7 @@ app.get('/api/setup/current', async (_req, res) => {
   res.json({ rerun: true, ha, answers: {
     house: { ...(c.house || {}), location: c.location || null },
     homeassistant: c.homeAssistant?.url ? { uses: 'yes', url: c.homeAssistant.url } : { uses: 'no' },
-    account: { username: c.signIn?.username || 'admin' },
+    account: { username: users.list.find((x) => x.role === 'owner')?.username || c.signIn?.username || 'admin' },
     calendars: { mine: c.myCalendar === false ? 'no' : 'yes', list: (c.calendars || []).map(({ name, url, color }) => ({ name, url, color })) },
     sports: { teams: c.sports?.teams || [] },
     news: { picks: NEWS_DEFAULTS.filter((f) => (c.news?.feeds || []).some((x) => x.url === f.url)).map((f) => f.id), custom: (c.news?.feeds || []).filter((x) => !NEWS_IDS.has(x.url)) },
@@ -199,8 +199,12 @@ app.post('/api/setup/finish', (req, res) => {
   const a = strip(raw);
   const prev = isDemo() ? {} : config;   // run again: anything not answered now is kept
   const acct = a.account || {};
-  const keepPw = !acct.password && prev.signIn?.password;
-  if (!acct.username || (!keepPw && String(acct.password || '').length < 8)) return res.status(400).json({ error: 'a username and a password of 8+ characters are needed' });
+  ensureUsers();
+  const owner = users.list.find((x) => x.role === 'owner');
+  const keepPw = !acct.password && !!owner?.password;
+  if (!acct.username || !/^[a-zA-Z0-9._@-]{3,40}$/.test(String(acct.username))) return res.status(400).json({ error: 'pick a username: 3-40 letters, numbers, dots or dashes' });
+  if (!keepPw) { const pwErr = passwordProblem(acct.password, acct.username); if (pwErr) return res.status(400).json({ error: pwErr }); }
+  if (acct.terms !== true && owner?.terms?.version !== TERMS_VERSION) return res.status(400).json({ error: 'please read and accept the Terms of Use and Privacy Notice' });
   if (acct.pin && !/^\d{4,8}$/.test(String(acct.pin))) return res.status(400).json({ error: 'the PIN is 4 to 8 digits' });
   if (acct.license && !checkLicenseKey(acct.license).valid) return res.status(400).json({ error: `license key: ${checkLicenseKey(acct.license).why}` });
   const picked = (step) => (a[step]?.has === 'yes' || a[step]?.track === 'yes' ? (Array.isArray(a[step].kinds) ? a[step].kinds : []) : []);
@@ -221,7 +225,7 @@ app.post('/api/setup/finish', (req, res) => {
     ...prev, version: 2, demo: undefined, setupAt: prev.setupAt || nowIso(), port: PORT,
     house: { name: a.house?.name || 'My House', timezone: a.house?.timezone || 'UTC', units: a.house?.units || 'F', currency: a.house?.currency || 'USD' },
     location: a.house?.location?.lat != null ? { name: a.house.location.name || null, lat: Number(a.house.location.lat), lon: Number(a.house.location.lon) } : prev.location || null,
-    signIn: { enabled: true, username: String(acct.username), password: keepPw ? prev.signIn.password : hashSecret(acct.password), pin: acct.pin ? hashSecret(acct.pin) : prev.signIn?.pin || null },
+    signIn: { enabled: true, pin: acct.pin ? hashSecret(acct.pin) : prev.signIn?.pin || null },
     license: acct.license || prev.license || undefined,
     myCalendar: a.calendars?.mine !== 'no',
     calendars: (a.calendars?.list || []).filter((c) => c?.url).map((c) => ({ name: c.name || 'Calendar', url: String(c.url).trim(), color: c.color || '#60a5fa' })),
@@ -245,6 +249,7 @@ app.post('/api/setup/finish', (req, res) => {
   };
   for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
   try { saveConfig(next); } catch (err) { return res.status(500).json({ error: `could not save the settings: ${err.message}` }); }
+  if (!isDemo()) authSetOwner({ username: acct.username, passwordHash: keepPw ? null : hashSecret(acct.password), acceptedTerms: acct.terms === true });
   setupReopened = false; draft.ring = null; draft.hue = null;
   if (next.ring && typeof ringConnect === 'function' && proStatus().pro) ringConnect();
   console.log(`  setup: done for "${next.house.name}"`);

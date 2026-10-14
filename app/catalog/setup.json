@@ -74,7 +74,7 @@
     {
       "id": "account",
       "title": "Your HouseOS login",
-      "intro": "This protects the dashboard. You'll use it to sign in from phones and other screens; the wall panel stays signed in.",
+      "intro": "Your own sign-in for HouseOS. You'll use it on phones and other screens; later you can add family members, turn on two-step sign-in, or connect Google sign-in in Settings > Security.",
       "fields": [
         {
           "id": "username",
@@ -85,10 +85,10 @@
         },
         {
           "id": "password",
-          "label": "Password (8+ characters)",
+          "label": "Password (10+ characters - a short sentence works well)",
           "type": "password",
           "required": true,
-          "minLength": 8
+          "minLength": 10
         },
         {
           "id": "pin",
@@ -102,6 +102,12 @@
           "label": "HouseOS Pro license key (optional)",
           "type": "textarea",
           "help": "Every new HouseOS gets 14 days of Pro free. Already bought Pro? Paste the key from your e-mail."
+        },
+        {
+          "id": "terms",
+          "type": "consent",
+          "required": true,
+          "label": "I have read and agree to the Terms of Use and the Privacy Notice."
         }
       ]
     },

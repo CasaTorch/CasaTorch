@@ -36,7 +36,7 @@ function haDevice(s) {
   const name = a.friendly_name || s.entity_id, on = s.state === 'on', cls = a.device_class || null, unit = a.unit_of_measurement || null;
   const base = { id: `ha:${s.entity_id}`, provider: 'ha', domain, haClass: cls, name, state: s.state, online: !['unavailable', 'unknown'].includes(s.state) || domain === 'sensor' };
   switch (domain) {
-    case 'light': return { ...base, kind: 'light', on, brightness: a.brightness != null ? Math.round(a.brightness / 2.55) : null };
+    case 'light': return { ...base, kind: 'light', on, brightness: a.brightness != null ? Math.round(a.brightness / 2.55) : null, rgb: Array.isArray(a.rgb_color) && a.rgb_color.length === 3 ? `#${a.rgb_color.map((v) => Math.max(0, Math.min(255, v | 0)).toString(16).padStart(2, '0')).join('')}` : null, kelvin: a.color_temp_kelvin ?? null };
     case 'switch': return { ...base, kind: cls === 'outlet' ? 'plug' : 'switch', on };
     case 'input_boolean': case 'automation': case 'siren': case 'humidifier': return { ...base, kind: 'switch', on };
     case 'fan': return { ...base, kind: 'fan', on, percent: a.percentage ?? null };

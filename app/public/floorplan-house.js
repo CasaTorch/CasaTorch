@@ -6,8 +6,8 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 /* ---------- roof: a gable over the top floor's footprint, with a little overhang ---------- */
 const ROOF = { neon: ['#1e2b4f', '#38bdf8', 0.92], blueprint: ['#1d4a8f', '#e8f1ff', 0.35], day: ['#8a5a44', '#5c3a2c', 1] };
-export function buildRoof(box, theme) {
-  const [color, edge, opacity] = ROOF[theme] || ROOF.neon;
+export function buildRoof(box, theme, custom) {
+  const [themeColor, edge, opacity] = ROOF[theme] || ROOF.neon, color = custom || themeColor;
   const over = 0.35, x0 = box.min.x - over, x1 = box.max.x + over, z0 = box.min.z - over, z1 = box.max.z + over, y = box.max.y + 0.02;
   const alongX = x1 - x0 >= z1 - z0, span = alongX ? z1 - z0 : x1 - x0, rise = Math.min(2.4, span * 0.3);
   const P = [];
@@ -95,3 +95,58 @@ const W = {
   fog: '<path d="M4 9h16M3 13h18M5 17h14"/>',
 };
 export const weatherIcon = (kind) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${W[kind] || W.cloud}</svg>`;
+
+/* ---------- the real sun: where it is in the sky for your home, right now (or any time of day) ---------- */
+/* Low-precision solar position (about 1° - plenty for shadows). az: radians clockwise from north; el: radians above the horizon. */
+export function sunPosition(date, lat, lon) {
+  const r = Math.PI / 180, n = (date.getTime() - 946728000000) / 86400000;   // days since J2000.0
+  const L = (280.46 + 0.9856474 * n) % 360, g = ((357.528 + 0.9856003 * n) % 360) * r;
+  const lam = (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * r, eps = (23.439 - 0.0000004 * n) * r;
+  const ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam)), dec = Math.asin(Math.sin(eps) * Math.sin(lam));
+  const gmst = ((18.697374558 + 24.06570982441908 * n) % 24 + 24) % 24, ha = (gmst * 15 + lon) * r - ra, phi = lat * r;
+  const el = Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(ha));
+  const az = Math.atan2(-Math.sin(ha), Math.tan(dec) * Math.cos(phi) - Math.sin(phi) * Math.cos(ha));
+  return { az: (az + 2 * Math.PI) % (2 * Math.PI), el };
+}
+/* 0 in full daylight, 1 at night, smooth through dusk and dawn. */
+export const nightness = (el) => Math.min(1, Math.max(0, (0.1 - el) / 0.25));
+export function kelvinToHex(k) {
+  const t = Math.max(1000, Math.min(12000, k)) / 100;
+  const r = t <= 66 ? 255 : 329.7 * (t - 60) ** -0.1332;
+  const g = t <= 66 ? 99.47 * Math.log(t) - 161.12 : 288.12 * (t - 60) ** -0.0755;
+  const b = t >= 66 ? 255 : t <= 19 ? 0 : 138.52 * Math.log(t - 10) - 305.04;
+  const c = (v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0');
+  return `#${c(r)}${c(g)}${c(b)}`;
+}
+
+/* ---------- weather outside: rain, snow, and the odd lightning flash ---------- */
+export class WeatherFx {
+  constructor(scene) { this.scene = scene; this.points = null; this.kind = null; this.flash = 0; }
+  set(kind, box) {
+    const want = ['rain', 'snow', 'storm'].includes(kind) ? kind : null;
+    const key = want && box ? `${want}|${box.min.x.toFixed(0)}|${box.max.x.toFixed(0)}|${box.min.z.toFixed(0)}` : null;
+    if (key === this.key) return; this.key = key;
+    if (this.points) { this.scene.remove(this.points); this.points.geometry.dispose(); this.points.material.dispose(); this.points = null; }
+    this.kind = want; if (!want) return;
+    const snow = want === 'snow', n = snow ? 1600 : 2600, pad = 6;
+    this.lo = new THREE.Vector3(box.min.x - pad, box.min.y, box.min.z - pad); this.hi = new THREE.Vector3(box.max.x + pad, box.max.y + 10, box.max.z + pad);
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) { pos[i * 3] = THREE.MathUtils.lerp(this.lo.x, this.hi.x, Math.random()); pos[i * 3 + 1] = THREE.MathUtils.lerp(this.lo.y, this.hi.y, Math.random()); pos[i * 3 + 2] = THREE.MathUtils.lerp(this.lo.z, this.hi.z, Math.random()); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.points = new THREE.Points(g, new THREE.PointsMaterial({ color: snow ? '#ffffff' : '#9fd3ff', size: snow ? 0.09 : 0.045, transparent: true, opacity: snow ? 0.9 : 0.55, depthWrite: false }));
+    this.points.raycast = () => {}; this.scene.add(this.points);
+  }
+  set visible(v) { if (this.points) this.points.visible = v; }
+  /* returns a 0..1 lightning flash for the lights to add */
+  tick(dt, t) {
+    if (!this.points || !this.points.visible) return 0;
+    const p = this.points.geometry.attributes.position, a = p.array, snow = this.kind === 'snow', fall = snow ? 0.9 : 9;
+    for (let i = 0; i < a.length; i += 3) {
+      a[i + 1] -= fall * dt; if (snow) { a[i] += Math.sin(t * 0.8 + i) * 0.004; a[i + 2] += Math.cos(t * 0.6 + i) * 0.004; }
+      if (a[i + 1] < this.lo.y) a[i + 1] = this.hi.y;
+    }
+    p.needsUpdate = true;
+    if (this.kind === 'storm') { if (this.flash <= 0 && Math.random() < dt * 0.08) this.flash = 1; this.flash = Math.max(0, this.flash - dt * 3); return this.flash > 0.5 || (this.flash > 0.2 && this.flash < 0.35) ? this.flash : 0; }
+    return 0;
+  }
+}

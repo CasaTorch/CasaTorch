@@ -97,7 +97,8 @@ app.put('/api/floorplan/style', requirePro, express.json(), (req, res) => {
   const d = fpData(), b = req.body || {}, KEYS = ['bg', 'wall', 'floor', 'furniture', 'edge', 'door', 'window'];
   const colors = {};
   for (const t of ['neon', 'blueprint', 'day']) { const c = b.colors?.[t]; if (c && typeof c === 'object') { const ok = Object.fromEntries(KEYS.filter((k) => FP_HEX.test(c[k])).map((k) => [k, c[k]])); if (Object.keys(ok).length) colors[t] = ok; } }
-  d.style = { theme: ['neon', 'blueprint', 'day'].includes(b.theme) ? b.theme : 'neon', colors };
+  const ex = b.extras || {}, extras = { ...(FP_HEX.test(ex.roof) ? { roof: ex.roof } : {}), ...(FP_HEX.test(ex.flow) ? { flow: ex.flow } : {}), ...(fin(ex.glow, 0.3, 2.5) ? { glow: +ex.glow } : {}) };
+  d.style = { theme: ['neon', 'blueprint', 'day'].includes(b.theme) ? b.theme : 'neon', colors, extras };
   fpWrite(d); res.json({ ok: true, style: d.style });
 });
 app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req, res) => {
@@ -112,6 +113,7 @@ app.put('/api/floorplan/settings', requirePro, express.json(), (req, res) => {
   if (b.panel === null) delete st.panel;
   else if (b.panel && d.floors.some((f) => f.id === b.panel.floor) && Array.isArray(b.panel.pos) && b.panel.pos.length === 3 && b.panel.pos.every((v) => fin(v, -1000, 1000))) st.panel = { floor: b.panel.floor, pos: b.panel.pos.map((v) => +(+v).toFixed(3)) };
   if ([0, 90, 180, 270].includes(Number(b.frontDeg))) st.frontDeg = Number(b.frontDeg);
+  if ([0, 90, 180, 270].includes(Number(b.northDeg))) st.northDeg = Number(b.northDeg);
   d.settings = st; fpWrite(d); res.json({ ok: true, settings: st });
 });
 /* The weather for the 3D page's control panel, in one small shape (same as the personal dashboard's). */
@@ -121,7 +123,8 @@ async function fpWeather() {
     const w = isDemo() ? JSON.parse(fs.readFileSync(path.join(DEMO_FP, '..', 'fixtures', 'home.json'), 'utf8')).weather : config.location ? await weatherNow() : null;
     if (!w?.now) return null;
     const d0 = w.days?.[0];
-    return { temp: w.now.temp, words: w.now.words, kind: fpKind(w.now.symbol), place: w.place || null, hi: d0?.hi ?? null, lo: d0?.lo ?? null, tz: houseTz(),
+    const loc = isDemo() ? { lat: 37.77, lon: -122.42 } : config.location || {};
+    return { temp: w.now.temp, words: w.now.words, kind: fpKind(w.now.symbol), place: w.place || null, hi: d0?.hi ?? null, lo: d0?.lo ?? null, tz: houseTz(), lat: loc.lat ?? null, lon: loc.lon ?? null,
       days: (w.days || []).slice(0, 5).map((x) => ({ label: new Date(`${x.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' }), hi: x.hi, lo: x.lo, kind: fpKind(x.symbol) })) };
   } catch { return null; }
 }
