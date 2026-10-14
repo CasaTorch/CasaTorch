@@ -171,6 +171,18 @@ own network so nothing leaves the house. It never unlocks doors or opens garage 
 
 Details: [docs/SUPPORT.md](docs/SUPPORT.md).
 
+## Security
+
+- **Everyone gets their own sign-in** with a role: owner, admin (settings and people), member (can switch
+  things) or viewer (can only look). Nobody can sign up on their own - the owner sends an invite link.
+- **Two-step sign-in** with any authenticator app, ten one-time recovery codes, and an option to require it
+  for everyone. Optional **Sign in with Google** for people you added (needs an https address or localhost).
+- **Wall-panel links** sign a tablet in as a panel (not a person) for a year, and can be revoked.
+- Sessions you can see and end, a **security log**, brute-force limits, encrypted secrets at rest,
+  strict Content-Security-Policy and same-site request checks.
+- Locks, garage doors, gates and alarms are never opened or disarmed automatically or by the AI.
+- Accepting the [Terms of Use](app/public/terms.html) and [Privacy Notice](app/public/privacy.html) is part of setup.
+
 ## Privacy
 
 Settings are one file (`config.json`, owner-only) on your box. Device passwords you type during
