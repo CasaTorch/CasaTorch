@@ -11,6 +11,7 @@ import { toGlb } from './floorplan-import.js';
 import { THEMES, COLOR_KEYS, ROOM_COLORS, lookOf, classify, guessCats, itemOf, prettyItem, sectionRooms, makeFx, fxMaterial, MAX_GLOW, MAX_ROOMS } from './floorplan-look.js';
 
 const S = { plan: null, live: null, mode: 'view', floorView: 'all', room: null, tool: null, sel: null, F: {}, pins: [], pinObjs: [], q: '', tab: 'devices' };
+let card = null;   // the open device card: { id, o }
 const PREF_KEY = 'houseos-3d';
 const prefs = { walls: 'tall', stack: 'stacked', names: true, values: false, cameras: true, theme: null, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
 const savePrefs = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* private window */ } };
@@ -53,6 +54,7 @@ const flyTo = (target, pos, ms = 750) => { tween = { t0: performance.now(), ms, 
   if (document.getElementById('drawer')) return;   // drawing on top: let the 3D rest
   if (tween) { const k = Math.min(1, (now - tween.t0) / tween.ms), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; controls.target.lerpVectors(tween.ft, tween.tt, e); camera.position.lerpVectors(tween.fp, tween.tp, e); if (k >= 1) tween = null; }
   controls.update(); renderer.render(scene, camera); labels.render(scene, camera);
+  if (card) card.o.element.style.zIndex = '100000';   // the open card stays above every pin
 })(0);
 
 /* ---------- look ---------- */
@@ -162,6 +164,7 @@ function layout(fit) {
     for (const l of F.roomLabs) l.visible = prefs.names && F.G.visible && (cur ? F === cur : !multi);
   }
   grid.position.y = (Number.isFinite(minY) ? minY : 0) - 0.05;
+  if (card) { const F = S.F[card.o.userData.floor]; card.o.visible = !!F && F.G.visible && (!cur || F === cur); }
   for (const o of S.pinObjs) { const F = S.F[o.userData.floor]; o.visible = !!F && F.G.visible && (!cur || F === cur) && (prefs.cameras || o.userData.kind !== 'camera'); }
   drawChips(); drawTools(); drawSummary(); drawRoomPanel();
   if (fit) fitView();
@@ -205,7 +208,8 @@ function devState(d) {
   if (d.water || d.smoke) return { alarm: true, act: true, val: d.water ? 'Water!' : 'Smoke!' };
   if (d.kind === 'light') return { act: !!d.on, val: d.on ? (d.brightness != null ? `${d.brightness}%` : 'On') : 'Off' };
   if (d.kind === 'media') return { act: !!d.playing, val: d.playing ? (d.title || 'Playing') : 'Idle' };
-  if (d.powerW != null) return { act: d.powerW > 3, val: `${Math.round(d.powerW)} W` };
+  if (['plug', 'switch'].includes(d.kind) && d.on != null) return { act: !!d.on, val: d.on ? (d.powerW != null ? `${fmtW(d.powerW)}` : 'On') : 'Off' };
+  if (d.powerW != null) return { act: d.powerW > 3, val: fmtW(d.powerW) };
   if (d.open != null) return { act: !!d.open, val: d.open ? 'Open' : 'Closed' };
   if (d.locked != null) return { act: !d.locked, val: d.locked ? 'Locked' : 'Unlocked' };
   if (d.kind === 'climate' || d.tempC != null) return { act: false, val: d.tempC != null ? temp(d.tempC) : d.state };
@@ -214,6 +218,7 @@ function devState(d) {
   return { act: false, val: d.value != null ? `${d.value}${d.unit || ''}` : d.state ?? null };
 }
 const pinName = (p) => p.label || p.device.name;
+const fmtW = (w) => (w >= 1000 ? `${(w / 1000).toFixed(w >= 10000 ? 0 : 1)} kW` : `${Math.round(w)} W`);
 function pinsByRoom(F) { const out = F.rooms.map(() => []); for (const p of S.live?.pins || []) if (p.floor === F.f.id) { const i = roomAt(F, p.pos[0], p.pos[2]); if (i >= 0) out[i].push(p); } return out; }
 function drawPins() {
   for (const o of S.pinObjs) { o.parent?.remove(o); o.element.remove(); }
@@ -225,7 +230,7 @@ function drawPins() {
     const div = el('button', { type: 'button', class: `pin${st.act ? ' act' : ''}${st.alarm ? ' alarm' : ''}${d.online === false ? ' offline' : ''}${sel ? ' sel' : ''}`, title: `${pinName(p)}${st.val ? ` - ${st.val}` : ''}`, onclick: () => pinClick(p) },
       ic(iconOf(d)), (st.act || prefs.values) && st.val ? el('span', { class: 'val' }, prefs.values && !st.act ? `${pinName(p)} · ${st.val}` : st.val) : null);
     const o = new CSS2DObject(div); o.position.set(...p.pos); o.userData = { floor: p.floor, kind: d.kind }; F.G.add(o); S.pinObjs.push(o);
-    const glow = d.kind === 'light' && d.on ? [p.color || '#ffc477', (0.35 + 0.65 * ((d.brightness ?? 100) / 100)) * L.glow] : d.kind === 'media' && d.playing ? ['#c084fc', 0.45 * L.glow] : st.alarm ? ['#ef4444', 0.9 * L.glow] : d.open ? ['#f59e0b', 0.35 * L.glow] : null;
+    const glow = d.kind === 'light' && d.on ? [p.color || '#ffc477', (0.35 + 0.65 * ((d.brightness ?? 100) / 100)) * L.glow] : d.kind === 'media' && d.playing ? ['#c084fc', 0.45 * L.glow] : st.alarm ? ['#ef4444', 0.9 * L.glow] : d.open ? ['#f59e0b', 0.35 * L.glow] : ['plug', 'switch'].includes(d.kind) && d.on && d.powerW > 5 ? ['#34d399', Math.min(0.5, 0.15 + d.powerW / 2000) * L.glow] : null;
     if (glow) (glows[p.floor] ||= []).push({ p, color: glow[0], k: glow[1] });
   }
   for (const F of Object.values(S.F)) {
@@ -237,22 +242,85 @@ function drawPins() {
     const lightsOn = (S.live?.pins || []).filter((p) => p.floor === F.f.id && p.device.kind === 'light' && p.device.on).length;
     fill(F.label.element, el('b', {}, F.f.name), el('small', {}, `${F.rooms.length} rooms · ${lightsOn} lights on`));
   }
+  if (card) { const p = (S.live?.pins || []).find((x) => x.deviceId === card.id); if (p) fillCard(p); else closeCard(); }
   layout(false);
 }
-async function act(d, action, value) {
-  try { await send(`/api/devices/${encodeURIComponent(d.id)}/${action}`, 'POST', value != null ? { value } : {}); setTimeout(refresh, 700); }
-  catch (e) { toast(e.message); }
+/* Some dashboards ask for a PIN before switching anything: asked once, kept for this tab only. */
+let pin = (() => { try { return sessionStorage.getItem('houseos-pin') || ''; } catch { return ''; } })();
+async function act(d, action, value, retry = true) {
+  try { await send(`/api/devices/${encodeURIComponent(d.id)}/${action}`, 'POST', { ...(value != null ? { value } : {}), ...(pin ? { pin } : {}) }); setTimeout(refresh, 700); }
+  catch (e) {
+    if (e.status === 401 && retry) { const v = prompt('PIN to control devices'); if (v) { pin = v; try { sessionStorage.setItem('houseos-pin', v); } catch { /* fine */ } return act(d, action, value, false); } }
+    toast(e.message); setTimeout(refresh, 300);
+  }
 }
 function pinClick(p) {
   const d = p.device;
   if (S.mode === 'edit') { S.tab = 'devices'; S.tool = { type: 'device', dev: { id: d.id, name: pinName(p) } }; editor(); drawPins(); return; }
-  if (d.kind === 'camera') return cameraModal(d);
-  if (['light', 'plug', 'switch', 'media', 'fan'].includes(d.kind)) return act(d, 'toggle');
-  const F = S.F[p.floor], i = F ? roomAt(F, p.pos[0], p.pos[2]) : -1; if (i >= 0) focusRoom(p.floor, i);
+  if (d.kind === 'camera') return cameraModal(d, pinName(p));
+  if (card?.id === p.deviceId) return closeCard();
+  openCard(p);
 }
 const snapUrl = (d) => d.snapshot || `/api/cameras/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`;
-function cameraModal(d) { modal(el('div', { class: 'box' }, el('h2', {}, d.name), el('img', { src: `${snapUrl(d)}?t=${Date.now()}`, alt: d.name }))); }
-function modal(content) { const m = $('#modal'); m.replaceChildren(content); m.hidden = false; m.onclick = (e) => { if (e.target === m) m.hidden = true; }; }
+/* A camera opens its live picture: a real stream when the server has one (MJPEG), otherwise a fresh
+   still every second, swapped in only once it has loaded so it never flickers. */
+let camStop = null;
+function cameraModal(d, name = d.name) {
+  const img = el('img', { alt: name, class: 'feed' }), badge = el('span', { class: 'livebadge' }, d.stream ? 'LIVE' : 'Connecting\u2026');
+  if (d.stream) { img.src = `${d.stream}${d.stream.includes('?') ? '&' : '?'}t=${Date.now()}`; img.onerror = () => { badge.textContent = 'Stills'; still(); }; }
+  let timer = null;
+  function still() {
+    const tick = () => { const n = new Image(); n.onload = () => { img.src = n.src; badge.textContent = 'Live (stills)'; timer = setTimeout(tick, 1000); }; n.onerror = () => { badge.textContent = 'No picture'; timer = setTimeout(tick, 4000); }; n.src = `${snapUrl(d)}${snapUrl(d).includes('?') ? '&' : '?'}t=${Date.now()}`; };
+    tick();
+  }
+  if (!d.stream) still();
+  camStop = () => { clearTimeout(timer); img.onerror = null; img.removeAttribute('src'); camStop = null; };
+  modal(el('div', { class: 'box cam' }, el('div', { class: 'rhead' }, ic('camera'), el('div', {}, el('h2', {}, name), el('small', {}, badge)), el('button', { type: 'button', class: 'iconbtn', title: 'Close', onclick: closeModal }, ic('close'))), img));
+}
+function modal(content) { const m = $('#modal'); m.replaceChildren(content); m.hidden = false; m.onclick = (e) => { if (e.target === m) closeModal(); }; }
+function closeModal() { camStop?.(); $('#modal').hidden = true; $('#modal').replaceChildren(); }
+addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeCard(); } });
+
+/* ---------- tapping a device: a small control card right where it is ---------- */
+function closeCard() { if (!card) return; card.o.parent?.remove(card.o); card.o.element.remove(); card = null; }
+function openCard(p) {
+  closeCard();
+  const F = S.F[p.floor]; if (!F) return;
+  const o = new CSS2DObject(el('div', { class: 'devcard-wrap' }, el('div', { class: 'devcard', onpointerdown: (e) => e.stopPropagation(), onclick: (e) => e.stopPropagation() })));
+  o.center.set(0.5, 1); o.position.set(...p.pos); o.userData = { floor: p.floor, card: true }; F.G.add(o);
+  const sp = F.G.localToWorld(new V3(...p.pos)).project(camera), below = (1 - sp.y) / 2 * view.clientHeight < 330;   // near the top: open downwards
+  if (below) { o.center.set(0.5, 0); o.element.classList.add('below'); }
+  card = { id: p.deviceId, o }; fillCard(p);
+}
+function fillCard(p) {
+  const box = card.o.element.firstChild, d = p.device, st = devState(d);
+  if (box.contains(document.activeElement) && document.activeElement.type === 'range') return;   // mid-drag
+  const sw = (on, fn) => el('label', { class: 'switch' }, el('input', { type: 'checkbox', checked: on ? true : null, onchange: fn }), el('span'));
+  const flip = (field, action) => () => { d[field] = !d[field]; fillCard(p); drawPinsSoon(); act(d, action); };
+  const F = S.F[p.floor], ri = F ? roomAt(F, p.pos[0], p.pos[2]) : -1, room = F?.rooms[ri];
+  const body = [];
+  if (d.online === false) body.push(el('p', { class: 'note' }, 'Not answering right now.'));
+  if (d.kind === 'light') {
+    body.push(el('div', { class: 'cbig' }, el('span', {}, d.on ? (d.brightness != null ? `${d.brightness}%` : 'On') : 'Off'), sw(d.on, flip('on', d.on ? 'off' : 'on'))));
+    const lab = el('small', {}, 'Brightness');
+    body.push(lab, el('input', { type: 'range', min: 1, max: 100, value: d.brightness ?? (d.on ? 100 : 50), class: 'bri', 'aria-label': 'Brightness',
+      oninput: (e) => { lab.textContent = `Brightness ${e.target.value}%`; }, onchange: (e) => { d.on = true; d.brightness = Number(e.target.value); act(d, 'brightness', d.brightness); drawPinsSoon(); } }));
+  } else if (['plug', 'switch', 'fan'].includes(d.kind)) {
+    body.push(el('div', { class: 'cbig' }, el('span', {}, d.on ? 'On' : 'Off'), sw(d.on, flip('on', d.on ? 'off' : 'on'))));
+    if (d.powerW != null) body.push(el('div', { class: 'cstat' }, el('b', {}, fmtW(d.powerW)), el('small', {}, 'drawing now')));
+    if (d.energyKWh != null) body.push(el('div', { class: 'cstat' }, el('b', {}, `${(+d.energyKWh).toFixed(2)} kWh`), el('small', {}, 'today')));
+  } else if (d.kind === 'media') {
+    body.push(el('div', { class: 'cbig' }, el('span', { class: 'title' }, d.playing ? d.title || 'Playing' : 'Not playing'), el('button', { type: 'button', class: 'mini', onclick: () => { d.playing = !d.playing; fillCard(p); act(d, 'toggle'); } }, d.playing ? 'Pause' : 'Play')));
+    if (d.artist) body.push(el('small', {}, d.artist));
+  } else {
+    body.push(el('div', { class: 'cbig' }, el('span', {}, st.val ?? d.state ?? '-')));
+    for (const [k, label, f] of [['humidity', 'Humidity', (v) => `${Math.round(v)}%`], ['battery', 'Battery', (v) => `${Math.round(v)}%`], ['tempC', 'Temperature', temp]]) if (d[k] != null && !(k === 'tempC' && st.val === temp(d.tempC))) body.push(el('div', { class: 'cstat' }, el('b', {}, f(d[k])), el('small', {}, label)));
+    if (['lock', 'cover', 'alarm'].includes(d.kind)) body.push(el('p', { class: 'note' }, 'Locks, garage doors and alarms are changed in Home Assistant.'));
+  }
+  fill(box, el('div', { class: 'chead' }, ic(iconOf(d)), el('b', {}, pinName(p)), el('button', { type: 'button', class: 'iconbtn sm', title: 'Close', onclick: closeCard }, ic('close'))), ...body,
+    room ? el('button', { type: 'button', class: 'mini wide', onclick: () => { closeCard(); focusRoom(p.floor, ri); } }, `Open ${room.name}`) : null);
+}
+const drawPinsSoon = debounce(() => drawPins(), 50);
 
 /* ---------- view UI: floor/room chips, toggles, floor summary, room panel ---------- */
 function drawChips() {
@@ -277,7 +345,7 @@ function drawTools() {
     S.room ? el('button', { type: 'button', class: 'tog on', onclick: () => { S.room = null; layout(true); } }, ic('back'), 'Back') : null);
 }
 const lightsIn = (pins) => pins.filter((p) => p.device.kind === 'light');
-async function allLights(pins, on) { await Promise.all(lightsIn(pins).filter((p) => !!p.device.on !== on).map((p) => send(`/api/devices/${encodeURIComponent(p.device.id)}/${on ? 'on' : 'off'}`, 'POST', {}).catch(() => {}))); setTimeout(refresh, 700); }
+async function allLights(pins, on) { await Promise.all(lightsIn(pins).filter((p) => !!p.device.on !== on).map((p) => send(`/api/devices/${encodeURIComponent(p.device.id)}/${on ? 'on' : 'off'}`, 'POST', pin ? { pin } : {}).catch(() => {}))); setTimeout(refresh, 700); }
 function drawSummary() {
   const box = $('#left');
   if (S.mode !== 'view' || !Object.keys(S.F).length || !S.live) { if (S.mode === 'view') box.hidden = true; return; }
@@ -310,7 +378,7 @@ function drawRoomPanel() {
     ...lights.map((p) => { const d = p.device, x = row(p, sw(d)); if (d.brightness != null || d.on) x.append(el('input', { type: 'range', min: 1, max: 100, value: d.brightness ?? 100, class: 'bri', 'aria-label': 'Brightness', onchange: (e) => act(d, 'brightness', Number(e.target.value)) })); return x; }),
     ctl.length ? el('div', { class: 'sechead' }, 'Devices') : null, ...ctl.map((p) => row(p, sw(p.device))),
     other.length ? el('div', { class: 'sechead' }, 'Sensors') : null, ...other.map((p) => row(p)),
-    cams.length ? el('div', { class: 'sechead' }, 'Cameras') : null, ...cams.map((p) => el('button', { type: 'button', class: 'camthumb', onclick: () => cameraModal(p.device) }, el('img', { src: `${snapUrl(p.device)}?t=${Math.floor(Date.now() / 30000)}`, alt: pinName(p), loading: 'lazy' }), el('span', {}, pinName(p)))),
+    cams.length ? el('div', { class: 'sechead' }, 'Cameras') : null, ...cams.map((p) => el('button', { type: 'button', class: 'camthumb', onclick: () => cameraModal(p.device, pinName(p)) }, el('img', { src: `${snapUrl(p.device)}?t=${Math.floor(Date.now() / 30000)}`, alt: pinName(p), loading: 'lazy' }), el('span', {}, pinName(p)))),
     !pins.length ? el('p', { class: 'note' }, 'Nothing placed in this room yet. Open ', el('b', {}, 'Editor > Devices'), ' and click where each device is.') : null);
 }
 
@@ -324,6 +392,7 @@ renderer.domElement.addEventListener('click', (e) => {
   ray.setFromCamera(mouse, camera);
   const cur = curF(), targets = Object.values(S.F).filter((F) => F.G.visible && (!cur || F === cur)).map((F) => F.G);
   const hit = ray.intersectObjects(targets, true).find((h) => h.object.isMesh && h.object.material?.opacity !== 0 && !isClipped(h));
+  if (S.mode === 'view' && card) { closeCard(); return; }
   if (S.mode === 'view') {
     if (!hit) { if (S.room) { S.room = null; layout(true); } return; }
     const F = S.F[hit.object.userData.floor], l = F.G.worldToLocal(hit.point.clone()), i = roomAt(F, l.x, l.z);
@@ -383,7 +452,7 @@ const saveStyleSoon = debounce(saveStyle, 500);
 /* ---------- editor ---------- */
 function setMode(m) {
   if (m === 'edit' && !S.plan.pro?.pro) { toast('The editor is part of HouseOS Pro.'); return; }
-  S.mode = m; S.tool = null; clearSel(); S.room = null;
+  S.mode = m; S.tool = null; clearSel(); S.room = null; closeCard();
   document.body.classList.toggle('editing', m === 'edit');
   $('#side').hidden = true; $('#side').dataset.kind = '';
   for (const b of document.querySelectorAll('#modeSeg button')) b.classList.toggle('on', b.dataset.mode === m);
@@ -514,7 +583,8 @@ function drawThemeSeg() { $('#themeSeg').replaceChildren(seg(Object.entries(THEM
 async function reload() { S.plan = await api('/api/floorplan'); await loadFloors(); await refresh(); drawThemeSeg(); if (S.mode === 'edit') editor(); }
 async function start() {
   S.plan = await api('/api/floorplan');
-  try { units = (await api('/api/status')).units || 'F'; } catch { /* default */ }
+  units = S.plan.units || 'F';
+  if (!S.plan.units) try { units = (await api('/api/status')).units || 'F'; } catch { /* default */ }
   drawThemeSeg();
   await loadFloors(); await refresh();
   if (!S.plan.floors.length || location.hash === '#guide') guidePanel();
