@@ -29,6 +29,13 @@ of Pro included. Plug it into your router and open it on any screen. **[casatorc
 
 ## Install it for real
 
+**Everyday installs:** go to **[casatorch.com/download](https://casatorch.com/download)**, answer a few questions
+(Home Assistant? what hardware? which NAS?) and get the right file with step-by-step instructions -
+a Home Assistant add-on link, a Raspberry Pi image for Raspberry Pi Imager, a Windows installer, a Mac
+installer, a .deb for Ubuntu/Debian, or a compose file for Synology, QNAP, TrueNAS, Unraid and Portainer.
+The installers are built on every release (`deploy/packaging/`, see its README). The options below are
+for developers and command-line fans.
+
 | Runs on | How |
 | --- | --- |
 | Raspberry Pi 4/5, Debian, Ubuntu | `sudo ./deploy/install.sh` - a service that starts at boot |

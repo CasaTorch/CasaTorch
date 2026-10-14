@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+if [ "$1" = configure ]; then
+  getent passwd casatorch >/dev/null || adduser --system --group --home /var/lib/casatorch --no-create-home --quiet casatorch
+  mkdir -p /var/lib/casatorch && chown casatorch:casatorch /var/lib/casatorch && chmod 700 /var/lib/casatorch
+  if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+    systemctl enable casatorch.service >/dev/null 2>&1 || true
+    systemctl restart casatorch.service || true
+    echo "CasaTorch is running: open http://$(hostname).local:8090 (or http://localhost:8090 on this computer)."
+  else
+    # building an image (no systemd running): just switch it on for the first boot
+    systemctl enable casatorch.service >/dev/null 2>&1 || ln -sf /lib/systemd/system/casatorch.service /etc/systemd/system/multi-user.target.wants/casatorch.service
+  fi
+fi
+exit 0

@@ -9,3 +9,11 @@ app/server.js
 app/public/app.js
 node_modules/
 .DS_Store
+
+# installer builds (deploy/packaging) - dist/casatorch-card.js stays tracked
+dist/bundle/
+dist/node-win/
+dist/*.deb
+dist/*.pkg
+dist/*.exe
+dist/*.img.xz

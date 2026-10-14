@@ -1,9 +1,15 @@
-# Tag a version (git tag v0.2.0 && git push --tags) to publish the multi-arch image:
-#   ghcr.io/<owner>/casatorch:<version> and :latest, for amd64 (PCs, NAS, N100) and arm64 (Raspberry Pi 4/5).
+# Tag a version (git tag v0.3.0 && git push --tags) to publish everything people download:
+#   - the multi-arch image ghcr.io/<owner>/casatorch:<version> and :latest (amd64 PCs/NAS, arm64 Raspberry Pi)
+#   - installers attached to the GitHub release under fixed names, which casatorch.com/dl/<name> serves:
+#     CasaTorch-Setup-Windows.exe, CasaTorch-macOS.pkg, casatorch_amd64.deb, casatorch_arm64.deb,
+#     casatorch-raspberry-pi.img.xz, casatorch-compose.yml, casatorch-unraid.xml
 name: Release
 on:
   push: { tags: ["v*"] }
+  workflow_dispatch:
 permissions: { contents: write, packages: write }
+env:
+  CASATORCH_VERSION: ${{ startsWith(github.ref_name, 'v') && github.ref_name || 'v0.0.0' }}
 jobs:
   image:
     runs-on: ubuntu-latest
@@ -28,5 +34,86 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: deploy/packaging/bundle.sh dist/bundle && echo "${CASATORCH_VERSION#v}" > dist/bundle/VERSION
+      - run: tar czf bundle.tgz -C dist bundle
+      - uses: actions/upload-artifact@v4
+        with: { name: bundle, path: bundle.tgz }
+
+  linux:
+    needs: bundle
+    runs-on: ubuntu-latest
+    strategy: { matrix: { arch: [amd64, arm64] } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/download-artifact@v4
+        with: { name: bundle }
+      - run: mkdir -p dist && tar xzf bundle.tgz -C dist
+      - run: CASATORCH_VERSION=${CASATORCH_VERSION#v} deploy/packaging/linux/build-deb.sh ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with: { name: deb-${{ matrix.arch }}, path: dist/casatorch_${{ matrix.arch }}.deb }
+
+  raspberry-pi:
+    needs: linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: deb-arm64, path: dist }
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user-static binfmt-support parted e2fsprogs xz-utils
+      - run: sudo deploy/packaging/pi/build-image.sh dist/casatorch_arm64.deb
+      - uses: actions/upload-artifact@v4
+        with: { name: pi-image, path: dist/casatorch-raspberry-pi.img.xz }
+
+  windows:
+    needs: bundle
+    runs-on: windows-latest
+    defaults: { run: { shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/download-artifact@v4
+        with: { name: bundle }
+      - run: mkdir -p dist && tar xzf bundle.tgz -C dist
+      - run: deploy/packaging/fetch-node.sh win-x64 dist/node-win
+      - run: choco install innosetup --no-progress -y
+      - run: '"/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DAppVersion=${CASATORCH_VERSION#v}" deploy/packaging/windows/casatorch.iss'
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: dist/CasaTorch-Setup-Windows.exe }
+
+  macos:
+    needs: bundle
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/download-artifact@v4
+        with: { name: bundle }
+      - run: mkdir -p dist && tar xzf bundle.tgz -C dist
+      - run: CASATORCH_VERSION=${CASATORCH_VERSION#v} deploy/packaging/macos/build-pkg.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: macos, path: dist/CasaTorch-macOS.pkg }
+
+  publish:
+    needs: [image, linux, raspberry-pi, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - run: rm -f out/bundle.tgz && cp deploy/downloads/casatorch-compose.yml out/ && cp deploy/unraid/casatorch.xml out/casatorch-unraid.xml && ls -la out
       - uses: softprops/action-gh-release@v2
-        with: { generate_release_notes: true }
+        with:
+          generate_release_notes: true
+          files: out/*

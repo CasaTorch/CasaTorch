@@ -74,7 +74,7 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
   main.append(el('div', { class: 'connect-hero card' },
     el('div', { class: 'ha-mark' }, icon('home', 26)),
     el('div', { class: 'grow' }, el('div', { class: 'connect-hero-title' }, ha ? 'Home Assistant is connected' : 'Got Home Assistant? Connect it once and everything comes with it.'),
-      el('p', { class: 'muted', style: 'margin:0' }, ha ? `${fromHa} entities - every light, sensor, lock, camera and room - are available as widgets automatically. New ones appear on their own.` : 'Every one of its 3,000+ integrations, every entity and every room shows up in CasaTorch as a ready-made widget. No YAML, no add-ons, no command line.')),
+      el('p', { class: 'muted', style: 'margin:0' }, ha ? `${fromHa} entities - every light, sensor, lock, camera and room - are available as widgets automatically. New ones appear on their own.` : 'Many brands need it - Matter, Zigbee, Z-Wave, ecobee, Nest, Lutron, Kasa, solar and your power company. Connect it once and everything you have in it, every entity and every room, shows up here as ready-made widgets.')),
     el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap' }, ha ? el('a', { class: 'btn primary', href: '#home', onclick: () => setTimeout(() => toast('Press Add widget > Rooms & devices'), 400) }, icon('plus'), 'Add Home Assistant widgets')
       : el('button', { class: 'btn primary', onclick: () => startConnect({ label: 'Home Assistant', step: 'homeassistant', how: 'direct' }, conn) }, 'Connect Home Assistant'),
       ha ? null : el('a', { class: 'btn', href: 'https://www.home-assistant.io/green', target: '_blank', rel: 'noopener' }, 'Don\'t have it? Home Assistant Green'))));

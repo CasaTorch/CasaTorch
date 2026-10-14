@@ -1,0 +1,14 @@
+# CasaTorch - for Synology Container Manager, QNAP Container Station, TrueNAS, Portainer or any Docker host.
+# Step-by-step for your NAS: https://casatorch.com/download
+# When it is running, open http://<your NAS or server address>:8090 and follow the setup screens.
+services:
+  casatorch:
+    image: ghcr.io/casatorch/casatorch:latest
+    container_name: casatorch
+    restart: unless-stopped
+    # "host" lets CasaTorch find Hue bridges and other gear on your network. If your system does not
+    # allow it (Docker Desktop on Mac or Windows), delete this line and use the "ports" line below.
+    network_mode: host
+    # ports: ["8090:8090"]
+    volumes:
+      - ./data:/data        # your settings; on TrueNAS use a full path, e.g. /mnt/tank/apps/casatorch:/data

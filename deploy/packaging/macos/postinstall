@@ -1,0 +1,8 @@
+#!/bin/sh
+DATA="/Library/Application Support/CasaTorch"
+mkdir -p "$DATA" && chown -R nobody:nobody "$DATA" && chmod 700 "$DATA"
+launchctl bootstrap system /Library/LaunchDaemons/com.casatorch.server.plist 2>/dev/null || launchctl kickstart -k system/com.casatorch.server
+# Wait for it to answer, then open setup for whoever is at the screen.
+i=0; while [ $i -lt 40 ]; do curl -fs http://127.0.0.1:8090/api/health >/dev/null 2>&1 && break; sleep 0.5; i=$((i+1)); done
+U=$(stat -f%Su /dev/console 2>/dev/null); [ -n "$U" ] && [ "$U" != root ] && sudo -u "$U" open http://localhost:8090/ 2>/dev/null
+exit 0

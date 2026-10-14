@@ -9,10 +9,12 @@ COPY app/src ./src
 COPY app/public ./public
 COPY app/catalog ./catalog
 COPY demo /demo
-RUN node build.mjs && mkdir -p /data && chown node:node /data
+COPY app/docker-entrypoint.sh /usr/local/bin/casatorch-entrypoint
+RUN node build.mjs && mkdir -p /data && chown node:node /data && chmod 755 /usr/local/bin/casatorch-entrypoint
 ENV CASATORCH_DATA_DIR=/data PORT=8090 NODE_ENV=production
-USER node
+# Starts as root only to fix the owner of /data, then runs CasaTorch as the "node" user (docker-entrypoint.sh).
 EXPOSE 8090
 VOLUME ["/data"]
 HEALTHCHECK --interval=60s --timeout=5s --start-period=20s CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8090)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+ENTRYPOINT ["casatorch-entrypoint"]
 CMD ["node", "server.js"]
