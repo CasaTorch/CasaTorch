@@ -73,8 +73,28 @@ const HA_SERVICES = {
   vacuum: { start: 'start', dock: 'return_to_base', stop: 'stop' }, lawn_mower: { start: 'start_mowing', dock: 'dock' },
   lock: { lock: 'lock' },
 };
+/* Home Assistant areas (Living room, Kitchen...): which room each entity is in, so every room can be a
+   widget of its own. One template call; areas change rarely, so it is kept for five minutes. */
+const HA_AREA_TEMPLATE = `{% set ns = namespace(out=[]) %}{% for a in areas() %}{% set n = namespace(ids=area_entities(a) | list) %}{% for d in area_devices(a) %}{% set n.ids = n.ids + (device_entities(d) | list) %}{% endfor %}{% set ns.out = ns.out + [{'name': area_name(a), 'ids': n.ids | unique | list}] %}{% endfor %}{{ ns.out | tojson }}`;
+async function haAreas() {
+  const h = config.homeAssistant; if (!h?.url) return {};
+  try {
+    return await cached('ha:areas', 300_000, async () => {
+      const r = await fetch(`${h.url}/api/template`, { method: 'POST', headers: { Authorization: `Bearer ${h.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ template: HA_AREA_TEMPLATE }), signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const map = {};
+      for (const a of JSON.parse(await r.text())) for (const id of a.ids || []) map[id] ||= String(a.name);
+      return map;
+    });
+  } catch { return {}; }   // older Home Assistant or no areas: entities just have no room
+}
 PROVIDERS.ha = {
-  async list() { return haPairPlugs((await haStates()).map(haDevice).filter(Boolean)); },
+  async list() {
+    const [states, areas] = await Promise.all([haStates(), haAreas()]);
+    const list = haPairPlugs(states.map(haDevice).filter(Boolean));
+    for (const d of list) { const a = areas[d.id.slice(3)]; if (a) d.area = a; }
+    return list;
+  },
   async act(d, action, value) {
     const h = config.homeAssistant, ent = d.id.slice(3), domain = ent.split('.')[0];
     if (d.risky && ['open', 'toggle'].includes(action)) throw new Error('opening garage doors and gates stays in Home Assistant');

@@ -49,3 +49,4 @@ textarea { font: inherit; padding: 9px 10px; border-radius: 8px; border: 1px sol
 .item { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin: 8px 0; display: grid; gap: 8px; }
 .grid2 { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; } @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
 .results button { display: block; width: 100%; text-align: left; margin: 4px 0; }
+.focus-note { margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(94, 184, 255, .35); background: rgba(94, 184, 255, .10); line-height: 1.5; }

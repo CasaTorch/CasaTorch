@@ -143,6 +143,60 @@ widget({ id: 'entities', title: 'Pinned devices', icon: 'sliders', multi: true, 
     const perRow = Math.max(1, Math.floor(w / 2));
     b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr));overflow:auto` }, ds.map((d) => devButton(d, true))));
   } });
+/* One device or entity as a tile of its own. The Add widget screen offers every device and every
+   Home Assistant entity automatically - anything new in Home Assistant shows up there on its own. */
+function devHeadline(d) {
+  if (d.kind === 'camera') return null;
+  if (d.tempC != null && d.kind !== 'climate') return tempOf(d.tempC);
+  if (d.kind === 'climate') return d.tempC != null ? tempOf(d.tempC) : pretty(d.mode || d.state);
+  if (d.powerW != null && d.kind === 'sensor') return `${Math.round(d.powerW)} W`;
+  if (d.humidity != null && d.kind === 'sensor') return `${d.humidity}%`;
+  if (d.battery != null && d.kind === 'sensor' && d.water == null && d.motion == null && d.open == null) return `${d.battery}%`;
+  if (d.kind === 'value') return `${d.value ?? '-'}${d.unit ? ` ${d.unit}` : ''}`;
+  if (d.kind === 'lock') return d.locked ? 'Locked' : 'Unlocked';
+  if (d.kind === 'presence') return d.home ? 'Home' : 'Away';
+  if (d.water != null) return d.water ? 'Water!' : 'Dry';
+  if (d.smoke != null) return d.smoke ? 'Smoke!' : 'Clear';
+  if (d.motion != null) return d.motion ? 'Motion' : 'Clear';
+  if (d.open != null) return d.open ? 'Open' : 'Closed';
+  if (d.kind === 'media') return d.playing ? 'Playing' : d.on ? 'Paused' : 'Off';
+  if (d.kind === 'action') return d.domain === 'scene' ? 'Scene' : d.domain === 'script' ? 'Script' : 'Button';
+  if (d.on != null) return d.on ? (d.brightness ? `On · ${d.brightness}%` : 'On') : 'Off';
+  return pretty(d.state || '-');
+}
+function deviceCard(d, { w, h }) {
+  if (d.kind === 'camera') return camView(d);
+  const act = async (action, label, value) => { try { await post(`/api/devices/${encodeURIComponent(d.id)}/${action}`, value != null ? { value } : {}); toast(`${d.name}: ${label}`); } catch (err) { toast(err.message, 4000); } };
+  const sub = devMeta(d, false), head = devHeadline(d);
+  const lit = d.on || d.playing || (d.kind === 'presence' && d.home) || (d.kind === 'cover' && d.open);
+  const controls = [];
+  if (TOGGLES.has(d.kind) && d.online !== false) controls.push(el('button', { class: `btn small${lit ? ' primary' : ''}`, onclick: async (e) => { try { await toggleDevice(d); e.target.closest('.devcard').replaceWith(deviceCard(d, { w, h })); } catch (err) { toast(err.message); } } }, d.kind === 'media' ? (d.playing ? 'Pause' : 'Play') : d.on ? 'Turn off' : 'Turn on'));
+  if (d.kind === 'cover') { if (!d.risky) controls.push(el('button', { class: 'btn small', onclick: () => act('open', 'opening') }, 'Open')); controls.push(el('button', { class: 'btn small', onclick: () => act('close', 'closing') }, 'Close')); }
+  if (d.kind === 'action') controls.push(el('button', { class: 'btn small primary', onclick: () => act('run', 'done') }, 'Run'));
+  if (d.kind === 'vacuum') controls.push(el('button', { class: 'btn small', onclick: () => act('start', 'starting') }, 'Start'), el('button', { class: 'btn small', onclick: () => act('dock', 'going home') }, 'Dock'));
+  const dim = d.kind === 'light' && d.on && h >= 3 ? el('input', { type: 'range', min: 1, max: 100, value: d.brightness || 100, 'aria-label': `${d.name} brightness`, style: 'margin-top:10px', onchange: (e) => { d.brightness = Number(e.target.value); act('brightness', `${d.brightness}%`, d.brightness); } }) : null;
+  return el('div', { class: `devcard${lit ? ' on' : ''}${d.water || d.smoke || d.triggered ? ' alarm' : ''}${d.online === false ? ' offline' : ''}` },
+    el('div', { class: 'row', style: 'gap:12px;align-items:center' }, el('span', { class: 'ic' }, icon(devIconName(d), 22)),
+      el('div', { style: 'min-width:0' }, el('div', { class: 'devcard-big ellipsis', style: w <= 2 ? 'font-size:22px' : null }, head || ''), h >= 2 && sub && sub !== head ? el('div', { class: 'small muted ellipsis' }, sub) : null)),
+    dim, controls.length && h >= 2 ? el('div', { class: 'row', style: 'gap:6px;margin-top:auto;padding-top:10px;flex-wrap:wrap' }, controls) : null,
+    h >= 3 ? el('div', { class: 'tiny faint', style: 'margin-top:8px' }, [d.area, d.provider === 'ha' ? 'Home Assistant' : pretty(d.provider)].filter(Boolean).join(' · ')) : null);
+}
+widget({ id: 'device', title: 'Device', icon: 'plug', multi: true, hidden: true, min: [2, 1], size: [3, 2], render(b, ctx, size) {
+  const d = (ctx.data.devices?.devices || []).find((x) => x.id === b._t?.device);
+  if (!d) return b.replaceChildren(empty('This device is not reporting right now. If it was removed from Home Assistant, remove this tile.'));
+  b.replaceChildren(deviceCard(d, size));
+} });
+/* A whole room (a Home Assistant area): every device in it, its temperature and what is on. */
+widget({ id: 'room', title: 'Room', icon: 'home', multi: true, hidden: true, min: [2, 2], size: [4, 3], render(b, ctx, { w, h }) {
+  const area = b._t?.area, ds = (ctx.data.devices?.devices || []).filter((d) => d.area === area);
+  if (!ds.length) return b.replaceChildren(empty(`Nothing is in "${area || 'this room'}" right now.`));
+  const temp = ds.find((d) => d.tempC != null && d.kind !== 'climate')?.tempC ?? ds.find((d) => d.tempC != null)?.tempC;
+  const on = ds.filter((d) => d.kind === 'light' && d.on).length, lights = ds.filter((d) => d.kind === 'light').length, watts = ds.reduce((s, d) => s + (typeof d.powerW === 'number' ? d.powerW : 0), 0);
+  const facts = [temp != null ? el('b', {}, tempOf(temp)) : null, lights ? el('span', {}, `${on}/${lights} lights on`) : null, watts ? el('span', {}, `${Math.round(watts)} W`) : null, el('span', {}, `${ds.length} device${ds.length === 1 ? '' : 's'}`)].filter(Boolean);
+  const perRow = Math.max(1, Math.floor(w / 2));
+  b.replaceChildren(el('div', { class: 'row small muted', style: 'gap:14px;margin-bottom:10px;flex-wrap:wrap' }, facts),
+    el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr));overflow:auto` }, ds.filter((d) => d.kind !== 'camera').slice(0, perRow * Math.max(1, fits(h, 66, 80))).map((d) => devButton(d, true))));
+} });
 widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', min: [2, 2], size: [4, 3], render(b, ctx, { w, h }) {
   const ds = (ctx.data.devices?.devices || []).filter((d) => ['light', 'switch', 'plug', 'media'].includes(d.kind));
   if (!ds.length) return b.replaceChildren(empty('No lights or plugs yet.'));

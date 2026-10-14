@@ -59,7 +59,9 @@ Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
 - **Drag, resize, add and remove tiles** on the Home screen (Edit layout). Tiles show more as they
   grow: a small weather tile is the temperature; a big one adds the hours and the week.
 - **14 widgets**: clock, weather, calendar, scores, headlines, internet, today, alerts, energy,
-  quick switches, pinned devices (any devices or Home Assistant entities you pick), cameras, photo reel, 3D Home.
+  quick switches, pinned devices (any devices or Home Assistant entities you pick), cameras, photo reel, 3D Home -
+  plus **every device, Home Assistant entity and room as a widget of its own**: Add widget > Rooms & devices lists
+  them all automatically, and anything new in Home Assistant appears there on its own (marked New).
 - **Panel mode** for wall tablets (`http://<box>:8090/?panel=1`): a status bar across the top with
   the time, weather, alerts and everything CasaTorch is connected to - green, yellow or red - plus
   the Ask the house bar. Keeps the screen on.
@@ -84,7 +86,9 @@ The first time you open CasaTorch, a setup wizard walks through:
 9. **Network, energy, alerts** - your power company's real usage needs Home Assistant; without it,
    CasaTorch uses your smart plugs and your price per kWh
 
-Run it again any time from **Settings > Run setup again**; what you don't change is kept.
+Run it again any time from **Settings > Run setup again**; what you don't change is kept. To add one thing, open
+the **Connect** tab: every brand CasaTorch works with, what's already connected, and a **Connect** button that
+opens the guided setup right at that item - pick, answer a question or two, Test, Save. No command line.
 
 ## What works without Home Assistant
 
@@ -102,7 +106,8 @@ Run it again any time from **Settings > Run setup again**; what you don't change
 
 With Home Assistant connected, **everything in it shows up in CasaTorch** - lights, switches, fans, blinds and
 covers, media, thermostats, locks, cameras, scenes, scripts, buttons, vacuums, alarms, people, and every sensor -
-searchable in Controls and pinnable to any Home screen tile ("Pinned devices"). That brings Z-Wave, Zigbee,
+searchable in Controls and ready to add to Home - one entity, a group ("Pinned devices"), or a whole Home
+Assistant area as a room tile. That brings Z-Wave, Zigbee,
 Matter, Nest, your power company's real usage (Opower) and thousands more. Unlocking doors, opening garage
 doors and disarming alarms stay in Home Assistant. The full list, including what
 we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRIX.md).
