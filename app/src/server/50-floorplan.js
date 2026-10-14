@@ -58,7 +58,7 @@ app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req,
 /* Live: every placed device's state + the house totals shown on top of the plan. */
 app.get('/api/floorplan/live', async (_req, res) => {
   const d = fpData();
-  const { devices } = isDemo() ? { devices: JSON.parse(fs.readFileSync(path.join(DEMO_FP, 'devices.json'), 'utf8')) } : await allDevices();
+  const { devices } = await houseDevices();
   const byId = new Map(devices.map((x) => [x.id, x]));
   const powerW = devices.filter((x) => x.powerW != null).reduce((a, x) => a + x.powerW, 0);
   res.json({

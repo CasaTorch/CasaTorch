@@ -36,6 +36,7 @@ app.get('/api/settings', (_req, res) => {
 app.put('/api/settings', express.json(), (req, res) => {
   if (isDemo()) return res.json({ ok: true, demo: true });
   const b = req.body || {}, next = { ...config };
+  if ('houseName' in b) next.house = { ...(next.house || {}), name: String(b.houseName || '').trim().slice(0, 60) || 'My House' };
   if ('note' in b) next.note = String(b.note || '').slice(0, 280) || null;
   if ('ratePerKwh' in b) { const r = Number(b.ratePerKwh); if (!(r >= 0 && r < 5)) return res.status(400).json({ error: 'the rate is in dollars per kWh, e.g. 0.17' }); next.energy = { ...(next.energy || {}), ratePerKwh: r }; }
   if ('budget' in b) next.energy = { ...(next.energy || {}), budget: Number(b.budget) || null };

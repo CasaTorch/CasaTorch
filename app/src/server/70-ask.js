@@ -57,7 +57,7 @@ async function houseSnapshot() {
   const s = async (p) => { try { return await p; } catch { return null; } };
   const demo = isDemo();
   const [dev, home, alertsNow] = await Promise.all([
-    demo ? { devices: JSON.parse(fs.readFileSync(path.join(APP_DIR, '..', 'demo', 'floorplan', 'devices.json'), 'utf8')) } : s(allDevices()),
+    s(houseDevices()),
     demo ? demoFixture('home') : (async () => ({
       weather: config.location ? await s(weatherNow()) : null, calendar: await s(calendarEvents(7)),
       sports: (config.sports?.teams || []).length ? await s(sportsNow()) : null, news: (config.news?.feeds || []).length ? await s(newsNow()) : null, internet: await s(internetNow()),

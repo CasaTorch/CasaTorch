@@ -21,7 +21,14 @@ async function allDevices() {
   }));
   return { devices: out, errors };
 }
-app.get('/api/devices', async (_req, res) => res.json(isDemo() ? { devices: JSON.parse(fs.readFileSync(path.join(APP_DIR, '..', 'demo', 'floorplan', 'devices.json'), 'utf8')), errors: [] } : await allDevices()));
+/** Every device, demo or real, with the names the household gave them (Settings > Names). */
+async function houseDevices() {
+  const r = isDemo() ? { devices: JSON.parse(fs.readFileSync(path.join(APP_DIR, '..', 'demo', 'floorplan', 'devices.json'), 'utf8')), errors: [] } : await allDevices();
+  const names = uiPrefs().deviceNames || {};
+  for (const d of r.devices) { d.originalName = d.name; if (names[d.id]) d.name = names[d.id]; }
+  return r;
+}
+app.get('/api/devices', async (_req, res) => res.json(await houseDevices()));
 app.post('/api/devices/:id/:action', express.json(), async (req, res) => {
   if (isDemo()) return res.json({ ok: true, demo: true });
   const id = String(req.params.id), prov = PROVIDERS[id.split(':')[0]];

@@ -26,6 +26,36 @@ function aiCard(s) {
   return el('div', { class: 'card' }, el('h2', {}, icon('spark', 15), 'Ask the house', el('span', { class: 'pill pro' }, 'PRO')), el('label', { class: 'field' }, el('span', {}, 'AI'), prov), help, keyF, urlF,
     el('label', { class: 'field' }, el('span', {}, 'Model'), model), el('div', { class: 'row wrap' }, find, save), msg);
 }
+
+function lookCard() {
+  const u = { ...S.ui };
+  const seg = (key, opts) => { const box = el('div', { class: 'seg' }); const draw = () => box.replaceChildren(...opts.map(([v, l]) => el('button', { class: u[key] === v ? 'on' : null, onclick: async () => { u[key] = v; draw(); await saveUi({ [key]: v }); } }, l))); draw(); return box; };
+  const sw = el('div', { class: 'swatches' });
+  const a1 = el('input', { type: 'color', value: u.accent, style: 'width:54px;height:38px;padding:2px' }), a2 = el('input', { type: 'color', value: u.accent2, style: 'width:54px;height:38px;padding:2px' });
+  const drawSw = () => sw.replaceChildren(...PALETTES.map(([name, x, y]) => el('button', { class: `swatch${u.accent === x && u.accent2 === y ? ' on' : ''}`, title: name, 'aria-label': `${name} colors`, style: `background:linear-gradient(135deg,${x},${y})`, onclick: async () => { u.accent = x; u.accent2 = y; a1.value = x; a2.value = y; drawSw(); await saveUi({ accent: x, accent2: y }); } })));
+  drawSw();
+  let t = null; const live = () => { u.accent = a1.value; u.accent2 = a2.value; S.ui = { ...S.ui, accent: u.accent, accent2: u.accent2 }; applyUi(); drawSw(); clearTimeout(t); t = setTimeout(() => saveUi({ accent: u.accent, accent2: u.accent2 }), 500); };
+  a1.oninput = live; a2.oninput = live;
+  const row = (label, ctl, help) => el('div', { style: 'margin:14px 0' }, el('div', { class: 'small muted', style: 'margin-bottom:6px' }, label), ctl, help ? el('div', { class: 'tiny faint', style: 'margin-top:5px' }, help) : null);
+  const askTog = el('input', { type: 'checkbox', checked: u.panelAsk !== false, style: 'width:auto', onchange: (e) => saveUi({ panelAsk: e.target.checked }) });
+  return el('div', { class: 'card' }, el('h2', {}, 'Look & feel'),
+    row('Mode', seg('theme', [['dark', 'Dark'], ['light', 'Light'], ['auto', 'Match device']])),
+    row('Colors', el('div', {}, sw, el('div', { class: 'row', style: 'margin-top:10px' }, el('span', { class: 'small muted' }, 'Custom'), a1, a2))),
+    row('Menu position', seg('nav', [['left', 'Left'], ['right', 'Right'], ['top', 'Top'], ['bottom', 'Bottom']]), 'Phones always use the bar along the bottom when the menu is on a side.'),
+    row('Status bar across the top', seg('statusBar', [['panel', 'Panel mode'], ['always', 'Always'], ['off', 'Off']]), 'Shows the time, weather, alerts and everything HouseOS is connected to.'),
+    el('label', { class: 'row small' }, askTog, 'Show the Ask the house bar in panel mode (Pro)'),
+    el('div', { class: 'row wrap', style: 'margin-top:14px' }, el('button', { class: 'btn', onclick: () => setPanel(true) }, icon('expand'), 'Panel mode on this screen'), el('button', { class: 'btn ghost', onclick: async () => { await post('/api/ui', { reset: true }, 'PUT'); S.ui = await api('/api/ui'); applyUi(); drawNav(); show('settings'); } }, icon('reset'), 'Reset look')),
+    el('p', { class: 'tiny faint' }, 'Tip: open http://<this box>:8090/?panel=1 on a wall tablet to start it in panel mode.'));
+}
+function menuCard() {
+  const tabs = JSON.parse(JSON.stringify(S.ui.tabs || {}));
+  const rows = TABS.map((t) => { const cur = tabs[t.id] || {};
+    const inp = el('input', { value: cur.label || '', placeholder: t.label, maxlength: 24, oninput: (e) => { tabs[t.id] = { ...(tabs[t.id] || {}), label: e.target.value.trim() || null }; } });
+    const vis = el('input', { type: 'checkbox', checked: !cur.hidden, disabled: t.id === 'settings', style: 'width:auto', title: 'Show in the menu', onchange: (e) => { tabs[t.id] = { ...(tabs[t.id] || {}), hidden: !e.target.checked }; } });
+    return el('div', { class: 'tab-row' }, icon(t.icon), inp, el('label', { class: 'row tiny muted' }, vis, 'Show')); });
+  return el('div', { class: 'card' }, el('h2', {}, 'Menu'), el('p', { class: 'small muted', style: 'margin-top:0' }, 'Rename menu items or hide the ones you don\'t use. Rename Home screen tiles from Edit layout, and devices from Controls.'), ...rows,
+    el('button', { class: 'btn primary', style: 'margin-top:12px', onclick: async () => { await saveUi({ tabs }); toast('Menu saved'); setTop(tabLabel(TABS.find((x) => x.id === 'settings'))); } }, 'Save menu'));
+}
 tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
   const s = await api('/api/settings'); S.settings = s;
   const p = s.pro || {};
@@ -37,11 +67,12 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
     el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 18px;margin:12px 0' }, PRO_FEATURES.map(([t, d, now]) => el('div', { style: 'padding:8px 0;border-top:1px solid var(--line)' }, el('b', {}, t), now ? el('span', { class: 'pill good', style: 'margin-left:6px' }, 'ready') : el('span', { class: 'pill', style: 'margin-left:6px' }, 'coming'), d ? el('div', { class: 'small muted' }, d) : null))),
     el('label', { class: 'field' }, el('span', {}, 'License key'), key), saveKey);
 
+  const hname = el('input', { type: 'text', maxlength: '60', value: s.house?.name || '' });
   const rate = el('input', { type: 'number', step: '0.01', min: '0', value: s.energy?.ratePerKwh ?? '', placeholder: '0.17' });
   const note = el('input', { type: 'text', maxlength: '280', value: s.note || '', placeholder: 'e.g. Plumber coming Thursday 10-12' });
   const saveV = el('button', { class: 'btn' }, 'Save');
-  saveV.onclick = async () => { try { await post('/api/settings', { ratePerKwh: rate.value === '' ? 0 : Number(rate.value), note: note.value }, 'PUT'); toast('Saved'); } catch (err) { toast(err.message); } };
-  const everyday = el('div', { class: 'card' }, el('h2', {}, 'Everyday'), el('label', { class: 'field' }, el('span', {}, 'Electricity rate ($ per kWh)'), rate), el('label', { class: 'field' }, el('span', {}, 'Note on the Home screen'), note), saveV);
+  saveV.onclick = async () => { try { await post('/api/settings', { houseName: hname.value, ratePerKwh: rate.value === '' ? 0 : Number(rate.value), note: note.value }, 'PUT'); toast('Saved'); } catch (err) { toast(err.message); } };
+  const everyday = el('div', { class: 'card' }, el('h2', {}, 'Everyday'), el('label', { class: 'field' }, el('span', {}, 'Name of your home'), hname), el('label', { class: 'field' }, el('span', {}, 'Electricity rate ($ per kWh)'), rate), el('label', { class: 'field' }, el('span', {}, 'Note on the Home screen'), note), saveV);
 
   const homeCard = el('div', { class: 'card' }, el('h2', {}, 'Home screen'), el('p', { class: 'small muted', style: 'margin-top:0' }, 'Add widgets, drag them around and resize them right on the Home screen (Edit layout). The layout is saved on this HouseOS, so every screen in the house matches.'),
     el('div', { class: 'row wrap' }, el('a', { class: 'btn primary', href: '#home', onclick: () => setTimeout(() => $('.top .btn.primary')?.click(), 400) }, icon('plus'), 'Add a widget'), el('button', { class: 'btn', onclick: async () => { await post('/api/layout', { reset: true }, 'PUT'); toast('Home screen reset'); } }, icon('reset'), 'Reset layout'), el('a', { class: 'btn', href: '#photos' }, 'Manage photos'), el('a', { class: 'btn', href: '#calendar' }, 'Calendar')));
@@ -61,7 +92,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
     s.demo ? null : el('label', { class: 'field' }, el('span', {}, 'Password (to run setup again)'), pw),
     el('div', { class: 'row wrap' }, rerun, s.signIn ? out : null),
     el('p', { class: 'small muted' }, `HouseOS ${s.version} · open-source core (AGPL-3.0) · `, el('a', { href: 'https://gethouseos.com', target: '_blank', rel: 'noopener' }, 'gethouseos.com')));
-  main.replaceChildren(el('div', { class: 'cards' }, pro, aiCard(s), homeCard, everyday, conn, acct));
+  main.replaceChildren(el('div', { class: 'cards' }, pro, lookCard(), menuCard(), aiCard(s), homeCard, everyday, conn, acct));
   return null;
 } });
 /* Side-rail order */
