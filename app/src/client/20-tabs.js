@@ -89,11 +89,11 @@ tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {
 tab({ id: 'house3d', label: '3D Home', short: '3D', icon: 'cube', pro: true, async render(main) {
   if (!isPro()) {
     main.replaceChildren(el('div', { class: 'card hero3d' }, el('h2', { style: 'justify-content:center' }, 'HouseOS Pro'), el('div', { style: 'font-size:28px;font-weight:700;margin-bottom:10px' }, 'Your house, in 3D'),
-      el('p', { class: 'muted', style: 'max-width:560px;margin:0 auto 18px' }, 'Scan each floor with an iPhone or iPad Pro (LiDAR), drop the model into HouseOS, and pin your devices where they really are. Lights glow when on, speakers pulse with music, leaks and open doors flash - tap a pin to switch it.'),
+      el('p', { class: 'muted', style: 'max-width:560px;margin:0 auto 18px' }, 'Scan each floor with a LiDAR iPhone or iPad Pro - or draw your floors right in HouseOS on any device - and pin your devices where they really are. Lights glow when on, speakers pulse with music, leaks and open doors flash - tap a pin to switch it.'),
       el('div', { class: 'row', style: 'justify-content:center' }, el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'), el('a', { class: 'btn', href: '/floorplan.html' }, 'Preview'))));
     return null;
   }
-  setTop('3D Home', 'Your LiDAR scan, live', [el('a', { class: 'btn', href: '/floorplan.html#guide' }, 'How to scan'), el('a', { class: 'btn primary', href: '/floorplan.html' }, icon('expand'), 'Full screen')]);
+  setTop('3D Home', 'Your LiDAR scan, live', [el('a', { class: 'btn', href: '/floorplan.html#guide' }, 'Add floors'), el('a', { class: 'btn primary', href: '/floorplan.html' }, icon('expand'), 'Full screen')]);
   main.replaceChildren(el('iframe', { class: 'plan', src: '/floorplan.html?embed=1', title: '3D floor plan' }));
   return null;
 } });

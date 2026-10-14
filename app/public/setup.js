@@ -320,6 +320,7 @@ function welcome() {
   if (W.rerun) { const k = Object.entries(W.keeps).filter(([, v]) => v).map(([n]) => n); return [el('h1', {}, 'Change your setup'), el('p', { class: 'intro' }, `Your current answers are filled in. Anything you don't change is kept${k.length ? `, including what's already connected (${k.join(', ')})` : ''}.`)]; }
   return [el('h1', {}, 'Welcome to HouseOS'),
     el('p', { class: 'intro' }, 'About 10 minutes. First the everyday things - your town for the weather, calendars, teams, headlines, reminders. Then your gear: HouseOS connects to Hue, Shelly, YoLink, Frigate, Reolink and Ring itself, and to thousands more through Home Assistant if you have it. Skip anything; add it later.'),
+    el('p', { class: 'note' }, 'Stuck at any point? Ask in the HouseOS community: ', el('a', { href: 'https://gethouseos.com/discord', target: '_blank', rel: 'noopener' }, 'gethouseos.com/discord'), '.'),
     el('div', { class: 'card' }, el('h3', {}, 'Just looking?'), el('p', { class: 'note' }, 'See HouseOS with a sample house, including the 3D floor plan. No setup needed.'),
       el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/'; } }, 'Try the demo'))];
 }

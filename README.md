@@ -22,6 +22,11 @@ npm install
 npm run demo          # open http://localhost:8090
 ```
 
+## Get a HouseOS Box
+
+Rather not set anything up? Order a **HouseOS Box** - a Raspberry Pi 5 with HouseOS installed, a year
+of Pro included. Plug it into your router and open it on any screen. **[gethouseos.com/box](https://gethouseos.com/box)**
+
 ## Install it for real
 
 | Runs on | How |
@@ -94,8 +99,8 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 
 | Pro, available now | Pro, coming (included when it ships) |
 | --- | --- |
-| **3D Home** - your LiDAR scan as a live floor plan | **Away from home** - secure remote access, no port forwarding |
-| **Ask the house** - plain-English answers about your home, tap-to-do actions | **Phone alerts** - push notifications with quiet hours |
+| **3D Home** - your home as a live 3D plan (LiDAR scan, or draw it in the app) | **Away from home** - secure remote access, no port forwarding |
+| **Ask the house** - plain-English answers about your home, tap-to-do actions (AI usage billed by your AI provider, or free with Ollama) | **Phone alerts** - push notifications with quiet hours |
 | **Ring** doorbells and cameras (Labs) | **iPhone, iPad and Android apps** |
 | | Smart alerts, energy insights, self-healing, 2-year history, multi-home, backups |
 
@@ -104,8 +109,17 @@ Full comparison: [docs/EDITIONS.md](docs/EDITIONS.md). Where phones, tablets and
 
 ### 3D Home (Pro)
 
-Scan each floor with an iPhone or iPad Pro (Polycam, Scaniverse or 3D Scanner App, LiDAR room mode),
-export **GLB**, and upload it under **3D Home > Floors**. Line the floors up, then **Place devices**:
+Two ways to get your floors in - mix and match per floor:
+
+- **Draw them, on any device.** In **3D Home > Floors > Draw a floor**, drag to draw each room on a 1 m
+  grid and add walls. Have a floor-plan picture (from the listing, the builder, or a photo of a paper
+  plan)? **Trace a picture**: set how wide it is in meters and draw over it. HouseOS raises the walls
+  into 3D.
+- **Scan them with LiDAR** for the most realistic result. This needs an iPhone or iPad **with a LiDAR
+  sensor** - iPhone 12 Pro and newer *Pro* models, iPad Pro 2020 and newer - and a free scanning app
+  (Polycam, Scaniverse or 3D Scanner App, room mode). Export **GLB** and upload it under **Floors**.
+
+Line the floors up, then **Place devices**:
 pick a light, plug, speaker, camera or sensor and click where it is. Lights glow when on, speakers
 pulse when music plays, leaks and open doors flash, the top bar shows total watts - and tapping a
 pin switches it or opens the camera. The step-by-step guide is built into the page ("How to scan").
@@ -116,6 +130,23 @@ pin switches it or opens the camera. The step-by-step guide is built into the pa
 HouseOS knows right now; when you ask it to switch something it shows a button you tap to confirm.
 Bring your own AI - **Claude**, **OpenAI**, any OpenAI-compatible server - or **Ollama** on your
 own network so nothing leaves the house. It never unlocks doors or opens garage doors.
+
+> **AI costs are separate from Pro.** If you connect Claude (Anthropic) or ChatGPT (OpenAI), you use
+> your own API key and **they bill you directly** for what you use - usually a fraction of a cent per
+> question, a few dollars a month for heavy use. A ChatGPT Plus or Claude Pro *subscription* does not
+> cover API use; you need an API key from console.anthropic.com or platform.openai.com. **Ollama is
+> free** - it runs on a computer at home - and private.
+
+## Support and services
+
+- **Community** (free): the HouseOS Discord - **[gethouseos.com/discord](https://gethouseos.com/discord)** - and GitHub issues
+- **Basic support** (included with Pro): e-mail and Discord support from the HouseOS team
+- **Service & Developer Access** ($100/year, includes Pro): a direct line to a HouseOS developer for
+  custom features and hands-on help deploying HouseOS in your home
+- **Home network planning**: a one-on-one consultation to scope your network, Wi-Fi, cameras and
+  sensors, with a written plan
+
+Details: [docs/SUPPORT.md](docs/SUPPORT.md).
 
 ## Privacy
 

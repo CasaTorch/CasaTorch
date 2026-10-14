@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { openDrawer } from './floorplan-draw.js';
 
 const S = { plan: null, live: null, floorView: 'all', edit: false, pick: null, pins: [], groups: {}, pinObjs: [], lights: {} };
 const $ = (s) => document.querySelector(s);
@@ -25,7 +26,7 @@ scene.add(new THREE.HemisphereLight('#9ec5ff', '#0b1220', 0.55)); const sun = ne
 const grid = new THREE.GridHelper(80, 80, '#12304a', '#0b1a2b'); grid.position.y = -0.02; scene.add(grid);
 const resize = () => { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); labels.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); };
 addEventListener('resize', resize); resize();
-(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); labels.render(scene, camera); })();
+(function loop() { requestAnimationFrame(loop); if (document.getElementById('drawer')) return; /* drawing on top: let the 3D rest */ controls.update(); renderer.render(scene, camera); labels.render(scene, camera); })();
 
 const wallMat = new THREE.MeshStandardMaterial({ color: '#1e293b', transparent: true, opacity: 0.38, roughness: 0.9, side: THREE.DoubleSide, depthWrite: false });
 const edgeMat = new THREE.LineBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.85 });
@@ -35,6 +36,7 @@ async function loadFloors() {
   S.groups = {};
   const box = new THREE.Box3();
   for (const f of S.plan.floors) {
+    if (f.kind === 'drawn') { const g = await drawnFloor(f); g.position.set(f.offset?.[0] || 0, (f.level || 0) * (f.heightM || 3), f.offset?.[1] || 0); scene.add(g); S.groups[f.id] = g; if (g.children.length) box.expandByObject(g); continue; }
     const gltf = await new Promise((ok, bad) => loader.load(`/api/floorplan/floors/${f.id}/model`, ok, undefined, bad)).catch(() => null);
     if (!gltf) { toast(`Could not load ${f.name}`); continue; }
     const g = new THREE.Group(); g.userData.floor = f.id;
@@ -49,6 +51,39 @@ async function loadFloors() {
   }
   if (!box.isEmpty()) { const c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3()).length(); controls.target.copy(c); camera.position.set(c.x + sz * 0.6, c.y + sz * 0.7, c.z + sz * 0.9); }
   showFloors();
+}
+/* A drawn floor in 3D: a slab per room, walls raised from the room edges and drawn walls,
+   room names floating above, and the floor-plan picture (if any) underneath. */
+const slabMat = new THREE.MeshStandardMaterial({ color: '#38bdf8', transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false });
+async function drawnFloor(f) {
+  const g = new THREE.Group(); g.userData.floor = f.id;
+  const p = f.plan || {}, H = Math.max(1.5, Math.min(4, (f.heightM || 2.7) - 0.1)), T = 0.12;
+  const addWall = (x1, z1, x2, z2) => {
+    const len = Math.hypot(x2 - x1, z2 - z1); if (len < 0.05) return;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, H, T), wallMat); m.position.set((x1 + x2) / 2, H / 2, (z1 + z2) / 2); m.rotation.y = -Math.atan2(z2 - z1, x2 - x1); m.userData.floor = f.id;
+    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), edgeMat); edges.raycast = () => {}; m.add(edges); g.add(m);
+  };
+  for (const r of p.rooms || []) {
+    const slab = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.h), slabMat); slab.rotation.x = -Math.PI / 2; slab.position.set(r.x + r.w / 2, 0.02, r.y + r.h / 2); slab.userData.floor = f.id; g.add(slab);
+    addWall(r.x, r.y, r.x + r.w, r.y); addWall(r.x + r.w, r.y, r.x + r.w, r.y + r.h); addWall(r.x + r.w, r.y + r.h, r.x, r.y + r.h); addWall(r.x, r.y + r.h, r.x, r.y);
+    if (r.name) { const lab = new CSS2DObject(el('div', { class: 'roomlab' }, r.name)); lab.position.set(r.x + r.w / 2, 0.1, r.y + r.h / 2); g.add(lab); }
+  }
+  for (const w of p.walls || []) addWall(w[0], w[1], w[2], w[3]);
+  if (p.bg) {
+    const tex = await new THREE.TextureLoader().loadAsync(`/api/floorplan/floors/${f.id}/background`).catch(() => null);
+    if (tex) { const w = p.bgW || 15, h = w * (tex.image.height / tex.image.width); const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: Math.min(0.85, (p.bgOpacity ?? 0.6) + 0.15), depthWrite: false })); m.rotation.x = -Math.PI / 2; m.position.set(w / 2, 0.005, h / 2); m.userData.floor = f.id; g.add(m); }
+  }
+  if (!g.children.length) { const hint = new CSS2DObject(el('div', { class: 'roomlab' }, `${f.name}: nothing drawn yet - Floors > Edit drawing`)); g.add(hint); }
+  g.scale.setScalar(f.scale || 1); g.rotation.y = THREE.MathUtils.degToRad(f.rotationY || 0);
+  return g;
+}
+const drawOpts = () => ({ el, api, toast, onSave: async () => { S.plan = await api('/api/floorplan'); await loadFloors(); floorsPanel(); } });
+async function newDrawnFloor(withPicture) {
+  try {
+    const r = await api('/api/floorplan/floors/drawn', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: S.plan.floors.length ? `Floor ${S.plan.floors.length + 1}` : 'Ground floor' }) });
+    S.plan = await api('/api/floorplan'); openDrawer(r.floor, drawOpts());
+    if (withPicture) setTimeout(() => document.querySelector('#drawer input[type=file]')?.click(), 200);
+  } catch (e) { toast(e.status === 402 ? '3D Home is part of HouseOS Pro.' : e.message); }
 }
 function showFloors() {
   for (const [id, g] of Object.entries(S.groups)) {
@@ -136,8 +171,12 @@ function floorsPanel() {
   side.replaceChildren(el('h2', {}, 'Floors'),
     ...S.plan.floors.map((f) => { const box = el('div', { class: 'card' }); const n = (k, label, step) => el('div', { class: 'row' }, el('label', {}, label), el('input', { type: 'number', step, value: k === 'offsetX' ? f.offset[0] : k === 'offsetZ' ? f.offset[1] : f[k], onchange: async (e) => { const v = Number(e.target.value); const body = k === 'offsetX' ? { offset: [v, f.offset[1]] } : k === 'offsetZ' ? { offset: [f.offset[0], v] } : { [k]: v }; try { await api(`/api/floorplan/floors/${f.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); await start(); floorsPanel(); } catch (er) { toast(er.message); } } }));
       box.append(el('h3', {}, f.name), n('level', 'Level', 1), n('heightM', 'Height (m)', 0.1), n('rotationY', 'Turn (°)', 5), n('scale', 'Scale', 0.01), n('offsetX', 'Shift X (m)', 0.1), n('offsetZ', 'Shift Z (m)', 0.1),
+        ...(f.kind === 'drawn' ? [el('button', { type: 'button', class: 'primary', onclick: () => openDrawer(f, drawOpts()) }, 'Edit drawing')] : []),
         el('button', { type: 'button', onclick: async () => { if (!confirm(`Remove ${f.name}?`)) return; await api(`/api/floorplan/floors/${f.id}`, { method: 'DELETE' }); await start(); floorsPanel(); } }, 'Remove floor')); return box; }),
-    el('h3', {}, 'Add a floor'), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,
+    el('h3', {}, 'Add a floor'),
+    el('p', { class: 'note' }, 'No LiDAR iPhone or iPad? Draw your floor, or trace over a picture of your floor plan (from the listing, the builder, or a photo of a paper plan).'),
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => newDrawnFloor(false) }, 'Draw a floor'), el('button', { type: 'button', onclick: () => newDrawnFloor(true) }, 'Trace a picture')),
+    el('h3', {}, 'Or upload a LiDAR scan (.glb)'), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,
     el('p', {}, el('button', { type: 'button', class: 'primary', id: 'uploadBtn', onclick: async () => {
       const f = file.files[0]; if (!f) { toast('Choose the .glb file from your scan first.'); return; }
       toast('Uploading…');
@@ -149,17 +188,23 @@ function floorsPanel() {
 }
 function guidePanel() {
   const side = $('#side'); side.hidden = false;
-  side.replaceChildren(el('h2', {}, 'Scan your home in 3D'),
-    el('p', { class: 'note' }, 'You need an iPhone Pro or iPad Pro (they have a LiDAR sensor, the small dark circle by the cameras). About 10 minutes per floor.'),
+  side.replaceChildren(el('h2', {}, 'Your home in 3D'),
+    el('p', { class: 'note' }, 'Two ways - pick whichever suits you. You can mix them: scan one floor, draw another.'),
+    el('h3', {}, 'A. Draw it (any device)'),
+    el('ol', { class: 'guide' },
+      el('li', {}, 'Open ', el('b', {}, 'Floors'), ' > ', el('b', {}, 'Draw a floor'), '. Drag to draw each room; the grid squares are 1 m.'),
+      el('li', {}, 'Got a floor-plan picture (from the listing, the builder, or a photo of a paper plan)? Choose ', el('b', {}, 'Trace a picture'), ', type how wide it is in meters, and draw the rooms over it.'),
+      el('li', {}, 'Name the rooms, add any extra walls, then ', el('b', {}, 'Save & view in 3D'), '. HouseOS raises the walls for you.')),
+    el('h3', {}, 'B. Scan it (iPhone Pro / iPad Pro with LiDAR)'),
+    el('p', { class: 'note' }, 'LiDAR is the small dark circle by the cameras: iPhone 12 Pro and newer Pro models, iPad Pro 2020 and newer. About 10 minutes per floor; the most realistic result.'),
     el('ol', { class: 'guide' },
       el('li', {}, 'Install a free scanning app: ', el('b', {}, 'Polycam'), ', ', el('b', {}, 'Scaniverse'), ' or ', el('b', {}, '3D Scanner App'), '. In Polycam choose "Room" mode (Apple RoomPlan) for clean walls.'),
-      el('li', {}, 'Turn on the lights and open interior doors. Start in a corner and walk slowly through every room on one floor, pointing at the walls and floor. Keep the phone about chest high.'),
-      el('li', {}, 'Scan one floor at a time. Finish where you started if the app asks.'),
-      el('li', {}, 'Export the scan as ', el('b', {}, 'GLB'), ' (Polycam: Export > GLB; Scaniverse: Share > Export Model > GLB; 3D Scanner App: Share > GLB). Send it to the computer you use for HouseOS (AirDrop, e-mail, or iCloud Drive).'),
-      el('li', {}, 'Here, open ', el('b', {}, 'Floors'), ' > Add a floor, name it ("Ground floor") and upload the file. Repeat for each floor and set its Level (0 = ground).'),
-      el('li', {}, 'Open ', el('b', {}, 'Place devices'), ': pick a light, speaker or sensor, then click where it is on the model. Done - the plan now shows them live.')),
-    el('p', { class: 'note' }, 'Tips: slow and steady scans line up best; mirrors and big windows can confuse the scanner - scan past them quickly. Your scan stays on your HouseOS box; it is never uploaded anywhere else.'),
-    el('p', {}, el('button', { type: 'button', class: 'primary', onclick: () => floorsPanel() }, S.plan?.floors?.length ? 'Add another floor' : 'Upload my first floor')));
+      el('li', {}, 'Turn on the lights, open interior doors, and walk slowly through every room on one floor, pointing at the walls and floor.'),
+      el('li', {}, 'Export as ', el('b', {}, 'GLB'), ' (Polycam: Export > GLB; Scaniverse: Share > Export Model > GLB; 3D Scanner App: Share > GLB) and send it to the computer you use for HouseOS.'),
+      el('li', {}, 'Here, open ', el('b', {}, 'Floors'), ' and upload it. Set each floor\'s Level (0 = ground).')),
+    el('h3', {}, 'Then: place your devices'),
+    el('p', { class: 'note' }, 'Open ', el('b', {}, 'Place devices'), ', pick a light, speaker or sensor, and click where it is. The plan shows them live. Your plans stay on your HouseOS box.'),
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => newDrawnFloor(false) }, 'Draw a floor'), el('button', { type: 'button', onclick: () => floorsPanel() }, 'Upload a scan')));
 }
 
 /* ---------- live data ---------- */
