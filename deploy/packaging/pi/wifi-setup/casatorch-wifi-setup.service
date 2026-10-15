@@ -1,0 +1,16 @@
+[Unit]
+Description=CasaTorch Wi-Fi setup (setup Wi-Fi when the Box has no network)
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+ExecStart=/opt/casatorch/node/node /opt/casatorch/wifi-setup/casatorch-wifi-setup.mjs
+Restart=always
+RestartSec=10
+# root only for nmcli; nothing else
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
