@@ -28,6 +28,26 @@ async function houseDevices() {
   for (const d of r.devices) { d.originalName = d.name; if (names[d.id]) d.name = names[d.id]; }
   return r;
 }
+/* ---- What the whole house is using right now, without counting anything twice. ----
+   1. A meter you picked (Settings > Energy), or one that is clearly the whole house ("house power",
+      "grid consumption", "mains"...): that is the answer.
+   2. Otherwise add up plugs and power sensors - skipping a plug's own power sensor (counted on the plug)
+      and a second sensor reporting the same big load (a car charger seen by both the car and the charger). */
+const WHOLE_HOUSE = /\b(house|home|whole|total|grid|mains?|main_?panel|consumption|import)\b|_house_|_home_|_grid_|_total_/i;
+function housePower(devices) {
+  const withW = devices.filter((d) => Number.isFinite(d.powerW));
+  const pick = config.energy?.meter && withW.find((d) => d.id === config.energy.meter);
+  if (pick) return { watts: Math.round(pick.powerW), from: pick.name };
+  const meters = withW.filter((d) => d.kind === 'sensor' && !d.pairedTo && WHOLE_HOUSE.test(`${d.id} ${d.name}`) && !/charg|car|ev_|solar|battery|pv/i.test(`${d.id} ${d.name}`));
+  if (meters.length) { const m = meters.sort((a, b) => b.powerW - a.powerW)[0]; return { watts: Math.round(m.powerW), from: m.name }; }
+  let sum = 0; const seen = [];
+  for (const d of withW) {
+    if (d.pairedTo || d.powerW <= 0 || /solar|pv_|production|generation/i.test(`${d.id} ${d.name}`)) continue;
+    if (d.powerW >= 50 && seen.some((w) => Math.abs(w - d.powerW) <= Math.max(5, d.powerW * 0.02))) continue;
+    seen.push(d.powerW); sum += d.powerW;
+  }
+  return { watts: Math.round(sum), from: null };
+}
 /* ---- The safety rule: CasaTorch never unlocks, opens a garage door or gate, or disarms an alarm. ----
    Home Assistant doesn't always label things, so this also looks at what a device is called:
    a relay named "garage", a "gate" button, an "unlock" script or a "disarm" scene is treated the same way.
@@ -47,7 +67,7 @@ function riskOf(d) {
   return null;
 }
 const blocked = (d, action) => { const r = riskOf(d); return r && !r.only.includes(action) ? r.why : null; };
-app.get('/api/devices', async (_req, res) => { const r = await houseDevices(); for (const d of r.devices) if (riskOf(d)) d.guarded = riskOf(d).only; res.json(r); });
+app.get('/api/devices', async (_req, res) => { const r = await houseDevices(); for (const d of r.devices) if (riskOf(d)) d.guarded = riskOf(d).only; res.json({ ...r, power: housePower(r.devices) }); });
 /* Owner: the devices the safety rule is holding back, and the ones allowed anyway. */
 app.get('/api/safety', requireRole('admin'), async (_req, res) => {
   const { devices } = await houseDevices(), allow = new Set(config.safety?.allow || []);

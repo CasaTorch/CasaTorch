@@ -65,7 +65,7 @@ async function houseSnapshot() {
     demo ? demoFixture('alerts') : { now: Object.values(alerts.open || {}) },
   ]);
   const devices = (dev?.devices || []).map((d) => Object.fromEntries(Object.entries({ id: d.id, name: d.name, room: d.area, kind: d.kind, on: d.on, brightness: d.brightness, watts: d.powerW, playing: d.playing, nowPlaying: d.title, temperature: temp(d.tempC), target: temp(d.targetC), humidity: d.humidity, open: d.open, water: d.water, motion: d.motion, locked: d.locked, battery: d.battery, online: d.online, home: d.home, armed: d.armed, fanPercent: d.percent, state: ['value', 'presence', 'alarm', 'vacuum', 'cover', 'action'].includes(d.kind) ? d.state : undefined, value: d.value, unit: d.unit || undefined }).filter(([, v]) => v !== undefined && v !== null)));
-  const watts = devices.reduce((t, d) => t + (d.watts || 0), 0), rate = config.energy?.ratePerKwh ?? (demo ? 0.17 : null);
+  const watts = housePower(dev?.devices || []).watts, rate = config.energy?.ratePerKwh ?? (demo ? 0.17 : null);
   /* A big Home Assistant can have thousands of entities. The AI gets the ones a person asks about first,
      and at most 350, so a question never costs a fortune or runs past the model's limit. */
   const PRI = { light: 0, plug: 0, switch: 1, media: 1, climate: 1, fan: 1, cover: 2, lock: 2, camera: 3, sensor: 3, presence: 3, vacuum: 4, action: 5, value: 6 };
