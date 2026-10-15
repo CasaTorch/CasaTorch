@@ -361,7 +361,26 @@ function welcome() {
     el('p', { class: 'intro' }, 'About 10 to 20 minutes, and you can skip anything. First the everyday things - your town for the weather, calendars, teams, headlines, reminders. Then your gear: CasaTorch connects to Hue, Shelly, YoLink, Frigate, Reolink and Ring itself, and to thousands more through Home Assistant if you have it. Skip anything; add it later.'),
     el('p', { class: 'note' }, 'Stuck at any point? E-mail ', el('a', { href: 'mailto:support@casatorch.com' }, 'support@casatorch.com'), ' - a real person answers.'),   // scrub-ok: public support address
     el('div', { class: 'card' }, el('h3', {}, 'Just looking?'), el('p', { class: 'note' }, 'See CasaTorch with a sample house, including the 3D floor plan. No setup needed.'),
-      el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/'; } }, 'Try the demo'))];
+      el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/'; } }, 'Try the demo')),
+    restoreBox()];
+}
+/* Moving from another CasaTorch: restore its backup instead of setting up again. */
+function restoreBox() {
+  const file = el('input', { type: 'file', accept: '.ctbk,application/octet-stream' }), pass = el('input', { type: 'password', autocomplete: 'off', placeholder: 'The backup\'s passphrase' });
+  const msg = el('p', { class: 'note' });
+  const go = el('button', { type: 'button', class: 'small', onclick: async () => {
+    const f = file.files?.[0]; if (!f || !pass.value) { msg.textContent = 'Choose the backup file and enter its passphrase.'; return; }
+    go.disabled = true; msg.textContent = 'Checking and restoring...';
+    try {
+      const r = await fetch('/api/setup/restore', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Backup-Passphrase': encodeURIComponent(pass.value) }, body: f });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Couldn\'t restore.');
+      msg.textContent = j.restart === 'manual' ? 'Restored. Start CasaTorch again, then sign in with the accounts from the backup.' : 'Restored. CasaTorch is restarting - this page reloads in a few seconds.';
+      if (j.restart !== 'manual') setTimeout(() => { location.href = '/'; }, 8000);
+    } catch (e) { msg.textContent = e.message; go.disabled = false; }
+  } }, 'Restore');
+  return el('details', { class: 'card' }, el('summary', {}, el('b', {}, 'Moving from another CasaTorch?'), ' Restore its backup'),
+    el('p', { class: 'note' }, 'Use a backup file from Settings › Backup on your old CasaTorch. Everything comes across: settings, connections, sign-ins, floor plans and history.'),
+    el('label', {}, 'Backup file (.ctbk) ', file), el('label', {}, 'Passphrase ', pass), go, msg);
 }
 /* Where a step's branch keeps its answers: the network step keeps each kind's own (meraki, unifi). */
 const branchStore = (step, store) => (step.id === 'network' && step.branches?.[store.kind]?.fields ? (store[store.kind] ||= {}) : store);

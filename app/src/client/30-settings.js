@@ -104,8 +104,8 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
     el('div', { class: 'row wrap' }, rerun),
     el('p', { class: 'small muted' }, `CasaTorch ${s.version} · open-source core (AGPL-3.0) · `, el('a', { href: 'https://casatorch.com', target: '_blank', rel: 'noopener' }, 'casatorch.com')));
   const security = await securityCards();
-  const updates = await updatesCard(), phone = await phoneCard(), safety = await safetyCard(), secure = await remoteCard();
-  main.replaceChildren(el('div', { class: 'cards' }, ...security, safety, secure, phone, pro, updates, lookCard(), menuCard(), aiCard(s), homeCard, helpCard(), everyday, conn, acct));
+  const updates = await updatesCard(), phone = await phoneCard(), safety = await safetyCard(), secure = await remoteCard(), backup = await backupCard(s);
+  main.replaceChildren(el('div', { class: 'cards' }, ...security, safety, secure, phone, pro, updates, backup, lookCard(), menuCard(), aiCard(s), homeCard, helpCard(), everyday, conn, acct));
   return null;
 } });
 /* Side-rail order */
@@ -130,6 +130,55 @@ function claimKey(done) {
     send.disabled = false;
   };
   setTimeout(() => email.focus(), 50);
+}
+/* Backup and restore (owner): one encrypted file with everything; restore replaces it all and restarts. */
+async function backupCard(s) {
+  if (s.demo) return null;
+  const me = await api('/api/auth/me').catch(() => null);
+  if (me && me.signIn !== false && me.user?.role !== 'owner') return null;
+  const pass = el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'At least 10 characters' }), pass2 = el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Type it again' });
+  const media = el('input', { type: 'checkbox', checked: true, style: 'width:auto' });
+  const msg = el('p', { class: 'small', style: 'min-height:1.2em' });
+  const make = el('button', { class: 'btn primary', onclick: async () => {
+    msg.style.color = 'var(--bad)';
+    if (pass.value.length < 10) { msg.textContent = 'Pick a passphrase of at least 10 characters.'; return; }
+    if (pass.value !== pass2.value) { msg.textContent = 'The two passphrases don\'t match.'; return; }
+    make.disabled = true; msg.style.color = ''; msg.textContent = 'Making your backup - this can take a minute with photos and 3D scans...';
+    try {
+      const r = await fetch('/api/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ passphrase: pass.value, media: media.checked }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'The backup couldn\'t be made.');
+      const blob = await r.blob(), a = el('a', { href: URL.createObjectURL(blob), download: (r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'casatorch-backup.ctbk' });
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+      pass.value = pass2.value = ''; msg.textContent = `Backup saved (${(blob.size / 1048576).toFixed(1)} MB). Keep the passphrase somewhere safe - without it the file can't be opened.`;
+    } catch (e) { msg.style.color = 'var(--bad)'; msg.textContent = e.message; }
+    make.disabled = false;
+  } }, 'Download backup');
+  const restore = el('button', { class: 'btn', onclick: () => restoreModal('/api/restore') }, 'Restore from a backup');
+  return el('div', { class: 'card' }, el('h2', {}, 'Backup'),
+    el('p', { class: 'small muted' }, 'One file with your settings and connections, sign-ins, calendar, floor plans, history and photos - to keep safe, or to move CasaTorch to new hardware. It\'s encrypted with a passphrase you pick; CasaTorch doesn\'t keep the passphrase.'),
+    el('label', { class: 'field' }, el('span', {}, 'Passphrase'), pass), el('label', { class: 'field' }, el('span', {}, 'Passphrase again'), pass2),
+    el('label', { class: 'row small', style: 'gap:8px;margin:6px 0 10px' }, media, 'Include photos and 3D scans (larger file)'),
+    msg, el('div', { class: 'row wrap' }, make, restore));
+}
+/* Used by Settings (owner) and by setup on a fresh install. */
+function restoreModal(url) {
+  const file = el('input', { type: 'file', accept: '.ctbk,application/octet-stream' }), pass = el('input', { type: 'password', autocomplete: 'off' });
+  const msg = el('p', { class: 'small', style: 'min-height:1.2em' });
+  const go = el('button', { class: 'btn primary', onclick: async () => {
+    const f = file.files?.[0]; msg.style.color = 'var(--bad)';
+    if (!f) { msg.textContent = 'Choose the backup file.'; return; }
+    if (!pass.value) { msg.textContent = 'Enter the passphrase.'; return; }
+    go.disabled = true; msg.style.color = ''; msg.textContent = 'Checking and restoring...';
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Backup-Passphrase': encodeURIComponent(pass.value) }, body: f });
+      const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Couldn\'t restore.');
+      m.querySelector('.box').replaceChildren(el('h3', {}, 'Restored'), el('p', {}, j.restart === 'manual' ? 'Start CasaTorch again, then sign in with the accounts from the backup.' : 'CasaTorch is restarting. This page reloads in a few seconds - sign in with the accounts from the backup.'));
+      if (j.restart !== 'manual') setTimeout(() => { location.href = '/'; }, 8000);
+    } catch (e) { msg.style.color = 'var(--bad)'; msg.textContent = e.message; go.disabled = false; }
+  } }, 'Restore');
+  const m = modal(el('div', {}, el('p', { class: 'small' }, el('b', {}, 'This replaces everything on this CasaTorch'), ' with what\'s in the backup. The current data is kept in a folder named ".before-restore" in case you need it.'),
+    el('label', { class: 'field' }, el('span', {}, 'Backup file (.ctbk)'), file), el('label', { class: 'field' }, el('span', {}, 'Passphrase'), pass), msg,
+    el('div', { class: 'row', style: 'justify-content:flex-end' }, go)), { title: 'Restore from a backup' });
 }
 /* Updates: the version, what's newest, and the two switches. */
 async function updatesCard() {

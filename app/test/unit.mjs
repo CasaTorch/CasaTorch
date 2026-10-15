@@ -227,5 +227,13 @@ t('network: only home-network addresses may use their own certificate', () => {
   for (const h of ['api.meraki.com', '8.8.8.8', '172.32.0.1', 'example.com']) assert.ok(!H.isLanHost(h), h);
 });
 
+t('bill forecast: this month so far plus the recent average for the days left', () => {
+  const days = {}; for (let d = 1; d <= 14; d++) days[`2026-10-${String(d).padStart(2, '0')}`] = { wh: 20000, n: 288 };
+  days['2026-10-15'] = { wh: 10000, n: 150 };
+  const f = H.billForecast(days, '2026-10-15');
+  assert.equal(f.kwhSoFar, 290); assert.equal(f.avgKwhPerDay, 20); assert.equal(f.daysLeft, 16); assert.equal(f.kwh, 620); assert.equal(f.missingDays, 0);
+  assert.equal(H.billForecast({ '2026-10-14': { wh: 1000, n: 288 } }, '2026-10-15'), null, 'too little history: no forecast');
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);

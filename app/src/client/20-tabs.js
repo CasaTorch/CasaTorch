@@ -241,7 +241,10 @@ tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {
       have.length ? el('div', {},
         el('div', { class: 'row wrap', style: 'gap:22px;margin:8px 0 6px' },
           el('div', {}, el('div', { class: 'num', style: 'font-size:22px;font-weight:700' }, `${wk.toFixed(1)} kWh`), el('div', { class: 'tiny muted' }, `${last7.length === 7 ? 'last 7 full days' : `last ${last7.length} full day${last7.length === 1 ? '' : 's'}`}${rate ? ` · ${money(wk * rate)}` : ''}`)),
-          pw ? el('div', {}, el('div', { class: 'num', style: 'font-size:22px;font-weight:700' }, `${wk >= pw ? '+' : ''}${Math.round((wk - pw) / pw * 100)}%`), el('div', { class: 'tiny muted' }, 'vs the 7 days before')) : null),
+          pw ? el('div', {}, el('div', { class: 'num', style: 'font-size:22px;font-weight:700' }, `${wk >= pw ? '+' : ''}${Math.round((wk - pw) / pw * 100)}%`), el('div', { class: 'tiny muted' }, 'vs the 7 days before')) : null,
+          h.forecast ? el('div', { title: `${h.forecast.kwhSoFar} kWh so far this month; about ${h.forecast.avgKwhPerDay} kWh a day lately${h.forecast.missingDays ? `; ${h.forecast.missingDays} day(s) this month before CasaTorch was running aren't counted` : ''}` },
+            el('div', { class: 'num', style: `font-size:22px;font-weight:700${h.forecast.overBudget ? ';color:var(--warn)' : ''}` }, h.forecast.cost != null ? `~${money(h.forecast.cost)}` : `~${h.forecast.kwh} kWh`),
+            el('div', { class: 'tiny muted' }, `this month, forecast${h.forecast.budget && h.forecast.cost != null ? ` · budget ${money(h.forecast.budget)}` : ''}${h.forecast.prevMonthCost != null ? ` · last month ${money(h.forecast.prevMonthCost)}` : ''}`)) : null),
         historyChart(days, money),
         h.pro ? null : el('p', { class: 'tiny muted', style: 'margin-top:8px' }, 'Basic keeps 7 days. Pro keeps 2 years.'))
         : el('p', { class: 'muted' }, 'CasaTorch notes what the house uses every 5 minutes. The first day of history shows here tomorrow.'));

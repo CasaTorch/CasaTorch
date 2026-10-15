@@ -85,6 +85,25 @@ async function demoHistory() {
 }
 const histDays = async () => (isDemo() ? (await demoHistory()).days : hist.days);
 
+/* ---- the bill forecast (Pro): this month so far, plus the recent daily average for the days left ---- */
+function billForecast(days, today = dayOf(Date.now())) {
+  const rate = config.energy?.ratePerKwh ?? (isDemo() ? 0.17 : null), budget = config.energy?.budget ?? (isDemo() ? 150 : null);
+  const month = today.slice(0, 7), y = Number(today.slice(0, 4)), m = Number(today.slice(5, 7));
+  const inMonth = new Date(Date.UTC(y, m, 0)).getUTCDate(), dayNo = Number(today.slice(8, 10));
+  const full = Object.keys(days).filter((k) => k.startsWith(month) && k < today).sort();
+  const recent = Array.from({ length: 14 }, (_, i) => addDays(today, -1 - i)).filter((k) => days[k] && (days[k].n || 0) >= 200);   // whole days only
+  if (recent.length < 3) return null;   // not enough history to say anything honest
+  const avg = recent.reduce((s, k) => s + kwhOf(days[k]), 0) / recent.length;
+  const soFar = full.reduce((s, k) => s + kwhOf(days[k]), 0) + kwhOf(days[today]);
+  const todayLeft = Math.max(0, avg - kwhOf(days[today])), daysLeft = inMonth - dayNo;
+  const kwh = soFar + todayLeft + avg * daysLeft;
+  const missing = Math.max(0, dayNo - 1 - full.length);   // days this month CasaTorch wasn't running
+  const prevMonth = addDays(`${month}-01`, -1).slice(0, 7), prev = Object.keys(days).filter((k) => k.startsWith(prevMonth));
+  const prevKwh = prev.length >= 25 ? prev.reduce((s, k) => s + kwhOf(days[k]), 0) : null;
+  const r1 = (v) => Math.round(v * 10) / 10, $ = (v) => (rate ? Math.round(v * rate * 100) / 100 : null);
+  return { month, kwhSoFar: r1(soFar), kwh: r1(kwh), cost: $(kwh), costSoFar: $(soFar), avgKwhPerDay: r1(avg), daysLeft, missingDays: missing, budget, overBudget: budget && rate ? $(kwh) > budget : null, prevMonthKwh: prevKwh == null ? null : r1(prevKwh), prevMonthCost: prevKwh == null ? null : $(prevKwh) };
+}
+
 /* ---- the weekly report ---- */
 const kwhOf = (d) => (d?.wh || 0) / 1000;
 function weekStats(days, to) {
@@ -122,6 +141,7 @@ function ruleReport(s) {
   const quiet = !s.alerts.critical && !s.alerts.warning;
   parts.push(s.alerts.critical ? `There ${s.alerts.critical === 1 ? 'was 1 critical alert' : `were ${s.alerts.critical} critical alerts`} - check the Alerts tab.` : quiet ? 'No critical or warning alerts.' : `${s.alerts.warning} warning${s.alerts.warning === 1 ? '' : 's'}, nothing critical.`);
   if (s.internetDownMin >= 10) parts.push(`The internet was down for about ${Math.round(s.internetDownMin)} minutes.`);
+  const f = s.monthForecast; if (f?.cost != null) parts.push(`This month is on track for about ${c(f.cost)}${f.budget && f.overBudget ? `, over your ${c(f.budget)} budget` : f.budget ? `, within your ${c(f.budget)} budget` : ''}.`);
   if (s.serversDown?.length) parts.push(`Down for a while: ${s.serversDown.map((x) => `${x.name} (${x.minutes >= 120 ? `${Math.round(x.minutes / 60)} hours` : `${x.minutes} minutes`})`).join(', ')}.`);
   const tips = [];
   if (s.alwaysOnW >= 120) tips.push(`About ${s.alwaysOnW} W stays on even in the middle of the night${s.alwaysOnCostPerYear ? ` - roughly ${c(s.alwaysOnCostPerYear)} a year` : ''}. Old fridges, computers, game consoles, pumps and heaters on standby are the usual suspects.`);
@@ -148,6 +168,7 @@ Reply with ONLY a JSON object: {"summary": "...", "tips": ["...", "..."]}`;
 }
 async function buildReport({ days, to, tz = houseTz(), demo = false }) {
   const s = weekStats(days, to);
+  s.monthForecast = billForecast(days, dayOf(Date.now(), tz));
   let body = null, by = 'rules', aiError = null;
   if (!demo) { try { body = await aiReport(s); if (body) by = 'ai'; } catch (e) { aiError = String(e.message || e).slice(0, 160); } }
   body ||= ruleReport(s);
@@ -182,7 +203,7 @@ app.get('/api/history', async (req, res) => {
   const want = Math.max(1, Math.min(pro ? HIST_KEEP_DAYS : HIST_BASIC_DAYS, Number(req.query.days) || 30)), today = dayOf(Date.now());
   const rate = config.energy?.ratePerKwh ?? (isDemo() ? 0.17 : null);
   const list = Array.from({ length: want }, (_, i) => addDays(today, i - want + 1)).map((k) => { const d = days[k]; return d ? { date: k, kwh: Math.round(kwhOf(d) * 100) / 100, cost: rate ? Math.round(kwhOf(d) * rate * 100) / 100 : null, peakW: d.peakW || null, nightMinW: d.nightMinW ?? null, alerts: Object.values(d.alerts || {}).reduce((s, n) => s + n, 0), partial: k === today } : { date: k, kwh: null }; });
-  res.json({ days: list, pro, maxDays: pro ? HIST_KEEP_DAYS : HIST_BASIC_DAYS, since: Object.keys(days).sort()[0] || null, rate, currency: config.house?.currency || 'USD' });
+  res.json({ days: list, pro, maxDays: pro ? HIST_KEEP_DAYS : HIST_BASIC_DAYS, since: Object.keys(days).sort()[0] || null, rate, currency: config.house?.currency || 'USD', forecast: pro ? billForecast(days, today) : null });
 });
 app.get('/api/reports', async (_req, res) => {
   const pro = !!proStatus().pro || isDemo();
