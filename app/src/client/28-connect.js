@@ -30,10 +30,10 @@ function connectItems(cat) {
   for (const [v, l] of net?.question?.options || []) {
     if (['isp', 'other'].includes(v)) continue;
     const note = net.branches?.[v]?.note || '';
-    add({ key: `net-${v}`, step: 'network', add: v, label: l, desc: /planned/i.test(note) ? 'Coming soon - internet status and speed tests work today' : note ? note.replace(/^CasaTorch will /, 'Shows ').replace(/, so CasaTorch shows/, ' - CasaTorch shows') : 'Every device on your network, Wi-Fi health and alerts', how: /planned/i.test(note) ? 'soon' : 'direct', ids: [v] }, 'network');
+    add({ key: `net-${v}`, step: 'network', add: v, label: l, desc: /planned|coming/i.test(note) ? 'Coming to Pro - internet status and speed tests work today' : note ? note.replace(/^CasaTorch will /, 'Shows ').replace(/, so CasaTorch shows/, ' - CasaTorch shows') : 'Every device on your network, Wi-Fi health and alerts', how: /planned|coming/i.test(note) ? 'soon' : 'direct', ids: [v] }, 'network');
   }
-  add({ key: 'pihole', step: 'network', add: 'dns:pihole', label: 'Pi-hole', desc: 'Ads blocked and devices seen', how: 'direct', ids: ['pihole'] }, 'network');
-  add({ key: 'adguard', step: 'network', add: 'dns:adguard', label: 'AdGuard Home', desc: 'Ads blocked and devices seen', how: 'direct', ids: ['adguard'] }, 'network');
+  add({ key: 'pihole', step: 'network', add: 'dns:pihole', label: 'Pi-hole', desc: 'Coming to Pro: ads blocked and devices seen', how: 'soon', ids: ['pihole'] }, 'network');
+  add({ key: 'adguard', step: 'network', add: 'dns:adguard', label: 'AdGuard Home', desc: 'Coming to Pro: ads blocked and devices seen', how: 'soon', ids: ['adguard'] }, 'network');
   return [...byId.values()];
 }
 const hueOf = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
