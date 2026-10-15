@@ -207,5 +207,252 @@
         6
       ]
     }
-  ]
+  ],
+  "yard": {
+    "areas": [
+      {
+        "id": "lawn",
+        "kind": "grass",
+        "pts": [
+          [
+            -7,
+            -7
+          ],
+          [
+            19,
+            -7
+          ],
+          [
+            19,
+            17
+          ],
+          [
+            -7,
+            17
+          ]
+        ]
+      },
+      {
+        "id": "drive",
+        "kind": "driveway",
+        "pts": [
+          [
+            12.3,
+            0.5
+          ],
+          [
+            19,
+            0.5
+          ],
+          [
+            19,
+            8
+          ],
+          [
+            12.3,
+            8
+          ]
+        ]
+      },
+      {
+        "id": "patio",
+        "kind": "patio",
+        "pts": [
+          [
+            2,
+            -0.1
+          ],
+          [
+            8,
+            -0.1
+          ],
+          [
+            8,
+            -3.6
+          ],
+          [
+            2,
+            -3.6
+          ]
+        ]
+      },
+      {
+        "id": "walk",
+        "kind": "path",
+        "pts": [
+          [
+            5,
+            9.1
+          ],
+          [
+            6.2,
+            9.1
+          ],
+          [
+            6.2,
+            17
+          ],
+          [
+            5,
+            17
+          ]
+        ]
+      },
+      {
+        "id": "bed1",
+        "kind": "garden",
+        "pts": [
+          [
+            -0.3,
+            9.2
+          ],
+          [
+            4.4,
+            9.2
+          ],
+          [
+            4.4,
+            10.6
+          ],
+          [
+            -0.3,
+            10.6
+          ]
+        ]
+      },
+      {
+        "id": "bed2",
+        "kind": "garden",
+        "pts": [
+          [
+            6.8,
+            9.2
+          ],
+          [
+            12,
+            9.2
+          ],
+          [
+            12,
+            10.6
+          ],
+          [
+            6.8,
+            10.6
+          ]
+        ]
+      }
+    ],
+    "items": [
+      {
+        "id": "oak1",
+        "kind": "tree",
+        "pos": [
+          -3.2,
+          -3
+        ],
+        "rot": 0,
+        "scale": 1.3
+      },
+      {
+        "id": "oak2",
+        "kind": "tree",
+        "pos": [
+          16.5,
+          13.5
+        ],
+        "rot": 40,
+        "scale": 1.1
+      },
+      {
+        "id": "pine1",
+        "kind": "pine",
+        "pos": [
+          -4.2,
+          12.5
+        ],
+        "rot": 0,
+        "scale": 1.2
+      },
+      {
+        "id": "pine2",
+        "kind": "pine",
+        "pos": [
+          15.5,
+          -4.2
+        ],
+        "rot": 0,
+        "scale": 1
+      },
+      {
+        "id": "b1",
+        "kind": "bush",
+        "pos": [
+          0.8,
+          9.9
+        ],
+        "rot": 0,
+        "scale": 1
+      },
+      {
+        "id": "b2",
+        "kind": "bush",
+        "pos": [
+          2.6,
+          9.9
+        ],
+        "rot": 0,
+        "scale": 0.9
+      },
+      {
+        "id": "b3",
+        "kind": "bush",
+        "pos": [
+          8.2,
+          9.9
+        ],
+        "rot": 0,
+        "scale": 1
+      },
+      {
+        "id": "b4",
+        "kind": "bush",
+        "pos": [
+          10.6,
+          9.9
+        ],
+        "rot": 0,
+        "scale": 0.8
+      },
+      {
+        "id": "ev",
+        "kind": "charger",
+        "pos": [
+          12.6,
+          6.9
+        ],
+        "rot": 90,
+        "scale": 1
+      },
+      {
+        "id": "car1",
+        "kind": "car",
+        "pos": [
+          15.4,
+          3.8
+        ],
+        "rot": 90,
+        "scale": 1,
+        "name": "Family car",
+        "color": "#c8102e",
+        "body": "sedan",
+        "bind": {
+          "home": "ha:device_tracker.family_car_location",
+          "plugged": "ha:binary_sensor.family_car_charge_cable",
+          "power": "ha:sensor.family_car_charger_power",
+          "battery": "ha:sensor.family_car_battery_level"
+        }
+      }
+    ]
+  }
 }
