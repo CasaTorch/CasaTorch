@@ -128,8 +128,29 @@ const CAMERA_SNAPSHOT = {
   snapshot: (c) => fetchImage(c.snapshotUrl, c.username, c.password),
 };
 PROVIDERS.camera = {
-  async list() { return (config.cameras || []).map((c) => ({ id: `camera:${c.id}`, provider: 'camera', kind: 'camera', name: c.name, source: c.type, live: c.rtspUrl ? true : false, online: true })); },
+  async list() { return (config.cameras || []).map((c) => ({ id: `camera:${c.id}`, provider: 'camera', kind: 'camera', name: c.name, source: c.type, live: c.type === 'frigate', stream: c.type === 'frigate' ? `/api/cameras/${encodeURIComponent(c.id)}/live` : undefined, online: true })); },
 };
+/* Ready pictures for every camera soon after start-up, so the first look is never blank. */
+setTimeout(() => { if (!isDemo()) for (const c of config.cameras || []) if (CAMERA_SNAPSHOT[c.type]) snapRefresh(snapEntry(`camera:${c.id}`, () => CAMERA_SNAPSHOT[c.type](c), 'local')); }, 2000).unref?.();
+/* Live video for Frigate cameras: Frigate's own MJPEG stream, passed through (the browser shows it in a
+   plain <img>). At most 3 viewers per camera; the upstream stream closes the moment the viewer leaves. */
+const LIVE_VIEWERS = new Map();
+app.get('/api/cameras/:id/live', async (req, res) => {
+  const c = (config.cameras || []).find((x) => x.id === req.params.id);
+  if (!c || c.type !== 'frigate') return res.status(404).end();
+  const n = LIVE_VIEWERS.get(c.id) || 0;
+  if (n >= 3) return res.status(429).json({ error: 'three screens are already watching this camera live' });
+  const ac = new AbortController(); LIVE_VIEWERS.set(c.id, n + 1);
+  const done = () => { ac.abort(); LIVE_VIEWERS.set(c.id, Math.max(0, (LIVE_VIEWERS.get(c.id) || 1) - 1)); };
+  req.on('close', done);
+  try {
+    const up = await fetch(`${String(c.url).replace(/\/+$/, '')}/api/${encodeURIComponent(c.camera)}?h=720&fps=10&bbox=0&timestamp=0&zones=0&mask=0&motion=0&regions=0`, { signal: ac.signal });
+    if (!up.ok || !up.body) { res.status(502).end(); return; }
+    res.setHeader('Content-Type', up.headers.get('content-type') || 'multipart/x-mixed-replace'); res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Accel-Buffering', 'no');
+    for await (const chunk of up.body) { if (!res.write(chunk)) await new Promise((ok) => res.once('drain', ok)); }
+    res.end();
+  } catch { if (!res.headersSent) res.status(502).end(); else res.end(); }
+});
 app.get('/api/cameras/:id/snapshot', async (req, res) => {
   if (isDemo()) {   // a drawn stand-in so the demo has pictures
     const name = String(req.params.id).replace(/[^\w -]/g, ''), t = new Date().toLocaleTimeString('en-US');
@@ -138,8 +159,7 @@ app.get('/api/cameras/:id/snapshot', async (req, res) => {
   }
   const c = (config.cameras || []).find((x) => x.id === req.params.id);
   if (!c || !CAMERA_SNAPSHOT[c.type]) return res.status(404).end();
-  try { const img = await CAMERA_SNAPSHOT[c.type](c); res.setHeader('Content-Type', img.type); res.setHeader('Cache-Control', 'no-store'); res.end(img.buf); }
-  catch (err) { res.status(502).json({ error: String(err.message) }); }
+  return sendSnap(req, res, `camera:${c.id}`, () => CAMERA_SNAPSHOT[c.type](c), 'local');
 });
 
 /* ---- YoLink: official cloud API. config.yolink = { uaid, secret } (YoLink app > Settings > Account > Advanced > User Access Credentials). ---- */

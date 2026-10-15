@@ -108,10 +108,9 @@ PROVIDERS.ha = {
 app.get('/api/ha/camera/:entity', async (req, res) => {
   const h = config.homeAssistant, ent = String(req.params.entity);
   if (!h?.url || !/^camera\.[\w]+$/.test(ent)) return res.status(404).end();
-  try {
+  return sendSnap(req, res, `ha:${ent}`, async () => {
     const r = await fetch(`${h.url}/api/camera_proxy/${ent}`, { headers: { Authorization: `Bearer ${h.token}` }, signal: AbortSignal.timeout(10000) });
-    if (!r.ok) return res.status(502).end();
-    res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg'); res.setHeader('Cache-Control', 'no-store');
-    res.end(Buffer.from(await r.arrayBuffer()));
-  } catch { res.status(502).end(); }
+    if (!r.ok) throw new Error(`Home Assistant answered ${r.status}`);
+    return { buf: Buffer.from(await r.arrayBuffer()), type: r.headers.get('content-type') || 'image/jpeg' };
+  }, 'ha');
 });

@@ -24,6 +24,8 @@ let demoFp = null;   // the demo can be edited, but only in memory
 const fpWrite = (d) => { if (isDemo()) { demoFp = d; return; } writeFileSafe(FP_FILE, JSON.stringify(d, null, 2), 0o600); };
 const DEMO_FP = path.join(APP_DIR, '..', 'demo', 'floorplan');
 const fpData = () => (isDemo() ? (demoFp ||= JSON.parse(fs.readFileSync(path.join(DEMO_FP, 'floorplan.json'), 'utf8'))) : fpRead());
+/* three.js: compressed (Brotli/gzip, kept in memory) and cached for a week - 2.7 MB becomes about 0.6 MB. */
+app.use((req, res, next) => (req.path.startsWith('/vendor/three/') ? staticPacked(req, res, next) : next()));
 app.use('/vendor/three', express.static(path.join(APP_DIR, 'node_modules', 'three'), { maxAge: '7d' }));
 
 app.get('/api/floorplan', (_req, res) => res.json({ ...fpData(), pro: proStatus() }));
