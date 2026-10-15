@@ -7,7 +7,7 @@ name: Release
 on:
   push: { tags: ["v*"] }
   workflow_dispatch:
-permissions: { contents: write, packages: write }
+permissions: { contents: write, packages: write, actions: read }
 env:
   CASATORCH_VERSION: ${{ startsWith(github.ref_name, 'v') && github.ref_name || 'v0.0.0' }}
 jobs:
@@ -112,9 +112,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with: { path: out, merge-multiple: true }
-      - run: rm -f out/bundle.tgz && cp deploy/downloads/casatorch-compose.yml out/ && cp deploy/unraid/casatorch.xml out/casatorch-unraid.xml && ls -la out
+      # Only what gets published, one artifact at a time, each retried - a single all-in-one download of
+      # everything (including the big intermediate bundle) failed on GitHub's side.
+      - name: Download the installers
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          mkdir -p out
+          for a in deb-amd64 deb-arm64 windows macos pi-image; do
+            for try in 1 2 3 4 5; do
+              rm -rf "tmp-$a"
+              if gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n "$a" -D "tmp-$a"; then break; fi
+              [ "$try" = 5 ] && { echo "could not download $a" >&2; exit 1; }
+              echo "retrying $a in $((try * 15))s"; sleep $((try * 15))
+            done
+            mv "tmp-$a"/* out/ && rmdir "tmp-$a"
+          done
+      - run: cp deploy/downloads/casatorch-compose.yml out/ && cp deploy/unraid/casatorch.xml out/casatorch-unraid.xml && ls -la out
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
