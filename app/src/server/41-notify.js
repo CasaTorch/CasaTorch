@@ -49,7 +49,7 @@ async function notify(a) {
 async function webPushAll(msg) {
   if (!push.subs.length) return;
   const k = vapid(); let changed = false;
-  await Promise.allSettled(push.subs.filter((s) => (LEVELS[s.level] || LEVELS.important).includes(msg.sev)).map(async (s) => {
+  await Promise.allSettled(push.subs.filter((s) => (Object.hasOwn(LEVELS, s.level) ? LEVELS[s.level] : LEVELS.important).includes(msg.sev)).map(async (s) => {
     try {
       await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(msg), { TTL: msg.sev === 'critical' ? 86_400 : 3_600, urgency: msg.sev === 'critical' ? 'high' : 'normal', vapidDetails: { subject: 'mailto:support@casatorch.com', publicKey: k.publicKey, privateKey: k.privateKey }, timeout: 10_000 });   // scrub-ok: public support address
       s.lastOk = nowIso(); changed = true;
@@ -79,7 +79,7 @@ const mySubs = (req) => push.subs.filter((s) => s.user === (req.user?.id || 'loc
 app.get('/api/push', (req, res) => res.json({ key: vapid().publicKey, quietHours: config.alerts?.quietHours || '22-7', haPhone: config.alerts?.phone === 'homeassistant', ha: !!config.homeAssistant?.url,
   devices: mySubs(req).map((s) => ({ id: s.id, name: s.name, level: s.level, since: s.at, lastOk: s.lastOk || null, broken: !!s.lastError && !s.lastOk })) }));
 app.post('/api/push', express.json({ limit: '8kb' }), (req, res) => {
-  const sub = req.body?.subscription, level = LEVELS[req.body?.level] ? req.body.level : 'important';
+  const sub = req.body?.subscription, level = Object.hasOwn(LEVELS, String(req.body?.level)) ? req.body.level : 'important';
   if (!sub || !okEndpoint(sub.endpoint) || typeof sub.keys?.p256dh !== 'string' || typeof sub.keys?.auth !== 'string' || Buffer.from(sub.keys.p256dh, 'base64url').length !== 65 || Buffer.from(sub.keys.auth, 'base64url').length !== 16) return res.status(400).json({ error: 'That browser gave an address CasaTorch can\'t use for alerts.' });
   const user = req.user?.id || 'local';
   push.subs = push.subs.filter((s) => s.endpoint !== sub.endpoint);
@@ -89,7 +89,7 @@ app.post('/api/push', express.json({ limit: '8kb' }), (req, res) => {
 });
 app.put('/api/push/:id', express.json({ limit: '2kb' }), (req, res) => {
   const s = mySubs(req).find((x) => x.id === req.params.id); if (!s) return res.status(404).json({ error: 'not found' });
-  if (LEVELS[req.body?.level]) s.level = req.body.level;
+  if (Object.hasOwn(LEVELS, String(req.body?.level))) s.level = req.body.level;
   savePush(); res.json({ ok: true });
 });
 app.delete('/api/push/:id', (req, res) => {

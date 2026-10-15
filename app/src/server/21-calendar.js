@@ -9,11 +9,13 @@
  * with EXDATE exceptions and moved instances (RECURRENCE-ID).
  * ====================================================================== */
 /** The UTC instant of a wall-clock time in a zone ("2026-10-20 09:00 in America/Chicago"). */
+const TZ_FMT = new Map();   // one formatter per time zone: making one is slow, using one is fast
+const tzFmt = (tz) => { let f = TZ_FMT.get(tz); if (!f) { f = new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }); if (TZ_FMT.size < 50) TZ_FMT.set(tz, f); } return f; };
 function zonedToUtc(y, mo, d, h, mi, s, tz) {
   const guess = Date.UTC(y, mo - 1, d, h, mi, s);
   if (!tz) return guess;
   try {
-    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(guess).map((x) => [x.type, x.value]));
+    const p = Object.fromEntries(tzFmt(tz).formatToParts(guess).map((x) => [x.type, x.value]));
     const asIfUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
     return guess - (asIfUtc - guess);
   } catch { return guess; }
@@ -83,7 +85,11 @@ function expandEvents(events, from, to, tz) {
     const byday = r.BYDAY ? r.BYDAY.split(',').map((x) => DAY_CODES.indexOf(x.slice(-2))).filter((x) => x >= 0) : null;
     const baseDow = new Date(Date.UTC(Y, M - 1, D)).getUTCDay();
     let n = 0;
-    outer: for (let k = 0; k < 1500; k++) {
+    /* An old daily or weekly event (say, every weekday since 2015): jump straight to just before the window
+       instead of walking every day since it started. Only when there is no COUNT to keep track of. */
+    const stepDays = r.FREQ === 'DAILY' ? interval : r.FREQ === 'WEEKLY' ? 7 * interval : r.FREQ === 'MONTHLY' ? 31 * interval : 366 * interval;   // months and years: round the step up, so the jump never overshoots
+    const k0 = count === Infinity ? Math.max(0, Math.floor((from - ev.start.t - dur) / (stepDays * 86400_000)) - 1) : 0;
+    outer: for (let k = k0; k < k0 + 1500; k++) {
       let dates = [];
       if (r.FREQ === 'DAILY') dates = [[Y, M, D + k * interval]];
       else if (r.FREQ === 'WEEKLY') dates = (byday || [baseDow]).map((wd) => [Y, M, D + k * 7 * interval + ((wd - baseDow + 7) % 7)]).sort((a, b) => a[2] - b[2]);

@@ -28,15 +28,46 @@ async function houseDevices() {
   for (const d of r.devices) { d.originalName = d.name; if (names[d.id]) d.name = names[d.id]; }
   return r;
 }
-app.get('/api/devices', async (_req, res) => res.json(await houseDevices()));
+/* ---- The safety rule: CasaTorch never unlocks, opens a garage door or gate, or disarms an alarm. ----
+   Home Assistant doesn't always label things, so this also looks at what a device is called:
+   a relay named "garage", a "gate" button, an "unlock" script or a "disarm" scene is treated the same way.
+   Covers can always be closed and stopped; opening is only for blinds, shades, curtains and the like.
+   An owner can allow a specific device in Settings > Security if the name caught it by mistake. */
+const SAFE_COVERS = new Set(['blind', 'shade', 'curtain', 'shutter', 'awning', 'window', 'damper']);
+const RISKY_NAME = /garage|\bgates?\b|gate_|door(?!bell|_?sensor|_?contact)|\block|unlock|disarm|\balarm|opener|deadbolt/i;
+function riskOf(d) {
+  if (!d) return null;
+  if ((config.safety?.allow || []).includes(d.id)) return null;
+  const words = `${d.id} ${d.originalName || d.name || ''}`;
+  if (d.kind === 'lock') return { only: ['lock'], why: 'unlocking isn\'t available from CasaTorch - use your lock\'s own app' };
+  if (d.kind === 'alarm') return { only: [], why: 'arm and disarm the alarm in its own app or Home Assistant' };
+  if (d.kind === 'cover' && (d.risky || !SAFE_COVERS.has(d.haClass) || RISKY_NAME.test(words))) return { only: ['close', 'stop'], why: 'opening garage doors, gates and doors stays in their own app or Home Assistant' };
+  if (d.domain === 'siren' || /siren/.test(d.id)) return { only: ['on'], why: 'sirens can be set off from CasaTorch, but only turned off where they were set' };
+  if (['switch', 'plug', 'action', 'fan'].includes(d.kind) && RISKY_NAME.test(words)) return { only: [], why: `"${d.name}" looks like a door, gate, lock or alarm control, so CasaTorch won't switch it. An owner can allow it in Settings › Security.` };
+  return null;
+}
+const blocked = (d, action) => { const r = riskOf(d); return r && !r.only.includes(action) ? r.why : null; };
+app.get('/api/devices', async (_req, res) => { const r = await houseDevices(); for (const d of r.devices) if (riskOf(d)) d.guarded = riskOf(d).only; res.json(r); });
+/* Owner: the devices the safety rule is holding back, and the ones allowed anyway. */
+app.get('/api/safety', requireRole('admin'), async (_req, res) => {
+  const { devices } = await houseDevices(), allow = new Set(config.safety?.allow || []);
+  res.json({ held: devices.filter((d) => ['switch', 'plug', 'action', 'fan', 'cover'].includes(d.kind) && (allow.has(d.id) || riskOf(d))).map((d) => ({ id: d.id, name: d.name, kind: d.kind, allowed: allow.has(d.id) })) });
+});
+app.put('/api/safety/:id', express.json({ limit: '2kb' }), (req, res) => {
+  if (signInOn() && req.user?.role !== 'owner') return res.status(403).json({ error: 'Only an owner can change this.' });
+  const id = String(req.params.id).slice(0, 200), allow = new Set(config.safety?.allow || []);
+  if (req.body?.allow === true) allow.add(id); else allow.delete(id);
+  config.safety = { ...(config.safety || {}), allow: [...allow].slice(0, 200) }; saveConfig(config);
+  if (typeof audit === 'function') audit(req, req.body?.allow ? 'safety-allow' : 'safety-hold', { id });
+  res.json({ ok: true });
+});
 app.post('/api/devices/:id/:action', express.json(), async (req, res) => {
-  if (isDemo()) { const d = (await houseDevices()).devices.find((x) => x.id === req.params.id); if (d?.risky && ['open', 'toggle'].includes(req.params.action)) return res.status(403).json({ error: 'opening garage doors and gates stays in Home Assistant' }); return res.json({ ok: true, demo: true }); }
+  if (isDemo()) { const d = (await houseDevices()).devices.find((x) => x.id === req.params.id); const why = blocked(d, req.params.action); if (why) return res.status(403).json({ error: why }); return res.json({ ok: true, demo: true }); }
   const id = String(req.params.id), prov = PROVIDERS[id.split(':')[0]];
   if (!prov?.act) return res.status(404).json({ error: 'that device cannot be controlled from here' });
   const { devices } = await allDevices(); const d = devices.find((x) => x.id === id);
   if (!d) return res.status(404).json({ error: 'device not found' });
-  if (d.kind === 'lock' && req.params.action === 'unlock') return res.status(403).json({ error: 'unlocking isn\'t available from CasaTorch - use your lock\'s own app' });
-  if (d.kind === 'alarm') return res.status(403).json({ error: 'arm and disarm the alarm in Home Assistant' });
+  const why = blocked(d, String(req.params.action)); if (why) return res.status(403).json({ error: why });
   try { await prov.act(d, req.params.action, req.body?.value); CACHE.delete(`dev:${id.split(':')[0]}`); res.json({ ok: true }); }
   catch (err) { res.status(502).json({ error: String(err.message) }); }
 });
@@ -146,7 +177,7 @@ app.get('/api/cameras/:id/live', async (req, res) => {
   try {
     const up = await fetch(`${String(c.url).replace(/\/+$/, '')}/api/${encodeURIComponent(c.camera)}?h=720&fps=10&bbox=0&timestamp=0&zones=0&mask=0&motion=0&regions=0`, { signal: ac.signal });
     if (!up.ok || !up.body) { res.status(502).end(); return; }
-    res.setHeader('Content-Type', up.headers.get('content-type') || 'multipart/x-mixed-replace'); res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Content-Type', /^multipart\/x-mixed-replace(;\s*boundary=[\w'()+,./:=?-]{1,70})?$/i.test(up.headers.get('content-type') || '') ? up.headers.get('content-type') : 'multipart/x-mixed-replace'); res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Accel-Buffering', 'no');
     for await (const chunk of up.body) { if (!res.write(chunk)) await new Promise((ok) => res.once('drain', ok)); }
     res.end();
   } catch { if (!res.headersSent) res.status(502).end(); else res.end(); }

@@ -45,5 +45,5 @@ app.put('/api/settings', express.json(), (req, res) => {
 /* Re-open the setup wizard from the app (asks for the password again). */
 app.post('/api/settings/rerun-setup', express.json(), (req, res) => {
   if (signInOn() && (!req.user || rank(req.user.role) < rank('admin') || !verifySecret(req.user.password, req.body?.password || ''))) return res.status(403).json({ error: 'that password is not right' });
-  setupReopened = true; res.json({ ok: true, url: '/setup.html' });
+  setupReopened = Date.now(); res.json({ ok: true, url: '/setup.html' });
 });

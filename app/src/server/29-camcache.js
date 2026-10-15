@@ -49,7 +49,7 @@ async function sendSnap(req, res, key, fetcher, kind) {
   res.setHeader('ETag', e.etag);
   res.setHeader('X-Snapshot-Age', String(Math.round((Date.now() - e.at) / 1000)));
   if (req.headers['if-none-match'] === e.etag) return res.status(304).end();
-  res.setHeader('Content-Type', e.type);
+  res.setHeader('Content-Type', /^image\/(jpeg|png|webp|gif|avif)$/.test(e.type) ? e.type : 'image/jpeg');   // a camera can't serve anything but a picture from this site
   res.end(e.buf);
 }
 /** Something happened at this camera (doorbell, motion): get a new picture now. */
