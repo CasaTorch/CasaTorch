@@ -25,7 +25,7 @@ let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{
 ver=${plan% *}; sha=${plan#* }
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 echo "downloading CasaTorch $ver"
-curl -fsSL --max-time 900 -o "$tmp/$file" "https://casatorch.com/dl/$file"
+curl -fsSL --max-time 900 -H "X-CasaTorch-Updater: 1" -o "$tmp/$file" "https://casatorch.com/dl/$file"
 got=$(sha256sum "$tmp/$file" | cut -d' ' -f1)
 [ "$got" = "$sha" ] || { echo "checksum does not match the release - not installing" >&2; exit 1; }
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$tmp/$file"
