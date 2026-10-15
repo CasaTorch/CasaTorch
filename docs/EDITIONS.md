@@ -1,7 +1,7 @@
 # CasaTorch Free and Pro
 
 **Free is a complete home dashboard, for good.** Pro adds the showpiece features and, as they
-ship, the things that cost money to run (remote access, phone alerts, backups).
+ship, the things that cost money to run (remote access, phone alerts, cloud backups).
 
 **Pro: $5/month or $49/year.** Every new install gets a
 **14-day Pro trial** - no card, nothing to cancel. A Pro key is checked on your box, offline;
@@ -36,14 +36,15 @@ CasaTorch never phones home to check it.
 | **Away from home** - secure remote access from your phone, no port forwarding | | ✓ | Coming |
 | **Phone alerts** - push notifications for leaks, doorbell, alarms, with quiet hours | | ✓ | Coming |
 | **CasaTorch apps** for iPhone, iPad and Android (App Store / Play Store) | | ✓ | Coming |
-| **Smart alerts** - "only if nobody's home", escalation, plain-English summaries | | ✓ | Coming |
+| **Smart alerts** - doorbell and motion only when nobody's home; critical alerts repeat every 10 minutes until acknowledged | | ✓ | Now |
+| Fewer false alarms: an alert must still be there a minute later (water and smoke go out at once) | ✓ | ✓ | Now |
 | **Weekly report** - every Monday: energy and cost vs the week before, always-on load, top devices, alerts, internet and server downtime, tips (written by your AI if connected, otherwise by rules); phone alert | | ✓ | Now |
-| Bill forecast | | ✓ | Coming |
+| Bill forecast for the month | | ✓ | Now |
 | **Self-healing** - restarts stuck integrations and tells you what it fixed | | ✓ | Coming |
 | Energy history (by day and by device) | 7 days | 2 years | Now |
 | Multiple homes (cabin, parents' house) in one app | | ✓ | Coming |
 | Extra wall-panel layouts and theme packs | | ✓ | Coming |
-| Encrypted backup of your settings | | ✓ | Coming |
+| Encrypted backup and restore (settings, sign-ins, floor plans, history, photos) | ✓ | ✓ | Now |
 | Network monitoring: UniFi and Cisco Meraki (every device online/offline, connected clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), alerts when a device drops off - free keeps internet status and speed tests | | ✓ | Now |
 | Wi-Fi health and per-client detail for UniFi and Meraki | | ✓ | Coming |
 | Server monitor: NAS, servers and self-hosted apps - up or down, response time, 24-hour uptime, certificate expiry, alerts | | ✓ | Now |
