@@ -11,7 +11,8 @@ PKG=$(mktemp -d); trap 'rm -rf "$PKG"' EXIT
 mkdir -p "$PKG/opt/casatorch" "$PKG/lib/systemd/system" "$PKG/DEBIAN"
 cp -R "$BUNDLE/app" "$BUNDLE/demo" "$BUNDLE/VERSION" "$PKG/opt/casatorch/"
 if [ -n "${NODE_BIN:-}" ]; then mkdir -p "$PKG/opt/casatorch/node"; cp "$NODE_BIN" "$PKG/opt/casatorch/node/node"; else "$ROOT/deploy/packaging/fetch-node.sh" "$NODEPLAT" "$PKG/opt/casatorch/node"; fi
-cp "$HERE/casatorch.service" "$PKG/lib/systemd/system/"
+cp "$HERE/casatorch.service" "$HERE/casatorch-update.service" "$HERE/casatorch-update.timer" "$PKG/lib/systemd/system/"
+cp "$HERE/casatorch-update" "$PKG/opt/casatorch/casatorch-update"
 for s in postinst prerm postrm; do cp "$HERE/$s" "$PKG/DEBIAN/"; chmod 755 "$PKG/DEBIAN/$s"; done
 MAINT="CasaTorch <support@casatorch.com>"   # scrub-ok: public support address
 SIZE=$(du -sk "$PKG/opt" | cut -f1)
@@ -30,7 +31,7 @@ Description: CasaTorch - one screen for your whole house
  sensors, energy, calendars and weather, with everything from Home Assistant.
  Runs as a service on port 8090; open http://<this computer>:8090 to set it up.
 CTRL
-chmod -R u+rwX,go+rX,go-w "$PKG/opt" "$PKG/lib"; chmod 644 "$PKG/lib/systemd/system/casatorch.service"
+chmod -R u+rwX,go+rX,go-w "$PKG/opt" "$PKG/lib"; chmod 644 "$PKG/lib/systemd/system/"casatorch*; chmod 755 "$PKG/opt/casatorch/casatorch-update"
 find "$PKG" -type d -exec chmod 755 {} +
 mkdir -p "$ROOT/dist"
 dpkg-deb --root-owner-group -Zxz --build "$PKG" "$ROOT/dist/casatorch_$ARCH.deb" >/dev/null

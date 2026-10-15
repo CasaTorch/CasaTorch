@@ -11,7 +11,7 @@ COPY app/catalog ./catalog
 COPY demo /demo
 COPY app/docker-entrypoint.sh /usr/local/bin/casatorch-entrypoint
 RUN node build.mjs && mkdir -p /data && chown node:node /data && chmod 755 /usr/local/bin/casatorch-entrypoint
-ENV CASATORCH_DATA_DIR=/data PORT=8090 NODE_ENV=production
+ENV CASATORCH_DATA_DIR=/data PORT=8090 NODE_ENV=production CASATORCH_INSTALL=docker
 # Starts as root only to fix the owner of /data, then runs CasaTorch as the "node" user (docker-entrypoint.sh).
 EXPOSE 8090
 VOLUME ["/data"]

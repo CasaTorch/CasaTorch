@@ -1,0 +1,32 @@
+#!/bin/sh
+# casatorch-update - run nightly by casatorch-update.timer (as root). If a newer CasaTorch is out and
+# automatic updates are on (Settings > Updates), downloads it from casatorch.com, checks its SHA-256
+# against the release, and installs it. Your settings in /var/lib/casatorch are kept.
+#   sudo /opt/casatorch/casatorch-update          check and update now
+set -eu
+NODE=/opt/casatorch/node/node
+CFG=/var/lib/casatorch/config.json
+API=${CASATORCH_UPDATE_URL:-https://casatorch.com/api/latest}
+cur=$(cat /opt/casatorch/VERSION)
+arch=$(dpkg --print-architecture)
+file="casatorch_${arch}.deb"
+auto=$("$NODE" -e "try{const c=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'));process.stdout.write(c.updates&&c.updates.auto===false?'off':'on')}catch(e){process.stdout.write('on')}" "$CFG")
+[ "$auto" = on ] || { echo "automatic updates are off (Settings > Updates)"; exit 0; }
+info=$(curl -fsS --max-time 30 "$API?v=$cur&i=auto-$arch") || { echo "could not reach casatorch.com - will try again tomorrow"; exit 0; }
+# Prints "<version> <sha256>" when the release is newer than this one and has our file with a checksum.
+plan=$(printf '%s' "$info" | "$NODE" -e "
+let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{
+  const j=JSON.parse(s),p=v=>String(v||'').replace(/^v/,'').split('.').map(n=>parseInt(n,10)||0),a=p(j.version),b=p(process.argv[1]);
+  let newer=false;for(let i=0;i<3;i++){if((a[i]||0)!==(b[i]||0)){newer=(a[i]||0)>(b[i]||0);break}}
+  const f=(j.assets||{})[process.argv[2]];
+  if(newer&&f&&/^[0-9a-f]{64}$/.test(f.sha256||''))process.stdout.write(j.version+' '+f.sha256);
+}catch(e){}})" "$cur" "$file")
+[ -n "$plan" ] || { echo "CasaTorch $cur is up to date"; exit 0; }
+ver=${plan% *}; sha=${plan#* }
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+echo "downloading CasaTorch $ver"
+curl -fsSL --max-time 900 -o "$tmp/$file" "https://casatorch.com/dl/$file"
+got=$(sha256sum "$tmp/$file" | cut -d' ' -f1)
+[ "$got" = "$sha" ] || { echo "checksum does not match the release - not installing" >&2; exit 1; }
+DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$tmp/$file"
+echo "updated CasaTorch $cur -> $ver"

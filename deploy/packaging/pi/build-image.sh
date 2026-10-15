@@ -31,6 +31,13 @@ mount --bind /dev "$MNT/dev"; mount --bind /dev/pts "$MNT/dev/pts"; mount -t pro
 cp "$DEB" "$MNT/tmp/casatorch.deb"
 chroot "$MNT" /usr/bin/env DEBIAN_FRONTEND=noninteractive dpkg -i /tmp/casatorch.deb
 rm -f "$MNT/tmp/casatorch.deb"
+# Raspberry Pi image: CasaTorch updates itself (casatorch-update.timer), and so does the system -
+# Debian security fixes install automatically every night.
+mkdir -p "$MNT/etc/systemd/system/casatorch.service.d"
+printf '[Service]\nEnvironment=CASATORCH_INSTALL=pi-image\n' > "$MNT/etc/systemd/system/casatorch.service.d/install.conf"
+cp -L /etc/resolv.conf "$MNT/etc/resolv.conf.casatorch" && mount --bind "$MNT/etc/resolv.conf.casatorch" "$MNT/etc/resolv.conf" 2>/dev/null || true
+chroot "$MNT" /usr/bin/env DEBIAN_FRONTEND=noninteractive sh -c 'apt-get update -qq && apt-get install -y -qq unattended-upgrades && printf "APT::Periodic::Update-Package-Lists \"1\";\nAPT::Periodic::Unattended-Upgrade \"1\";\n" > /etc/apt/apt.conf.d/20auto-upgrades && apt-get clean'
+umount "$MNT/etc/resolv.conf" 2>/dev/null || true; rm -f "$MNT/etc/resolv.conf.casatorch"
 # The name it answers to on the network: http://casatorch.local:8090 (Raspberry Pi Imager can change it).
 echo casatorch > "$MNT/etc/hostname"
 sed -i 's/\braspberrypi\b/casatorch/g' "$MNT/etc/hosts"
