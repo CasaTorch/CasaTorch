@@ -1,11 +1,13 @@
 /* Unit tests for the parts that read other people's data formats. Run: node test/unit.mjs */
 import assert from 'node:assert/strict';
 import * as fsMod from 'node:fs';
-const require_ = () => fsMod;
+import { createRequire } from 'node:module';
+const req = createRequire(import.meta.url);
+const require_ = (m) => (m === 'fs' ? fsMod : req(m));
 process.env.CASATORCH_TEST = '1'; process.env.CASATORCH_DATA_DIR = '/tmp/casatorch-unit';
 await import('../server.js');
 const H = globalThis.__casatorch;
-let n = 0; const t = (name, fn) => { fn(); n++; console.log('ok', name); };
+let n = 0; const t = async (name, fn) => { await fn(); n++; console.log('ok', name); };
 const TZ = 'America/Los_Angeles';
 
 t('ics: zoned time to UTC (PDT)', () => assert.equal(new Date(H.zonedToUtc(2026, 10, 20, 9, 0, 0, TZ)).toISOString(), '2026-10-20T16:00:00.000Z'));
@@ -81,6 +83,21 @@ t('config: every token, key and password is sealed on disk, nothing else', () =>
   assert.deepEqual(H.openConfig(H.sealConfig(disk)), c, 'sealing twice is harmless');
 });
 t('files: safe write replaces the file whole', () => { const f = '/tmp/casatorch-unit/x.json'; H.writeFileSafe(f, '{"a":1}'); H.writeFileSafe(f, '{"a":2}'); assert.equal(JSON.parse(require_('fs').readFileSync(f, 'utf8')).a, 2); });
+
+t('alerts: push only to real push services (no sending to typed-in addresses)', () => {
+  assert.ok(H.okEndpoint('https://fcm.googleapis.com/fcm/send/x')); assert.ok(H.okEndpoint('https://web.push.apple.com/abc')); assert.ok(H.okEndpoint('https://updates.push.services.mozilla.com/wpush/v2/x'));
+  for (const bad of ['http://fcm.googleapis.com/x', 'https://evil.example.com/x', 'https://fcm.googleapis.com.evil.com/x', 'https://127.0.0.1/x', 'not a url']) assert.ok(!H.okEndpoint(bad), bad);
+});
+t('alerts: a doorbell press counts as important, motion does not', () => { assert.equal(H.sevOf({ id: 'ring:1:doorbell:123', severity: 'notice' }), 'event'); assert.equal(H.sevOf({ id: 'ring:1:motion:123', severity: 'info' }), 'info'); assert.equal(H.sevOf({ severity: 'critical' }), 'critical'); });
+await t('alerts: a push message decrypts on the phone it was made for', async () => {
+  const { default: webpush } = await import('web-push'), ece = require_('http_ece'), ecdh = require_('crypto').createECDH('prime256v1'); ecdh.generateKeys();
+  const auth = require_('crypto').randomBytes(16), v = webpush.generateVAPIDKeys();
+  const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/x', keys: { p256dh: ecdh.getPublicKey().toString('base64url'), auth: auth.toString('base64url') } };
+  const d = webpush.generateRequestDetails(sub, JSON.stringify({ title: 'Water detected' }), { vapidDetails: { subject: 'mailto:test@example.com', publicKey: v.publicKey, privateKey: v.privateKey } });
+  const plain = ece.decrypt(d.body, { version: 'aes128gcm', privateKey: ecdh, authSecret: auth });
+  assert.equal(JSON.parse(plain.toString()).title, 'Water detected');
+  assert.ok(!d.body.toString('latin1').includes('Water'), 'the push service sees only ciphertext');
+});
 
 console.log(`\n${n} passed`);
 process.exit(0);

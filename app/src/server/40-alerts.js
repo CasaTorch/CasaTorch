@@ -13,6 +13,7 @@ function alertRaise(a) {
   alerts.events.unshift({ at: nowIso(), ...a });
   alerts.events = alerts.events.slice(0, 300);
   saveAlerts();
+  if (!isDemo()) notify(a).catch(() => {});   // phones: web app alerts and/or the Home Assistant app
 }
 async function alertConditions() {
   const found = {};
