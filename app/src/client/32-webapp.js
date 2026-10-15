@@ -30,7 +30,7 @@ async function phoneCard() {
     /* 2. Alerts on this device */
     add(el('h3', { class: 'sub' }, 'Alerts on this device'));
     if (!isSecureContext) {
-      add(el('p', { class: 'small muted' }, `Phones only allow app installs and alerts on a secure (https) address, and this page is on ${location.host} (http). Secure access is coming in an update.`),
+      add(el('p', { class: 'small muted' }, `Phones only allow app installs and alerts on a secure (https) address, and this page is on ${location.host} (http). Turn on Secure access (on this page) and open CasaTorch at its https address on your phone.`),
         info?.haPhone ? el('p', { class: 'small good' }, '✓ Alerts already go to the Home Assistant app on your phones.') : el('p', { class: 'small muted' }, 'Using Home Assistant? Its phone app can get CasaTorch alerts today - turn it on below.'));
     } else if (!('PushManager' in window) || !('Notification' in window)) {
       add(el('p', { class: 'small muted' }, isIOS && !isStandalone() ? 'On iPhone and iPad, alerts work in the installed app: add CasaTorch to your Home Screen first (above), open it from there, and come back here.' : 'This browser can\'t show alerts.'));
@@ -68,6 +68,37 @@ async function phoneCard() {
       add(el('h3', { class: 'sub' }, 'For everyone'), el('label', { class: 'field' }, el('span', {}, 'Quiet hours (only critical alerts get through)'), quiet),
         info.ha ? el('label', { class: 'field check' }, ha, el('span', {}, 'Also send alerts to the Home Assistant app on your phones')) : null);
     }
+  };
+  draw(); return card;
+}
+
+/* Settings > Secure access: this CasaTorch at its own https address. */
+async function remoteCard() {
+  const card = el('div', { class: 'card' }, el('h2', {}, icon('lock', 15), 'Secure access'));
+  const body = el('div'); card.append(body);
+  const draw = async () => {
+    const r = await api('/api/remote').catch(() => null);
+    const me = await api('/api/auth/me').catch(() => null), admin = !me || me.signIn === false || ['owner', 'admin'].includes(me.user?.role);
+    body.replaceChildren();
+    if (!r) return body.append(el('p', { class: 'small muted' }, 'Not available right now.'));
+    const add = (...k) => body.append(...k.filter(Boolean));
+    if (!r.on) {
+      add(el('p', { class: 'small muted', style: 'margin-top:0' }, 'Give this CasaTorch its own secure https address, so phones can install the CasaTorch app and get alerts. Nothing to change on your router. Everyone still signs in as usual.'),
+        el('p', { class: 'small muted' }, r.anywhere ? 'With Pro, the address works from anywhere - at home or away.' : 'On Basic, the address works on your home Wi-Fi. Using it from anywhere is part of Pro.'),
+        !r.supported ? el('p', { class: 'small bad' }, 'Secure access isn\'t available on this kind of computer yet.') : null,
+        admin && r.supported ? el('button', { class: 'btn primary', onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Setting up… (up to a minute)'; try { await post('/api/remote/on', {}); toast('Secure access is on'); } catch (err) { toast(err.message, 6000); } draw(); } }, icon('lock'), 'Turn on secure access') : null);
+      if (r.why) add(el('p', { class: 'small bad' }, r.why));
+      return;
+    }
+    const st = { connected: ['good', 'Connected'], connecting: ['warn', 'Connecting…'], downloading: ['warn', 'Getting ready…'], error: ['bad', 'Not working'] }[r.state] || ['warn', r.state];
+    const qr = el('div', { class: 'qr', style: 'width:150px;height:150px;background:#fff;border-radius:12px;padding:8px' }); qr.innerHTML = r.qr || '';   // server-made SVG
+    add(el('div', { class: 'row', style: 'gap:8px;align-items:center' }, el('span', { class: `dot ${st[0]}` }), el('b', {}, st[1])),
+      el('p', {}, el('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.url)),
+      el('div', { class: 'row wrap', style: 'gap:16px;align-items:center' }, qr, el('p', { class: 'small muted', style: 'max-width:340px' }, 'Scan this with your phone camera to open CasaTorch at its secure address, sign in, then add it to your home screen and turn on alerts (Settings › Phone app & alerts).')),
+      el('p', { class: 'small muted' }, r.anywhere ? 'Works from anywhere (Pro).' : 'Works on your home Wi-Fi. From anywhere is part of Pro.'),
+      r.why ? el('p', { class: 'small bad' }, r.why) : null,
+      admin ? el('button', { class: 'btn small ghost', onclick: async () => { if (!confirm('Turn off secure access? The address stops working on every phone.')) return; await post('/api/remote/off', {}).catch((err) => toast(err.message)); draw(); } }, 'Turn off') : null);
+    if (r.state !== 'connected') setTimeout(() => { if (card.isConnected) draw(); }, 4000);
   };
   draw(); return card;
 }

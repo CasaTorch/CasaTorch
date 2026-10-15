@@ -123,5 +123,12 @@ t('power: the house total never counts a plug or a car charger twice', () => {
   assert.equal(P([{ id: 'ha:sensor.solar_power', kind: 'sensor', powerW: 3000 }, { id: 'p', kind: 'plug', powerW: 40 }]), 40, 'solar production is not use');
 });
 
+await t('secure access: Basic works from home only (IPv4 exact, IPv6 same network)', async () => {
+  H.remote.homeIps = { v4: '198.51.100.7', v6: '2001:db8:aa:bb::1', at: Date.now() };
+  assert.ok(await H.fromHome('198.51.100.7')); assert.ok(!(await H.fromHome('198.51.100.8')));
+  assert.ok(await H.fromHome('2001:db8:aa:bb:1234::9'), 'another device on the home network');
+  assert.ok(!(await H.fromHome('2001:db8:aa:cc::1')), 'a different network');
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);
