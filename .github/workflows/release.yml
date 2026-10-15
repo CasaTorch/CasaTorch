@@ -59,7 +59,7 @@ jobs:
       - run: mkdir -p dist && tar xzf bundle.tgz -C dist
       - run: CASATORCH_VERSION=${CASATORCH_VERSION#v} deploy/packaging/linux/build-deb.sh ${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
-        with: { name: "deb-${{ matrix.arch }}", path: "dist/casatorch_${{ matrix.arch }}.deb" }
+        with: { name: "deb-${{ matrix.arch }}", path: "dist/casatorch_${{ matrix.arch }}.deb", compression-level: 0 }
 
   raspberry-pi:
     needs: linux
@@ -71,7 +71,7 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user-static binfmt-support parted e2fsprogs xz-utils
       - run: sudo deploy/packaging/pi/build-image.sh dist/casatorch_arm64.deb
       - uses: actions/upload-artifact@v4
-        with: { name: pi-image, path: dist/casatorch-raspberry-pi.img.xz }
+        with: { name: pi-image, path: dist/casatorch-raspberry-pi.img.xz, compression-level: 0 }
 
   windows:
     needs: bundle
