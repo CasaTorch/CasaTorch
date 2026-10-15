@@ -63,7 +63,7 @@ tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
     const sp = el('div', { class: 'card' }, el('h2', {}, 'Speed'), n.speed ? el('div', { class: 'row', style: 'gap:30px' }, el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(n.speed.downMbps)), el('span', { class: 'lbl' }, 'Mbps down')), el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(n.speed.upMbps)), el('span', { class: 'lbl' }, 'Mbps up'))) : el('p', { class: 'muted' }, 'No test yet.'),
       el('p', { class: 'small muted' }, n.speed ? `Tested ${fmtWhen(n.speed.at)}. CasaTorch tests every 4 hours.` : 'CasaTorch tests every 4 hours.'), btn);
     const lan = el('div', { class: 'card' }, el('h2', {}, 'Home network'), el('dl', { class: 'kv' }, el('dt', {}, 'Router'), el('dd', {}, n.gateway || '-'), el('dt', {}, 'Devices seen'), el('dd', {}, n.lanDevices ?? '-'), el('dt', {}, 'This box'), el('dd', {}, n.host || '-')),
-      el('p', { class: 'small muted' }, 'Per-device traffic and Wi-Fi detail come from a Meraki or UniFi controller (Settings > Run setup again).'));
+      el('p', { class: 'small muted' }, 'Every device, Wi-Fi health and alerts from Cisco Meraki and UniFi are coming to CasaTorch Pro.'));
     main.replaceChildren(el('div', { class: 'cards' }, net, sp, lan));
   };
   await draw(); return draw;

@@ -43,6 +43,9 @@ CasaTorch never phones home to check it.
 | Multiple homes (cabin, parents' house) in one app | | ✓ | Coming |
 | Extra wall-panel layouts and theme packs | | ✓ | Coming |
 | Encrypted backup of your settings | | ✓ | Coming |
+| Network integration: Cisco Meraki and UniFi (every device, Wi-Fi health, alerts), Pi-hole, AdGuard Home - free keeps internet status and speed tests | | ✓ | Coming |
+| Server monitor: NAS, servers and self-hosted apps - up or down, storage, temperatures | | ✓ | Coming |
+| AI reports: a plain-English weekly report on energy, security, the network and anything unusual | | ✓ | Coming |
 | Basic support: e-mail and Discord, members-only Pro channel | | ✓ | Now |
 | Service & Developer Access: custom features, hands-on deployment help, priority replies ($100/yr, includes Pro) - see [SUPPORT.md](SUPPORT.md) | | add-on | Now |
 

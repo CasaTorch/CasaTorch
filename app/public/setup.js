@@ -358,7 +358,6 @@ function stepPage(step) {
   }
   if (step.fields) out.push(...fieldsEl(step.id === 'account' && W.rerun ? step.fields.map((f) => (f.id === 'password' ? { ...f, required: false, label: 'New password (leave empty to keep the current one)' } : f)) : step.fields, store, go));
   if (step.help) out.push(el('details', { class: 'card' }, el('summary', {}, 'Where do I find the link?'), el('p', { class: 'note' }, step.help)));
-  if (step.id === 'network' && ['pihole', 'adguard'].includes(store.dns)) out.push(testEl(store.dns, store, `Test ${store.dns === 'pihole' ? 'Pi-hole' : 'AdGuard'}`));
   return out;
 }
 /* "Who is your power company?" - Home Assistant's own list (Opower), then its sign-in. */

@@ -130,6 +130,9 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 | **3D Home** - your home as a live 3D plan (LiDAR scan, or draw it in the app) | **Away from home** - secure remote access, no port forwarding |
 | **Ask the house** - plain-English answers about your home, tap-to-do actions (AI usage billed by your AI provider, or free with Ollama) | **Phone alerts** - push notifications with quiet hours |
 | **Ring** doorbells and cameras (Labs) | **iPhone, iPad and Android apps** |
+| | **Network integration** - Cisco Meraki and UniFi (every device, Wi-Fi health, alerts), Pi-hole, AdGuard Home |
+| | **Server monitor** - your NAS, servers and self-hosted apps: up or down, storage, temperatures |
+| | **AI reports** - a plain-English weekly report on energy, security, the network and anything unusual |
 | | Smart alerts, energy insights, self-healing, 2-year history, multi-home, backups |
 
 Full comparison: [docs/EDITIONS.md](docs/EDITIONS.md). Where phones, tablets and the cloud fit in:

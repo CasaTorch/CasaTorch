@@ -387,19 +387,9 @@
               },
               {
                 "id": "meraki-mv",
-                "label": "Cisco Meraki MV",
-                "method": "direct",
-                "provider": "meraki",
-                "fields": [
-                  {
-                    "id": "apiKey",
-                    "label": "Meraki API key",
-                    "type": "password",
-                    "required": true,
-                    "help": "Meraki dashboard > your profile > API access > Generate key."
-                  }
-                ],
-                "test": "meraki"
+                "label": "Cisco Meraki MV (coming to Pro)",
+                "method": "guide",
+                "guide": "meraki-soon"
               },
               {
                 "id": "wyze",
@@ -716,18 +706,9 @@
               },
               {
                 "id": "meraki-mt",
-                "label": "Cisco Meraki MT",
-                "method": "direct",
-                "provider": "meraki",
-                "fields": [
-                  {
-                    "id": "apiKey",
-                    "label": "Meraki API key",
-                    "type": "password",
-                    "required": true
-                  }
-                ],
-                "test": "meraki"
+                "label": "Cisco Meraki MT (coming to Pro)",
+                "method": "guide",
+                "guide": "meraki-soon"
               },
               {
                 "id": "other",
@@ -817,36 +798,10 @@
       },
       "branches": {
         "unifi": {
-          "fields": [
-            {
-              "id": "url",
-              "label": "UniFi console address",
-              "type": "url",
-              "placeholder": "https://192.168.1.1",
-              "required": true
-            },
-            {
-              "id": "apiKey",
-              "label": "UniFi API key",
-              "type": "password",
-              "required": true,
-              "help": "UniFi Network > Settings > Control Plane > Integrations > Create API key."
-            }
-          ],
-          "test": "unifi"
+          "note": "Network integration for UniFi (every device, Wi-Fi health and alerts) is coming to CasaTorch Pro. Today CasaTorch shows your internet status and runs speed tests."
         },
         "meraki": {
-          "fields": [
-            {
-              "id": "apiKey",
-              "label": "Meraki API key",
-              "type": "password",
-              "required": true,
-              "help": "Meraki dashboard > your profile > API access > Generate key."
-            }
-          ],
-          "test": "meraki",
-          "then": "meraki-network"
+          "note": "Network integration for Cisco Meraki (every device, Wi-Fi health and alerts) is coming to CasaTorch Pro. Today CasaTorch shows your internet status and runs speed tests."
         },
         "omada": {
           "note": "Omada support is planned. CasaTorch will still show your internet speed and devices from your DNS blocker."
@@ -868,49 +823,6 @@
         }
       },
       "fields": [
-        {
-          "id": "dns",
-          "label": "Do you run a network-wide ad blocker?",
-          "type": "choice",
-          "options": [
-            [
-              "none",
-              "No"
-            ],
-            [
-              "pihole",
-              "Pi-hole"
-            ],
-            [
-              "adguard",
-              "AdGuard Home"
-            ]
-          ],
-          "default": "none"
-        },
-        {
-          "id": "dnsUrl",
-          "label": "Its address",
-          "type": "url",
-          "placeholder": "http://192.168.1.2",
-          "showIf": {
-            "dns": [
-              "pihole",
-              "adguard"
-            ]
-          }
-        },
-        {
-          "id": "dnsKey",
-          "label": "Its password or API token",
-          "type": "password",
-          "showIf": {
-            "dns": [
-              "pihole",
-              "adguard"
-            ]
-          }
-        },
         {
           "id": "speedtest",
           "label": "Run an internet speed test every few hours?",
@@ -1113,6 +1025,7 @@
     "wyze": "Wyze cameras work through docker-wyze-bridge, which turns them into normal streams. Install it, then pick 'Frigate' or 'Other IP camera'.",
     "cloud-cams": "Arlo and Eufy are cloud cameras. Add them in Home Assistant with the community integrations (HACS); CasaTorch shows them once they're there.",
     "already-in-ha": "Anything already in Home Assistant shows up in CasaTorch automatically - nothing else to do.",
-    "emporia": "Emporia Vue works through a community integration (HACS). Add it in Home Assistant; CasaTorch reads it from there."
+    "emporia": "Emporia Vue works through a community integration (HACS). Add it in Home Assistant; CasaTorch reads it from there.",
+    "meraki-soon": "Cisco Meraki cameras (MV) and sensors (MT) are coming to CasaTorch Pro with the network integration."
   }
 }
