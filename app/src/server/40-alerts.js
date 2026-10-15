@@ -31,6 +31,7 @@ async function alertConditions() {
     if (want.has('temp') && d.tempC != null && (d.tempC < 3 || d.tempC > 35)) add(`temp:${d.id}`, { severity: 'warning', title: `${d.name} is ${d.tempC < 3 ? 'near freezing' : 'very hot'}`, source: d.provider });
   }
   for (const d of offline.slice(0, 10)) add(`offline:${d.id}`, { severity: 'warning', title: `${d.name} is not responding`, source: d.provider });
+  if (typeof monitorAlerts === 'function') for (const m of monitorAlerts()) add(m.id, m);   // the server monitor (Pro)
   if (offline.length > 10) add('offline:more', { severity: 'notice', title: `${offline.length - 10} more devices are not responding`, source: 'casatorch' });
   const net = await internetNow().catch(() => null);
   if (net && !net.online) add('internet', { severity: 'critical', title: 'The internet is down', source: 'internet' });

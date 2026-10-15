@@ -52,9 +52,47 @@ tab({ id: 'cameras', label: 'Cameras', icon: 'camera', async render(main) {
 } });
 
 /* ---- Network ---- */
+/* Server monitor (Pro): a row per server or app, with the last hour as a strip of ticks. */
+function serversCard(mo, redraw) {
+  const card = el('div', { class: 'card servers', style: 'margin-top:14px' });
+  const head = el('h2', { style: 'margin:0' }, 'Servers and apps', el('span', { class: 'pill pro' }, 'Pro'));
+  if (!mo.pro) {
+    card.append(head, el('p', { class: 'muted', style: 'margin-top:10px' }, 'Watch your NAS, servers and self-hosted apps: up or down, how fast they answer, and certificates about to expire - with a phone alert when something stops responding.'), el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'));
+    return card;
+  }
+  const add = el('button', { class: 'btn small', onclick: () => {
+    const name = el('input', { placeholder: 'NAS, Plex, Backup server...', maxlength: 40 });
+    const target = el('input', { placeholder: 'http://nas.local:5000  or  192.168.1.20:22' });
+    const msg = el('p', { class: 'small', style: 'min-height:1.2em' });
+    const save = el('button', { class: 'btn primary', onclick: async () => {
+      save.disabled = true; msg.textContent = 'Checking it...';
+      try { const r = await post('/api/monitors', { name: name.value, target: target.value }); m.remove(); toast(r.monitor.up ? `${r.monitor.name} is up` : `${r.monitor.name} added - it isn't answering yet`); redraw(); }
+      catch (e) { msg.textContent = e.message; msg.style.color = 'var(--bad)'; save.disabled = false; }
+    } }, 'Add');
+    const m = modal(el('div', {}, el('label', { class: 'field' }, el('span', {}, 'Name'), name), el('label', { class: 'field' }, el('span', {}, 'Web address, or host and port'), target),
+      el('p', { class: 'small muted' }, 'A web address is up when it answers. A host and port is up when it accepts a connection (for example 22 for SSH, 445 for file sharing). Checked every minute from this CasaTorch.'), msg, el('div', { class: 'row', style: 'justify-content:flex-end' }, save)), { title: 'Watch a server or app' });
+    setTimeout(() => name.focus(), 30);
+  } }, icon('plus'), 'Add');
+  const rows = mo.monitors.map((x) => {
+    const dot = x.down ? 'bad' : x.up ? 'good' : 'warn';
+    const strip = el('div', { class: 'tickstrip', 'aria-hidden': 'true' }, (x.recent || []).map((v) => el('i', { class: v < 0 ? 'down' : '' })));
+    const del = el('button', { class: 'btn ghost small', 'aria-label': `Stop watching ${x.name}`, onclick: async () => { try { await api(`/api/monitors/${encodeURIComponent(x.id)}`, { method: 'DELETE' }); redraw(); } catch (e) { toast(e.message); } } }, icon('x'));
+    return el('div', { class: 'srv' },
+      el('span', { class: `dot ${dot}` }),
+      el('div', { class: 'grow' }, el('div', { class: 'row wrap', style: 'gap:8px' }, el('b', {}, x.name), x.cert && x.cert.days <= 14 ? el('span', { class: 'pill warn' }, x.cert.days < 0 ? 'certificate expired' : `certificate: ${x.cert.days} d`) : null),
+        el('div', { class: 'tiny muted ellipsis' }, x.target)),
+      strip,
+      el('div', { class: 'srv-num' }, el('b', {}, x.down ? 'Down' : x.ms != null ? `${x.ms} ms` : '-'), el('span', { class: 'tiny muted' }, x.down ? (x.error || '') : x.uptime24h != null ? `${x.uptime24h}% up` : 'checking')),
+      mo.demo ? null : del);
+  });
+  card.append(el('div', { class: 'row between', style: 'margin-bottom:10px' }, head, mo.monitors.length < mo.max ? add : null),
+    rows.length ? el('div', { class: 'srvs' }, rows) : el('p', { class: 'muted' }, 'Nothing watched yet. Add your NAS, a media server, Home Assistant or any self-hosted app.'));
+  return card;
+}
 tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
   const draw = async () => {
-    const n = await api('/api/internet');
+    const [n, mo] = await Promise.all([api('/api/internet'), api('/api/monitors').catch(() => ({ pro: false, monitors: [], max: 30 }))]);
+    mo.demo = !!S.status?.demo;
     const btn = el('button', { class: 'btn primary' }, icon('bolt'), 'Run a speed test');
     btn.onclick = async () => { btn.disabled = true; btn.lastChild.textContent = 'Testing (about 20 s)...'; try { await post('/api/internet/speedtest'); toast('Speed test done'); await draw(); } catch (err) { toast(err.message); btn.disabled = false; } };
     const net = el('div', { class: 'card' }, el('h2', {}, 'Internet'), el('div', { class: 'row' }, el('span', { class: `dot ${n.online ? 'good' : 'bad'}` }), el('b', {}, n.online ? 'Online' : 'Down')),
@@ -64,7 +102,7 @@ tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
       el('p', { class: 'small muted' }, n.speed ? `Tested ${fmtWhen(n.speed.at)}. CasaTorch tests every 4 hours.` : 'CasaTorch tests every 4 hours.'), btn);
     const lan = el('div', { class: 'card' }, el('h2', {}, 'Home network'), el('dl', { class: 'kv' }, el('dt', {}, 'Router'), el('dd', {}, n.gateway || '-'), el('dt', {}, 'Devices seen'), el('dd', {}, n.lanDevices ?? '-'), el('dt', {}, 'This box'), el('dd', {}, n.host || '-')),
       el('p', { class: 'small muted' }, 'Every device, Wi-Fi health and alerts from Cisco Meraki and UniFi are coming to CasaTorch Pro.'));
-    main.replaceChildren(el('div', { class: 'cards' }, net, sp, lan));
+    main.replaceChildren(el('div', { class: 'cards' }, net, sp, lan), serversCard(mo, draw));
   };
   await draw(); return draw;
 } });

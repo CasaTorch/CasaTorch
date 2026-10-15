@@ -161,5 +161,25 @@ await t('history: a sample records the day and counts new alerts once', async ()
   assert.equal(day.alerts.critical, 1, 'counted once, cleared ones ignored'); assert.equal(day.titles['Water detected: Laundry'], 1);
 });
 
+t('server monitor: what counts as an address', () => {
+  assert.equal(H.parseTarget('http://nas.local:5000').kind, 'http');
+  assert.deepEqual(H.parseTarget('192.168.1.20:22'), { kind: 'tcp', target: '192.168.1.20:22', host: '192.168.1.20', port: 22 });
+  assert.equal(H.parseTarget('[fd00::5]:53').host, 'fd00::5');
+  for (const bad of ['nas.local', 'ftp://x', 'http://user:pw@nas', 'host:99999', '', 'javascript:alert(1)']) assert.equal(H.parseTarget(bad), null, bad);
+});
+await t('server monitor: up, a server error, and a closed port', async () => {
+  const http = req('node:http');
+  const srv = http.createServer((q, r) => { r.statusCode = q.url === '/broken' ? 503 : 200; r.end('ok'); });
+  await new Promise((ok) => srv.listen(0, '127.0.0.1', ok)); const port = srv.address().port;
+  const up = await H.checkOne({ kind: 'http', target: `http://127.0.0.1:${port}/` });
+  const err = await H.checkOne({ kind: 'http', target: `http://127.0.0.1:${port}/broken` });
+  const tcp = await H.checkOne({ kind: 'tcp', target: `127.0.0.1:${port}` });
+  srv.close();
+  const closed = await H.checkOne({ kind: 'tcp', target: `127.0.0.1:${port}` });
+  assert.equal(up.up, true); assert.ok(up.ms >= 0);
+  assert.equal(err.up, false); assert.equal(err.error, 'answered 503');
+  assert.equal(tcp.up, true); assert.equal(closed.up, false);
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);
