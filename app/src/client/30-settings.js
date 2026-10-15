@@ -105,8 +105,8 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
     el('div', { class: 'row wrap' }, rerun),
     el('p', { class: 'small muted' }, `CasaTorch ${s.version} · open-source core (AGPL-3.0) · `, el('a', { href: 'https://casatorch.com', target: '_blank', rel: 'noopener' }, 'casatorch.com')));
   const security = await securityCards();
-  const updates = await updatesCard();
-  main.replaceChildren(el('div', { class: 'cards' }, ...security, pro, updates, lookCard(), menuCard(), aiCard(s), homeCard, helpCard(), everyday, conn, acct));
+  const updates = await updatesCard(), phone = await phoneCard();
+  main.replaceChildren(el('div', { class: 'cards' }, ...security, phone, pro, updates, lookCard(), menuCard(), aiCard(s), homeCard, helpCard(), everyday, conn, acct));
   return null;
 } });
 /* Side-rail order */
