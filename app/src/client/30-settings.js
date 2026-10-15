@@ -1,8 +1,8 @@
 /* ---- Settings ---- */
 const PRO_FEATURES = [   // [name, what, ships now?]
   ['3D Home', 'Your home as a live, tappable 3D plan - from a LiDAR scan, or drawn in the app.', true], ['Ask the house', 'Ask questions about your home; it lines up switches for you to confirm with a tap.', true], ['Ring (Labs)', 'Ring doorbells and cameras without Home Assistant.', true],
-  ['Network integration', 'Cisco Meraki and UniFi: every device, Wi-Fi health and alerts; Pi-hole and AdGuard Home.'], ['Server monitor', 'Your NAS, servers and self-hosted apps: up or down, storage, temperatures.'], ['AI reports', 'A weekly report on energy, security, the network and anything unusual.'], ['Away from home', 'Secure remote access and phone alerts - no port forwarding.'], ['Smart alerts', 'Quiet hours, "only if nobody\'s home", fewer false alarms.'],
-  ['Energy insights', 'History, cost by device, and a weekly report.'], ['Self-healing', 'Restarts stuck integrations and tells you what it fixed.'], ['History', '2 years instead of 7 days.'], ['Multi-home, theme packs, cloud backup', ''],
+  ['Network integration', 'Cisco Meraki and UniFi: every device, Wi-Fi health and alerts; Pi-hole and AdGuard Home.'], ['Server monitor', 'Your NAS, servers and self-hosted apps: up or down, storage, temperatures.'], ['Weekly report', 'Every Monday: energy and what it cost, what stays on all night, alerts and the internet - with tips, written by your own AI if you connect one.', true], ['Away from home', 'Secure remote access and phone alerts - no port forwarding.'], ['Smart alerts', 'Quiet hours, "only if nobody\'s home", fewer false alarms.'],
+  ['Energy history', '2 years of daily energy and cost instead of 7 days, and what each metered device used.', true], ['Self-healing', 'Restarts stuck integrations and tells you what it fixed.'], ['Multi-home, theme packs, cloud backup', ''],
 ];
 const AI_PROVIDERS = [['none', 'Not connected'], ['anthropic', 'Anthropic (Claude)'], ['openai', 'OpenAI'], ['ollama', 'Ollama - runs on your own network'], ['compatible', 'Other OpenAI-compatible server (LM Studio, vLLM...)']];
 function aiCard(s) {

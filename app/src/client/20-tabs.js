@@ -70,16 +70,95 @@ tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
 } });
 
 /* ---- Energy ---- */
+/* Daily energy as bars (today is lighter: it isn't over yet). Plain SVG so it works offline and on old tablets. */
+function historyChart(days, money) {
+  const box = el('div', { class: 'hist-chart' });
+  const paint = () => {
+    const W = Math.max(260, box.clientWidth || 600), H = W < 500 ? 150 : 190, padL = 50, padB = 22, padT = 10, n = days.length, max = Math.max(1, ...days.map((d) => d.kwh || 0));
+    const top = Math.ceil(max / 5) * 5, bw = (W - padL) / n, y = (v) => padT + (H - padT - padB) * (1 - v / top);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', `Energy per day for the last ${n} days, up to ${top} kWh`);
+    const add = (tag, attrs, text) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; svg.append(e); return e; };
+    for (const v of [0, top / 2, top]) { add('line', { x1: padL, x2: W, y1: y(v), y2: y(v), class: 'grid' }); add('text', { x: padL - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, v === top ? `${v} kWh` : `${v}`); }
+    days.forEach((d, i) => {
+      if (d.kwh == null) return;
+      const x = padL + i * bw + bw * 0.16, h = Math.max(1, y(0) - y(d.kwh));
+      const r = add('rect', { x, y: y(d.kwh), width: Math.max(1, bw * 0.68), height: h, rx: Math.min(3, bw * 0.2), class: d.partial ? 'bar partial' : 'bar' });
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      t.textContent = `${fmt(`${d.date}T12:00:00Z`, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}: ${d.kwh} kWh${d.cost != null ? ` (${money(d.cost)})` : ''}${d.partial ? ' so far today' : ''}${d.peakW ? ` · peak ${(d.peakW / 1000).toFixed(1)} kW` : ''}`;
+      r.append(t);
+    });
+    const lab = (i, anchor) => add('text', { x: anchor === 'start' ? padL + i * bw : anchor === 'end' ? padL + (i + 1) * bw : padL + i * bw + bw / 2, y: H - 5, 'text-anchor': anchor, class: 'axis' }, fmt(`${days[i].date}T12:00:00Z`, { month: 'short', day: 'numeric', timeZone: 'UTC' }));
+    lab(0, 'start'); lab(n - 1, 'end'); if (n > 10 && W > 420) lab(Math.floor(n / 2), 'middle');
+    box.replaceChildren(svg);
+  };
+  let lastW = 0;
+  const ro = new ResizeObserver(() => { if (Math.abs(box.clientWidth - lastW) > 4) { lastW = box.clientWidth; paint(); } });
+  ro.observe(box);
+  return box;
+}
+function reportCard(rep, money, redraw) {
+  const card = el('div', { class: 'card report' });
+  const head = el('h2', {}, 'Weekly report', el('span', { class: 'pill pro' }, 'Pro'));
+  if (!rep.pro) {
+    card.append(head, el('p', { class: 'muted' }, 'Every Monday, a short summary of the week: energy and what it cost, what stays on all night, the alerts and the internet - with a few tips. Written by your own AI if you connect one.'), el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'));
+    return card;
+  }
+  const list = rep.reports || []; let i = 0;
+  const body = el('div');
+  const makeNow = el('button', { class: 'btn small', onclick: async () => {
+    makeNow.disabled = true; makeNow.textContent = 'Writing your report...';
+    try { await post('/api/reports/now'); toast('Report ready'); redraw(); } catch (e) { toast(e.message); makeNow.disabled = false; makeNow.textContent = 'Make one now'; }
+  } }, 'Make one now');
+  const weekly = el('input', { type: 'checkbox', checked: rep.weekly, style: 'width:auto', onchange: async () => { try { await post('/api/reports/settings', { weekly: weekly.checked }, 'PUT'); toast(weekly.checked ? 'You\'ll get a report every Monday morning' : 'Weekly report off'); } catch (e) { weekly.checked = !weekly.checked; toast(e.message); } } });
+  const pick = list.length > 1 ? el('select', { style: 'width:auto', 'aria-label': 'Earlier reports', onchange: () => { i = Number(pick.value); show(); } }, list.map((r, k) => el('option', { value: k }, r.title.replace(/^Your week: /, '')))) : null;
+  const show = () => {
+    const r = list[i];
+    if (!r) { body.replaceChildren(el('p', { class: 'muted' }, 'Your first report arrives Monday morning, once CasaTorch has a few days of history. Or make one now.')); return; }
+    const s = r.stats, chg = s.changePct;
+    const chip = (v, l) => el('div', { class: 'rstat' }, el('b', {}, v), el('span', {}, l));
+    body.replaceChildren(...[
+      el('div', { class: 'row between wrap' }, el('div', { class: 'rtitle' }, r.title), el('div', { class: 'tiny muted' }, r.by === 'ai' ? 'Written by your AI' : 'Written by CasaTorch', ' · ', ago(r.at))),
+      el('p', { class: 'rsum' }, r.summary),
+      el('div', { class: 'rstats' }, chip(`${s.kwh} kWh`, s.cost != null ? money(s.cost) : 'this week'), chg != null ? chip(`${chg > 0 ? '+' : ''}${chg}%`, 'vs the week before') : null, s.alwaysOnW ? chip(`${s.alwaysOnW} W`, 'on all night') : null, chip(String((s.alerts.critical || 0) + (s.alerts.warning || 0)), 'warnings or worse')),
+      r.tips?.length ? el('ul', { class: 'rtips' }, r.tips.map((t) => el('li', {}, t))) : null,
+      s.topDevices?.length ? el('details', { class: 'rmore' }, el('summary', {}, 'Biggest users this week'), el('div', { class: 'bars', style: 'margin-top:10px' }, s.topDevices.map((d) => el('div', { class: 'bar-row' }, el('span', { class: 'ellipsis' }, d.name), el('div', { class: 'track' }, el('div', { class: 'fill', style: `width:${(d.kwh / s.topDevices[0].kwh) * 100}%` })), el('span', { class: 'num', style: 'text-align:right' }, `${d.kwh} kWh`))))) : null,
+      r.note ? el('p', { class: 'tiny muted' }, r.note) : null].filter(Boolean));
+  };
+  show();
+  card.append(el('div', { class: 'row between wrap', style: 'margin-bottom:12px' }, head, el('div', { class: 'row wrap', style: 'gap:8px' }, pick, makeNow)), body,
+    el('label', { class: 'row small muted', style: 'margin-top:14px;gap:8px' }, weekly, 'Send it every Monday morning (as a phone alert)'),
+    rep.ai ? null : el('p', { class: 'tiny muted', style: 'margin-top:6px' }, 'Connect an AI in Settings > Ask the house and the report is written by it, with tips in plain words.'));
+  return card;
+}
 tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {
+  let span = 30;
   const draw = async () => {
-    const [{ devices = [], power }, st] = await Promise.all([api('/api/devices'), api('/api/settings').catch(() => ({}))]);
+    const [{ devices = [], power }, st, h, rep] = await Promise.all([api('/api/devices'), api('/api/settings').catch(() => ({})), api(`/api/history?days=${Math.max(span, 15)}`).catch(() => null), api('/api/reports').catch(() => ({ pro: false, reports: [] }))]);
     const rate = st.energy?.ratePerKwh, cur = st.energy?.currency || 'USD';
     const money = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(v);
     const ds = devices.filter((d) => typeof d.powerW === 'number' && !d.pairedTo).sort((a, b) => b.powerW - a.powerW);
     const total = power?.watts ?? ds.reduce((s, d) => s + d.powerW, 0), max = Math.max(1, ...ds.map((d) => d.powerW));
+    const all = h?.days || [], days = all.slice(-span), have = days.filter((d) => d.kwh != null);
+    const full = all.filter((d) => !d.partial), last7 = full.slice(-7).filter((d) => d.kwh != null), prev7 = full.slice(-14, -7).filter((d) => d.kwh != null);
+    const sum = (a) => a.reduce((s, d) => s + d.kwh, 0), wk = sum(last7), pw = prev7.length >= 5 ? sum(prev7) : null;
+    const spans = h?.pro ? [[7, '7 days'], [30, '30 days'], [90, '90 days'], [365, '1 year']] : [[7, '7 days']];
+    const seg = el('div', { class: 'seg' }, spans.map(([v, l]) => el('button', { class: v === Math.min(span, h?.maxDays || 7) ? 'on' : '', onclick: () => { span = v; draw(); } }, l)));
+    const histCard = el('div', { class: 'card', style: 'margin-top:14px' },
+      el('div', { class: 'row between wrap', style: 'margin-bottom:6px' }, el('h2', { style: 'margin:0' }, 'History'), seg),
+      have.length ? el('div', {},
+        el('div', { class: 'row wrap', style: 'gap:22px;margin:8px 0 6px' },
+          el('div', {}, el('div', { class: 'num', style: 'font-size:22px;font-weight:700' }, `${wk.toFixed(1)} kWh`), el('div', { class: 'tiny muted' }, `${last7.length === 7 ? 'last 7 full days' : `last ${last7.length} full day${last7.length === 1 ? '' : 's'}`}${rate ? ` · ${money(wk * rate)}` : ''}`)),
+          pw ? el('div', {}, el('div', { class: 'num', style: 'font-size:22px;font-weight:700' }, `${wk >= pw ? '+' : ''}${Math.round((wk - pw) / pw * 100)}%`), el('div', { class: 'tiny muted' }, 'vs the 7 days before')) : null),
+        historyChart(days, money),
+        h.pro ? null : el('p', { class: 'tiny muted', style: 'margin-top:8px' }, 'Basic keeps 7 days. Pro keeps 2 years.'))
+        : el('p', { class: 'muted' }, 'CasaTorch notes what the house uses every 5 minutes. The first day of history shows here tomorrow.'));
     main.replaceChildren(el('div', { class: 'cards' },
       el('div', { class: 'card' }, el('h2', {}, 'Using now'), el('div', { class: 'big' }, `${Math.round(total)} W`), el('div', { class: 'muted small', style: 'margin-top:6px' }, `on ${ds.length} metered device${ds.length === 1 ? '' : 's'}`)),
       el('div', { class: 'card' }, el('h2', {}, 'If it stays like this'), rate ? el('div', {}, el('div', { class: 'big' }, money(total / 1000 * 24 * rate)), el('div', { class: 'muted small', style: 'margin-top:6px' }, `a day · ${money(total / 1000 * 24 * 30 * rate)} a month at ${money(rate)}/kWh`)) : el('p', { class: 'muted' }, 'Add your electricity rate in Settings to see the cost.'))),
+    histCard,
+    el('div', { style: 'margin-top:14px' }, reportCard(rep, money, draw)),
     el('div', { class: 'card', style: 'margin-top:14px' }, el('h2', {}, 'By device'), ds.length ? el('div', { class: 'bars' }, ds.map((d) => el('div', { class: 'bar-row' }, el('span', { class: 'ellipsis' }, d.name), el('div', { class: 'track' }, el('div', { class: 'fill', style: `width:${(d.powerW / max) * 100}%` })), el('span', { class: 'num', style: 'text-align:right' }, `${Math.round(d.powerW)} W`)))) : el('p', { class: 'muted' }, 'No smart plugs with power metering yet. Shelly plugs work without Home Assistant; Kasa, Tapo and others through Home Assistant.')));
   };
   await draw(); return draw;
