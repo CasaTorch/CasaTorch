@@ -1,0 +1,66 @@
+[
+  {
+    "file": "scenic-1.jpg",
+    "caption": "Grand Canyon at sunset",
+    "title": "Grand Canyon South Rim at Sunset.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Grand_Canyon_South_Rim_at_Sunset.jpg",
+    "license": "CC0",
+    "author": "Mgimelfarb"
+  },
+  {
+    "file": "scenic-2.jpg",
+    "caption": "Boat on the beach",
+    "title": "Fishing boats, morning, Beach, Rincon de la Victoria, Andalusia, Spain.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Fishing_boats,_morning,_Beach,_Rincon_de_la_Victoria,_Andalusia,_Spain.jpg",
+    "license": "CC0",
+    "author": "Jebulon"
+  },
+  {
+    "file": "scenic-3.jpg",
+    "caption": "Harbour castle",
+    "title": "Bourtzi castle harbour Karystos Euboea Greece.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Bourtzi_castle_harbour_Karystos_Euboea_Greece.jpg",
+    "license": "CC0",
+    "author": "Jebulon"
+  },
+  {
+    "file": "scenic-4.jpg",
+    "caption": "Foggy sunset",
+    "title": "Foggy sunset view from Moos mountain, Baden-Württemberg, Germany.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Foggy_sunset_view_from_Moos_mountain,_Baden-W%C3%BCrttemberg,_Germany.jpg",
+    "license": "CC BY 4.0",
+    "author": "Thomas  Heins from Friesenheim, Deutschland"
+  },
+  {
+    "file": "scenic-5.jpg",
+    "caption": "Glacier lake",
+    "title": "Fjallsárlón glacier lake, Iceland, 20240719 1720 2774.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Fjalls%C3%A1rl%C3%B3n_glacier_lake,_Iceland,_20240719_1720_2774.jpg",
+    "license": "CC BY 4.0",
+    "author": "Jakub Hałun"
+  },
+  {
+    "file": "scenic-6.jpg",
+    "caption": "Lake shore",
+    "title": "Friars' Crag Derwentwater Lake District 2022 01.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Friars%27_Crag_Derwentwater_Lake_District_2022_01.jpg",
+    "license": "CC BY 4.0",
+    "author": "Julian Herzog (Website)"
+  },
+  {
+    "file": "scenic-7.jpg",
+    "caption": "Driftwood beach",
+    "title": "Havelock Island, Sandy lagoon, Andaman Islands.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Havelock_Island,_Sandy_lagoon,_Andaman_Islands.jpg",
+    "license": "CC BY 4.0",
+    "author": "Vyacheslav Argenberg"
+  },
+  {
+    "file": "scenic-8.jpg",
+    "caption": "Grass at sunset",
+    "title": "20220706 Naturschutzgebiet Südliche Fröttmaninger Heide 02.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:20220706_Naturschutzgebiet_S%C3%BCdliche_Fr%C3%B6ttmaninger_Heide_02.jpg",
+    "license": "CC BY 4.0",
+    "author": "Flocci Nivis"
+  }
+]
