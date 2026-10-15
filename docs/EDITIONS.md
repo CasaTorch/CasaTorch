@@ -37,16 +37,17 @@ CasaTorch never phones home to check it.
 | **Phone alerts** - push notifications for leaks, doorbell, alarms, with quiet hours | | ✓ | Coming |
 | **CasaTorch apps** for iPhone, iPad and Android (App Store / Play Store) | | ✓ | Coming |
 | **Smart alerts** - "only if nobody's home", escalation, plain-English summaries | | ✓ | Coming |
-| **Energy insights** - history, bill forecast, always-on load, weekly report | | ✓ | Coming |
+| **Weekly report** - every Monday: energy and cost vs the week before, always-on load, top devices, alerts, internet and server downtime, tips (written by your AI if connected, otherwise by rules); phone alert | | ✓ | Now |
+| Bill forecast | | ✓ | Coming |
 | **Self-healing** - restarts stuck integrations and tells you what it fixed | | ✓ | Coming |
-| History | 7 days | 2 years | Coming |
+| Energy history (by day and by device) | 7 days | 2 years | Now |
 | Multiple homes (cabin, parents' house) in one app | | ✓ | Coming |
 | Extra wall-panel layouts and theme packs | | ✓ | Coming |
 | Encrypted backup of your settings | | ✓ | Coming |
 | Network integration: Cisco Meraki and UniFi (every device, Wi-Fi health, alerts), Pi-hole, AdGuard Home - free keeps internet status and speed tests | | ✓ | Coming |
-| Server monitor: NAS, servers and self-hosted apps - up or down, storage, temperatures | | ✓ | Coming |
-| AI reports: a plain-English weekly report on energy, security, the network and anything unusual | | ✓ | Coming |
-| Basic support: e-mail and Discord, members-only Pro channel | | ✓ | Now |
+| Server monitor: NAS, servers and self-hosted apps - up or down, response time, 24-hour uptime, certificate expiry, alerts | | ✓ | Now |
+| Server monitor: storage and temperatures (needs an agent on the server) | | ✓ | Coming |
+| E-mail help | ✓ | ✓ | Now |
 
 \* The 3D Home tile needs Pro. 3D Home works with no special hardware if you draw your floors; LiDAR scanning needs an iPhone 12 Pro or newer *Pro* model, or an iPad Pro (2020 or newer).
 
