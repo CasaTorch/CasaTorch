@@ -3,7 +3,7 @@
 **Free is a complete home dashboard, for good.** Pro adds the showpiece features and, as they
 ship, the things that cost money to run (remote access, phone alerts, backups).
 
-**Pro: $5/month, $49/year, or $129 once** (lifetime, one home). Every new install gets a
+**Pro: $5/month or $49/year.** Every new install gets a
 **14-day Pro trial** - no card, nothing to cancel. A Pro key is checked on your box, offline;
 CasaTorch never phones home to check it.
 

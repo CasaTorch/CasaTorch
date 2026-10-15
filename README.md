@@ -123,7 +123,7 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 
 **Free** is open source (AGPL-3.0) and everything above - the whole dashboard, for good.
 
-**Pro** - $5/month, $49/year or $129 once, with a 14-day trial on every new install:
+**Pro** - $5/month or $49/year, with a 14-day trial on every new install:
 
 | Pro, available now | Pro, coming (included when it ships) |
 | --- | --- |
