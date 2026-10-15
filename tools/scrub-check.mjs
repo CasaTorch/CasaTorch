@@ -34,7 +34,7 @@ const PATTERNS = [
   ['e-mail address', /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, (m) => !/@(example\.(com|org)|users\.noreply\.github\.com|casatorch\.(dev|app))$/i.test(m)],
   ['street address', /\b\d{2,5}\s+[A-Z][a-z]+\s+(St|Street|Ave|Avenue|Rd|Road|Blvd|Dr|Drive|Ln|Lane|Ct|Court|Way)\b/g, () => true],
 ];
-const SKIP = /(^|\/)(node_modules|\.git|vendor)(\/|$)|\.(png|jpe?g|gif|webp|ico|glb|gltf|woff2?|pdf)$|(^|\/)LICENSE$|private-terms\.txt$/;
+const SKIP = /(^|\/)(node_modules|\.git|vendor)(\/|$)|\.(png|jpe?g|gif|webp|ico|glb|gltf|woff2?|pdf|mp4|webm|mov|tgz|xz)$|(^|\/)LICENSE$|private-terms\.txt$/;
 
 function files(args) {
   if (args[0] === '--staged') {
