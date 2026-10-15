@@ -361,10 +361,10 @@ function stepPage(step) {
   if (step.help) out.push(el('details', { class: 'card' }, el('summary', {}, 'Where do I find the link?'), el('p', { class: 'note' }, step.help)));
   return out;
 }
-/* Bought Pro or a Box? The key comes by e-mail code instead of copy and paste. */
+/* Bought Pro? The key comes by e-mail code instead of copy and paste. */
 function claimEl(store) {
   const st = W.claim ||= { email: '', sent: false, msg: '' };
-  const card = el('div', { class: 'card' }, el('h3', {}, 'Bought Pro or a CasaTorch Box?'));
+  const card = el('div', { class: 'card' }, el('h3', {}, 'Bought CasaTorch Pro?'));
   if (store.license && st.done) { card.append(el('div', { class: 'ok' }, `✓ Pro key added (${st.done})`)); return card; }
   const email = el('input', { type: 'email', value: st.email, placeholder: 'you@example.com', autocomplete: 'email', oninput: (e) => { st.email = e.target.value; } });
   const code = el('input', { inputmode: 'numeric', maxlength: '6', placeholder: '6-digit code', autocomplete: 'one-time-code' });
@@ -373,7 +373,7 @@ function claimEl(store) {
   btn.onclick = async () => {
     btn.disabled = true;
     try {
-      if (!st.sent) { await api('/api/license/claim/start', { body: { email: st.email } }); st.sent = true; st.msg = 'If that address bought Pro or a Box, a code is on its way - check spam too. It works for 15 minutes.'; go(); }
+      if (!st.sent) { await api('/api/license/claim/start', { body: { email: st.email } }); st.sent = true; st.msg = 'If that address bought Pro, a code is on its way - check spam too. It works for 15 minutes.'; go(); }
       else { const r = await api('/api/license/claim/finish', { body: { email: st.email, code: code.value } }); store.license = r.key; st.done = r.plan; go(); }
     } catch (e) { msg.textContent = e.message; btn.disabled = false; }
   };

@@ -24,8 +24,8 @@ npm run demo          # open http://localhost:8090
 
 ## Get a CasaTorch Box
 
-Rather not set anything up? Order a **CasaTorch Box** - a Raspberry Pi 5 with CasaTorch installed, a year
-of Pro included. Plug it into your router and open it on any screen. **[casatorch.com/box](https://casatorch.com/box)**
+Rather not set anything up? Order a **CasaTorch Box** - a Raspberry Pi 5 with CasaTorch installed.
+Plug it into your router and open it on any screen. **[casatorch.com/box](https://casatorch.com/box)**
 
 ## Install it for real
 

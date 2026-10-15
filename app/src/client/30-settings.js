@@ -36,7 +36,7 @@ function helpCard() {
     item('Basic support', 'E-mail and Discord help from the CasaTorch team, and the members-only Pro channel.', 'Included with Pro'),
     item('Service & Developer Access', 'A direct line to a CasaTorch developer: custom features written for your home, hands-on help installing CasaTorch and setting up your wall panels, priority replies. Includes Pro.', '$100 / year', link(`${SITE}/developer`, 'Learn more', 'btn small')),
     item('Home network planning', 'A one-on-one consultation to plan your Wi-Fi, wiring, cameras, sensors and NAS - with a written plan of what to buy and where it goes.', null, link(`${SITE}/network-planning`, 'Book a consultation', 'btn small')),
-    item('CasaTorch Box', 'A Raspberry Pi 5 with CasaTorch already installed - for a second home, or a friend. Plug it in and go. A year of Pro included.', null, link(`${SITE}/box`, 'Order a Box', 'btn small')));
+    item('CasaTorch Box', 'A Raspberry Pi 5 with CasaTorch already installed - for a second home, or a friend. Plug it in and go.', null, link(`${SITE}/box`, 'Order a Box', 'btn small')));
 }
 function lookCard() {
   const u = { ...S.ui };
@@ -77,7 +77,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
   const pro = el('div', { class: 'card', style: 'grid-column:1/-1' }, el('h2', {}, 'CasaTorch Pro'), el('div', { class: 'row between wrap' }, el('b', { style: 'font-size:18px' }, status), el('a', { href: 'https://casatorch.com/pro', target: '_blank', rel: 'noopener' }, '$5/mo or $49/yr')),
     el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 18px;margin:12px 0' }, PRO_FEATURES.map(([t, d, now]) => el('div', { style: 'padding:8px 0;border-top:1px solid var(--line)' }, el('b', {}, t), now ? el('span', { class: 'pill good', style: 'margin-left:6px' }, 'ready') : el('span', { class: 'pill', style: 'margin-left:6px' }, 'coming'), d ? el('div', { class: 'small muted' }, d) : null))),
     el('label', { class: 'field' }, el('span', {}, 'License key'), key), el('div', { class: 'row wrap' }, saveKey, el('span', { class: 'small muted' }, 'or'), el('button', { class: 'btn', onclick: () => claimKey(async () => { await loadStatus(); show('settings'); }) }, 'Get my key by e-mail')),
-    el('p', { class: 'small muted' }, 'Bought Pro or a CasaTorch Box? "Get my key by e-mail" sends a code to the address you bought with - no copying keys around.'));
+    el('p', { class: 'small muted' }, 'Bought Pro? "Get my key by e-mail" sends a code to the address you bought with - no copying keys around.'));
 
   const hname = el('input', { type: 'text', maxlength: '60', value: s.house?.name || '' });
   const rate = el('input', { type: 'number', step: '0.01', min: '0', value: s.energy?.ratePerKwh ?? '', placeholder: '0.17' });
@@ -113,11 +113,11 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
 const TAB_ORDER = ['home', 'alerts', 'controls', 'cameras', 'calendar', 'photos', 'energy', 'network', 'house3d', 'ask', 'connect', 'settings'];
 TABS.sort((a, b) => TAB_ORDER.indexOf(a.id) - TAB_ORDER.indexOf(b.id));
 
-/* "Get my key by e-mail": the e-mail used to buy Pro or a Box gets a 6-digit code; the key is saved here. */
+/* "Get my key by e-mail": the e-mail used to buy Pro gets a 6-digit code; the key is saved here. */
 function claimKey(done) {
   const email = el('input', { type: 'email', placeholder: 'you@example.com', autocomplete: 'email' });
   const code = el('input', { inputmode: 'numeric', maxlength: '6', placeholder: '6-digit code', autocomplete: 'one-time-code' });
-  const msg = el('p', { class: 'small muted' }, 'Use the e-mail address you bought Pro or your Box with.');
+  const msg = el('p', { class: 'small muted' }, 'Use the e-mail address you bought Pro with.');
   const stepB = el('div', { hidden: true }, el('label', { class: 'field' }, el('span', {}, 'Code from the e-mail'), code));
   const send = el('button', { class: 'btn primary' }, 'Send me a code');
   const m = modal(el('div', {}, el('label', { class: 'field' }, el('span', {}, 'E-mail address'), email), stepB, msg, el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { class: 'btn ghost', onclick: () => m.remove() }, 'Cancel'), send)), { title: 'Get my Pro key' });
@@ -125,7 +125,7 @@ function claimKey(done) {
   send.onclick = async () => {
     send.disabled = true;
     try {
-      if (!sent) { await post('/api/license/claim/start', { email: email.value }); sent = true; stepB.hidden = false; send.textContent = 'Get my key'; msg.textContent = 'If that address bought Pro or a Box, a code is on its way - check spam too. It works for 15 minutes.'; setTimeout(() => code.focus(), 50); }
+      if (!sent) { await post('/api/license/claim/start', { email: email.value }); sent = true; stepB.hidden = false; send.textContent = 'Get my key'; msg.textContent = 'If that address bought Pro, a code is on its way - check spam too. It works for 15 minutes.'; setTimeout(() => code.focus(), 50); }
       else { const r = await post('/api/license/claim/finish', { email: email.value, code: code.value }); m.remove(); toast(`Pro is on (${r.plan}). Thank you!`, 4000); done?.(r); }
     } catch (err) { msg.textContent = err.message; }
     send.disabled = false;
