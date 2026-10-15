@@ -55,6 +55,7 @@ app.put('/api/floorplan/floors/:id', requirePro, express.json(), (req, res) => {
   if (['auto', 'styled', 'original'].includes(b.look)) f.look = b.look;
   if (Array.isArray(b.rooms)) f.rooms = b.rooms.filter((r) => Array.isArray(r?.pos) && r.pos.length === 2 && r.pos.every((v) => fin(v, -1000, 1000))).slice(0, 60)
     .map((r) => ({ name: String(r.name || 'Room').slice(0, 30), color: FP_HEX.test(r.color) ? r.color : '#38bdf8', pos: r.pos.map((v) => +(+v).toFixed(2)) }));
+  if (Array.isArray(b.hiddenParts)) f.hiddenParts = [...new Set(b.hiddenParts.filter((k) => typeof k === 'string' && k.length && k.length <= 120))].slice(0, 2000);
   if (b.paint && typeof b.paint === 'object') f.paint = Object.fromEntries(Object.entries(b.paint).filter(([k, v]) => k.length <= 120 && FP_HEX.test(v)).slice(0, 800));
   fpWrite(d); res.json({ ok: true, floor: f });
 });
@@ -106,7 +107,9 @@ app.put('/api/floorplan/style', requirePro, express.json(), (req, res) => {
 app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req, res) => {
   const d = fpData(), floors = new Set(d.floors.map((f) => f.id));
   d.pins = (Array.isArray(req.body?.pins) ? req.body.pins : []).filter((p) => floors.has(p.floor) && Array.isArray(p.pos) && p.pos.length === 3 && p.pos.every(Number.isFinite))
-    .slice(0, 500).map((p) => ({ deviceId: String(p.deviceId).slice(0, 200), floor: p.floor, pos: p.pos.map((n) => Math.round(n * 1000) / 1000), label: p.label ? String(p.label).slice(0, 40) : null, color: FP_HEX.test(p.color) ? p.color : null }));
+    .slice(0, 500).map((p) => ({ deviceId: String(p.deviceId).slice(0, 200), floor: p.floor, pos: p.pos.map((n) => Math.round(n * 1000) / 1000), label: p.label ? String(p.label).slice(0, 40) : null, color: FP_HEX.test(p.color) ? p.color : null,
+      // the power line's bends along the floor, if the owner drew one
+      route: Array.isArray(p.route) && p.route.length ? p.route.slice(0, 30).filter((q) => Array.isArray(q) && q.length === 2 && q.every((n) => fin(n, -1000, 1000))).map((q) => q.map((n) => Math.round(n * 100) / 100)) : null }));
   fpWrite(d); res.json({ ok: true, pins: d.pins.length });
 });
 /* The 3D view's own choices (walls, which floors are hidden, labels, overlays...): kept with the plan so

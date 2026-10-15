@@ -175,11 +175,12 @@ async function loadFloors() {
       edgeMat: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, clippingPlanes: [clip] }), furnEdgeMat: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.35 }), doorEdge: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, clippingPlanes: [clip] }),
       edgeLow: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, clippingPlanes: [clipLow] }), doorEdgeLow: new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9, clippingPlanes: [clipLow] }) };
     const meshes = []; inner.traverse((o) => { if (o.isMesh && !o.userData.keep) meshes.push(o); });
-    for (const m of meshes) { m.userData.cat ||= classify(m); m.userData.floor = f.id; }
+    for (const m of meshes) { m.userData.cat ||= classify(m); m.userData.floor = f.id; m.userData.key ||= itemOf(m).name || m.name || `mesh${meshes.indexOf(m)}`; }
+    /* Parts of a scan the owner erased (stray furniture, scan noise, a neighbour's wall): kept hidden, never deleted from the file. */
+    const gone = new Set(f.hiddenParts || []); for (const m of meshes) m.visible = !gone.has(m.userData.key);
     F.original = f.look === 'original' || (f.look !== 'styled' && f.kind !== 'drawn' && !guessCats(meshes, inner));
     if (!F.original) for (const m of meshes) {
-      const cat = m.userData.cat || 'furniture', it = itemOf(m), key = it.name || m.name || `mesh${meshes.indexOf(m)}`;
-      m.userData.key = key; m.material = F.mats[cat] || F.mats.furniture;
+      const cat = m.userData.cat || 'furniture', key = m.userData.key; m.material = F.mats[cat] || F.mats.furniture;
       if (!F.items.has(key)) F.items.set(key, []); F.items.get(key).push(m);
       const em = cat === 'furniture' ? F.furnEdgeMat : cat === 'door' ? F.doorEdge : cat === 'opening' || cat === 'floor' ? null : F.edgeMat;
       if (em && m.geometry.attributes.position.count < 80000) { const e = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, cat === 'furniture' ? 40 : 25), em); e.raycast = () => {}; m.add(e); m.userData.edge = e; }
@@ -188,12 +189,12 @@ async function loadFloors() {
     }
     /* The house itself = walls and floors. Scans can carry stray bits far outside it, which must not
        size the roof, place the panel or frame the view. */
-    let box = new THREE.Box3(); for (const m of meshes) if (m.userData.cat === 'wall') box.expandByObject(m);
-    if (box.isEmpty()) for (const m of meshes) if (m.userData.cat === 'floor') box.expandByObject(m);
+    let box = new THREE.Box3(); for (const m of meshes) if (m.visible && m.userData.cat === 'wall') box.expandByObject(m);
+    if (box.isEmpty()) for (const m of meshes) if (m.visible && m.userData.cat === 'floor') box.expandByObject(m);
     if (box.isEmpty()) box = new THREE.Box3().setFromObject(inner);
     { const all = new THREE.Box3().setFromObject(inner); box.min.y = Math.min(box.min.y, all.min.y); }   // floors sit a touch below the walls
     F.minY = box.min.y; F.box = box;
-    const fb = new THREE.Box3(); for (const m of meshes) if (m.userData.cat === 'floor') fb.expandByObject(m);
+    const fb = new THREE.Box3(); for (const m of meshes) if (m.visible && m.userData.cat === 'floor') fb.expandByObject(m);
     F.floorY = fb.isEmpty() ? box.min.y : Math.min(box.min.y + 0.3, fb.max.y);   // the walking surface: power lines run just above it
     F.center = box.getCenter(new V3()); F.r = Math.max(1, Math.hypot(box.max.x - box.min.x, box.max.z - box.min.z) / 2);
     F.detected = f.kind === 'drawn' ? drawnRooms(f, inner, G) : sectionRooms(inner, (p) => G.worldToLocal(p.clone()));
@@ -563,8 +564,12 @@ function drawPower() {
     const d = p.device, F = S.F[p.floor];
     if (!F || !F.G.visible || (cur && F !== cur) || !POWERED.has(d.kind)) continue;
     const on = !!(d.on || d.playing) && d.online !== false, P0 = spot.w, yb = F.G.position.y + F.floorY + 0.03, Pd = F.G.localToWorld(new V3(...p.pos)), o = ((i++ % 9) - 4) * 0.05;
-    lines.push({ on, watts: d.powerW ?? (d.kind === 'light' ? 10 : 40), color: d.kind === 'light' && on ? '#fbbf24' : null,
-      pts: [P0.clone(), new V3(P0.x, yb, P0.z), new V3(P0.x, yb, P0.z + o), new V3(Pd.x, yb, P0.z + o), new V3(Pd.x, yb, Pd.z), new V3(Pd.x, Math.max(yb, Pd.y - 0.15), Pd.z)] });
+    const own = S.pins.find((x) => x.deviceId === p.deviceId)?.route, drawing = S.tool?.type === 'route' && S.tool.dev.id === p.deviceId;
+    const via = (drawing ? S.tool.pts : own) || null;   // a route the owner drew, as bends along the floor
+    const mid = via?.length ? via.map(([x, z]) => { const w = F.G.localToWorld(new V3(x, 0, z)); return new V3(w.x, yb, w.z); })
+      : [new V3(P0.x, yb, P0.z + o), new V3(Pd.x, yb, P0.z + o)];
+    lines.push({ on: on || drawing, watts: d.powerW ?? (d.kind === 'light' ? 10 : 40), color: drawing ? '#f472b6' : d.kind === 'light' && on ? '#fbbf24' : null,
+      pts: [P0.clone(), new V3(P0.x, yb, P0.z), ...mid, new V3(Pd.x, yb, Pd.z), new V3(Pd.x, Math.max(yb, Pd.y - 0.15), Pd.z)] });
   }
   power.update(lines, spot.w, S.live.totals?.powerW ?? 0, el, look());
   power.visible = prefs.power && (spot.F.G.visible || !!cur);
@@ -579,7 +584,7 @@ renderer.domElement.addEventListener('click', (e) => {
   const r = renderer.domElement.getBoundingClientRect(); mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(mouse, camera);
   const cur = curF(), targets = Object.values(S.F).filter((F) => F.G.visible && (!cur || F === cur)).map((F) => F.G);
-  const hit = ray.intersectObjects(targets, true).find((h) => h.object.isMesh && h.object.material?.opacity !== 0 && !isClipped(h));
+  const hit = ray.intersectObjects(targets, true).find((h) => h.object.isMesh && h.object.visible && h.object.material?.opacity !== 0 && !isClipped(h));
   if (S.mode === 'view' && card) { closeCard(); return; }
   if (S.mode === 'view') {
     if (!hit) { if (S.room) { S.room = null; layout(true); } return; }
@@ -595,6 +600,15 @@ renderer.domElement.addEventListener('click', (e) => {
     const old = S.pins.find((p) => p.deviceId === S.tool.dev.id);
     S.pins = S.pins.filter((p) => p.deviceId !== S.tool.dev.id).concat({ ...(old || {}), deviceId: S.tool.dev.id, floor: F.f.id, pos: [local.x, local.y, local.z] });
     S.tool = null; savePins();
+  } else if (S.tool.type === 'erase') {
+    if (F.f.id !== S.tool.floor) { toast(`Click a part of ${S.F[S.tool.floor]?.f.name || 'that floor'}.`); return; }
+    const key = hit.object.userData.key, list = [...(F.f.hiddenParts || [])];
+    if (key && !list.includes(key)) { list.push(key); S.tool.done.push(key); for (const m of (F.items.get(key) || [hit.object])) m.visible = false; hit.object.visible = false; saveHidden(F, list); }
+  } else if (S.tool.type === 'route') {
+    const pin = S.pins.find((p) => p.deviceId === S.tool.dev.id);
+    if (!pin || F.f.id !== pin.floor) { toast('Click on the same floor as the device.'); return; }
+    if (S.tool.pts.length >= 30) { toast('That\'s the most bends one line can have.'); return; }
+    const l = F.G.worldToLocal(hit.point.clone()); S.tool.pts.push([+l.x.toFixed(2), +l.z.toFixed(2)]); drawPower(); editor();
   } else if (S.tool.type === 'panel') {
     const l = F.G.worldToLocal(hit.point.clone());
     S.tool = null; saveSettings({ panel: { floor: F.f.id, pos: [+l.x.toFixed(3), +l.y.toFixed(3), +l.z.toFixed(3)] } });
@@ -620,10 +634,19 @@ const clearSel = () => { S.sel = null; scene.children.filter((o) => o.userData.s
 
 /* ---------- saving ---------- */
 async function savePins() {
-  try { await send('/api/floorplan/pins', 'PUT', { pins: S.pins.map(({ deviceId, floor, pos, label, color }) => ({ deviceId, floor, pos, label, color })) }); await refresh(); editor(); }
+  try { await send('/api/floorplan/pins', 'PUT', { pins: S.pins.map(({ deviceId, floor, pos, label, color, route }) => ({ deviceId, floor, pos, label, color, route })) }); await refresh(); editor(); }
   catch (e) { proErr(e); }
 }
 const savePinsSoon = debounce(savePins, 500);
+async function saveHidden(F, list) {
+  F.f.hiddenParts = list; editor();   // right away, so quick clicks build on each other
+  try { await send(`/api/floorplan/floors/${F.f.id}`, 'PUT', { hiddenParts: list }); }
+  catch (e) { proErr(e); }
+}
+function saveRoute(id, pts) {
+  const p = S.pins.find((x) => x.deviceId === id); if (!p) return;
+  p.route = pts?.length ? pts : null; S.tool = null; savePins().then(drawPower);
+}
 async function saveRooms(F, rooms) {
   try { await send(`/api/floorplan/floors/${F.f.id}`, 'PUT', { rooms }); F.f.rooms = rooms; F.rooms = rooms; buildRoomLabels(); drawPins(); editor(); }
   catch (e) { proErr(e); }
@@ -660,6 +683,15 @@ function editor() {
   const box = $('#left'); box.hidden = false;
   const tabs = [['devices', 'Devices'], ['rooms', 'Rooms'], ['colors', 'Colours'], ['floors', 'Floors']];
   const body = { devices: edDevices, rooms: edRooms, colors: edColors, floors: edFloors }[S.tab]();
+  const er = S.tool?.type === 'erase' ? S.tool : null;
+  if (er) { const F = S.F[er.floor]; return fill(box, el('div', { class: 'hint' }, `Hiding parts of ${F?.f.name}. Click anything that shouldn't be there - a stray chair, scan noise, a wall from next door. ${er.done.length} hidden so far. Nothing is deleted from your scan; you can bring it all back.`,
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.tool = null; reload(); } }, 'Done'),
+      el('button', { type: 'button', class: 'mini', disabled: er.done.length ? null : true, onclick: () => { const k = er.done.pop(); saveHidden(F, (F.f.hiddenParts || []).filter((x) => x !== k)); F.inner.traverse((o) => { if (o.isMesh && o.userData.key === k) o.visible = true; }); editor(); } }, 'Undo last')))); }
+  const rt = S.tool?.type === 'route' ? S.tool : null;
+  if (rt) return fill(box, el('div', { class: 'hint' }, `Drawing the power line to "${rt.dev.name}". Click along the floor, in order from the panel to the device, wherever the wire really runs. ${rt.pts.length} bend${rt.pts.length === 1 ? '' : 's'} so far.`,
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => saveRoute(rt.dev.id, rt.pts.length ? rt.pts : null) }, 'Done'),
+      el('button', { type: 'button', class: 'mini', disabled: rt.pts.length ? null : true, onclick: () => { rt.pts.pop(); drawPower(); editor(); } }, 'Undo last bend'),
+      el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; drawPower(); editor(); } }, 'Cancel'))));
   const hint = S.tool?.type === 'panel' ? 'Click where the electrical panel is (a wall or the floor next to it).' : S.tool?.type === 'device' ? `Click on the model where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
   fill(box, el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { S.tab = k; S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
     hint ? el('div', { class: 'hint' }, hint, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; editor(); drawPins(); } }, 'Cancel')) : null, body);
@@ -678,7 +710,9 @@ function edDevices() {
   const placedRow = (d) => { const p = placed.get(d.id), active = S.tool?.dev?.id === d.id;
     return el('div', { class: `edrow${active ? ' sel' : ''}` }, el('div', { class: 'dtop' }, ic(iconOf(d)), el('input', { type: 'text', value: p.label || '', placeholder: d.name, title: 'Name on the plan', oninput: (e) => { p.label = e.target.value.trim() || null; savePinsSoon(); } }),
       d.kind === 'light' ? el('input', { type: 'color', value: p.color || '#ffc477', title: 'Glow colour', oninput: (e) => { p.color = e.target.value; savePinsSoon(); } }) : null),
-    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => pick(d) }, 'Move'), el('button', { type: 'button', class: 'mini', onclick: () => { S.pins = S.pins.filter((x) => x.deviceId !== d.id); savePins(); } }, 'Remove'), el('small', {}, S.F[p.floor]?.f.name || ''))); };
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => pick(d) }, 'Move'), POWERED.has(d.kind) ? el('button', { type: 'button', class: 'mini', title: 'Draw where the power line runs', onclick: () => { S.tool = { type: 'route', dev: { id: d.id, name: p.label || d.name }, pts: [] }; editor(); drawPower(); } }, p.route ? 'Redraw line' : 'Draw line') : null,
+      p.route ? el('button', { type: 'button', class: 'mini', title: 'Back to the automatic route', onclick: () => saveRoute(d.id, null) }, 'Auto line') : null,
+      el('button', { type: 'button', class: 'mini', onclick: () => { S.pins = S.pins.filter((x) => x.deviceId !== d.id); savePins(); } }, 'Remove'), el('small', {}, S.F[p.floor]?.f.name || ''))); };
   const free = devs.filter((d) => !placed.has(d.id)), on = devs.filter((d) => placed.has(d.id));
   return el('div', {}, el('p', { class: 'note' }, 'Pick a device, then click where it really is. Lights glow on the plan when they are on; power lines run to everything that uses electricity.'), search,
     el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, ic('plug'), el('b', {}, 'Electrical panel'), el('small', {}, S.plan.settings?.panel ? 'placed' : 'front corner')),
@@ -737,6 +771,8 @@ function edFloors() {
       return el('div', { class: 'card' }, el('div', { class: 'row' }, el('label', {}, 'Name'), el('input', { type: 'text', value: f.name, maxlength: 40, onchange: (e) => put(f, { name: e.target.value }) })),
         n('level', 'Level', 1), n('heightM', 'Height (m)', 0.1), n('rotationY', 'Turn (°)', 5), n('scale', 'Scale', 0.01), n('offsetX', 'Shift X (m)', 0.1), n('offsetZ', 'Shift Z (m)', 0.1),
         f.kind !== 'drawn' ? el('div', { class: 'row' }, el('label', {}, 'Colours'), el('select', { onchange: (e) => put(f, { look: e.target.value }) }, ...[['auto', 'Automatic'], ['styled', 'Styled (theme)'], ['original', 'Scan\'s own colours']].map(([v, t]) => el('option', { value: v, selected: (f.look || 'auto') === v ? true : null }, t)))) : null,
+        f.kind !== 'drawn' ? el('div', { class: 'row' }, el('label', {}, 'Clean up'), el('button', { type: 'button', class: 'mini', onclick: () => { pickFloor(f.id); S.tool = { type: 'erase', floor: f.id, done: [] }; editor(); } }, 'Hide parts…'),
+          f.hiddenParts?.length ? el('button', { type: 'button', class: 'mini', onclick: () => put(f, { hiddenParts: [] }) }, `Show all ${f.hiddenParts.length} again`) : null) : null,
         F?.original && f.look !== 'original' ? el('p', { class: 'note' }, 'This scan has no named walls or furniture, so it shows in its own colours.') : null,
         el('div', { class: 'row' }, f.kind === 'drawn' ? el('button', { type: 'button', class: 'primary', onclick: () => openDrawer(f, drawOpts()) }, 'Edit drawing') : null,
           el('button', { type: 'button', onclick: async () => { if (!confirm(`Remove ${f.name}?`)) return; await api(`/api/floorplan/floors/${f.id}`, { method: 'DELETE' }).catch(proErr); await reload(); } }, 'Remove floor'))); }),
@@ -785,7 +821,7 @@ function drawTotals() {
     ...(t.openDoors ? [el('span', { class: 'stat bad' }, el('small', {}, 'Open'), `${t.openDoors}`)] : []), ...(t.leaks ? [el('span', { class: 'stat bad' }, el('small', {}, 'Leak'), '!')] : []));
 }
 async function refresh() {
-  try { S.live = await api('/api/floorplan/live'); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color }) => ({ deviceId, floor, pos, label, color })); drawPins(); drawTotals(); if (S.mode === 'edit' && S.tab === 'devices' && !$('#left').contains(document.activeElement)) editor(); }
+  try { S.live = await api('/api/floorplan/live'); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color, route }) => ({ deviceId, floor, pos, label, color, route })); drawPins(); drawTotals(); if (S.mode === 'edit' && S.tab === 'devices' && !$('#left').contains(document.activeElement)) editor(); }
   catch { /* next time */ }
 }
 function drawThemeSeg() { $('#themeSeg').replaceChildren(seg(Object.entries(THEMES).map(([k, t]) => [k, t.label]), curTheme(), (v) => { prefs.theme = v; savePrefs(); applyLook(); drawThemeSeg(); if (S.mode === 'edit') editor(); })); }
