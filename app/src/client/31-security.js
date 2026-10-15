@@ -122,3 +122,25 @@ async function securityCards() {
   if (['admin', 'owner'].includes(me.user.role)) { const d = await api('/api/users').catch(() => null); if (d) cards.push(peopleCard(d, me), await securityAdminCard(d, me)); }
   return cards;
 }
+
+/* Safety: what CasaTorch refuses to switch (anything that looks like a door, gate, lock or alarm control),
+   and the owner's exceptions - for a device the name rule caught by mistake. */
+async function safetyCard() {
+  const me = await api('/api/auth/me').catch(() => null);
+  if (me && me.signIn !== false && !['owner', 'admin'].includes(me.user?.role)) return null;
+  const owner = !me || me.signIn === false || me.user?.role === 'owner';
+  const card = el('div', { class: 'card' }, el('h2', {}, icon('lock', 15), 'Safety'),
+    el('p', { class: 'small muted', style: 'margin-top:0' }, 'CasaTorch never unlocks doors, opens garage doors or gates, or disarms alarms. It also holds back switches, buttons and scripts whose names look like one of those (a "garage" relay, an "unlock" script). Covers can always be closed.'));
+  const list = el('div'); card.append(list);
+  const draw = async () => {
+    const r = await api('/api/safety').catch(() => ({ held: [] }));
+    list.replaceChildren(...(r.held.length ? r.held.map((d) => el('div', { class: 'row between', style: 'gap:8px;margin:6px 0' },
+      el('span', {}, d.name, el('small', { class: 'muted' }, ` · ${d.allowed ? 'allowed' : 'held back'}`)),
+      owner && d.kind !== 'cover' ? el('button', { class: `btn small${d.allowed ? '' : ' ghost'}`, onclick: async () => {
+        if (!d.allowed && !confirm(`Allow CasaTorch to switch "${d.name}"? Only do this if it is not a door, gate, lock or alarm.`)) return;
+        await post(`/api/safety/${encodeURIComponent(d.id)}`, { allow: !d.allowed }, 'PUT').catch((e) => toast(e.message)); draw();
+      } }, d.allowed ? 'Hold back again' : 'Allow') : null))
+      : [el('p', { class: 'small muted' }, 'Nothing is being held back.')]));
+  };
+  draw(); return card;
+}

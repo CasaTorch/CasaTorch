@@ -108,6 +108,7 @@ PROVIDERS.ha = {
 app.get('/api/ha/camera/:entity', async (req, res) => {
   const h = config.homeAssistant, ent = String(req.params.entity);
   if (!h?.url || !/^camera\.[\w]+$/.test(ent)) return res.status(404).end();
+  if (!SNAP.has(`ha:${ent}`) && !(await haStates().catch(() => [])).some((s) => s.entity_id === ent)) return res.status(404).end();   // only cameras Home Assistant really has
   return sendSnap(req, res, `ha:${ent}`, async () => {
     const r = await fetch(`${h.url}/api/camera_proxy/${ent}`, { headers: { Authorization: `Bearer ${h.token}` }, signal: AbortSignal.timeout(10000) });
     if (!r.ok) throw new Error(`Home Assistant answered ${r.status}`);

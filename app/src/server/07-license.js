@@ -34,4 +34,4 @@ function proStatus() {
 }
 /** Route guard: Pro features answer 402 with what to do. */
 const requirePro = (req, res, next) => (proStatus().pro ? next() : res.status(402).json({ error: 'This is a CasaTorch Pro feature.', pro: proStatus(), upgrade: 'https://casatorch.com/pro' }));
-app.get('/api/license', (_req, res) => res.json(proStatus()));
+app.get('/api/license', (req, res) => { const p = proStatus(); if (signInOn() && !sessionOf(req)) { const { email, ...rest } = p; return res.json(rest); } res.json(p); });   // the e-mail only for people signed in

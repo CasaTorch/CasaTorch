@@ -8,7 +8,7 @@ const el = (tag, attrs = {}, ...kids) => {
   return e;
 };
 const q = new URLSearchParams(location.search);
-const nextUrl = (() => { const n = q.get('next'); return n && n.startsWith('/') && !n.startsWith('//') && !n.startsWith('/login') ? n : '/'; })();
+const nextUrl = (() => { const n = q.get('next') || ''; try { const u = new URL(n, location.origin); return n.startsWith('/') && u.origin === location.origin && !u.pathname.startsWith('/login') ? u.pathname + u.search + u.hash : '/'; } catch { return '/'; } })();   // only this CasaTorch's own pages
 async function call(url, body) {
   const r = await fetch(url, { method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));

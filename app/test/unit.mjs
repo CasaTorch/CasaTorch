@@ -7,7 +7,7 @@ const require_ = (m) => (m === 'fs' ? fsMod : req(m));
 process.env.CASATORCH_TEST = '1'; process.env.CASATORCH_DATA_DIR = '/tmp/casatorch-unit';
 await import('../server.js');
 const H = globalThis.__casatorch;
-let n = 0; const t = async (name, fn) => { await fn(); n++; console.log('ok', name); };
+let n = 0; const t = (name, fn) => { const r = fn(); const ok = () => { n++; console.log('ok', name); }; return r?.then ? r.then(ok) : ok(); };
 const TZ = 'America/Los_Angeles';
 
 t('ics: zoned time to UTC (PDT)', () => assert.equal(new Date(H.zonedToUtc(2026, 10, 20, 9, 0, 0, TZ)).toISOString(), '2026-10-20T16:00:00.000Z'));
@@ -97,6 +97,22 @@ await t('alerts: a push message decrypts on the phone it was made for', async ()
   const plain = ece.decrypt(d.body, { version: 'aes128gcm', privateKey: ecdh, authSecret: auth });
   assert.equal(JSON.parse(plain.toString()).title, 'Water detected');
   assert.ok(!d.body.toString('latin1').includes('Water'), 'the push service sees only ciphertext');
+});
+
+t('safety: never unlock, open a garage/gate or disarm - even when Home Assistant does not label it', () => {
+  const B = H.blocked;
+  assert.ok(B({ id: 'ha:lock.front', kind: 'lock', name: 'Front door' }, 'unlock')); assert.ok(!B({ id: 'ha:lock.front', kind: 'lock', name: 'Front door' }, 'lock'));
+  assert.ok(B({ id: 'ha:alarm_control_panel.home', kind: 'alarm', name: 'Alarm' }, 'disarm'));
+  assert.ok(B({ id: 'ha:cover.garage', kind: 'cover', haClass: 'garage', name: 'Garage' }, 'open')); assert.ok(!B({ id: 'ha:cover.garage', kind: 'cover', haClass: 'garage', name: 'Garage' }, 'close'));
+  assert.ok(B({ id: 'ha:cover.thing', kind: 'cover', haClass: null, name: 'Thing' }, 'open'), 'an unlabeled cover could be a garage');
+  assert.ok(!B({ id: 'ha:cover.lr_blinds', kind: 'cover', haClass: 'blind', name: 'Living room blinds' }, 'open'));
+  assert.ok(B({ id: 'ha:switch.shelly_relay', kind: 'switch', name: 'Garage door opener' }, 'toggle'));
+  assert.ok(B({ id: 'ha:script.unlock_front_door', kind: 'action', name: 'Let me in' }, 'run'));
+  assert.ok(B({ id: 'ha:scene.disarm_home', kind: 'action', name: 'Home' }, 'run'));
+  assert.ok(B({ id: 'ha:siren.hall', domain: 'siren', kind: 'switch', name: 'Siren' }, 'off'));
+  assert.ok(!B({ id: 'ha:switch.kitchen_lights', kind: 'switch', name: 'Kitchen lights' }, 'toggle'));
+  assert.ok(!B({ id: 'ha:light.front_door_light', kind: 'light', name: 'Front door light' }, 'toggle'), 'a light by the door is just a light');
+  assert.ok(!B({ id: 'ha:switch.clock_display', kind: 'switch', name: 'Clock display' }, 'on'), '"clock" is not "lock"');
 });
 
 console.log(`\n${n} passed`);

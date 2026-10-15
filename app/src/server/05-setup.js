@@ -18,12 +18,27 @@
  * every /api/setup route answers 403.
  * ====================================================================== */
 const SETUP_CATALOG = path.join(APP_DIR, 'catalog', 'setup.json');
-let setupReopened = false;   // Settings > Run setup again (09-settings.js)
-const setupOpen = () => !isConfigured() || isDemo() || setupReopened || process.env.CASATORCH_SETUP === '1';
+let setupReopened = 0;   // when Settings > Run setup again was pressed (09-settings.js); open for 30 minutes
+const setupOpen = () => !isConfigured() || isDemo() || Date.now() - setupReopened < 30 * 60_000 || process.env.CASATORCH_SETUP === '1';
+/* Once CasaTorch is set up, the wizard is only for a signed-in owner or admin - these routes run before the
+   sign-in gate, so they check for themselves (and refuse requests from other sites, like the rest of the API). */
+function setupCaller(req) {
+  if (!isConfigured() || isDemo() || !signInOn()) return { ok: true, user: null };
+  const s = sessionOf(req), u = s && userById(s.userId);
+  if (!u || u.panel || rank(u.role) < rank('admin')) return { ok: false };
+  if (!['GET', 'HEAD'].includes(req.method)) {
+    const site = req.headers['sec-fetch-site'], origin = req.headers.origin;
+    if (site && !['same-origin', 'none'].includes(site)) return { ok: false };
+    if (origin) { try { if (new URL(origin).host !== req.headers.host) return { ok: false }; } catch { return { ok: false }; } }
+  }
+  return { ok: true, user: u };
+}
 const draft = { ha: null, hue: null, ring: null };   // what the wizard has proven so far (memory only)
 
 app.use('/api/setup', express.json({ limit: '64kb' }), (req, res, next) => {
   if (req.path === '/state') return next();
+  const who = setupCaller(req); if (!who.ok) return res.status(403).json({ error: 'Sign in as an owner or admin to change setup.' });
+  req.setupUser = who.user;
   if (!setupOpen()) return res.status(403).json({ error: 'CasaTorch is already set up. To change it, open Settings > Run setup again, or Connect in the dashboard.' });
   next();
 });
@@ -201,6 +216,8 @@ app.post('/api/setup/finish', (req, res) => {
   const acct = a.account || {};
   ensureUsers();
   const owner = users.list.find((x) => x.role === 'owner');
+  // Running setup again never changes the owner's password unless the owner is the one doing it.
+  if (isConfigured() && owner?.password && acct.password && req.setupUser && req.setupUser.id !== owner.id) delete acct.password;
   const keepPw = !acct.password && !!owner?.password;
   if (!acct.username || !/^[a-zA-Z0-9._@-]{3,40}$/.test(String(acct.username))) return res.status(400).json({ error: 'pick a username: 3-40 letters, numbers, dots or dashes' });
   if (!keepPw) { const pwErr = passwordProblem(acct.password, acct.username); if (pwErr) return res.status(400).json({ error: pwErr }); }
@@ -249,7 +266,7 @@ app.post('/api/setup/finish', (req, res) => {
   for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
   try { saveConfig(next); } catch (err) { return res.status(500).json({ error: `could not save the settings: ${err.message}` }); }
   if (!isDemo()) authSetOwner({ username: acct.username, passwordHash: keepPw ? null : hashSecret(acct.password), acceptedTerms: acct.terms === true });
-  setupReopened = false; draft.ring = null; draft.hue = null;
+  setupReopened = 0; draft.ring = null; draft.hue = null;
   if (next.ring && typeof ringConnect === 'function' && proStatus().pro) ringConnect();
   console.log(`  setup: done for "${next.house.name}"`);
   res.json({ ok: true });

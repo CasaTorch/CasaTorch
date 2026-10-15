@@ -64,8 +64,12 @@ async function houseSnapshot() {
     }))(),
     demo ? demoFixture('alerts') : { now: Object.values(alerts.open || {}) },
   ]);
-  const devices = (dev?.devices || []).map((d) => Object.fromEntries(Object.entries({ id: d.id, name: d.name, kind: d.kind, on: d.on, brightness: d.brightness, watts: d.powerW, playing: d.playing, nowPlaying: d.title, temperature: temp(d.tempC), target: temp(d.targetC), humidity: d.humidity, open: d.open, water: d.water, motion: d.motion, locked: d.locked, battery: d.battery, online: d.online, home: d.home, armed: d.armed, fanPercent: d.percent, state: ['value', 'presence', 'alarm', 'vacuum', 'cover', 'action'].includes(d.kind) ? d.state : undefined, value: d.value, unit: d.unit || undefined }).filter(([, v]) => v !== undefined && v !== null)));
+  const devices = (dev?.devices || []).map((d) => Object.fromEntries(Object.entries({ id: d.id, name: d.name, room: d.area, kind: d.kind, on: d.on, brightness: d.brightness, watts: d.powerW, playing: d.playing, nowPlaying: d.title, temperature: temp(d.tempC), target: temp(d.targetC), humidity: d.humidity, open: d.open, water: d.water, motion: d.motion, locked: d.locked, battery: d.battery, online: d.online, home: d.home, armed: d.armed, fanPercent: d.percent, state: ['value', 'presence', 'alarm', 'vacuum', 'cover', 'action'].includes(d.kind) ? d.state : undefined, value: d.value, unit: d.unit || undefined }).filter(([, v]) => v !== undefined && v !== null)));
   const watts = devices.reduce((t, d) => t + (d.watts || 0), 0), rate = config.energy?.ratePerKwh ?? (demo ? 0.17 : null);
+  /* A big Home Assistant can have thousands of entities. The AI gets the ones a person asks about first,
+     and at most 350, so a question never costs a fortune or runs past the model's limit. */
+  const PRI = { light: 0, plug: 0, switch: 1, media: 1, climate: 1, fan: 1, cover: 2, lock: 2, camera: 3, sensor: 3, presence: 3, vacuum: 4, action: 5, value: 6 };
+  devices.sort((a, b) => (PRI[a.kind] ?? 7) - (PRI[b.kind] ?? 7)); devices.length = Math.min(devices.length, 350);
   return {
     house: config.house?.name || (demo ? 'Demo House' : 'Home'), now: new Intl.DateTimeFormat('en-US', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' }).format(new Date()), timezone: tz, temperatureUnit: units,
     devices, power: { wattsNow: Math.round(watts), costPerKwh: rate, costPerDayIfSteady: rate ? Math.round(watts / 1000 * 24 * rate * 100) / 100 : null },
@@ -82,7 +86,7 @@ const SAFE_ACTIONS = new Set(['on', 'off', 'toggle']);
 function systemPrompt(snap) {
   return `You are the assistant built into CasaTorch, the home dashboard for "${snap.house}". Answer the household's questions about their home in plain, friendly English - usually 1-3 sentences, a short list if it helps. Use only the data below; if something isn't there, say you can't see it. Times are in the house's time zone (${snap.timezone}); temperatures in °${snap.temperatureUnit}.
 
-You cannot change anything yourself. If the person asks to switch something (lights, plugs, switches, play/pause music), suggest it as an action and they will tap to confirm. Allowed actions: "on", "off", "toggle" (use "toggle" for play/pause on media). Never suggest unlocking doors, opening garage doors or disarming anything - tell them to use the Controls tab with their PIN.
+You cannot change anything yourself. If the person asks to switch something (lights, plugs, switches, play/pause music), suggest it as an action and they will tap to confirm. Allowed actions: "on", "off", "toggle" (use "toggle" for play/pause on media). Never suggest unlocking doors, opening garage doors or gates, or disarming alarms - say CasaTorch doesn't do that, and to use that device's own app.
 
 Reply with ONLY a JSON object, no other text:
 {"answer": "your reply", "actions": [{"deviceId": "<id from the data>", "action": "on|off|toggle", "label": "short button text, e.g. Turn off Kitchen"}]}
@@ -97,8 +101,11 @@ function parseReply(text, snap) {
   if (m) { try { j = JSON.parse(m[0]); } catch { j = null; } }
   if (!j || typeof j.answer !== 'string') return { answer: String(text).trim() || 'Sorry - I could not answer that.', actions: [] };
   const byId = new Map(snap.devices.map((d) => [d.id, d]));
-  const actions = (Array.isArray(j.actions) ? j.actions : []).filter((a) => byId.has(a?.deviceId) && SAFE_ACTIONS.has(a.action) && ['light', 'switch', 'plug', 'media', 'fan'].includes(byId.get(a.deviceId).kind))
-    .slice(0, 12).map((a) => ({ deviceId: a.deviceId, action: a.action, label: String(a.label || `${a.action} ${byId.get(a.deviceId).name}`).slice(0, 60) }));
+  // The button text is made here from the device's real name - never taken from the AI - and nothing the
+  // safety rule holds back (door, gate, lock, alarm controls) is ever offered.
+  const VERB = { on: 'Turn on', off: 'Turn off', toggle: 'Switch' };
+  const actions = (Array.isArray(j.actions) ? j.actions : []).filter((a) => byId.has(a?.deviceId) && SAFE_ACTIONS.has(a.action) && ['light', 'switch', 'plug', 'media', 'fan'].includes(byId.get(a.deviceId).kind) && !blocked(byId.get(a.deviceId), a.action))
+    .slice(0, 12).map((a) => { const d = byId.get(a.deviceId); return { deviceId: a.deviceId, action: a.action, label: `${d.kind === 'media' && a.action === 'toggle' ? 'Play/pause' : VERB[a.action]} ${d.name}`.slice(0, 60) }; });
   return { answer: j.answer.trim(), actions };
 }
 /* Demo with no AI connected: a few canned skills over the sample house, so the demo still shows the idea. */
@@ -134,18 +141,20 @@ app.post('/api/ask', express.json({ limit: '64kb' }), requirePro, async (req, re
 });
 
 /* Settings > Ask the house */
-app.post('/api/settings/ai/models', express.json(), async (req, res) => {
+app.post('/api/settings/ai/models', requireRole('admin'), express.json(), async (req, res) => {
   const b = req.body || {}, p = AI[b.provider];
   if (!p) return res.status(400).json({ error: 'pick a provider' });
-  const c = { provider: b.provider, url: b.url || config.ai?.url, apiKey: b.apiKey || (config.ai?.provider === b.provider ? config.ai?.apiKey : null) };
+  // The saved key is only reused for the same provider at the same address - never sent somewhere new.
+  const sameHome = config.ai?.provider === b.provider && (b.url || null) === (config.ai?.url || null) || (config.ai?.provider === b.provider && !b.url);
+  const c = { provider: b.provider, url: b.url || config.ai?.url, apiKey: b.apiKey || (sameHome ? config.ai?.apiKey : null) };
   try { const models = await p.models(c); res.json({ models, suggested: p.pick(models) || null }); }
   catch (err) { res.status(400).json({ error: `${p.name}: ${err.message}` }); }
 });
-app.put('/api/settings/ai', express.json(), (req, res) => {
+app.put('/api/settings/ai', requireRole('admin'), express.json(), (req, res) => {
   const b = req.body || {};
   if (b.provider === 'none') { if (!isDemo()) { const { ai, ...rest } = config; saveConfig(rest); } return res.json({ ok: true }); }
   if (!AI[b.provider] || !b.model) return res.status(400).json({ error: 'pick a provider and a model' });
-  const keep = config.ai?.provider === b.provider ? config.ai.apiKey : null;
+  const keep = config.ai?.provider === b.provider && (b.url ? String(b.url).trim() : null) === (config.ai?.url || null) ? config.ai.apiKey : null;   // a new address needs the key typed again
   const ai = { provider: b.provider, model: String(b.model).slice(0, 120), url: b.url ? String(b.url).trim() : null, apiKey: b.apiKey ? String(b.apiKey).trim() : keep };
   if (!isDemo()) saveConfig({ ...config, ai });
   res.json({ ok: true });

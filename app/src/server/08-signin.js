@@ -199,8 +199,9 @@ app.use((req, res, next) => {
 /* Roles: viewers look, members switch things, admins change settings. */
 const ADMIN_WRITES = [/^\/api\/settings/, /^\/api\/license/, /^\/api\/ui$/, /^\/api\/floorplan\/(?!live)/, /^\/api\/users/, /^\/api\/ai/, /^\/api\/setup\//, /^\/api\/auth\/admin\//, /^\/api\/layout/];
 app.use((req, res, next) => {
-  if (!req.user || ['GET', 'HEAD', 'OPTIONS'].includes(req.method) || /^\/api\/auth\/(?!admin\/)/.test(req.path)) return next();
-  const needs = ADMIN_WRITES.some((p) => p.test(req.path)) ? 'admin' : 'member';
+  if (!req.user || ['GET', 'HEAD', 'OPTIONS'].includes(req.method) || /^\/api\/auth\/(?!admin\/)/.test(req.path.toLowerCase())) return next();
+  const p = req.path.toLowerCase().replace(/\/+$/, '') || '/';   // Express matches /API/x and /api/x/ too - so must we
+  const needs = ADMIN_WRITES.some((re) => re.test(p)) ? 'admin' : 'member';
   if (rank(req.user.role) < rank(needs)) return res.status(403).json({ error: needs === 'admin' ? 'Only an admin can change that.' : 'Your account can look, but not switch things.' });
   next();
 });
@@ -215,7 +216,7 @@ app.post('/api/auth/login', express.json({ limit: '4kb' }), (req, res) => {
   const u = findLogin(name);
   const ok = verifySecret(u?.password || DUMMY_HASH, String(password || ''));   // same work whether or not the account exists
   if (!u || !ok || u.invite) { failed(`ip:${ip}`, `u:${name}|${ip}`); audit(req, 'login-failed', { user: name }); return res.status(401).json({ error: 'Wrong username or password.' }); }
-  proceed(req, res, newTicket(u, { remember: !!remember, via: 'password', next: typeof next === 'string' && next.startsWith('/') && !next.startsWith('//') ? next : '/' }));
+  proceed(req, res, newTicket(u, { remember: !!remember, via: 'password', next: typeof next === 'string' && /^\/(?![\/\\])[^\\]*$/.test(next) ? next : '/' }));
 });
 app.post('/api/auth/mfa', express.json({ limit: '4kb' }), (req, res) => {
   const t = ticketOf(req.body?.ticket); if (!t) return res.status(401).json({ error: 'That took too long - sign in again.' });
@@ -230,6 +231,7 @@ app.post('/api/auth/mfa', express.json({ limit: '4kb' }), (req, res) => {
 app.post('/api/auth/enroll', express.json({ limit: '4kb' }), async (req, res) => {
   const t = ticketOf(req.body?.ticket); if (!t) return res.status(401).json({ error: 'That took too long - sign in again.' });
   const u = userById(t.userId);
+  if (!u || nextStep(t, u) !== 'enroll') return res.status(400).json({ error: 'Sign in again.' });   // never a way around a code you already have
   if (!req.body?.code) { const e = await totpEnrolment(u); t.pending = e.secret; return res.json({ uri: e.uri, qr: e.qr, secret: e.secret }); }
   if (!t.pending || !totpOk(t.pending, req.body.code)) return res.status(400).json({ error: 'That code is not right - check the time on your phone and try again.' });
   const codes = recoveryCodes();
@@ -361,6 +363,7 @@ app.post('/api/users', requireRole('admin'), express.json({ limit: '4kb' }), (re
 app.put('/api/users/:id', requireRole('admin'), express.json({ limit: '4kb' }), (req, res) => {
   const u = users.list.find((x) => x.id === req.params.id); if (!u) return res.status(404).json({ error: 'no such person' });
   const b = req.body || {};
+  if (u.role === 'owner' && req.user && req.user.role !== 'owner' && req.user.id !== u.id) return res.status(403).json({ error: 'Only an owner can change an owner\'s details.' });
   if (b.role && ROLES.includes(b.role) && b.role !== u.role) {
     if ((b.role === 'owner' || u.role === 'owner') && req.user?.role !== 'owner') return res.status(403).json({ error: 'Only the owner can change an owner.' });
     if (u.role === 'owner' && users.list.filter((x) => x.role === 'owner').length < 2) return res.status(400).json({ error: 'There must always be an owner.' });

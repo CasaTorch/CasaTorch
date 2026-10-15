@@ -6,19 +6,30 @@
 const UA = `CasaTorch/${VERSION} (+https://casatorch.com)`;
 async function getText(url, { headers = {}, timeout = 12000, method = 'GET', body } = {}) {
   const r = await fetch(url, { method, body, headers: { 'User-Agent': UA, ...headers }, signal: AbortSignal.timeout(timeout) });
-  const t = await r.text();
+  // Never read an endless or huge answer into memory (a calendar or feed link pointing at something else).
+  const max = 32 * 1024 * 1024, len = Number(r.headers.get('content-length') || 0);
+  if (len > max) { r.body?.cancel?.(); throw Object.assign(new Error('that answer is too big'), { status: 413 }); }
+  let t = '';
+  if (r.body?.getReader) { const rd = r.body.getReader(), dec = new TextDecoder(); let n = 0; for (;;) { const { done, value } = await rd.read(); if (done) break; n += value.length; if (n > max) { rd.cancel(); throw Object.assign(new Error('that answer is too big'), { status: 413 }); } t += dec.decode(value, { stream: true }); } t += dec.decode(); }
+  else t = await r.text();
   if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status, body: t.slice(0, 200) });
   return { text: t, headers: r.headers };
 }
 async function getJSON(url, opts) { const { text } = await getText(url, { ...opts, headers: { Accept: 'application/json', ...(opts?.headers || {}) } }); return JSON.parse(text); }
 
 /** cached(key, ttlMs, fn): reuse a fresh answer; on failure, serve the last good one (marked stale). */
-const CACHE = new Map();
+const CACHE = new Map(), INFLIGHT = new Map();
 async function cached(key, ttl, fn) {
   const hit = CACHE.get(key);
   if (hit && Date.now() - hit.at < ttl) return hit.value;
-  try { const value = await fn(); CACHE.set(key, { at: Date.now(), value }); return value; }
-  catch (err) { if (hit) return { ...hit.value, stale: true, error: String(err.message || err) }; throw err; }
+  // Many screens asking at once (or a slow Home Assistant): one fetch, everyone waits for the same answer.
+  if (INFLIGHT.has(key)) return INFLIGHT.get(key);
+  const p = (async () => {
+    try { const value = await fn(); CACHE.set(key, { at: Date.now(), value }); return value; }
+    catch (err) { if (hit) return { ...hit.value, stale: true, error: String(err.message || err) }; throw err; }
+    finally { INFLIGHT.delete(key); }
+  })();
+  INFLIGHT.set(key, p); return p;
 }
 
 /* RSS 2.0 and Atom, without a library: titles, links, dates. */

@@ -45,7 +45,7 @@ async function ringSave(refreshToken) {
   saveConfig({ ...config, ring: { refreshToken, connectedAt: nowIso() } });
   await ringConnect(); return ring.cameras.map((c) => c.name);
 }
-app.post(['/api/ring/login', '/api/setup/ring/login'], express.json(), requirePro, async (req, res) => {
+app.post(['/api/ring/login', '/api/setup/ring/login'], requireRole('admin'), express.json(), requirePro, async (req, res) => {
   const { email, password, code } = req.body || {};
   try {
     if (code) {
