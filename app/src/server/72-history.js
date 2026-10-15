@@ -109,6 +109,7 @@ function weekStats(days, to) {
     topDevices: top, meteredShareOfHousePct: kwh && metered ? Math.min(100, Math.round(metered / kwh * 100)) : null,
     alerts: alertsBy, repeatedAlerts: Object.entries(titles).filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([title, times]) => ({ title, times })),
     internetDownMin: keys.reduce((s, k) => s + (days[k]?.netDownMin || 0), 0),
+    serversDown: Object.entries(keys.reduce((a, k) => { for (const [n, m] of Object.entries(days[k]?.monDown || {})) a[n] = (a[n] || 0) + m; return a; }, {})).filter(([, m]) => m >= 5).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, minutes]) => ({ name, minutes: Math.round(minutes) })),
     lowBatteries: Object.values(alerts.open || {}).filter((a) => String(a.id).startsWith('battery:')).map((a) => a.title.replace(/^Low battery \(\d+%\): /, '')).slice(0, 8),
     notRespondingNow: Object.values(alerts.open || {}).filter((a) => String(a.id).startsWith('offline:') && a.id !== 'offline:more').map((a) => a.title.replace(/ is not responding$/, '')).slice(0, 8),
   };
@@ -121,6 +122,7 @@ function ruleReport(s) {
   const quiet = !s.alerts.critical && !s.alerts.warning;
   parts.push(s.alerts.critical ? `There ${s.alerts.critical === 1 ? 'was 1 critical alert' : `were ${s.alerts.critical} critical alerts`} - check the Alerts tab.` : quiet ? 'No critical or warning alerts.' : `${s.alerts.warning} warning${s.alerts.warning === 1 ? '' : 's'}, nothing critical.`);
   if (s.internetDownMin >= 10) parts.push(`The internet was down for about ${Math.round(s.internetDownMin)} minutes.`);
+  if (s.serversDown?.length) parts.push(`Down for a while: ${s.serversDown.map((x) => `${x.name} (${x.minutes >= 120 ? `${Math.round(x.minutes / 60)} hours` : `${x.minutes} minutes`})`).join(', ')}.`);
   const tips = [];
   if (s.alwaysOnW >= 120) tips.push(`About ${s.alwaysOnW} W stays on even in the middle of the night${s.alwaysOnCostPerYear ? ` - roughly ${c(s.alwaysOnCostPerYear)} a year` : ''}. Old fridges, computers, game consoles, pumps and heaters on standby are the usual suspects.`);
   if (s.topDevices[0]?.sharePct >= 25) tips.push(`${s.topDevices[0].name} used ${s.topDevices[0].sharePct}% of the energy your metered devices used (${s.topDevices[0].kwh} kWh${s.topDevices[0].cost != null ? `, about ${c(s.topDevices[0].cost)}` : ''}).`);

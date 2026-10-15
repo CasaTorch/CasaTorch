@@ -337,3 +337,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .report .rstat b { font-size: 17px; font-variant-numeric: tabular-nums; } .report .rstat span { font-size: 12px; color: var(--muted); }
 .report .rtips { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 7px; line-height: 1.5; max-width: 76ch; }
 .report .rmore summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+
+/* Server monitor */
+.srvs { display: grid; } .srv { display: grid; grid-template-columns: auto minmax(0, 1fr) 240px 150px auto; gap: 14px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.srv:first-child { border-top: 0; } .srv-num { display: grid; justify-items: end; min-width: 84px; } .srv-num b { font-variant-numeric: tabular-nums; }
+.tickstrip { display: flex; gap: 1px; height: 18px; align-items: stretch; justify-content: flex-end; overflow: hidden; } .tickstrip i { width: 3px; border-radius: 1px; background: var(--good); opacity: .65; } .tickstrip i.down { background: var(--bad); opacity: 1; }
+@media (max-width: 760px) { .srv { grid-template-columns: auto minmax(0, 1fr) auto auto; } .tickstrip { display: none; } }
