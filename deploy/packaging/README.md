@@ -27,8 +27,18 @@ runs CasaTorch as a background service on port 8090 that starts with the compute
 **Signing.** Until the Windows installer is code-signed and the macOS package is
 signed and notarized (Apple Developer ID), Windows SmartScreen and macOS
 Gatekeeper show a warning the first time; the download page explains the click
-past it. Add the certificates as release secrets and sign in the workflow to
-remove the warnings.
+past it. The release workflow signs automatically once these are set in the
+GitHub repository (Settings > Secrets and variables > Actions); without them it
+builds unsigned, as before:
+
+- macOS: secrets `MACOS_INSTALLER_P12` (base64 of a "Developer ID Installer"
+  certificate exported as .p12), `MACOS_INSTALLER_P12_PASSWORD`, and for
+  notarization `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` (an
+  app-specific password).
+- Windows (Microsoft Artifact Signing): secrets `AZURE_TENANT_ID`,
+  `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`; variables
+  `ARTIFACT_SIGNING_ENDPOINT`, `ARTIFACT_SIGNING_ACCOUNT`,
+  `ARTIFACT_SIGNING_PROFILE`.
 
 Build one locally: `deploy/packaging/bundle.sh` (all platforms need it first),
 then `linux/build-deb.sh amd64`, `macos/build-pkg.sh` (on a Mac), `iscc windows/casatorch.iss`
