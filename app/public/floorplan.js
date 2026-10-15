@@ -7,7 +7,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { openDrawer } from './floorplan-draw.js';
-import { toGlb } from './floorplan-import.js';
+/* The scan importers (USDZ, OBJ, GLTF exporter...) load only when someone uploads a scan. */
+const toGlb = async (...a) => (await import('./floorplan-import.js')).toGlb(...a);
 import { buildRoof, PowerNet, weatherIcon, sunPosition, nightness, kelvinToHex, WeatherFx } from './floorplan-house.js';
 import { THEMES, COLOR_KEYS, ROOM_COLORS, lookOf, classify, guessCats, itemOf, prettyItem, sectionRooms, makeFx, fxMaterial, MAX_GLOW, MAX_ROOMS } from './floorplan-look.js';
 
@@ -372,7 +373,7 @@ function pinClick(p) {
   if (card?.id === p.deviceId) return closeCard();
   openCard(p);
 }
-const snapUrl = (d) => d.snapshot || `/api/cameras/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`;
+const snapUrl = (d) => d.snapshot || (d.provider === 'ha' ? `/api/ha/camera/${encodeURIComponent(d.id.slice(3))}` : `/api/cameras/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`);
 /* A camera opens its live picture: a real stream when the server has one (MJPEG), otherwise a fresh
    still every second, swapped in only once it has loaded so it never flickers. */
 let camStop = null;

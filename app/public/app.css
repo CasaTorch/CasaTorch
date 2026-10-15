@@ -302,3 +302,13 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .connect-steps { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 8px; } .connect-steps li { line-height: 1.45; }
 @media (max-width: 760px) { .connect-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .connect-hero { gap: 12px; } }
 .connect-hero-title { font-size: 20px; font-weight: 700; letter-spacing: -.01em; margin: 0 0 4px; }
+
+/* camera tiles: a soft placeholder until the first picture, a quiet age label when a picture is old */
+.cam.cam-wait img { opacity: 0; } .cam.cam-wait { background: linear-gradient(110deg, #0b1220 30%, #111a2e 50%, #0b1220 70%); background-size: 200% 100%; animation: camshimmer 1.4s linear infinite; }
+@keyframes camshimmer { to { background-position: -200% 0; } }
+.cam img { transition: opacity .25s; }
+.cam-age { position: absolute; top: 10px; right: 10px; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, .55); color: #fde68a; }
+.cam-age:empty { display: none; }
+.cam.cam-err::after { content: 'Camera not answering - showing the last picture'; position: absolute; top: 10px; left: 10px; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(127, 29, 29, .8); color: #fff; }
+.cam-full { width: 100%; max-height: 78vh; object-fit: contain; background: #000; border-radius: 12px; display: block; }
+@media (prefers-reduced-motion: reduce) { .cam.cam-wait { animation: none; } }

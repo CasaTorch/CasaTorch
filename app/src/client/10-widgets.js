@@ -205,9 +205,51 @@ widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', min: [2, 2], size:
 } });
 
 const snapUrl = (d) => (d.provider === 'ha' ? `/api/ha/camera/${encodeURIComponent(d.id.slice(3))}` : `/api/${d.provider === 'ring' ? 'ring' : 'cameras'}/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`);
+/* Camera tiles: one lasting element per camera, so a dashboard refresh never blanks the picture. Each one
+   asks for a newer picture on its own beat (the CasaTorch keeps them ready, so the answer is instant),
+   sends If-None-Match so an unchanged picture costs nothing, decodes the new one off-screen and only then
+   swaps it in. Cameras that are scrolled away, or in a tab nobody is looking at, pause. */
+const CAMS = new Map();
+const camEvery = (d) => (d.provider === 'ring' ? 4000 : d.provider === 'ha' ? 3000 : 2000);
+const camSeen = 'IntersectionObserver' in window ? new IntersectionObserver((es) => { for (const e of es) { const c = e.target.__cam; if (c) c.visible = e.isIntersecting; } }) : null;
+async function camFetch(c, force = false) {
+  if (c.busy || (!force && (!c.visible || document.hidden))) return;
+  c.busy = true; c.last = Date.now();
+  try {
+    const r = await fetch(snapUrl(c.d), { cache: 'no-store', headers: c.etag ? { 'If-None-Match': c.etag } : {} });
+    const age = Number(r.headers.get('X-Snapshot-Age') || 0);
+    c.age.textContent = age > 15 ? (age > 120 ? `${Math.round(age / 60)} min ago` : `${age} s ago`) : '';
+    if (r.status === 304) { c.wrap.classList.remove('cam-err'); return; }
+    if (!r.ok) throw new Error('no picture');
+    const url = URL.createObjectURL(await r.blob()), tmp = new Image(); tmp.src = url;
+    await (tmp.decode ? tmp.decode() : new Promise((ok, no) => { tmp.onload = ok; tmp.onerror = no; }));
+    const old = c.url; c.img.src = url; c.url = url; c.etag = r.headers.get('ETag'); c.wrap.classList.remove('cam-err', 'cam-wait');
+    if (old) setTimeout(() => URL.revokeObjectURL(old), 1000);
+  } catch { c.wrap.classList.add('cam-err'); c.wrap.classList.remove('cam-wait'); }
+  finally { c.busy = false; }
+}
+setInterval(() => { const now = Date.now(); for (const c of CAMS.values()) if (c.wrap.isConnected && now - c.last >= camEvery(c.d)) camFetch(c); }, 400);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) for (const c of CAMS.values()) if (c.wrap.isConnected) camFetch(c); });
 function camView(d) {
-  const img = el('img', { alt: d.name, src: `${snapUrl(d)}?t=${Date.now()}`, onclick: () => modal(el('img', { src: `${snapUrl(d)}?t=${Date.now()}`, alt: d.name }), { wide: true, title: d.name }) });
-  return el('div', { class: 'cam' }, img, el('div', { class: 'cap' }, el('span', {}, d.name), el('span', { class: 'tiny muted' }, d.source || d.provider)));
+  let c = CAMS.get(d.id);
+  if (!c) {
+    const img = el('img', { alt: d.name, decoding: 'async' }), age = el('span', { class: 'cam-age' }), name = el('span', {}, d.name);
+    const wrap = el('div', { class: 'cam cam-wait', onclick: () => camModal(c.d) }, img, el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, d.stream ? 'Live' : d.source || d.provider)), age);
+    c = { d, img, age, name, wrap, visible: true, last: 0, etag: null, url: null, busy: false }; wrap.__cam = c; CAMS.set(d.id, c);
+    camSeen?.observe(wrap); camFetch(c, true);
+  }
+  c.d = d; c.name.textContent = d.name; c.img.alt = d.name;
+  return c.wrap;
+}
+/* Full screen: live video where the camera has it (Frigate), otherwise a new picture every second. */
+function camModal(d) {
+  const img = el('img', { alt: d.name, class: 'cam-full' }), note = el('div', { class: 'tiny muted', style: 'margin-top:8px' }, d.stream ? 'Live video' : 'A new picture every second');
+  const m = modal(el('div', {}, img, note), { wide: true, title: d.name });
+  const stills = () => { let etag = null; const tick = async () => { if (!m.isConnected) return; try { const r = await fetch(snapUrl(d), { cache: 'no-store', headers: etag ? { 'If-None-Match': etag } : {} }); if (r.ok) { const u = URL.createObjectURL(await r.blob()), t = new Image(); t.src = u; await t.decode().catch(() => {}); const o = img.src; img.src = u; etag = r.headers.get('ETag'); if (o.startsWith('blob:')) URL.revokeObjectURL(o); } } catch { /* next tick */ } setTimeout(tick, 1000); }; tick(); };
+  if (d.stream) { img.src = `${d.stream}?t=${Date.now()}`; img.onerror = () => { note.textContent = 'Live video unavailable - showing pictures'; stills(); }; }
+  else stills();
+  // closing the window stops a live stream at once
+  new MutationObserver((_, o) => { if (!m.isConnected) { img.src = ''; o.disconnect(); } }).observe(document.body, { childList: true });
 }
 widget({ id: 'camera', title: 'Cameras', icon: 'camera', min: [3, 2], size: [4, 3], render(b, ctx, { w, h }) {
   const cams = (ctx.data.devices?.devices || []).filter((d) => d.kind === 'camera');

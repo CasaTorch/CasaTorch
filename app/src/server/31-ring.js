@@ -21,6 +21,8 @@ async function ringConnect() {
     ring.api = new RingApi({ refreshToken: config.ring.refreshToken, controlCenterDisplayName: 'CasaTorch', cameraStatusPollingSeconds: 60 });
     ring.api.onRefreshTokenUpdated.subscribe(({ newRefreshToken }) => { saveConfig({ ...config, ring: { ...config.ring, refreshToken: newRefreshToken } }); });
     ring.cameras = await ring.api.getCameras();
+    // Ready pictures for every Ring camera from the start (refreshed once a minute until someone watches).
+    for (const cam of ring.cameras) { const e = snapEntry(`ring:${cam.id}`, async () => ({ buf: await cam.getSnapshot(), type: 'image/jpeg' }), 'ring'); snapRefresh(e); }
     for (const cam of ring.cameras) {
       cam.onDoorbellPressed?.subscribe(() => ringEvent(cam, 'doorbell'));
       cam.onMotionDetected?.subscribe((m) => { if (m) ringEvent(cam, 'motion'); });
@@ -29,6 +31,7 @@ async function ringConnect() {
   } catch (err) { ring.api = null; ring.error = String(err.message); }
 }
 function ringEvent(cam, kind) {
+  snapNow(`ring:${cam.id}`);   // a fresh picture of whoever is at the door, straight away
   ring.events.unshift({ at: nowIso(), camera: cam.name, kind });
   ring.events = ring.events.slice(0, 100);
   if (typeof alertRaise === 'function') alertRaise({ id: `ring:${cam.id}:${kind}:${Date.now()}`, severity: kind === 'doorbell' ? 'notice' : 'info', title: kind === 'doorbell' ? `Someone at the ${cam.name}` : `Motion at the ${cam.name}`, source: 'ring', image: `/api/ring/${cam.id}/snapshot` });
@@ -66,7 +69,6 @@ app.get('/api/ring/status', requirePro, (_req, res) => res.json({ connected: !!r
 app.get('/api/ring/:id/snapshot', requirePro, async (req, res) => {
   const cam = ring.cameras.find((c) => String(c.id) === req.params.id);
   if (!cam) return res.status(404).end();
-  try { const buf = await cam.getSnapshot(); res.setHeader('Content-Type', 'image/jpeg'); res.setHeader('Cache-Control', 'no-store'); res.end(buf); }
-  catch (err) { res.status(502).json({ error: String(err.message) }); }
+  return sendSnap(req, res, `ring:${cam.id}`, async () => ({ buf: await cam.getSnapshot(), type: 'image/jpeg' }), 'ring');
 });
 PROVIDERS.ring = { async list() { return proStatus().pro ? ring.cameras.map((c) => ({ id: `ring:${c.id}`, provider: 'ring', kind: 'camera', name: c.name, battery: c.batteryLevel ?? null, online: true, snapshot: `/api/ring/${c.id}/snapshot` })) : []; } };
