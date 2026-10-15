@@ -11,6 +11,7 @@
  *   node tools/mock-ha.mjs [port]      token: test-token
  */
 import http from 'node:http';
+import crypto from 'node:crypto';
 const PORT = Number(process.argv[2] || 18123), TOKEN = 'test-token';
 /* With a second argument (e.g. 1500) it also pretends to be a big, messy house: that many entities across
    every domain Home Assistant has, with odd states (unavailable, unknown, empty), odd units, long and
@@ -63,8 +64,11 @@ function step(f, input) {
   return null;
 }
 const send = (res, code, body) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
   let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
+    // "Sign in with Home Assistant": the login page signs you in at once and sends a code back.
+    if (req.url.startsWith('/auth/authorize')) { const q = new URL(req.url, 'http://x').searchParams; res.writeHead(302, { Location: `${q.get('redirect_uri')}?code=code123&state=${encodeURIComponent(q.get('state'))}` }); return res.end(); }
+    if (req.url === '/auth/token' && req.method === 'POST') { const f = new URLSearchParams(body); return f.get('code') === 'code123' ? send(res, 200, { access_token: 'short-lived', refresh_token: 'r', token_type: 'Bearer', expires_in: 1800 }) : send(res, 400, { error: 'invalid_request' }); }
     if (req.headers.authorization !== `Bearer ${TOKEN}`) return send(res, 401, { message: 'Unauthorized' });
     const j = body ? JSON.parse(body) : null;
     const u = req.url;
@@ -93,4 +97,21 @@ http.createServer((req, res) => {
     }
     send(res, 404, { message: 'not found' });
   });
-}).listen(PORT, () => console.log(`mock Home Assistant on :${PORT} (token: ${TOKEN})`));
+});
+/* A tiny WebSocket API: sign in with a token, then answer "make a long-lived token". */
+server.on('upgrade', (req, sock) => {
+  const key = req.headers['sec-websocket-key'];
+  sock.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${crypto.createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64')}\r\n\r\n`);
+  const sendWs = (o) => { const b = Buffer.from(JSON.stringify(o)); const h = b.length < 126 ? Buffer.from([0x81, b.length]) : Buffer.from([0x81, 126, b.length >> 8, b.length & 255]); sock.write(Buffer.concat([h, b])); };
+  sendWs({ type: 'auth_required' });
+  sock.on('data', (d) => {
+    let len = d[1] & 127, off = 2; if (len === 126) { len = d.readUInt16BE(2); off = 4; }
+    const mask = d.subarray(off, off + 4), data = Buffer.from(d.subarray(off + 4, off + 4 + len).map((b, i) => b ^ mask[i % 4]));
+    let m; try { m = JSON.parse(data.toString()); } catch { return; }
+    if (m.type === 'auth') sendWs(m.access_token === 'short-lived' || m.access_token === TOKEN ? { type: 'auth_ok' } : { type: 'auth_invalid' });
+    else if (m.type === 'auth/long_lived_access_token') sendWs({ id: m.id, type: 'result', success: true, result: TOKEN });
+    else if (m.type === 'integration/descriptions') sendWs({ id: m.id, type: 'result', success: true, result: { core: { integration: { sonos: { name: 'Sonos', config_flow: true, integration_type: 'hub' }, tesla_fleet: { name: 'Tesla Fleet', config_flow: true, iot_class: 'cloud_polling' } } } } });
+    else sendWs({ id: m.id, type: 'result', success: false, error: { message: 'unknown command' } });
+  });
+});
+server.listen(PORT, () => console.log(`mock Home Assistant on :${PORT} (token: ${TOKEN})`));

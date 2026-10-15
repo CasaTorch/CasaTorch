@@ -122,6 +122,57 @@ const TESTS = {
     return { ok: true, message: `Connected to AdGuard Home ${s?.version || ''}`.trim() };
   },
 };
+/* ---- Home Assistant without copying a token ----
+   1. Find it: try the addresses Home Assistant uses out of the box.
+   2. "Sign in with Home Assistant": its own login page opens (in a small window), the person signs in
+      there, Home Assistant hands back a one-time code, and CasaTorch turns that into a long-lived token
+      named "CasaTorch" (visible - and removable - in Home Assistant under Profile > Security). */
+const HA_GUESSES = ['http://homeassistant.local:8123', 'http://homeassistant:8123', 'http://home-assistant.local:8123'];
+async function looksLikeHa(url) {
+  try { const r = await fetch(`${url}/api/`, { signal: AbortSignal.timeout(3500), redirect: 'manual' }); return r.status === 401 || r.status === 200; } catch { return false; }
+}
+app.get('/api/setup/ha/find', async (_req, res) => {
+  const hits = await Promise.all(HA_GUESSES.map(async (u) => ((await looksLikeHa(u)) ? u : null)));
+  res.json({ url: hits.find(Boolean) || null });
+});
+const haSignins = new Map();   // state -> { url, origin, exp }
+app.post('/api/setup/ha/signin', async (req, res) => {
+  const url = clean(req.body?.url);
+  if (badUrl(url)) return res.status(400).json({ error: 'The address should start with http:// or https://' });
+  if (!(await looksLikeHa(url))) return res.status(400).json({ error: `Home Assistant didn't answer at ${url}. Check the address (it usually ends in :8123).` });
+  const origin = `${req.protocol}://${req.headers.host}`, state = crypto.randomBytes(18).toString('base64url');
+  for (const [k, v] of haSignins) if (v.exp < Date.now()) haSignins.delete(k);
+  haSignins.set(state, { url, origin, exp: Date.now() + 10 * 60_000 });
+  const q = new URLSearchParams({ response_type: 'code', client_id: `${origin}/`, redirect_uri: `${origin}/api/setup/ha/callback`, state });
+  res.json({ go: `${url}/auth/authorize?${q}` });
+});
+function haWsAt(url, token, msg) {
+  return new Promise((ok, bad) => {
+    let ws; try { ws = new WebSocket(`${url.replace(/^http/, 'ws')}/api/websocket`); } catch (e) { bad(e); return; }
+    const t = setTimeout(() => { try { ws.close(); } catch { /* closed */ } bad(new Error('Home Assistant did not answer')); }, 15000);
+    ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.type === 'auth_required') ws.send(JSON.stringify({ type: 'auth', access_token: token }));
+      else if (m.type === 'auth_invalid') { clearTimeout(t); ws.close(); bad(new Error('Home Assistant refused the sign-in')); }
+      else if (m.type === 'auth_ok') ws.send(JSON.stringify({ id: 1, ...msg }));
+      else if (m.id === 1) { clearTimeout(t); ws.close(); m.success ? ok(m.result) : bad(new Error(m.error?.message || 'Home Assistant said no')); } };
+    ws.onerror = () => { clearTimeout(t); bad(new Error('Could not reach Home Assistant')); };
+  });
+}
+let haSigninResult = null;
+app.get('/api/setup/ha/callback', async (req, res) => {
+  const s = haSignins.get(String(req.query.state || '')); haSignins.delete(String(req.query.state || ''));
+  const done = (ok, msg) => res.redirect(`/setup-ha-done.html?ok=${ok ? 1 : 0}&msg=${encodeURIComponent(msg || '')}`);
+  if (!s || s.exp < Date.now() || !req.query.code) return done(false, 'That sign-in expired - try again.');
+  try {
+    const r = await fetch(`${s.url}/auth/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'authorization_code', code: String(req.query.code), client_id: `${s.origin}/` }), signal: AbortSignal.timeout(10000) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j?.access_token) throw new Error('Home Assistant did not accept the sign-in');
+    const token = await haWsAt(s.url, j.access_token, { type: 'auth/long_lived_access_token', client_name: `CasaTorch (${new Date().toISOString().slice(0, 10)})`, lifespan: 3650 });
+    haSigninResult = await TESTS.homeassistant({ url: s.url, token });
+    done(true, haSigninResult.message);
+  } catch (err) { haSigninResult = { ok: false, error: why(err) }; done(false, haSigninResult.error); }
+});
+app.get('/api/setup/ha/signin-result', (_req, res) => { const r = haSigninResult; haSigninResult = null; res.json(r ? { ...r, url: draft.ha?.url || null } : { ok: false, error: 'no sign-in yet' }); });
 app.post('/api/setup/test/:kind', async (req, res) => {
   const t = TESTS[req.params.kind];
   if (!t) return res.status(404).json({ ok: false, error: 'unknown test' });

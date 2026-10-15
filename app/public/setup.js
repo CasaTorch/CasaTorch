@@ -139,6 +139,42 @@ const CUSTOM = {
   },
 };
 
+/* ---------- Home Assistant: find it, then sign in on its own page - no token to copy ---------- */
+function haSigninEl(sub) {
+  const box = el('div', { class: 'card' });
+  const msg = el('div', { class: 'note' });
+  if (sub._signedIn && W.ha) { box.append(el('div', { class: 'ok' }, `✓ ${W.ha.message}`), el('p', { class: 'note' }, 'CasaTorch made its own access token in Home Assistant (named "CasaTorch"). You can see or remove it there under Profile > Security.'),
+    el('button', { type: 'button', class: 'small', onclick: () => { sub._signedIn = false; W.ha = null; go(); } }, 'Use a different Home Assistant')); return box; }
+  const url = el('input', { type: 'url', placeholder: 'http://homeassistant.local:8123', value: sub.url || '', 'aria-label': 'Home Assistant address', oninput: (e) => { sub.url = e.target.value.trim(); } });
+  const find = el('button', { type: 'button', class: 'small', onclick: async () => {
+    find.disabled = true; msg.textContent = 'Looking on your network…';
+    const r = await api('/api/setup/ha/find').catch(() => ({}));
+    if (r.url) { sub.url = r.url; url.value = r.url; msg.textContent = `Found it at ${r.url}.`; } else msg.textContent = 'Couldn\'t find it by itself - type its address (the one you open Home Assistant with).';
+    find.disabled = false;
+  } }, 'Find it');
+  const go2 = el('button', { type: 'button', class: 'primary', onclick: async () => {
+    if (!sub.url) { msg.textContent = 'Type the address first, or press Find it.'; return; }
+    const win = window.open('about:blank', 'ha-signin', 'width=520,height=720');
+    try {
+      const r = await api('/api/setup/ha/signin', { body: { url: sub.url } });
+      if (win) win.location = r.go; else location.href = r.go;
+      msg.textContent = 'Sign in to Home Assistant in the window that opened…';
+    } catch (e) { win?.close(); msg.textContent = e.message; }
+  } }, 'Sign in with Home Assistant');
+  box.append(el('h3', {}, 'Connect with your Home Assistant sign-in'), el('p', { class: 'note' }, 'Sign in with an administrator account. CasaTorch never sees your password.'),
+    el('div', { class: 'row' }, url, find), el('div', { class: 'row', style: 'margin-top:10px' }, go2), msg,
+    el('p', { class: 'note', style: 'margin-top:12px' }, 'Or paste an access token instead:'));
+  return box;
+}
+addEventListener('message', async (e) => {
+  if (e.origin !== location.origin || typeof e.data?.casatorchHa !== 'boolean') return;
+  const r = await api('/api/setup/ha/signin-result').catch(() => null);
+  const store = ans('homeassistant'), sub = branchStore(W.steps.find((s) => s.id === 'homeassistant'), store);
+  if (r?.ok) { W.ha = r; W.haDomains = r.domains || []; store.uses = 'yes'; sub.url = r.url; sub._signedIn = true; sub._test = r; }
+  else $('#navmsg').textContent = r?.error || 'Home Assistant sign-in didn\'t finish.';
+  go();
+});
+
 /* ---------- connection tests ---------- */
 function testEl(kind, store, label = 'Test connection') {
   const out = el('div', { class: 'note' });
@@ -344,8 +380,9 @@ function stepPage(step) {
       const sub = branchStore(step, store);
       // Questions that follow a pick (alerts for people? a budget?) come after it.
       const late = !!(br.pick || br.provider);
-      if (br.fields && !late) out.push(...fieldsEl(br.fields, sub, go));
-      if (br.test) out.push(testEl(br.test, sub));
+      if (step.id === 'homeassistant' && store[q.id] === 'yes') out.push(haSigninEl(sub));
+      if (br.fields && !late && !(step.id === 'homeassistant' && sub._signedIn)) out.push(...fieldsEl(br.fields, sub, go));
+      if (br.test && !(step.id === 'homeassistant' && sub._signedIn)) out.push(testEl(br.test, sub));
       if (br.provider) out.push(utilityEl(br.provider, store));
       if (br.pick) {
         const p = br.pick, cur = new Set(store[p.id] || []);
@@ -423,7 +460,7 @@ function problems(step) {
   if (step.question && !store[step.question.id]) return 'Pick an answer to continue.';
   const br = step.question ? step.branches?.[store[step.question.id]] : null;
   const sub = br ? branchStore(step, store) : store;
-  for (const [list, src] of [[step.fields, store], [br?.fields, sub]]) for (const f of (list || []).filter((g) => visible(g, src) && g.required && !(W.rerun && step.id === 'account' && g.id === 'password') && !(W.rerun && W.ha && step.id === 'homeassistant' && g.id === 'token'))) {
+  for (const [list, src] of [[step.fields, store], [br?.fields, sub]]) for (const f of (list || []).filter((g) => visible(g, src) && g.required && !(step.id === 'homeassistant' && sub._signedIn) && !(W.rerun && step.id === 'account' && g.id === 'password') && !(W.rerun && W.ha && step.id === 'homeassistant' && g.id === 'token'))) {
     const v = src[f.id];
     if (v == null || v === '') return `${f.label} is needed.`;
     if (f.minLength && String(v).length < f.minLength) return `${f.label}: at least ${f.minLength} characters.`;
