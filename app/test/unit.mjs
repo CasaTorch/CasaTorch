@@ -235,5 +235,10 @@ t('bill forecast: this month so far plus the recent average for the days left', 
   assert.equal(H.billForecast({ '2026-10-14': { wh: 1000, n: 288 } }, '2026-10-15'), null, 'too little history: no forecast');
 });
 
+t('Meraki MT sensors become devices the alerts understand', () => {
+  const d = H.mtDevice({ serial: 'Q2XX-1', readings: [{ metric: 'temperature', temperature: { celsius: 2.5, fahrenheit: 36.5 } }, { metric: 'water', water: { present: true } }, { metric: 'door', door: { open: false } }, { metric: 'battery', battery: { percentage: 12 } }, { metric: 'humidity', humidity: { relativePercentage: 40 } }] }, new Map([['Q2XX-1', 'Garage sensor']]));
+  assert.deepEqual([d.id, d.name, d.kind, d.tempC, d.water, d.open, d.battery, d.humidity], ['meraki:Q2XX-1', 'Garage sensor', 'sensor', 2.5, true, false, 12, 40]);
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);

@@ -204,7 +204,7 @@ widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', min: [2, 2], size:
   b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr))` }, ds.slice(0, perRow * rows).map((d) => devButton(d, true))));
 } });
 
-const snapUrl = (d) => (d.provider === 'ha' ? `/api/ha/camera/${encodeURIComponent(d.id.slice(3))}` : `/api/${d.provider === 'ring' ? 'ring' : 'cameras'}/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`);
+const snapUrl = (d) => (d.snapshot ? d.snapshot : d.provider === 'ha' ? `/api/ha/camera/${encodeURIComponent(d.id.slice(3))}` : `/api/${d.provider === 'ring' ? 'ring' : 'cameras'}/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`);
 /* Camera tiles: one lasting element per camera, so a dashboard refresh never blanks the picture. Each one
    asks for a newer picture on its own beat (the CasaTorch keeps them ready, so the answer is instant),
    sends If-None-Match so an unchanged picture costs nothing, decodes the new one off-screen and only then

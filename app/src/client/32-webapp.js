@@ -67,6 +67,14 @@ async function phoneCard() {
       const ha = el('input', { type: 'checkbox', checked: info.haPhone ? true : null, onchange: () => post('/api/alerts/settings', { haPhone: ha.checked }, 'PUT').then(() => toast('Saved')).catch((e) => toast(e.message)) });
       add(el('h3', { class: 'sub' }, 'For everyone'), el('label', { class: 'field' }, el('span', {}, 'Quiet hours (only critical alerts get through)'), quiet),
         info.ha ? el('label', { class: 'field check' }, ha, el('span', {}, 'Also send alerts to the Home Assistant app on your phones')) : null);
+      /* Smart alerts (Pro) */
+      const set = (k) => (e) => post('/api/alerts/settings', { [k]: e.target.checked }, 'PUT').then(() => toast('Saved')).catch((x) => { e.target.checked = !e.target.checked; toast(x.message); });
+      const away = el('input', { type: 'checkbox', checked: info.awayOnly ? true : null, disabled: !info.pro || !info.people ? true : null, onchange: set('awayOnly') });
+      const rep = el('input', { type: 'checkbox', checked: info.repeat ? true : null, disabled: !info.pro ? true : null, onchange: set('repeat') });
+      add(el('h3', { class: 'sub' }, 'Smart alerts ', el('span', { class: 'pill pro' }, 'Pro')),
+        el('label', { class: 'field check' }, away, el('span', {}, 'Doorbell and motion alerts only when nobody\'s home', el('span', { class: 'small muted', style: 'display:block' }, info.people ? `Uses the ${info.people} ${info.people === 1 ? 'person or phone' : 'people and phones'} Home Assistant tracks. They still show on the dashboard.` : 'Needs people or phones tracked in Home Assistant (the Home Assistant phone app does this).'))),
+        el('label', { class: 'field check' }, rep, el('span', {}, 'Repeat critical alerts every 10 minutes until someone taps "Got it"', el('span', { class: 'small muted', style: 'display:block' }, 'Water, smoke and the internet going down. Up to 6 reminders.'))),
+        el('p', { class: 'small muted' }, 'For everyone: an alert has to still be there a minute later before it goes out, so a sensor that blinks offline doesn\'t wake anyone up. Water and smoke go out straight away.'));
     }
   };
   draw(); return card;

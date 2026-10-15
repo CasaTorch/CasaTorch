@@ -37,14 +37,39 @@ async function alertConditions() {
   const net = await internetNow().catch(() => null);
   if (net && !net.online) add('internet', { severity: 'critical', title: 'The internet is down', source: 'internet' });
   const now = nowIso();
-  for (const [id, a] of Object.entries(found)) found[id] = { ...a, since: alerts.open[id]?.since || now };
+  /* Fewer false alarms: a new alert must still be there a minute later before it counts (a sensor that
+     blinks offline for a moment, or the internet dropping for a few seconds, doesn't wake anyone up).
+     Water and smoke are the exception - those go out straight away. */
+  const pending = (alerts.pending ||= {}), seen = new Set(Object.keys(found));
+  for (const id of Object.keys(pending)) if (!seen.has(id)) delete pending[id];   // gone again: it was a blip
+  for (const id of seen) {
+    if (alerts.open[id] || /^(leak|smoke):/.test(id)) continue;
+    if (pending[id]) { delete pending[id]; continue; }   // still there a minute later: it counts
+    pending[id] = now; delete found[id];
+  }
+  for (const [id, a] of Object.entries(found)) { const o = alerts.open[id]; found[id] = { ...a, since: o?.since || now, ...(o?.acked ? { acked: o.acked } : {}), pushes: o?.pushes || 0, lastPush: o?.lastPush || null }; }
   for (const id of Object.keys(alerts.open)) if (!found[id]) alertRaise({ id: `cleared:${id}`, severity: 'ok', title: `Cleared: ${alerts.open[id].title}`, source: alerts.open[id].source });
-  for (const id of Object.keys(found)) if (!alerts.open[id]) alertRaise({ ...found[id], id: `${id}:${now}` });
+  for (const id of Object.keys(found)) if (!alerts.open[id]) { alertRaise({ ...found[id], id: `${id}:${now}` }); found[id].pushes = 1; found[id].lastPush = now; }
+  /* Smart alerts (Pro): a critical alert nobody has acknowledged goes out again every 10 minutes, up to 6 times. */
+  if (proStatus().pro && config.alerts?.repeat !== false && !isDemo()) {
+    for (const a of Object.values(found)) {
+      if (a.severity !== 'critical' || a.acked || (a.pushes || 0) >= 6 || !a.lastPush || Date.now() - Date.parse(a.lastPush) < 10 * 60_000) continue;
+      a.pushes = (a.pushes || 0) + 1; a.lastPush = now;
+      notify({ ...a, id: `${a.id}:repeat`, title: `Still happening: ${a.title}`, body: 'Open CasaTorch and tap "Got it" to stop these reminders.' }).catch(() => {});
+    }
+  }
   alerts.open = found; saveAlerts();
 }
 setInterval(() => { if (isConfigured() && !isDemo()) alertConditions().catch(() => {}); }, 60_000).unref?.();
 app.get('/api/alerts', (req, res, next) => {
   if (isDemo()) return next();
   const rank = { critical: 0, warning: 1, notice: 2, info: 3, ok: 4 };
-  res.json({ now: Object.values(alerts.open).sort((a, b) => rank[a.severity] - rank[b.severity]), recent: alerts.events.slice(0, 100) });
+  res.json({ now: Object.values(alerts.open).sort((a, b) => rank[a.severity] - rank[b.severity]).map(({ pushes, lastPush, ...a }) => ({ ...a, repeating: a.severity === 'critical' && !a.acked && proStatus().pro && config.alerts?.repeat !== false })), recent: alerts.events.slice(0, 100) });
+});
+/* "Got it": stops the reminders for this alert. It stays on the list until the problem clears. */
+app.post('/api/alerts/:id/ack', requireRole('member'), (req, res) => {
+  const a = alerts.open[req.params.id]; if (!a) return res.status(404).json({ error: 'That alert has already cleared.' });
+  a.acked = { by: req.user?.name || req.user?.username || 'someone', at: nowIso() }; saveAlerts();
+  if (typeof audit === 'function' && req.user) audit(req, 'alert-acknowledged', { alert: a.title });
+  res.json({ ok: true, acked: a.acked });
 });

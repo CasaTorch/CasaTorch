@@ -4,7 +4,8 @@ tab({ id: 'alerts', label: 'Alerts', icon: 'bell', async render(main) {
     const a = await api('/api/alerts');
     const now = el('div', { class: 'card' }, el('h2', {}, 'Right now'));
     if (!a.now?.length) now.append(el('div', { class: 'row' }, el('span', { class: 'dot good' }), 'All clear - nothing needs you.'));
-    for (const x of a.now || []) now.append(el('div', { class: `alert ${x.severity}` }, el('div', {}, el('b', {}, x.title), el('div', { class: 'small muted' }, `${x.source || ''}${x.since ? ` · since ${fmtWhen(x.since)}` : ''}`))));
+    for (const x of a.now || []) now.append(el('div', { class: `alert ${x.severity}` }, el('div', { class: 'grow' }, el('b', {}, x.title), el('div', { class: 'small muted' }, `${x.source || ''}${x.since ? ` · since ${fmtWhen(x.since)}` : ''}${x.acked ? ` · ${x.acked.by} has it (${fmtTime(x.acked.at)})` : ''}`)),
+      x.repeating ? el('button', { class: 'btn small', onclick: async (e) => { e.target.disabled = true; try { await post(`/api/alerts/${encodeURIComponent(x.id)}/ack`); toast('Got it - no more reminders for this one'); draw(); } catch (err) { toast(err.message); e.target.disabled = false; } } }, icon('check'), 'Got it') : null));
     const past = el('div', { class: 'card' }, el('h2', {}, 'Recent'));
     past.append(a.recent?.length ? el('ul', { class: 'list' }, a.recent.slice(0, 50).map((x) => el('li', {}, el('span', { class: `dot ${x.severity === 'ok' ? 'good' : x.severity === 'critical' ? 'bad' : 'warn'}` }), el('div', { class: 'grow' }, x.title), el('span', { class: 'small muted' }, fmtWhen(x.at))))) : el('p', { class: 'muted' }, 'Nothing yet.'));
     main.replaceChildren(el('div', { class: 'cards' }, now, past));

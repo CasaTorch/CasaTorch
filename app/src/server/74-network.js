@@ -90,8 +90,8 @@ const NET = {
     const org = (Array.isArray(orgs) ? orgs : []).find((o) => o.id === s.org) || (Array.isArray(orgs) ? orgs[0] : null);
     if (!org) throw new Error('no Meraki organizations were found for this key');
     const st = await netRequest(`${b}/organizations/${encodeURIComponent(org.id)}/devices/statuses?perPage=1000`, { headers: H });
-    const devices = (Array.isArray(st) ? st : []).slice(0, 500).map((d) => ({ name: d.name || d.model || d.serial || 'Meraki device', model: d.model || null, ip: d.lanIp || d.publicIp || null, online: d.status === 'online' || d.status === 'alerting', state: d.status || null, alerting: d.status === 'alerting' }));
-    return { summary: { org: org.name || null, devices: devices.length, offline: devices.filter((d) => d.state === 'offline').length, alerting: devices.filter((d) => d.alerting).length }, devices };
+    const devices = (Array.isArray(st) ? st : []).slice(0, 500).map((d) => ({ name: d.name || d.model || d.serial || 'Meraki device', model: d.model || null, ip: d.lanIp || d.publicIp || null, online: d.status === 'online' || d.status === 'alerting', state: d.status || null, alerting: d.status === 'alerting', serial: d.serial || null, type: d.productType || null }));
+    return { summary: { orgId: org.id, org: org.name || null, devices: devices.length, offline: devices.filter((d) => d.state === 'offline').length, alerting: devices.filter((d) => d.alerting).length }, devices };
   },
 };
 
