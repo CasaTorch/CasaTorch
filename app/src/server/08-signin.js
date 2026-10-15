@@ -269,7 +269,7 @@ app.post('/api/auth/terms', express.json({ limit: '4kb' }), (req, res) => {
 });
 app.post('/api/auth/logout', (req, res) => { const tok = cookieOf(req); if (tok) { delete sessions[sha256(tok)]; saveSessions(); } if (req.user) audit(req, 'signed-out'); res.setHeader('Set-Cookie', `casatorch_session=; ${cookieFlags(req)}; Max-Age=0`); res.json({ ok: true }); });
 app.post('/api/logout', (req, res) => { const tok = cookieOf(req); if (tok) { delete sessions[sha256(tok)]; saveSessions(); } res.setHeader('Set-Cookie', `casatorch_session=; ${cookieFlags(req)}; Max-Age=0`); res.json({ ok: true }); });
-app.get('/api/health', (_req, res) => res.json({ ok: true, version: '0.3.0' }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, version: VERSION }));
 
 /* ---- invites: the owner adds someone, they pick their own username and password ---- */
 app.get('/api/auth/invite', (req, res) => {

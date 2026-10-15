@@ -357,8 +357,30 @@ function stepPage(step) {
     }
   }
   if (step.fields) out.push(...fieldsEl(step.id === 'account' && W.rerun ? step.fields.map((f) => (f.id === 'password' ? { ...f, required: false, label: 'New password (leave empty to keep the current one)' } : f)) : step.fields, store, go));
+  if (step.id === 'account') out.push(claimEl(store));
   if (step.help) out.push(el('details', { class: 'card' }, el('summary', {}, 'Where do I find the link?'), el('p', { class: 'note' }, step.help)));
   return out;
+}
+/* Bought Pro or a Box? The key comes by e-mail code instead of copy and paste. */
+function claimEl(store) {
+  const st = W.claim ||= { email: '', sent: false, msg: '' };
+  const card = el('div', { class: 'card' }, el('h3', {}, 'Bought Pro or a CasaTorch Box?'));
+  if (store.license && st.done) { card.append(el('div', { class: 'ok' }, `✓ Pro key added (${st.done})`)); return card; }
+  const email = el('input', { type: 'email', value: st.email, placeholder: 'you@example.com', autocomplete: 'email', oninput: (e) => { st.email = e.target.value; } });
+  const code = el('input', { inputmode: 'numeric', maxlength: '6', placeholder: '6-digit code', autocomplete: 'one-time-code' });
+  const msg = el('p', { class: 'note' }, st.msg || 'Type the e-mail you bought with and we\'ll send a code - no key to copy. (Or paste a key in the box above.)');
+  const btn = el('button', { type: 'button', class: 'small' }, st.sent ? 'Get my key' : 'Send me a code');
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      if (!st.sent) { await api('/api/license/claim/start', { body: { email: st.email } }); st.sent = true; st.msg = 'If that address bought Pro or a Box, a code is on its way - check spam too. It works for 15 minutes.'; go(); }
+      else { const r = await api('/api/license/claim/finish', { body: { email: st.email, code: code.value } }); store.license = r.key; st.done = r.plan; go(); }
+    } catch (e) { msg.textContent = e.message; btn.disabled = false; }
+  };
+  card.append(el('label', { class: 'field' }, el('span', {}, 'E-mail address'), email));
+  if (st.sent) card.append(el('label', { class: 'field' }, el('span', {}, 'Code from the e-mail'), code));
+  card.append(msg, btn);
+  return card;
 }
 /* "Who is your power company?" - Home Assistant's own list (Opower), then its sign-in. */
 function utilityEl(p, store) {

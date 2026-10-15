@@ -1,0 +1,8 @@
+[Unit]
+Description=Install a newer CasaTorch if one is out (Settings > Updates)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/casatorch/casatorch-update

@@ -78,6 +78,7 @@ function drawBanner() {
   const b = $('#banner'), s = S.status; if (!s) return;
   const p = s.pro || {}; b.className = ''; b.replaceChildren();
   if (s.demo) b.append('Demo mode - sample data, no real house connected.', el('a', { href: '/setup.html' }, 'Set up my house'));
+  else if (S.updates?.available) b.append(icon('spark', 16), `CasaTorch ${S.updates.latest} is available${S.updates.auto ? ' - it installs itself overnight.' : '.'}`, el('a', { href: '#settings' }, S.updates.auto ? 'Details' : 'How to update'));
   else if (p.plan === 'trial') b.append(icon('spark', 16), `Pro trial: ${p.trialDaysLeft} day${p.trialDaysLeft === 1 ? '' : 's'} left - 3D Home, Ask the house and Ring are unlocked.`, el('a', { href: '#settings' }, 'Enter a license key'));
   else if (p.grace) b.append('Your Pro subscription has ended - Pro keeps working for a few more days.', el('a', { href: '#settings' }, 'Renew'));
   else if (!p.pro) { b.className = 'free'; b.append('CasaTorch Free.', el('a', { href: '#settings' }, 'See what Pro adds')); }
@@ -85,6 +86,7 @@ function drawBanner() {
 }
 function tick() { $('#clock').textContent = fmt(new Date().toISOString(), { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 async function loadStatus() {
+  api('/api/updates').then((u) => { S.updates = u; drawBanner(); }).catch(() => {});
   try { S.status = await api('/api/status'); S.units = S.status.units || 'F'; const a = await api('/api/alerts').catch(() => null); S.alertsOpen = a?.now?.length || 0; } catch { /* offline: keep what we had */ }
   drawBanner(); drawNav(); statusBar.draw();
 }

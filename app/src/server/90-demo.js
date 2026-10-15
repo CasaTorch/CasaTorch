@@ -3,7 +3,7 @@
    modules are ported (docs/MODULES.md). */
 const FIXTURES = path.join(APP_DIR, '..', 'demo', 'fixtures');
 const TABS = ['home', 'alerts', 'controls', 'cameras', 'sensors', 'network', 'servers', 'energy'];
-app.get('/api/status', (_req, res) => res.json({ name: 'CasaTorch', version: '0.2.0', house: config.house?.name || null, units: config.house?.units || 'F', demo: isDemo(), configured: isConfigured(), pro: proStatus(), tabs: TABS, at: nowIso() }));
+app.get('/api/status', (_req, res) => res.json({ name: 'CasaTorch', version: VERSION, house: config.house?.name || null, units: config.house?.units || 'F', demo: isDemo(), configured: isConfigured(), pro: proStatus(), tabs: TABS, at: nowIso() }));
 app.get('/api/:tab', (req, res, next) => {
   if (!TABS.includes(req.params.tab)) return next();
   if (!isDemo()) return res.status(501).json({ error: `the ${req.params.tab} tab is not ported yet - run in demo mode (CASATORCH_DEMO=1)` });

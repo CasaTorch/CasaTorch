@@ -5,12 +5,13 @@ if [ "$1" = configure ]; then
   mkdir -p /var/lib/casatorch && chown casatorch:casatorch /var/lib/casatorch && chmod 700 /var/lib/casatorch
   if [ -d /run/systemd/system ]; then
     systemctl daemon-reload
-    systemctl enable casatorch.service >/dev/null 2>&1 || true
+    systemctl enable casatorch.service casatorch-update.timer >/dev/null 2>&1 || true
     systemctl restart casatorch.service || true
+    systemctl start casatorch-update.timer >/dev/null 2>&1 || true
     echo "CasaTorch is running: open http://$(hostname).local:8090 (or http://localhost:8090 on this computer)."
   else
     # building an image (no systemd running): just switch it on for the first boot
-    systemctl enable casatorch.service >/dev/null 2>&1 || ln -sf /lib/systemd/system/casatorch.service /etc/systemd/system/multi-user.target.wants/casatorch.service
+    systemctl enable casatorch.service casatorch-update.timer >/dev/null 2>&1 || { ln -sf /lib/systemd/system/casatorch.service /etc/systemd/system/multi-user.target.wants/casatorch.service; mkdir -p /etc/systemd/system/timers.target.wants; ln -sf /lib/systemd/system/casatorch-update.timer /etc/systemd/system/timers.target.wants/casatorch-update.timer; }
   fi
 fi
 exit 0

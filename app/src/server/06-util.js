@@ -3,7 +3,7 @@
  * and Nominatim require a real one), timeouts, a small time-to-live cache,
  * and a tolerant XML reader for RSS/Atom.
  * ====================================================================== */
-const UA = `CasaTorch/0.2 (+https://github.com/casatorch/casatorch)`;
+const UA = `CasaTorch/${VERSION} (+https://casatorch.com)`;
 async function getText(url, { headers = {}, timeout = 12000, method = 'GET', body } = {}) {
   const r = await fetch(url, { method, body, headers: { 'User-Agent': UA, ...headers }, signal: AbortSignal.timeout(timeout) });
   const t = await r.text();

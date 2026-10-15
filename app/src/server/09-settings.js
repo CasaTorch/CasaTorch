@@ -16,7 +16,7 @@ app.delete('/api/license', (_req, res) => { if (!isDemo()) { const { license, ..
 app.get('/api/settings', (_req, res) => {
   const c = config;
   res.json({
-    demo: isDemo(), version: '0.2.0', pro: proStatus(),
+    demo: isDemo(), version: VERSION, install: INSTALL, pro: proStatus(),
     house: c.house || { name: 'Demo House', timezone: 'America/Los_Angeles', units: 'F' },
     location: c.location ? { name: c.location.name || null } : (isDemo() ? { name: 'Springfield' } : null),
     calendars: (c.calendars || []).map((x) => x.name),
