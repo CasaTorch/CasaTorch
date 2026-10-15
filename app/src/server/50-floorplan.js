@@ -18,10 +18,10 @@ const FP_DIR = path.join(DATA_DIR, 'floorplan');
 const FP_HEX = /^#[0-9a-f]{6}$/i;
 const fin = (v, lo, hi) => Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi;
 const FP_FILE = path.join(FP_DIR, 'floorplan.json');
-fs.mkdirSync(FP_DIR, { recursive: true });
+fs.mkdirSync(FP_DIR, { recursive: true, mode: 0o700 });
 const fpRead = () => { try { return JSON.parse(fs.readFileSync(FP_FILE, 'utf8')); } catch { return { floors: [], pins: [] }; } };
 let demoFp = null;   // the demo can be edited, but only in memory
-const fpWrite = (d) => { if (isDemo()) { demoFp = d; return; } fs.writeFileSync(`${FP_FILE}.tmp`, JSON.stringify(d, null, 2)); fs.renameSync(`${FP_FILE}.tmp`, FP_FILE); };
+const fpWrite = (d) => { if (isDemo()) { demoFp = d; return; } writeFileSafe(FP_FILE, JSON.stringify(d, null, 2), 0o600); };
 const DEMO_FP = path.join(APP_DIR, '..', 'demo', 'floorplan');
 const fpData = () => (isDemo() ? (demoFp ||= JSON.parse(fs.readFileSync(path.join(DEMO_FP, 'floorplan.json'), 'utf8'))) : fpRead());
 app.use('/vendor/three', express.static(path.join(APP_DIR, 'node_modules', 'three'), { maxAge: '7d' }));
@@ -39,7 +39,7 @@ app.post('/api/floorplan/floors', requirePro, express.raw({ type: '*/*', limit: 
   const buf = req.body;
   if (!Buffer.isBuffer(buf) || buf.length < 20 || buf.subarray(0, 4).toString() !== 'glTF') return res.status(400).json({ error: 'That is not a .glb file. In your scanning app, export as GLB (binary glTF).' });
   const d = fpData(), id = `f${Date.now().toString(36)}`;
-  fs.writeFileSync(path.join(FP_DIR, `${id}.glb`), buf);
+  writeFileSafe(path.join(FP_DIR, `${id}.glb`), buf, 0o600);
   const level = d.floors.length;
   d.floors.push({ id, name: String(req.query.name || `Floor ${level + 1}`).slice(0, 40), file: `${id}.glb`, level, heightM: 3, rotationY: 0, scale: 1, offset: [0, 0] });
   fpWrite(d); res.json({ ok: true, id });
@@ -84,7 +84,7 @@ app.post('/api/floorplan/floors/:id/background', requirePro, express.raw({ type:
   if (!f || f.kind !== 'drawn') return res.status(404).json({ error: 'no such drawn floor' });
   const t = BG_TYPES.find(([, , ok]) => Buffer.isBuffer(req.body) && ok(req.body));
   if (!t) return res.status(415).json({ error: 'use a PNG, JPEG or WebP picture of the floor plan (for a PDF, take a screenshot of it)' });
-  const file = `${f.id}-bg.${t[0]}`; fs.writeFileSync(path.join(FP_DIR, file), req.body, { mode: 0o600 });
+  const file = `${f.id}-bg.${t[0]}`; writeFileSafe(path.join(FP_DIR, file), req.body, 0o600);
   f.plan = { ...f.plan, bg: file }; fpWrite(d); res.json({ ok: true, floor: f });
 });
 app.get('/api/floorplan/floors/:id/background', (req, res) => {
@@ -106,6 +106,17 @@ app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req,
   d.pins = (Array.isArray(req.body?.pins) ? req.body.pins : []).filter((p) => floors.has(p.floor) && Array.isArray(p.pos) && p.pos.length === 3 && p.pos.every(Number.isFinite))
     .slice(0, 500).map((p) => ({ deviceId: String(p.deviceId).slice(0, 200), floor: p.floor, pos: p.pos.map((n) => Math.round(n * 1000) / 1000), label: p.label ? String(p.label).slice(0, 40) : null, color: FP_HEX.test(p.color) ? p.color : null }));
   fpWrite(d); res.json({ ok: true, pins: d.pins.length });
+});
+/* The 3D view's own choices (walls, which floors are hidden, labels, overlays...): kept with the plan so
+   every screen and every restart sees the same view. Only known keys, only simple values. */
+const VIEW_KEYS = { walls: ['auto', 'tall', 'cut'], stack: ['stacked', 'apart', 'alone'], overlay: ['rooms', 'temp', 'energy', 'lights', 'presence', 'motion'], theme: [null, 'neon', 'blueprint', 'day'] };
+const VIEW_BOOLS = ['names', 'values', 'cameras', 'roof', 'power', 'sun', 'weatherFx', 'spin'];
+app.put('/api/floorplan/view', requirePro, express.json({ limit: '64kb' }), (req, res) => {
+  const d = fpData(), v = req.body?.view || {}, out = {};
+  for (const [k, ok] of Object.entries(VIEW_KEYS)) if (ok.includes(v[k] ?? null) && k in v) out[k] = v[k];
+  for (const k of VIEW_BOOLS) if (typeof v[k] === 'boolean') out[k] = v[k];
+  if (v.hidden && typeof v.hidden === 'object') out.hidden = Object.fromEntries(Object.entries(v.hidden).filter(([id, h]) => d.floors.some((f) => f.id === id) && typeof h === 'boolean').slice(0, 50));
+  d.view = out; fpWrite(d); res.json({ ok: true });
 });
 /* Where the electrical panel is (the power lines start there) and which side is the front of the house. */
 app.put('/api/floorplan/settings', requirePro, express.json(), (req, res) => {

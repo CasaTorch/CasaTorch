@@ -8,7 +8,7 @@
 const ALERTS_FILE = path.join(DATA_DIR, 'alerts.json');
 const alerts = { events: [], open: {} };
 try { Object.assign(alerts, JSON.parse(fs.readFileSync(ALERTS_FILE, 'utf8'))); } catch { /* first run */ }
-const saveAlerts = () => { try { fs.writeFileSync(ALERTS_FILE, JSON.stringify(alerts)); } catch { /* next time */ } };
+const saveAlerts = () => { try { writeFileSafe(ALERTS_FILE, JSON.stringify(alerts), 0o600); } catch { /* next time */ } };
 function alertRaise(a) {
   alerts.events.unshift({ at: nowIso(), ...a });
   alerts.events = alerts.events.slice(0, 300);

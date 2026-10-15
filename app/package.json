@@ -20,5 +20,8 @@
     "qrcode": "1.5.4",
     "ring-client-api": "^14.3.0",
     "three": "0.185.1"
+  },
+  "overrides": {
+    "werift": "0.25.0"
   }
 }

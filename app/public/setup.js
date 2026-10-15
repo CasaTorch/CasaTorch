@@ -401,7 +401,7 @@ function review() {
   const add = (k, v) => dl.append(el('dt', {}, k), el('dd', {}, v || '-'));
   add('Home', `${a.house?.name} · ${a.house?.timezone} · °${a.house?.units} · ${a.house?.currency}`);
   add('Weather for', a.house?.location?.name || 'not set');
-  add('Login', `${a.account?.username}${a.account?.pin ? ' · PIN set' : ''}${a.account?.license ? ' · Pro key entered' : ''}`);
+  add('Login', `${a.account?.username}${a.account?.license ? ' · Pro key entered' : ''}`);
   add('Calendars', (a.calendars?.list || []).filter((c) => c.url).map((c) => c.name).join(', ') || 'none');
   add('Teams', (a.sports?.teams || []).map((t) => t.name).join(', ') || 'none');
   add('Headlines', `${(a.news?.picks || []).length + (a.news?.custom || []).filter((c) => c.url).length} source(s)`);
@@ -428,7 +428,6 @@ function problems(step) {
     if (v == null || v === '') return `${f.label} is needed.`;
     if (f.minLength && String(v).length < f.minLength) return `${f.label}: at least ${f.minLength} characters.`;
   }
-  if (step.id === 'account' && store.pin && !/^\d{4,8}$/.test(store.pin)) return 'The PIN is 4 to 8 digits.';
   if (step.id === 'calendars' && (store.list || []).some((c) => !c.url)) return 'Paste a link for each calendar, or remove the empty one.';
   if (step.id === 'reminders' && (store.list || []).some((r) => !r.title)) return 'Give each reminder a name, or remove the empty one.';
   if (br?.pick) for (const o of shownOptions(br.pick.options)) if ((store[br.pick.id] || []).includes(o.id) && o.method === 'direct') {

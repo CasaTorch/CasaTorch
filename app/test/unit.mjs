@@ -1,5 +1,7 @@
 /* Unit tests for the parts that read other people's data formats. Run: node test/unit.mjs */
 import assert from 'node:assert/strict';
+import * as fsMod from 'node:fs';
+const require_ = () => fsMod;
 process.env.CASATORCH_TEST = '1'; process.env.CASATORCH_DATA_DIR = '/tmp/casatorch-unit';
 await import('../server.js');
 const H = globalThis.__casatorch;
@@ -67,6 +69,18 @@ t('totp: base32 round trip', () => assert.equal(H.b32dec(H.b32enc(Buffer.from('h
 t('totp: a code is accepted once (no replay)', () => { const sec = H.b32enc(Buffer.from('abcdefghijabcdefghij')), step = Math.floor(Date.now() / 30000), code = H.totpAt(sec, step); const used = H.totpOk(sec, code, 0); assert.ok(used); assert.equal(H.totpOk(sec, code, used), 0); });
 t('secrets: sealed at rest and back; tampering is caught', () => { const s = H.seal('JBSWY3DPEHPK3PXP'); assert.notEqual(s, 'JBSWY3DPEHPK3PXP'); assert.equal(H.unseal(s), 'JBSWY3DPEHPK3PXP'); assert.equal(H.unseal(`${s.slice(0, -3)}AAA`), null); });
 t('passwords: short, common or username-based ones are refused', () => { assert.ok(H.passwordProblem('short', 'robin')); assert.ok(H.passwordProblem('password123', 'x')); assert.ok(H.passwordProblem('robin-is-great-1', 'robin')); assert.equal(H.passwordProblem('blue kettle on the porch', 'robin'), null); });
+
+t('config: every token, key and password is sealed on disk, nothing else', () => {
+  const c = { house: { name: 'Home' }, homeAssistant: { url: 'http://ha.local:8123', token: 'eyJhbGciOi.secret' }, ring: { refreshToken: 'rt-123' }, ai: { provider: 'anthropic', apiKey: 'sk-ant-xyz' },
+    yolink: { uaid: 'ua-1', secret: 'ys-2' }, hue: { host: '10.0.0.5', username: 'hue-user' }, cameras: [{ id: 'c1', name: 'Porch', username: 'admin', password: 'pw!' }], meraki: { apiKey: '' } };
+  const disk = H.sealConfig(c), text = JSON.stringify(disk);
+  for (const secret of ['eyJhbGciOi.secret', 'rt-123', 'sk-ant-xyz', 'ys-2', 'hue-user', 'pw!']) assert.ok(!text.includes(secret), `${secret} left in the clear`);
+  for (const plain of ['http://ha.local:8123', 'ua-1', '10.0.0.5', 'Porch', 'anthropic']) assert.ok(text.includes(plain), `${plain} should stay readable`);
+  assert.equal(disk.meraki.apiKey, '');
+  assert.deepEqual(H.openConfig(disk), c);
+  assert.deepEqual(H.openConfig(H.sealConfig(disk)), c, 'sealing twice is harmless');
+});
+t('files: safe write replaces the file whole', () => { const f = '/tmp/casatorch-unit/x.json'; H.writeFileSafe(f, '{"a":1}'); H.writeFileSafe(f, '{"a":2}'); assert.equal(JSON.parse(require_('fs').readFileSync(f, 'utf8')).a, 2); });
 
 console.log(`\n${n} passed`);
 process.exit(0);

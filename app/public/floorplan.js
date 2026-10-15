@@ -16,7 +16,13 @@ let card = null;   // the open device card: { id, o }
 const PREF_KEY = 'casatorch-3d';
 const prefs = { walls: 'auto', stack: 'stacked', names: true, values: false, cameras: true, roof: true, power: true, hidden: {}, theme: null, sun: true, weatherFx: true, overlay: 'rooms', spin: false, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
 if (prefs.v !== 2) Object.assign(prefs, { v: 2, walls: 'auto', roof: true, power: true, hidden: {} });   // the dollhouse view is the new default
-const savePrefs = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* private window */ } };
+/* View choices are kept on the CasaTorch (so every screen and every restart keeps them), with this browser's copy for an instant start. */
+let prefTimer = null;
+const savePrefs = () => {
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch { /* private window */ }
+  clearTimeout(prefTimer); prefTimer = setTimeout(() => fetch('/api/floorplan/view', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view: prefs }) }).catch(() => {}), 600);
+};
+const adoptServerView = (v) => { if (v && typeof v === 'object') Object.assign(prefs, v, { v: 2 }); };
 const $ = (s) => document.querySelector(s);
 const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (v == null || v === false) continue; if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'value') e.value = v; else e.setAttribute(k, v === true ? '' : v); } for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k))); return e; };
 const api = async (url, opts = {}) => { const r = await fetch(url, opts); const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status, body: j }); return j; };
@@ -355,14 +361,9 @@ function drawPins() {
   if (card) { const p = (S.live?.pins || []).find((x) => x.deviceId === card.id); if (p) fillCard(p); else closeCard(); }
   layout(false);
 }
-/* Some dashboards ask for a PIN before switching anything: asked once, kept for this tab only. */
-let pin = (() => { try { return sessionStorage.getItem('casatorch-pin') || ''; } catch { return ''; } })();
-async function act(d, action, value, retry = true) {
-  try { await send(`/api/devices/${encodeURIComponent(d.id)}/${action}`, 'POST', { ...(value != null ? { value } : {}), ...(pin ? { pin } : {}) }); setTimeout(refresh, 700); }
-  catch (e) {
-    if (e.status === 401 && retry) { const v = prompt('PIN to control devices'); if (v) { pin = v; try { sessionStorage.setItem('casatorch-pin', v); } catch { /* fine */ } return act(d, action, value, false); } }
-    toast(e.message); setTimeout(refresh, 300);
-  }
+async function act(d, action, value) {
+  try { await send(`/api/devices/${encodeURIComponent(d.id)}/${action}`, 'POST', value != null ? { value } : {}); setTimeout(refresh, 700); }
+  catch (e) { if (e.status === 401) { location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.hash)}`; return; } toast(e.message); setTimeout(refresh, 300); }
 }
 function pinClick(p) {
   const d = p.device;
@@ -789,7 +790,7 @@ async function refresh() {
 function drawThemeSeg() { $('#themeSeg').replaceChildren(seg(Object.entries(THEMES).map(([k, t]) => [k, t.label]), curTheme(), (v) => { prefs.theme = v; savePrefs(); applyLook(); drawThemeSeg(); if (S.mode === 'edit') editor(); })); }
 async function reload() { S.plan = await api('/api/floorplan'); await loadFloors(); await refresh(); drawThemeSeg(); if (S.mode === 'edit') editor(); }
 async function start() {
-  S.plan = await api('/api/floorplan');
+  S.plan = await api('/api/floorplan'); adoptServerView(S.plan.view);
   units = S.plan.units || 'F';
   if (!S.plan.units) try { units = (await api('/api/status')).units || 'F'; } catch { /* default */ }
   drawThemeSeg();
