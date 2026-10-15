@@ -288,5 +288,49 @@
     "humidity": 44,
     "online": true,
     "area": "Office"
+  },
+  {
+    "id": "ha:device_tracker.family_car_location",
+    "provider": "ha",
+    "domain": "device_tracker",
+    "kind": "presence",
+    "name": "Family car location",
+    "state": "home",
+    "home": true,
+    "online": true
+  },
+  {
+    "id": "ha:binary_sensor.family_car_charge_cable",
+    "provider": "ha",
+    "domain": "binary_sensor",
+    "haClass": "plug",
+    "kind": "sensor",
+    "name": "Family car charge cable",
+    "state": "on",
+    "on": true,
+    "online": true
+  },
+  {
+    "id": "ha:sensor.family_car_charger_power",
+    "provider": "ha",
+    "domain": "sensor",
+    "haClass": "power",
+    "kind": "sensor",
+    "name": "Family car charger power",
+    "state": "7.2",
+    "powerW": 7200,
+    "meter": true,
+    "online": true
+  },
+  {
+    "id": "ha:sensor.family_car_battery_level",
+    "provider": "ha",
+    "domain": "sensor",
+    "haClass": "battery",
+    "kind": "sensor",
+    "name": "Family car battery",
+    "state": "64",
+    "battery": 64,
+    "online": true
   }
 ]

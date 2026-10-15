@@ -147,3 +147,9 @@ input[type=color] { width: 34px; height: 30px; padding: 2px; flex: none; } input
 .sunrow { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; margin: -4px 0 12px; } .sunrow input { accent-color: var(--warm); } .sunrow b { font-size: 13px; min-width: 62px; text-align: right; }
 .tools .seg button { padding: 5px 10px; }
 .tools { position: fixed; } .morepop { position: absolute; bottom: calc(100% + 10px); right: 0; display: flex; flex-wrap: wrap; gap: 6px; width: min(420px, 92vw); padding: 10px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: var(--blur); box-shadow: 0 20px 50px #0007; }
+/* the yard */
+.row.wrap { flex-wrap: wrap; }
+.carlab { display: grid; gap: 1px; padding: 5px 9px; border-radius: 10px; background: rgba(8, 12, 22, .82); border: 1px solid rgba(255, 255, 255, .14); color: #e8eef7; font-size: 12px; white-space: nowrap; pointer-events: none; transform: translateY(-6px); }
+.carlab small { color: #9fb0c5; }
+.carlab.charging { border-color: #34d399; box-shadow: 0 0 14px rgba(52, 211, 153, .45); } .carlab.charging small { color: #6ee7b7; }
+.carlab.away { opacity: .6; }

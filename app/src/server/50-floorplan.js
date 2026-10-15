@@ -115,13 +115,30 @@ app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req,
 /* The 3D view's own choices (walls, which floors are hidden, labels, overlays...): kept with the plan so
    every screen and every restart sees the same view. Only known keys, only simple values. */
 const VIEW_KEYS = { walls: ['auto', 'tall', 'cut'], stack: ['stacked', 'apart', 'alone'], overlay: ['rooms', 'temp', 'energy', 'lights', 'presence', 'motion'], theme: [null, 'neon', 'blueprint', 'day'] };
-const VIEW_BOOLS = ['names', 'values', 'cameras', 'roof', 'power', 'sun', 'weatherFx', 'spin'];
+const VIEW_BOOLS = ['names', 'values', 'cameras', 'roof', 'power', 'sun', 'weatherFx', 'spin', 'yard'];
 app.put('/api/floorplan/view', requirePro, express.json({ limit: '64kb' }), (req, res) => {
   const d = fpData(), v = req.body?.view || {}, out = {};
   for (const [k, ok] of Object.entries(VIEW_KEYS)) if (ok.includes(v[k] ?? null) && k in v) out[k] = v[k];
   for (const k of VIEW_BOOLS) if (typeof v[k] === 'boolean') out[k] = v[k];
   if (v.hidden && typeof v.hidden === 'object') out.hidden = Object.fromEntries(Object.entries(v.hidden).filter(([id, h]) => d.floors.some((f) => f.id === id) && typeof h === 'boolean').slice(0, 50));
   d.view = out; fpWrite(d); res.json({ ok: true });
+});
+/* The yard: areas drawn on the ground and things placed on it (trees, bushes, cars, an EV charger).
+   A car can be linked to its own sensors - home/away, plugged in, charging power, battery - to show
+   where it is and whether it is charging. Showing only: nothing here can control a car. */
+const YARD_AREAS = new Set(['grass', 'driveway', 'patio', 'path', 'garden', 'pool']), YARD_ITEMS = new Set(['tree', 'pine', 'bush', 'car', 'charger']), CAR_BINDS = ['home', 'plugged', 'power', 'battery'];
+const yid = (v) => (/^[\w-]{1,24}$/.test(v) ? v : crypto.randomBytes(5).toString('hex'));
+app.put('/api/floorplan/yard', requirePro, express.json({ limit: '512kb' }), (req, res) => {
+  const d = fpData(), b = req.body || {}, pt = (q) => Array.isArray(q) && q.length === 2 && q.every((n) => fin(n, -1000, 1000));
+  const areas = (Array.isArray(b.areas) ? b.areas : []).filter((a) => YARD_AREAS.has(a?.kind) && Array.isArray(a.pts) && a.pts.length >= 3 && a.pts.length <= 200 && a.pts.every(pt)).slice(0, 150)
+    .map((a) => ({ id: yid(a.id), kind: a.kind, pts: a.pts.map((q) => q.map((n) => Math.round(n * 100) / 100)) }));
+  const items = (Array.isArray(b.items) ? b.items : []).filter((it) => YARD_ITEMS.has(it?.kind) && pt(it.pos)).slice(0, 400).map((it) => {
+    const o = { id: yid(it.id), kind: it.kind, pos: it.pos.map((n) => Math.round(n * 100) / 100), rot: fin(it.rot, -360, 360) ? Math.round(+it.rot) : 0, scale: fin(it.scale, 0.3, 4) ? +(+it.scale).toFixed(2) : 1 };
+    if (it.kind === 'car') Object.assign(o, { name: String(it.name || 'Car').slice(0, 30), color: FP_HEX.test(it.color) ? it.color : '#cfd6df', body: it.body === 'suv' ? 'suv' : 'sedan',
+      bind: Object.fromEntries(CAR_BINDS.filter((k) => typeof it.bind?.[k] === 'string' && it.bind[k].length <= 200 && it.bind[k]).map((k) => [k, it.bind[k]])) });
+    return o;
+  });
+  d.yard = { areas, items }; fpWrite(d); res.json({ ok: true, yard: d.yard });
 });
 /* Where the electrical panel is (the power lines start there) and which side is the front of the house. */
 app.put('/api/floorplan/settings', requirePro, express.json(), (req, res) => {
@@ -152,7 +169,11 @@ app.get('/api/floorplan/live', async (_req, res) => {
   const powerW = devices.filter((x) => x.powerW != null).reduce((a, x) => a + x.powerW, 0);
   res.json({
     pins: d.pins.map((p) => ({ ...p, device: byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })), weather,
-    devices: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider })),
+    devices: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),
+    cars: Object.fromEntries((d.yard?.items || []).filter((it) => it.kind === 'car').map((it) => {
+      const g = (k) => byId.get(it.bind?.[k]), h = g('home'), p = g('plugged'), w = g('power'), bt = g('battery'), n = (v) => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
+      return [it.id, { home: h ? (h.home ?? h.on ?? null) : null, plugged: p ? !!(p.on ?? p.plugged) : null, powerW: w ? w.powerW ?? null : null, battery: bt ? n(bt.battery ?? bt.value) : null }];
+    })),
     totals: { powerW: Math.round(powerW), lightsOn: devices.filter((x) => x.kind === 'light' && x.on).length, playing: devices.filter((x) => x.playing).map((x) => ({ name: x.name, title: x.title })), openDoors: devices.filter((x) => x.open).length, leaks: devices.filter((x) => x.water).length },
   });
 });

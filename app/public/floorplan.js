@@ -9,13 +9,14 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { openDrawer } from './floorplan-draw.js';
 /* The scan importers (USDZ, OBJ, GLTF exporter...) load only when someone uploads a scan. */
 const toGlb = async (...a) => (await import('./floorplan-import.js')).toGlb(...a);
+import { Yard, AREA_KINDS, ITEM_KINDS } from './floorplan-yard.js';
 import { buildRoof, PowerNet, weatherIcon, sunPosition, nightness, kelvinToHex, WeatherFx } from './floorplan-house.js';
 import { THEMES, COLOR_KEYS, ROOM_COLORS, lookOf, classify, guessCats, itemOf, prettyItem, sectionRooms, makeFx, fxMaterial, MAX_GLOW, MAX_ROOMS } from './floorplan-look.js';
 
 const S = { plan: null, live: null, mode: 'view', floorView: 'all', room: null, tool: null, sel: null, F: {}, pins: [], pinObjs: [], q: '', tab: 'devices' };
 let card = null;   // the open device card: { id, o }
 const PREF_KEY = 'casatorch-3d';
-const prefs = { walls: 'auto', stack: 'stacked', names: true, values: false, cameras: true, roof: true, power: true, hidden: {}, theme: null, sun: true, weatherFx: true, overlay: 'rooms', spin: false, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
+const prefs = { walls: 'auto', stack: 'stacked', names: true, values: false, cameras: true, roof: true, power: true, hidden: {}, theme: null, sun: true, weatherFx: true, yard: true, overlay: 'rooms', spin: false, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
 if (prefs.v !== 2) Object.assign(prefs, { v: 2, walls: 'auto', roof: true, power: true, hidden: {} });   // the dollhouse view is the new default
 /* View choices are kept on the CasaTorch (so every screen and every restart keeps them), with this browser's copy for an instant start. */
 let prefTimer = null;
@@ -61,7 +62,7 @@ const resize = () => { const w = view.clientWidth, h = view.clientHeight; render
 addEventListener('resize', resize); resize();
 let tween = null, wallsDirty = true, wallsAt = 0, lastT = 0, skyAt = 0, flash = 0, flashWas = 0;
 controls.addEventListener('change', () => { wallsDirty = true; });
-const power = new PowerNet(scene), weather = new WeatherFx(scene);
+const power = new PowerNet(scene), weather = new WeatherFx(scene), yard = new Yard(scene);
 const flyTo = (target, pos, ms = 750) => { tween = { t0: performance.now(), ms, ft: controls.target.clone(), fp: camera.position.clone(), tt: target, tp: pos }; };
 (function loop(now) {
   requestAnimationFrame(loop);
@@ -86,7 +87,7 @@ function updateSky() {
   let k = 0, el = 0.9, az = 2.4;
   if (prefs.sun && w?.lat != null && w?.lon != null) { const sp = sunPosition(S.timeAt || new Date(), w.lat, w.lon); el = sp.el; az = sp.az; k = nightness(el); }
   const north = deg(S.plan?.settings?.northDeg || 0), dir = new V3(Math.sin(az) * Math.cos(Math.max(el, 0.05)), Math.sin(Math.max(el, 0.05)), -Math.cos(az) * Math.cos(Math.max(el, 0.05))).applyAxisAngle(new V3(0, 1, 0), -north);
-  const c = S.houseBox ? S.houseBox.getCenter(new V3()) : new V3(), R = S.houseBox ? S.houseBox.getSize(new V3()).length() * 0.6 + 4 : 20;
+  const B = S.sceneBox || S.houseBox, c = B ? B.getCenter(new V3()) : new V3(), R = B ? B.getSize(new V3()).length() * 0.6 + 4 : 20;
   sun.position.copy(c).add(dir.multiplyScalar(R * 2)); sun.target.position.copy(c); sun.target.updateMatrixWorld();
   const cam = sun.shadow.camera; if (cam.right !== R) { cam.left = -R; cam.right = R; cam.top = R; cam.bottom = -R; cam.near = 0.5; cam.far = R * 4; cam.updateProjectionMatrix(); }
   const lowSun = Math.min(1, Math.max(0, el / 0.45)), day = 1 - k;
@@ -107,9 +108,16 @@ function applyLook() {
   hemi.color.set(L.hemi[0]); hemi.groundColor.set(L.hemi[1]); hemi.intensity = L.hemi[2]; sun.intensity = L.sun; skyAt = 0;
   const y = grid.position.y; scene.remove(grid); grid = new THREE.GridHelper(140, 140, L.grid[0], L.grid[1]); grid.position.y = y; scene.add(grid);
   for (const F of Object.values(S.F)) styleFloor(F);
-  buildRoofs();
+  buildRoofs(); buildYard();
   document.documentElement.dataset.theme = curTheme();
   drawPins();
+}
+/* The yard sits on the ground around the lowest floor. */
+const groundY = () => { const F = Object.values(S.F).sort((a, b) => (a.f.level || 0) - (b.f.level || 0))[0]; return F ? (F.f.level || 0) * (F.f.heightM || 3) + F.minY : 0; };
+function buildYard() {
+  yard.build(S.plan?.yard, groundY(), curTheme(), el);
+  S.sceneBox = S.houseBox?.clone(); if (S.sceneBox && yard.group.children.length) S.sceneBox.union(yard.box);
+  skyAt = 0;
 }
 function styleFloor(F) {
   if (F.original) return;
@@ -256,6 +264,7 @@ function layout(fit) {
     for (const l of F.roomLabs) l.visible = prefs.names && F.G.visible && (cur ? F === cur : !multi);
   }
   grid.position.y = (Number.isFinite(minY) ? minY : 0) - 0.05;
+  yard.visible = (prefs.yard || (S.mode === 'edit' && S.tab === 'yard')) && (!cur || cur === Object.values(S.F).sort((a, b) => (a.f.level || 0) - (b.f.level || 0))[0]);
   if (card) { const F = S.F[card.o.userData.floor]; card.o.visible = !!F && F.G.visible && (!cur || F === cur); }
   for (const o of S.pinObjs) { const F = S.F[o.userData.floor]; o.visible = !!F && F.G.visible && (!cur || F === cur) && (prefs.cameras || o.userData.kind !== 'camera'); }
   wallsDirty = true;
@@ -294,6 +303,7 @@ function fitView() {
   const cur = curF(), box = new THREE.Box3();
   for (const F of Object.values(S.F)) if (F.G.visible && (!cur || F === cur)) box.union(F.box.clone().translate(new V3(0, F.G.position.y, 0)));
   if (box.isEmpty()) return;
+  if (!cur && yard.group.visible) for (const c of yard.cars) box.expandByObject(c.o);   // keep the car in the picture
   /* From the front of the house, a little to one side and above - like looking into a dollhouse. */
   const c = box.getCenter(new V3()), len = Math.max(6, box.getSize(new V3()).length());
   const dir = new V3(0.32, 0, 1).applyAxisAngle(new V3(0, 1, 0), deg(S.plan?.settings?.frontDeg || 0)).normalize();
@@ -451,7 +461,7 @@ function drawTools() {
   const t = $('#tools'); t.hidden = S.mode !== 'view' || !Object.keys(S.F).length;
   const set = (k) => (v) => { prefs[k] = v; savePrefs(); layout(k === 'stack'); };
   const more = S.moreOpen ? el('div', { class: 'morepop' },
-    Object.values(S.F).some((F) => F.roof) ? toggle('Roof', 'roof') : null, toggle('Power lines', 'power'), toggle('Sun & shadows', 'sun'), toggle('Weather', 'weatherFx'),
+    Object.values(S.F).some((F) => F.roof) ? toggle('Roof', 'roof') : null, toggle('Power lines', 'power'), toggle('Sun & shadows', 'sun'), toggle('Weather', 'weatherFx'), (S.plan?.yard?.areas?.length || S.plan?.yard?.items?.length) ? toggle('Yard', 'yard') : null,
     toggle('Room names', 'names'), toggle('Values', 'values'), toggle('Cameras', 'cameras'), toggle('Spin', 'spin'),
     Object.keys(S.F).length > 1 ? seg([['stacked', 'Stacked'], ['apart', 'Apart'], ['alone', 'Alone']], prefs.stack, set('stack')) : null) : null;
   fill(t,
@@ -508,7 +518,8 @@ function drawLeft() {
 function homeBlock() {
   const cur = curF(), Fs = cur ? [cur] : Object.values(S.F), pins = (S.live?.pins || []).filter((p) => Fs.some((F) => F.f.id === p.floor));
   const lights = lightsIn(pins), on = lights.filter((p) => p.device.on).length, open = pins.filter((p) => p.device.open && p.device.kind !== 'cover'), wet = pins.filter((p) => p.device.water || p.device.smoke);
-  const watts = pins.filter((p) => p.device.powerW != null && (p.device.on ?? true)).reduce((a, p) => a + p.device.powerW, 0) || S.live?.totals?.powerW || 0;
+  const placedW = pins.filter((p) => p.device.powerW != null && (p.device.on ?? true)).reduce((a, p) => a + p.device.powerW, 0);
+  const watts = cur ? placedW : S.live?.totals?.powerW ?? placedW;   // the whole home: the same number as the top bar
   const all = Object.values(S.F).sort((a, b) => (b.f.level || 0) - (a.f.level || 0)), hasRoof = all.some((F) => F.roof);
   const eye = (on, fn, label) => el('button', { type: 'button', class: `eye${on ? ' on' : ''}`, title: on ? `Hide ${label}` : `Show ${label}`, onclick: fn }, on ? '◉' : '○');
   return el('div', {},
@@ -558,8 +569,12 @@ function panelSpot() {
 function drawPower() {
   if (!S.live) return;
   const cur = curF(), spot = panelSpot();
-  if (!spot || S.mode === 'edit' && S.tab !== 'devices') { power.clear(); return; }
-  const lines = []; let i = 0;
+  if (S.mode === 'edit' && !['devices', 'yard'].includes(S.tab)) { power.clear(); return; }
+  const lines = yard.group.visible ? yard.live(S.live.cars, el, fmtW) : []; let i = 0;
+  // the charger gets its own line from the panel, carrying what the car is pulling
+  const evW = lines.reduce((a, l) => a + (l.on ? l.watts : 0), 0);
+  if (spot && yard.charger && yard.group.visible && lines.length) { const a = yard.charger.localToWorld(new V3(0, 0.6, 0)), yb = yard.y + 0.03; lines.push({ on: evW > 0, watts: evW, pts: [spot.w.clone(), new V3(spot.w.x, yb, spot.w.z), new V3(a.x, yb, a.z), a] }); }
+  if (!spot) { power.update(lines, null, 0, el, look()); power.visible = prefs.power; return; }
   for (const p of S.live.pins || []) {
     const d = p.device, F = S.F[p.floor];
     if (!F || !F.G.visible || (cur && F !== cur) || !POWERED.has(d.kind)) continue;
@@ -593,6 +608,7 @@ renderer.domElement.addEventListener('click', (e) => {
     return;
   }
   if (!S.tool) return;
+  if (S.tool.type?.startsWith('yard-')) { const g = ray.ray.intersectPlane(new THREE.Plane(new V3(0, 1, 0), -groundY()), new V3()); if (g) yardClick(g); return; }
   if (!hit) { toast('Click on the model.'); return; }
   const F = S.F[hit.object.userData.floor];
   if (S.tool.type === 'device') {
@@ -638,6 +654,75 @@ async function savePins() {
   catch (e) { proErr(e); }
 }
 const savePinsSoon = debounce(savePins, 500);
+/* ---------- the yard: drawing areas, placing trees and cars ---------- */
+const newId = () => Math.random().toString(36).slice(2, 10);
+const yardData = () => { const y = S.plan.yard || {}; return { areas: [...(y.areas || [])], items: (y.items || []).map((it) => ({ ...it, bind: { ...(it.bind || {}) } })) }; };
+async function saveYard(y, quiet) {
+  S.plan.yard = y; buildYard(); layout(false); if (!quiet) editor();   // show it right away; the CasaTorch keeps it
+  try { const r = await send('/api/floorplan/yard', 'PUT', y); S.plan.yard = r.yard; await refresh(); }
+  catch (e) { proErr(e); }
+}
+const saveYardSoon = debounce((y) => saveYard(y, true), 400);   // typing a name or dragging a slider: no re-draw of the panel
+let previewLine = null;
+function yardPreview() {
+  if (previewLine) { scene.remove(previewLine); previewLine.geometry.dispose(); previewLine = null; }
+  const t = S.tool; if (t?.type !== 'yard-area' || !t.pts.length) return;
+  const y = groundY() + 0.05, pts = t.pts.map(([x, z]) => new V3(x, y, z));
+  previewLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(t.pts.length > 2 ? [...pts, pts[0]] : pts), new THREE.LineBasicMaterial({ color: '#f472b6', depthTest: false }));
+  previewLine.renderOrder = 20; scene.add(previewLine);
+}
+function yardClick(g) {
+  const t = S.tool, at = [+g.x.toFixed(2), +g.z.toFixed(2)];
+  if (t.type === 'yard-area') { if (t.pts.length >= 200) return; t.pts.push(at); yardPreview(); editor(); return; }
+  const y = yardData();
+  if (t.type === 'yard-place') { const it = { id: newId(), kind: t.kind, pos: at, rot: 0, scale: 1, ...(t.kind === 'car' ? { name: 'Car', color: '#cfd6df', body: 'sedan', bind: {} } : {}) }; y.items.push(it); S.yardSel = it.id; }
+  if (t.type === 'yard-move') { const it = y.items.find((x) => x.id === t.id); if (it) it.pos = at; }
+  S.tool = null; saveYard(y);
+}
+/* Find a car's sensors by their names - Tesla, and most EVs in Home Assistant, name them the same way. */
+function guessCar(devs) {
+  const ent = (d) => d.id.replace(/^ha:[a-z_]+\./, '');
+  const plug = devs.find((d) => (d.bin || d.kind === 'switch') && /charge_cable|charger_cable|charging_cable|plugged|plug_state|_cable$/.test(ent(d)));
+  const stem = plug ? ent(plug).replace(/_?(charge_cable|charger_cable|charging_cable|plugged_in|plugged|plug_state|cable)$/, '') : '';
+  const near = (list) => list.sort((a, b) => (ent(b).startsWith(stem) ? 1 : 0) - (ent(a).startsWith(stem) ? 1 : 0))[0];
+  const power = near(devs.filter((d) => d.pw && /charger_power|charging_power|charge_power|charge_rate|charger_rate/.test(ent(d))));
+  const battery = near(devs.filter((d) => d.bat && /battery_level|battery|state_of_charge|_soc$/.test(ent(d)) && (!stem || ent(d).startsWith(stem))));
+  const home = near(devs.filter((d) => d.pres && /location|device_tracker|_car|tesla/.test(d.id) && (!stem || ent(d).startsWith(stem))));
+  return { plugged: plug?.id, power: power?.id, battery: battery?.id, home: home?.id };
+}
+function edYard() {
+  const y = yardData(), devs = S.live?.devices || [];
+  const save = () => saveYardSoon(y);
+  const place = (kind) => { S.tool = { type: 'yard-place', kind }; editor(); };
+  const pick = (label, key, it, filter) => el('div', { class: 'row' }, el('label', {}, label), el('select', { onchange: (e) => { if (e.target.value) it.bind[key] = e.target.value; else delete it.bind[key]; save(); } },
+    el('option', { value: '' }, '-'), ...devs.filter(filter).sort((a, b) => a.name.localeCompare(b.name)).map((d) => el('option', { value: d.id, selected: it.bind[key] === d.id ? true : null }, d.name))));
+  const row = (it, i) => {
+    const sel = S.yardSel === it.id;
+    const head = el('div', { class: 'dtop' }, el('b', {}, it.kind === 'car' ? it.name : ITEM_KINDS[it.kind]), el('small', {}, it.kind === 'car' ? (it.bind.plugged || it.bind.home ? 'linked' : 'not linked') : ''));
+    const btns = el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.yardSel = it.id; S.tool = { type: 'yard-move', id: it.id }; editor(); } }, 'Move'),
+      el('button', { type: 'button', class: 'mini', title: 'Turn 45°', onclick: () => { it.rot = ((it.rot || 0) + 45) % 360; saveYard(y); } }, 'Turn'),
+      el('button', { type: 'button', class: 'mini', onclick: () => { y.items.splice(i, 1); saveYard(y); } }, 'Remove'),
+      el('button', { type: 'button', class: 'mini', onclick: () => { S.yardSel = sel ? null : it.id; editor(); } }, sel ? 'Less' : 'More'));
+    const more = !sel ? null : it.kind === 'car' ? el('div', {},
+      el('div', { class: 'row' }, el('label', {}, 'Name'), el('input', { type: 'text', value: it.name, maxlength: 30, oninput: (e) => { it.name = e.target.value || 'Car'; save(); } }), el('input', { type: 'color', value: it.color, title: 'Paint colour', oninput: (e) => { it.color = e.target.value; save(); } })),
+      seg([['sedan', 'Car'], ['suv', 'SUV']], it.body, (v) => { it.body = v; saveYard(y); }),
+      el('p', { class: 'note' }, 'Link it to your car\'s sensors to show it home or away, plugged in, charging and its battery. Needs your car in Home Assistant (Tesla, and many other EVs). CasaTorch only shows the car - it never controls it.'),
+      el('button', { type: 'button', class: 'mini', onclick: () => { const g = guessCar(devs); const n = Object.values(g).filter(Boolean).length; if (!n) { toast('No car sensors found. Add your car to Home Assistant first (Connect > Add any Home Assistant integration).'); return; } it.bind = Object.fromEntries(Object.entries(g).filter(([, v]) => v)); toast(`Found ${n} of 4 - check them below.`); saveYard(y); } }, 'Find my car\'s sensors'),
+      pick('Home or away', 'home', it, (d) => d.pres), pick('Plugged in', 'plugged', it, (d) => d.bin || d.kind === 'switch'), pick('Charging power', 'power', it, (d) => d.pw), pick('Battery', 'battery', it, (d) => d.bat))
+      : it.kind === 'charger' ? el('p', { class: 'note' }, 'The charging cable runs from here to a car that\'s plugged in, and a power line runs here from your panel.')
+      : el('div', { class: 'row' }, el('label', {}, 'Size'), el('input', { type: 'range', min: 0.4, max: 3, step: 0.1, value: it.scale || 1, oninput: (e) => { it.scale = Number(e.target.value); save(); } }));
+    return el('div', { class: `edrow${sel ? ' sel' : ''}` }, head, btns, more);
+  };
+  return el('div', {}, el('p', { class: 'note' }, 'Draw the yard and add trees, bushes and your car so the 3D home looks like your place. Trees and cars cast shadows in the sunlight view.'),
+    el('h3', {}, 'Draw an area'),
+    el('div', { class: 'row wrap' }, ...Object.entries(AREA_KINDS).map(([k, [n]]) => el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'yard-area', kind: k, pts: [] }; editor(); } }, n))),
+    y.areas.length ? el('div', {}, ...y.areas.map((a, i) => el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, el('i', { class: 'swatch', style: `--rc:${AREA_KINDS[a.kind][1]}` }), el('span', {}, AREA_KINDS[a.kind][0]), el('small', {}, `${a.pts.length} corners`)),
+      el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { y.areas.splice(i, 1); saveYard(y); } }, 'Delete'))))) : null,
+    el('h3', {}, 'Add things'),
+    el('div', { class: 'row wrap' }, ...Object.entries(ITEM_KINDS).map(([k, n]) => el('button', { type: 'button', class: 'mini', onclick: () => place(k) }, n))),
+    ...y.items.map(row),
+    y.areas.length || y.items.length ? el('p', {}, el('button', { type: 'button', class: 'mini', onclick: () => { if (confirm('Clear the whole yard?')) saveYard({ areas: [], items: [] }); } }, 'Clear the yard')) : null);
+}
 async function saveHidden(F, list) {
   F.f.hiddenParts = list; editor();   // right away, so quick clicks build on each other
   try { await send(`/api/floorplan/floors/${F.f.id}`, 'PUT', { hiddenParts: list }); }
@@ -681,8 +766,8 @@ const edFloor = () => curF() || Object.values(S.F)[0];
 function editor() {
   if (S.mode !== 'edit') return;
   const box = $('#left'); box.hidden = false;
-  const tabs = [['devices', 'Devices'], ['rooms', 'Rooms'], ['colors', 'Colours'], ['floors', 'Floors']];
-  const body = { devices: edDevices, rooms: edRooms, colors: edColors, floors: edFloors }[S.tab]();
+  const tabs = [['devices', 'Devices'], ['rooms', 'Rooms'], ['yard', 'Yard'], ['colors', 'Colours'], ['floors', 'Floors']];
+  const body = { devices: edDevices, rooms: edRooms, yard: edYard, colors: edColors, floors: edFloors }[S.tab]();
   const er = S.tool?.type === 'erase' ? S.tool : null;
   if (er) { const F = S.F[er.floor]; return fill(box, el('div', { class: 'hint' }, `Hiding parts of ${F?.f.name}. Click anything that shouldn't be there - a stray chair, scan noise, a wall from next door. ${er.done.length} hidden so far. Nothing is deleted from your scan; you can bring it all back.`,
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.tool = null; reload(); } }, 'Done'),
@@ -692,7 +777,12 @@ function editor() {
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => saveRoute(rt.dev.id, rt.pts.length ? rt.pts : null) }, 'Done'),
       el('button', { type: 'button', class: 'mini', disabled: rt.pts.length ? null : true, onclick: () => { rt.pts.pop(); drawPower(); editor(); } }, 'Undo last bend'),
       el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; drawPower(); editor(); } }, 'Cancel'))));
-  const hint = S.tool?.type === 'panel' ? 'Click where the electrical panel is (a wall or the floor next to it).' : S.tool?.type === 'device' ? `Click on the model where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
+  const ya = S.tool?.type === 'yard-area' ? S.tool : null;
+  if (ya) return fill(box, el('div', { class: 'hint' }, `Drawing ${AREA_KINDS[ya.kind][0].toLowerCase()}: click its corners on the ground, one after another. ${ya.pts.length} so far${ya.pts.length < 3 ? ' - at least 3' : ''}.`,
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', disabled: ya.pts.length >= 3 ? null : true, onclick: () => { const y = yardData(); y.areas.push({ id: newId(), kind: ya.kind, pts: ya.pts }); S.tool = null; yardPreview(); saveYard(y); } }, 'Finish'),
+      el('button', { type: 'button', class: 'mini', disabled: ya.pts.length ? null : true, onclick: () => { ya.pts.pop(); yardPreview(); editor(); } }, 'Undo last corner'),
+      el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; yardPreview(); editor(); } }, 'Cancel'))));
+  const hint = S.tool?.type === 'yard-place' ? `Click on the ground where the ${ITEM_KINDS[S.tool.kind].toLowerCase()} goes.` : S.tool?.type === 'yard-move' ? 'Click on the ground where it should go.' : S.tool?.type === 'panel' ? 'Click where the electrical panel is (a wall or the floor next to it).' : S.tool?.type === 'device' ? `Click on the model where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
   fill(box, el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { S.tab = k; S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
     hint ? el('div', { class: 'hint' }, hint, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; editor(); drawPins(); } }, 'Cancel')) : null, body);
 }
