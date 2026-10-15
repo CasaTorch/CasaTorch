@@ -53,7 +53,7 @@ async function startConnect(item, conn) {
   };
   pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
   const steps = [
-    toHaFirst ? `${item.label} connects through Home Assistant, so we'll connect Home Assistant first (about two minutes - you just paste one key).` : `The guided setup opens right at ${item.label}${viaHa ? ', and CasaTorch adds it to Home Assistant for you' : ''}.`,
+    toHaFirst ? `${item.label} connects through Home Assistant, so we'll connect Home Assistant first - you just sign in with your Home Assistant account.` : `The guided setup opens right at ${item.label}${viaHa ? ', and CasaTorch adds it to Home Assistant for you' : ''}.`,
     'Answer a question or two, press Test, and you\'ll see a green check when it works.',
     'Save. Everything it brings in is ready under Add widget > Rooms & devices.',
   ];

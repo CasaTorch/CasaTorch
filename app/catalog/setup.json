@@ -997,7 +997,7 @@
     }
   ],
   "guides": {
-    "install-ha": "The easiest way, no computer skills needed: get a Home Assistant Green (about $99). Plug it into your router and power, wait five minutes, then open http://homeassistant.local:8123 on your phone or computer and follow its welcome screens to make your account.\n\nAlready have a spare computer or a Raspberry Pi? Home Assistant's website has a one-click installer for those too: home-assistant.io/installation\n\nWhen Home Assistant shows its dashboard, come back here and choose 'Yes'. CasaTorch takes it from there - you will paste one key, and that's all.",
+    "install-ha": "The easiest way, no computer skills needed: get a Home Assistant Green, a small box made by the Home Assistant team. Plug it into your router and power, wait five minutes, then open http://homeassistant.local:8123 on your phone or computer and follow its welcome screens to make your account.\n\nAlready have a spare computer or a Raspberry Pi? Home Assistant's website has a one-click installer for those too: home-assistant.io/installation\n\nWhen Home Assistant shows its dashboard, come back here and choose 'Yes'. CasaTorch takes it from there - you just sign in with your Home Assistant account.",
     "wyze": "Wyze cameras work through docker-wyze-bridge, which turns them into normal streams. Install it, then pick 'Frigate' or 'Other IP camera'.",
     "cloud-cams": "Arlo and Eufy are cloud cameras. Add them in Home Assistant with the community integrations (HACS); CasaTorch shows them once they're there.",
     "already-in-ha": "Anything already in Home Assistant shows up in CasaTorch automatically - nothing else to do.",
