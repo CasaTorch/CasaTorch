@@ -24,7 +24,7 @@ npm run demo          # open http://localhost:8090
 
 ## Get a CasaTorch Box
 
-Rather not set anything up? Order a **CasaTorch Box** - a Raspberry Pi 5 with CasaTorch installed.
+Rather not set anything up? Order a **CasaTorch Box** (Raspberry Pi 5) or **Box Lite** (Raspberry Pi 4) with CasaTorch installed.
 Plug it into your router and open it on any screen. **[casatorch.com/box](https://casatorch.com/box)**
 
 ## Install it for real
@@ -178,7 +178,7 @@ own network so nothing leaves the house. It never unlocks doors or opens garage 
 ## Support and services
 
 - **Community** (free): the CasaTorch Discord - **[casatorch.com/discord](https://casatorch.com/discord)** - and GitHub issues
-- **Basic support** (included with Pro): e-mail and Discord support from the CasaTorch team
+- **Help** (free, for everyone): e-mail and Discord support from the CasaTorch team
 - **Service & Developer Access** ($100/year, includes Pro): a direct line to a CasaTorch developer for
   custom features and hands-on help deploying CasaTorch in your home
 - **Home network planning**: a one-on-one consultation to scope your network, Wi-Fi, cameras and
