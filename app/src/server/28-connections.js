@@ -14,7 +14,7 @@ async function haDomainsNow() {
 }
 app.get('/api/connections', async (_req, res) => {
   if (isDemo() && process.env.CASATORCH_DEMO_NOHA === '1') return res.json({ demo: true, ha: { connected: false, online: false }, domains: [], direct: ['hue-local', 'shelly-local', 'frigate', 'yolink-cloud', 'calendars', 'sports', 'news'], counts: { hue: 3, shelly: 2, camera: 4, yolink: 1 } });
-  if (isDemo()) return res.json({ demo: true, ha: { connected: true, online: true }, domains: ['hue', 'ring', 'zwave_js', 'ecobee', 'enphase_envoy', 'opower'], direct: ['hue-local', 'shelly-local', 'frigate', 'yolink-cloud', 'calendars', 'sports', 'news'], counts: { ha: 18, hue: 3, shelly: 2, camera: 3, yolink: 1 } });
+  if (isDemo()) return res.json({ demo: true, ha: { connected: true, online: true }, domains: ['hue', 'ring', 'zwave_js', 'ecobee', 'enphase_envoy', 'opower'], direct: ['hue-local', 'shelly-local', 'frigate', 'yolink-cloud', 'calendars', 'sports', 'news'], counts: Object.fromEntries(Object.entries((await houseDevices()).devices.reduce((a, d) => ({ ...a, [d.provider]: (a[d.provider] || 0) + 1 }), {}))) });
   const c = config, cams = c.cameras || [], net = c.network || {};
   const direct = [
     cams.some((x) => x.type === 'frigate') && 'frigate', cams.some((x) => x.type === 'reolink') && 'reolink-local', cams.some((x) => x.type === 'snapshot') && 'snapshot',
