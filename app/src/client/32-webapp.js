@@ -90,7 +90,7 @@ async function remoteCard() {
       if (r.why) add(el('p', { class: 'small bad' }, r.why));
       return;
     }
-    const st = { connected: ['good', 'Connected'], connecting: ['warn', 'Connecting…'], downloading: ['warn', 'Getting ready…'], error: ['bad', 'Not working'] }[r.state] || ['warn', r.state];
+    const st = { connected: ['good', 'Connected'], connecting: ['warn', 'Connecting…'], downloading: ['warn', 'Getting ready…'], off: ['warn', 'Starting…'], error: ['bad', 'Not working'] }[r.state] || ['warn', r.state];
     const qr = el('div', { class: 'qr', style: 'width:150px;height:150px;background:#fff;border-radius:12px;padding:8px' }); qr.innerHTML = r.qr || '';   // server-made SVG
     add(el('div', { class: 'row', style: 'gap:8px;align-items:center' }, el('span', { class: `dot ${st[0]}` }), el('b', {}, st[1])),
       el('p', {}, el('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.url)),
