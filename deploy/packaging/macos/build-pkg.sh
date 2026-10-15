@@ -2,7 +2,7 @@
 # Builds dist/CasaTorch-macOS.pkg (Apple silicon and Intel) from dist/bundle - run on a Mac.
 # Installs to /Library/CasaTorch with its own Node.js, runs as a background service (LaunchDaemon
 # com.casatorch.server, user "nobody") that starts with the Mac, settings in /Library/Application Support/CasaTorch.
-# Signing: set PKG_SIGN_ID="Developer ID Installer: ..." to sign; notarize afterwards with notarytool.
+# Signing: set PKG_SIGN_ID="Developer ID Installer: ..." to sign (the release workflow does this and notarizes when its secrets are set).
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
 BUNDLE=$ROOT/dist/bundle; [ -d "$BUNDLE" ] || "$ROOT/deploy/packaging/bundle.sh"
