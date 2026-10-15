@@ -25,7 +25,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---- shell ---- */
 .shell { display: grid; grid-template-columns: 92px 1fr; min-height: 100vh; }
 .rail { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 0; border-right: 1px solid var(--line); background: var(--rail-bg); backdrop-filter: blur(14px); }
-.logo { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--on-accent); margin-bottom: 14px; box-shadow: 0 8px 24px rgba(94, 184, 255, .25); }
+.logo { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; background: #0f172a; border: 1px solid rgba(125, 211, 252, .22); color: #7dd3fc; margin-bottom: 14px; box-shadow: 0 8px 24px rgba(94, 184, 255, .25); }
 .nav { display: flex; flex-direction: column; gap: 4px; flex: 1; overflow-y: auto; scrollbar-width: none; }
 .nav a { position: relative; width: 72px; padding: 9px 4px 7px; border-radius: 14px; color: var(--muted); text-decoration: none; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; transition: background .15s, color .15s; }
 .nav a svg { width: 22px; height: 22px; }
