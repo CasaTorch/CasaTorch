@@ -130,5 +130,36 @@ await t('secure access: Basic works from home only (IPv4 exact, IPv6 same networ
   assert.ok(!(await H.fromHome('2001:db8:aa:cc::1')), 'a different network');
 });
 
+t('weekly report: totals, change, always-on and top device from day records', () => {
+  const days = {};
+  for (let i = 0; i < 14; i++) {
+    const k = H.addDays('2026-10-14', -i);
+    days[k] = { wh: i < 7 ? 20_000 : 25_000, peakW: 5000 + i, peakAt: `${k}T02:00:00.000Z`, nightMinW: 300, dev: { 'ev': ['Car charger', i < 7 ? 6000 : 9000], fridge: ['Fridge', 1500] }, alerts: i === 2 ? { warning: 1 } : {}, titles: { 'Doorbell: Front': 1 }, netDownMin: i === 1 ? 30 : 0 };
+  }
+  const s = H.weekStats(days, '2026-10-14');
+  assert.equal(s.from, '2026-10-08'); assert.equal(s.kwh, 140); assert.equal(s.prevKwh, 175); assert.equal(s.changePct, -20);
+  assert.equal(s.alwaysOnW, 300); assert.equal(s.topDevices[0].name, 'Car charger'); assert.equal(s.topDevices[0].kwh, 42);
+  assert.equal(s.alerts.warning, 1); assert.equal(s.internetDownMin, 30); assert.deepEqual(s.repeatedAlerts, [{ title: 'Doorbell: Front', times: 7 }]);
+  const r = H.ruleReport(s);
+  assert.match(r.summary, /140 kWh/); assert.match(r.summary, /20% less/); assert.match(r.summary, /internet was down for about 30 minutes/);
+  assert.ok(r.tips.some((x) => /300 W stays on/.test(x))); assert.ok(r.tips.some((x) => /came up 7 times/.test(x))); assert.ok(r.tips.length <= 5);
+});
+t('weekly report: a first week with no earlier data has no comparison', () => {
+  const s = H.weekStats({ '2026-10-14': { wh: 9000, dev: {}, alerts: {}, titles: {} } }, '2026-10-14');
+  assert.equal(s.daysWithData, 1); assert.equal(s.prevKwh, null); assert.equal(s.changePct, null);
+  assert.match(H.ruleReport(s).summary, /9 kWh over its first day of history\./);
+});
+
+await t('history: a sample records the day and counts new alerts once', async () => {
+  const now = Date.parse('2026-10-14T18:00:00Z');
+  H.alerts.events.unshift({ at: new Date(now - 60_000).toISOString(), id: 'leak:x:1', severity: 'critical', title: 'Water detected: Laundry' }, { at: new Date(now - 90_000).toISOString(), id: 'cleared:x', severity: 'ok', title: 'Cleared: x' });
+  H.hist.seenAlertAt = null; H.hist.last = null;
+  await H.historySample(now);
+  await H.historySample(now + 5 * 60_000);
+  const day = H.hist.days['2026-10-14'];
+  assert.ok(day, 'a record for the house-time day'); assert.equal(day.n, 2);
+  assert.equal(day.alerts.critical, 1, 'counted once, cleared ones ignored'); assert.equal(day.titles['Water detected: Laundry'], 1);
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);

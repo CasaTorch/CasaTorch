@@ -325,3 +325,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .card h3.sub { margin: 16px 0 6px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .card p.good { color: var(--good); } .field.check { display: flex; gap: 8px; align-items: center; }
 .field.check { display: flex !important; flex-direction: row; gap: 10px; align-items: center; } .field.check input[type=checkbox] { width: 18px; height: 18px; flex: none; margin: 0; accent-color: var(--accent); }
+
+/* Energy history and the weekly report */
+.hist-chart { width: 100%; min-height: 150px; margin-top: 6px; } .hist-chart svg { display: block; }
+.hist-chart .bar { fill: var(--accent); opacity: .85; } .hist-chart .bar:hover { opacity: 1; } .hist-chart .bar.partial { opacity: .4; }
+.hist-chart .grid { stroke: var(--line); stroke-width: 1; } .hist-chart .axis { fill: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.report .rtitle { font-size: 18px; font-weight: 650; }
+.report .rsum { margin: 8px 0 14px; line-height: 1.55; max-width: 72ch; }
+.report .rstats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.report .rstat { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; display: grid; gap: 2px; min-width: 96px; }
+.report .rstat b { font-size: 17px; font-variant-numeric: tabular-nums; } .report .rstat span { font-size: 12px; color: var(--muted); }
+.report .rtips { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 7px; line-height: 1.5; max-width: 76ch; }
+.report .rmore summary { cursor: pointer; color: var(--muted); font-size: 13px; }
