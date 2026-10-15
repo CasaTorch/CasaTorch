@@ -23,7 +23,7 @@
  * ====================================================================== */
 const USERS_FILE = path.join(DATA_DIR, 'users.json'), SESS_FILE = path.join(DATA_DIR, 'sessions.json');
 const AUDIT_FILE = path.join(DATA_DIR, 'audit.log');
-const TERMS_VERSION = '2026-10-14';
+const TERMS_VERSION = '2026-10-15';
 const ROLES = ['viewer', 'member', 'admin', 'owner'], rank = (r) => ROLES.indexOf(r);
 const IDLE_DAYS = 30, PANEL_DAYS = 365;
 const writeSecretJson = (file, obj) => writeFileSafe(file, JSON.stringify(obj, null, 2), 0o600);
