@@ -55,7 +55,7 @@ function housePower(devices) {
    a relay named "garage", a "gate" button, an "unlock" script or a "disarm" scene is treated the same way.
    Covers can always be closed and stopped; opening is only for blinds, shades, curtains and the like.
    An owner can allow a specific device in Settings > Security if the name caught it by mistake. */
-const SAFE_COVERS = new Set(['blind', 'shade', 'curtain', 'shutter', 'awning', 'window', 'damper']);
+const SAFE_COVERS = new Set(['blind', 'shade', 'curtain', 'shutter', 'awning', 'window', 'damper', 'water']);   // 'water': a water valve
 const RISKY_NAME = /garage|\bgates?\b|gate_|door(?!bell|_?sensor|_?contact)|\block|unlock|disarm|\balarm|opener|deadbolt/i;
 function riskOf(d) {
   if (!d) return null;

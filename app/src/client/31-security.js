@@ -132,15 +132,19 @@ async function safetyCard() {
   const card = el('div', { class: 'card' }, el('h2', {}, icon('lock', 15), 'Safety'),
     el('p', { class: 'small muted', style: 'margin-top:0' }, 'CasaTorch never unlocks doors, opens garage doors or gates, or disarms alarms. It also holds back switches, buttons and scripts whose names look like one of those (a "garage" relay, an "unlock" script). Covers can always be closed.'));
   const list = el('div'); card.append(list);
+  let all = false, q = '';
   const draw = async () => {
     const r = await api('/api/safety').catch(() => ({ held: [] }));
-    list.replaceChildren(...(r.held.length ? r.held.map((d) => el('div', { class: 'row between', style: 'gap:8px;margin:6px 0' },
+    const find = q.toLowerCase(), held = r.held.filter((d) => !find || d.name.toLowerCase().includes(find)), shown = all || find ? held : held.slice(0, 6);
+    const search = r.held.length > 6 ? el('input', { type: 'search', placeholder: `Search ${r.held.length} held-back devices`, value: q, oninput: (e) => { q = e.target.value; draw().then(() => { const n = list.querySelector('input[type=search]'); n?.focus(); n?.setSelectionRange(q.length, q.length); }); } }) : null;
+    const more = !all && !find && held.length > shown.length ? el('button', { class: 'btn small ghost', onclick: () => { all = true; draw(); } }, `Show all ${held.length}`) : null;
+    list.replaceChildren(...[search].filter(Boolean), ...(shown.length ? shown.map((d) => el('div', { class: 'row between', style: 'gap:8px;margin:6px 0' },
       el('span', {}, d.name, el('small', { class: 'muted' }, ` · ${d.allowed ? 'allowed' : 'held back'}`)),
-      owner && d.kind !== 'cover' ? el('button', { class: `btn small${d.allowed ? '' : ' ghost'}`, onclick: async () => {
-        if (!d.allowed && !confirm(`Allow CasaTorch to switch "${d.name}"? Only do this if it is not a door, gate, lock or alarm.`)) return;
+      owner ? el('button', { class: `btn small${d.allowed ? '' : ' ghost'}`, onclick: async () => {
+        if (!d.allowed && !confirm(d.kind === 'cover' ? `Allow CasaTorch to open "${d.name}"? Only do this for blinds, shades or curtains - never a garage door, gate or door.` : `Allow CasaTorch to switch "${d.name}"? Only do this if it is not a door, gate, lock or alarm.`)) return;
         await post(`/api/safety/${encodeURIComponent(d.id)}`, { allow: !d.allowed }, 'PUT').catch((e) => toast(e.message)); draw();
       } }, d.allowed ? 'Hold back again' : 'Allow') : null))
-      : [el('p', { class: 'small muted' }, 'Nothing is being held back.')]));
+      : [el('p', { class: 'small muted' }, find ? 'No match.' : 'Nothing is being held back.')]), ...[more].filter(Boolean));
   };
   draw(); return card;
 }
