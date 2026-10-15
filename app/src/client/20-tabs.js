@@ -46,10 +46,15 @@ tab({ id: 'controls', label: 'Controls', icon: 'sliders', async render(main) {
 
 /* ---- Cameras ---- */
 tab({ id: 'cameras', label: 'Cameras', icon: 'camera', async render(main) {
-  const { devices = [] } = await api('/api/devices');
-  const cams = devices.filter((d) => d.kind === 'camera');
-  main.replaceChildren(cams.length ? el('div', { class: 'cams' }, cams.map(camView)) : el('div', { class: 'card empty' }, 'No cameras yet. Frigate, Reolink, any camera with a snapshot address, and Ring (Pro) can be added in setup.'));
-  return () => main.querySelectorAll('.cam img').forEach((img, i) => { img.src = `${snapUrl(cams[i])}?t=${Date.now()}`; });
+  // Each camera tile keeps itself fresh (camView); the 30-second refresh only adds or removes cameras.
+  let ids = '';
+  const draw = async () => {
+    const { devices = [] } = await api('/api/devices');
+    const cams = devices.filter((d) => d.kind === 'camera'), now = cams.map((d) => d.id).join('|');
+    if (now === ids && main.firstChild) return; ids = now;
+    main.replaceChildren(cams.length ? el('div', { class: 'cams' }, cams.map(camView)) : el('div', { class: 'card empty' }, 'No cameras yet. Add Frigate, Reolink, any camera with a snapshot address, Ring (Pro) or cameras in Home Assistant from Connect.'));
+  };
+  await draw(); return draw;
 } });
 
 /* ---- Network ---- */

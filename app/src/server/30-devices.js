@@ -11,6 +11,49 @@
  * Home Assistant when it is connected (32-ha.js). Ring is Pro (31-ring.js).
  * ====================================================================== */
 const PROVIDERS = {};   // name -> { list(): Promise<device[]>, act?(device, action, value) }
+/* ---- Integrations: one call, and a brand shows up everywhere ----
+   integration({
+     id: 'acme',                       // also the device id prefix: 'acme:<id>'
+     label: 'Acme cameras', group: 'cameras' | 'controls' | 'sensors' | 'network' | 'energy' | 'day',
+     desc: 'What it brings in', how: 'direct' | 'pro' | 'ha',
+     href: '#network',                 // where in CasaTorch it's connected (or step/add for the setup wizard)
+     replaces: ['old-catalog-key'],    // catalog cards this one stands in for on the Connect page
+     connected: () => boolean,
+     list: async () => devices,        // as any provider; cameras add camDevice('acme', id, {...})
+     act: async (device, action, value) => ...,
+     camera: { every: 3000, idle: 60000, snapshot: async (id) => ({ buf, type }), live: async (id) => ({ url, headers }) },
+   })
+   The Connect page lists it with its status, its devices join Home, Controls, Cameras, 3D, alerts and Ask,
+   and cameras get pictures (cached, conditional, at the integration's own pace) and live video for free. */
+const INTEGRATIONS = new Map();
+function integration(def) {
+  INTEGRATIONS.set(def.id, def);
+  if (def.list) PROVIDERS[def.id] = { list: def.list, ...(def.act ? { act: def.act } : {}) };
+  return def;
+}
+/** The standard camera fields for an integration's camera. */
+const camDevice = (integ, id, extra = {}) => {
+  const def = INTEGRATIONS.get(integ), enc = encodeURIComponent(id);
+  return { id: `${integ}:${id}`, provider: integ, kind: 'camera', online: true, ...extra, snapshot: `/api/cam/${integ}/${enc}/snapshot`, every: def?.camera?.every || 3000, ...(def?.camera?.live ? { stream: `/api/cam/${integ}/${enc}/live` } : {}) };
+};
+app.get('/api/cam/:integ/:id/snapshot', async (req, res) => {
+  const def = INTEGRATIONS.get(req.params.integ), id = String(req.params.id);
+  if (!def?.camera?.snapshot || (def.pro && !proStatus().pro)) return res.status(404).end();
+  if (def.camera.known && !(await def.camera.known(id))) return res.status(404).end();
+  return sendSnap(req, res, `${def.id}:${id}`, () => def.camera.snapshot(id), { every: def.camera.every, idle: def.camera.idle });
+});
+app.get('/api/cam/:integ/:id/live', async (req, res) => {
+  const def = INTEGRATIONS.get(req.params.integ), id = String(req.params.id);
+  if (!def?.camera?.live || (def.pro && !proStatus().pro)) return res.status(404).end();
+  if (def.camera.known && !(await def.camera.known(id))) return res.status(404).end();
+  try { const up = await def.camera.live(id); if (!up?.url) return res.status(404).end(); return mjpegPass(req, res, `${def.id}:${id}`, up.url, up.headers); }
+  catch { return res.status(502).end(); }
+});
+/* What's registered, and whether each is connected - the Connect page shows these next to the catalog. */
+app.get('/api/integrations', async (_req, res) => {
+  const counts = {}; for (const d of (await houseDevices().catch(() => ({ devices: [] }))).devices) counts[d.provider] = (counts[d.provider] || 0) + 1;
+  res.json({ integrations: [...INTEGRATIONS.values()].filter((d) => d.label).map((d) => ({ id: d.id, label: d.label, group: d.group || 'controls', desc: d.desc || '', how: d.how || 'direct', href: d.href || null, step: d.step || null, add: d.add || null, replaces: d.replaces || [], connected: (() => { try { return !!d.connected?.(); } catch { return false; } })(), devices: counts[d.id] || 0 })) });
+});
 async function allDevices() {
   const out = [], errors = [];
   // Providers in parallel, each capped at 6 s, so one dead bridge never stalls the screen.
@@ -181,34 +224,21 @@ const CAMERA_SNAPSHOT = {
   snapshot: (c) => fetchImage(c.snapshotUrl, c.username, c.password),
 };
 PROVIDERS.camera = {
-  async list() { return (config.cameras || []).map((c) => ({ id: `camera:${c.id}`, provider: 'camera', kind: 'camera', name: c.name, source: c.type, live: c.type === 'frigate', stream: c.type === 'frigate' ? `/api/cameras/${encodeURIComponent(c.id)}/live` : undefined, online: true })); },
+  async list() { return (config.cameras || []).map((c) => ({ id: `camera:${c.id}`, provider: 'camera', kind: 'camera', name: c.name, source: c.type, live: c.type === 'frigate', stream: c.type === 'frigate' ? `/api/cameras/${encodeURIComponent(c.id)}/live` : undefined, snapshot: `/api/cameras/${encodeURIComponent(c.id)}/snapshot`, every: 2000, online: true })); },
 };
 /* Ready pictures for every camera soon after start-up, so the first look is never blank. */
 setTimeout(() => { if (!isDemo()) for (const c of config.cameras || []) if (CAMERA_SNAPSHOT[c.type]) snapRefresh(snapEntry(`camera:${c.id}`, () => CAMERA_SNAPSHOT[c.type](c), 'local')); }, 2000).unref?.();
-/* Live video for Frigate cameras: Frigate's own MJPEG stream, passed through (the browser shows it in a
-   plain <img>). At most 3 viewers per camera; the upstream stream closes the moment the viewer leaves. */
-const LIVE_VIEWERS = new Map();
+/* Live video for Frigate cameras: Frigate's own MJPEG stream, passed through (mjpegPass in 29-camcache.js). */
 app.get('/api/cameras/:id/live', async (req, res) => {
   const c = (config.cameras || []).find((x) => x.id === req.params.id);
   if (!c || c.type !== 'frigate') return res.status(404).end();
-  const n = LIVE_VIEWERS.get(c.id) || 0;
-  if (n >= 3) return res.status(429).json({ error: 'three screens are already watching this camera live' });
-  const ac = new AbortController(); LIVE_VIEWERS.set(c.id, n + 1);
-  const done = () => { ac.abort(); LIVE_VIEWERS.set(c.id, Math.max(0, (LIVE_VIEWERS.get(c.id) || 1) - 1)); };
-  req.on('close', done);
-  try {
-    const up = await fetch(`${String(c.url).replace(/\/+$/, '')}/api/${encodeURIComponent(c.camera)}?h=720&fps=10&bbox=0&timestamp=0&zones=0&mask=0&motion=0&regions=0`, { signal: ac.signal });
-    if (!up.ok || !up.body) { res.status(502).end(); return; }
-    res.setHeader('Content-Type', /^multipart\/x-mixed-replace(;\s*boundary=[\w'()+,./:=?-]{1,70})?$/i.test(up.headers.get('content-type') || '') ? up.headers.get('content-type') : 'multipart/x-mixed-replace'); res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Accel-Buffering', 'no');
-    for await (const chunk of up.body) { if (!res.write(chunk)) await new Promise((ok) => res.once('drain', ok)); }
-    res.end();
-  } catch { if (!res.headersSent) res.status(502).end(); else res.end(); }
+  return mjpegPass(req, res, `camera:${c.id}`, `${String(c.url).replace(/\/+$/, '')}/api/${encodeURIComponent(c.camera)}?h=720&fps=10&bbox=0&timestamp=0&zones=0&mask=0&motion=0&regions=0`);
 });
 app.get('/api/cameras/:id/snapshot', async (req, res) => {
   if (isDemo()) {   // a drawn stand-in so the demo has pictures
     const name = String(req.params.id).replace(/[^\w -]/g, ''), t = new Date().toLocaleTimeString('en-US');
     res.setHeader('Content-Type', 'image/svg+xml'); res.setHeader('Cache-Control', 'no-store');
-    return res.end(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e3a5f"/><stop offset="1" stop-color="#0b1220"/></linearGradient></defs><rect width="640" height="360" fill="url(#g)"/><rect y="250" width="640" height="110" fill="#14301f"/><rect x="250" y="120" width="140" height="140" fill="#3b2f2a"/><polygon points="240,125 320,70 400,125" fill="#5b3b30"/><rect x="300" y="190" width="40" height="70" fill="#1f160f"/><text x="16" y="30" fill="#fff" font-family="monospace" font-size="18">${name.toUpperCase()}  DEMO</text><text x="16" y="345" fill="#fff" font-family="monospace" font-size="16">${t}</text></svg>`);
+    return res.end(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e3a5f"/><stop offset="1" stop-color="#0b1220"/></linearGradient></defs><rect width="640" height="360" fill="url(#g)"/><rect y="250" width="640" height="110" fill="#14301f"/><rect x="250" y="120" width="140" height="140" fill="#3b2f2a"/><polygon points="240,125 320,70 400,125" fill="#5b3b30"/><rect x="300" y="190" width="40" height="70" fill="#1f160f"/><text x="16" y="30" fill="#fff" font-family="monospace" font-size="18">${name.toUpperCase()}  DEMO</text><text x="624" y="30" text-anchor="end" fill="#fff" font-family="monospace" font-size="16">${t}</text></svg>`);
   }
   const c = (config.cameras || []).find((x) => x.id === req.params.id);
   if (!c || !CAMERA_SNAPSHOT[c.type]) return res.status(404).end();

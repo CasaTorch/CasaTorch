@@ -22,7 +22,7 @@ async function ringConnect() {
     ring.api.onRefreshTokenUpdated.subscribe(({ newRefreshToken }) => { saveConfig({ ...config, ring: { ...config.ring, refreshToken: newRefreshToken } }); });
     ring.cameras = await ring.api.getCameras();
     // Ready pictures for every Ring camera from the start (refreshed once a minute until someone watches).
-    for (const cam of ring.cameras) { const e = snapEntry(`ring:${cam.id}`, async () => ({ buf: await cam.getSnapshot(), type: 'image/jpeg' }), 'ring'); snapRefresh(e); }
+    for (const cam of ring.cameras) { const e = snapEntry(`ring:${cam.id}`, async () => ({ buf: await cam.getSnapshot(), type: 'image/jpeg' }), ringBeat(cam)); snapRefresh(e); }
     for (const cam of ring.cameras) {
       cam.onDoorbellPressed?.subscribe(() => ringEvent(cam, 'doorbell'));
       cam.onMotionDetected?.subscribe((m) => { if (m) ringEvent(cam, 'motion'); });
@@ -69,6 +69,10 @@ app.get('/api/ring/status', requirePro, (_req, res) => res.json({ connected: !!r
 app.get('/api/ring/:id/snapshot', requirePro, async (req, res) => {
   const cam = ring.cameras.find((c) => String(c.id) === req.params.id);
   if (!cam) return res.status(404).end();
-  return sendSnap(req, res, `ring:${cam.id}`, async () => ({ buf: await cam.getSnapshot(), type: 'image/jpeg' }), 'ring');
+  return sendSnap(req, res, `ring:${cam.id}`, async () => ({ buf: await cam.getSnapshot(), type: 'image/jpeg' }), ringBeat(cam));
 });
-PROVIDERS.ring = { async list() { return proStatus().pro ? ring.cameras.map((c) => ({ id: `ring:${c.id}`, provider: 'ring', kind: 'camera', name: c.name, battery: c.batteryLevel ?? null, online: true, snapshot: `/api/ring/${c.id}/snapshot` })) : []; } };
+/* Battery Ring cameras sleep to save power: waking one for a picture every few seconds would drain it in days,
+   so they get a new picture every 20 s while someone is looking and every 10 minutes otherwise (and always
+   right away on a ring or motion). Wired ones: every 4 s while watched. */
+const ringBeat = (c) => (c.hasBattery ? { every: 20_000, idle: 10 * 60_000 } : { every: 4000, idle: 60_000 });
+PROVIDERS.ring = { async list() { return proStatus().pro ? ring.cameras.map((c) => ({ id: `ring:${c.id}`, provider: 'ring', kind: 'camera', name: c.name, battery: c.batteryLevel ?? null, online: !c.isOffline, source: c.hasBattery ? 'Ring (battery)' : 'Ring', snapshot: `/api/ring/${c.id}/snapshot`, every: c.hasBattery ? 20_000 : 4000 })) : []; } };

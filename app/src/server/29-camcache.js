@@ -17,10 +17,14 @@
 const SNAP = new Map();   // key -> { buf, type, at, etag, err, inflight, fetcher, every, wanted }
 const SNAP_EVERY = { local: 2000, ring: 4000, ha: 3000 };
 const SNAP_IDLE = 60_000, SNAP_WATCH = 60_000;
+/* `kind` is a known cadence ('local', 'ring', 'ha') or { every, idle } in ms - an integration's own beat
+   (a battery doorbell is woken far less often than a wired camera, so it lasts). */
 function snapEntry(key, fetcher, kind) {
+  const beat = typeof kind === 'object' && kind ? kind : { every: SNAP_EVERY[kind] || 3000 };
   let e = SNAP.get(key);
-  if (!e) { e = { buf: null, type: 'image/jpeg', at: 0, etag: null, err: null, inflight: null, fetcher, every: SNAP_EVERY[kind] || 3000, wanted: 0 }; SNAP.set(key, e); }
+  if (!e) { e = { buf: null, type: 'image/jpeg', at: 0, etag: null, err: null, inflight: null, fetcher, wanted: 0 }; SNAP.set(key, e); }
   e.fetcher = fetcher;   // the camera's settings may have changed
+  e.every = beat.every || 3000; e.idle = beat.idle || SNAP_IDLE;
   return e;
 }
 function snapRefresh(e) {
@@ -60,7 +64,29 @@ setInterval(() => {
   for (const e of SNAP.values()) {
     const watched = now - e.wanted < SNAP_WATCH;
     // timed start-to-start, so a slow camera (or Ring's servers) still gets a new picture on its beat
-    const due = now - (e.started || 0) >= (watched ? e.every : SNAP_IDLE) && !(e.err && now - (e.errAt || 0) < 10_000);
+    const due = now - (e.started || 0) >= (watched ? e.every : e.idle || SNAP_IDLE) && !(e.err && now - (e.errAt || 0) < 10_000);
     if (due) snapRefresh(e);
   }
 }, 500).unref?.();
+
+/* Live video as MJPEG, passed straight through to a plain <img> (Frigate, Home Assistant, any integration
+   that offers it). At most 3 viewers per camera, and the upstream connection closes the moment the viewer
+   leaves, so a forgotten tab never keeps a camera streaming. */
+const LIVE_VIEWERS = new Map();
+async function mjpegPass(req, res, key, url, headers = {}) {
+  const n = LIVE_VIEWERS.get(key) || 0;
+  if (n >= 3) return res.status(429).json({ error: 'three screens are already watching this camera live' });
+  const ac = new AbortController(); LIVE_VIEWERS.set(key, n + 1);
+  let left = false; const done = () => { if (left) return; left = true; ac.abort(); LIVE_VIEWERS.set(key, Math.max(0, (LIVE_VIEWERS.get(key) || 1) - 1)); };
+  res.on('close', done);   // the viewer left (req 'close' fires as soon as a GET's empty body is read)
+  try {
+    const up = await fetch(url, { headers, signal: ac.signal });
+    const type = up.headers.get('content-type') || '';
+    if (!up.ok || !up.body || !/^multipart\/x-mixed-replace/i.test(type)) { res.status(502).end(); return; }
+    res.setHeader('Content-Type', /^multipart\/x-mixed-replace(;\s*boundary=[\w'()+,./:=?-]{1,70})?$/i.test(type) ? type : 'multipart/x-mixed-replace');
+    res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Accel-Buffering', 'no');
+    for await (const chunk of up.body) { if (left) break; if (!res.write(chunk)) await new Promise((ok) => res.once('drain', ok)); }
+    res.end();
+  } catch { if (!res.headersSent) res.status(502).end(); else res.end(); }
+  finally { done(); }
+}

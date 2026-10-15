@@ -6,7 +6,7 @@
 2. Put your own names, plates, network names and address in `tools/private-terms.txt`
    (git-ignored) so the hook catches those too.
 3. Use example values in code and docs: `192.168.1.10`, `example.com`, `Q2XX-XXXX-XXXX`.
-4. New integrations go in `app/src/providers/<name>` and must work when not configured
+4. New integrations are one file in `app/src/server/` registered with `integration()` - see [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md). They must work (and stay quiet) when not configured
    (the tab shows "not set up", never an error).
 5. By sending a pull request you agree your contribution may also be included in CasaTorch Pro
    (a short contributor license agreement will be added before the first release).

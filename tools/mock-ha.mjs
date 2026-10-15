@@ -13,6 +13,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 const PORT = Number(process.argv[2] || 18123), TOKEN = 'test-token';
+let streamsOpen = 0;   // how many live camera streams are open (to check viewers really close them)
 /* With a second argument (e.g. 1500) it also pretends to be a big, messy house: that many entities across
    every domain Home Assistant has, with odd states (unavailable, unknown, empty), odd units, long and
    non-English names, and no device_class where people forget one - for testing that CasaTorch copes. */
@@ -77,7 +78,14 @@ const server = http.createServer((req, res) => {
     if (req.method === 'GET' && u === '/api/states') return send(res, 200, STATES);
     if (req.method === 'GET' && u === '/api/services') return send(res, 200, [{ domain: 'notify', services: { mobile_app_phone_one: {}, mobile_app_phone_two: {}, persistent_notification: {} } }]);
     if (req.method === 'POST' && u === '/api/template') return send(res, 200, NAMES.map((name, k) => ({ name, ids: STATES.filter((_, i) => i % NAMES.length === k).map((x) => x.entity_id) })));
-    if (req.method === 'GET' && u.startsWith('/api/camera_proxy/')) { res.writeHead(200, { 'Content-Type': 'image/jpeg' }); return res.end(Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==', 'base64')); }
+    if (req.method === 'GET' && u.startsWith('/api/camera_proxy_stream/')) {   // MJPEG: a frame every 200 ms until the viewer leaves
+      const jpg = Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==', 'base64');
+      res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame' });
+      const tick = setInterval(() => res.write(Buffer.concat([Buffer.from(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpg.length}\r\n\r\n`), jpg, Buffer.from('\r\n')])), 200);
+      res.on('close', () => { clearInterval(tick); streamsOpen--; }); streamsOpen++; return;
+    }
+    if (req.method === 'GET' && u === '/mock/streams') return send(res, 200, { open: streamsOpen });
+    if (req.method === 'GET' && u.startsWith('/api/camera_proxy/')) return setTimeout(() => { res.writeHead(200, { 'Content-Type': 'image/jpeg' }); res.end(Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==', 'base64')); }, 300);   // a camera takes a moment
     const sv = u.match(/^\/api\/services\/(\w+)\/(\w+)$/);
     if (req.method === 'POST' && sv) { CALLS.push(`${sv[1]}.${sv[2]} ${j?.entity_id || ''}`); console.log('service call:', sv[1], sv[2], j?.entity_id || j?.title || ''); return send(res, 200, []); }
     if (req.method === 'GET' && u === '/api/config/config_entries/flow') return send(res, 200, [{ flow_id: 'disc1abc', handler: 'sonos', step_id: 'discovery_confirm', context: { source: 'zeroconf', title_placeholders: { name: 'Sonos Arc' }, unique_id: 'RINCON_1' } }]);

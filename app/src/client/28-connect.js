@@ -143,9 +143,13 @@ async function haAnyModal(conn, after) {
 }
 tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
   setTop('Connect', 'Everything CasaTorch works with - add anything in a few clicks');
-  const [cat, conn] = await Promise.all([api('/api/catalog'), api('/api/connections').catch(() => ({ ha: {}, domains: [], direct: [], counts: {} }))]);
-  const items = connectItems(cat);
-  const isOn = (it) => it.ids.some((id) => conn.direct.includes(id)) || (it.domain && conn.domains.includes(it.domain));
+  const [cat, conn, reg] = await Promise.all([api('/api/catalog'), api('/api/connections').catch(() => ({ ha: {}, domains: [], direct: [], counts: {} })), api('/api/integrations').catch(() => ({ integrations: [] }))]);
+  // Integrations registered in the app (integration() on the server) show up here by themselves, standing in
+  // for any catalog card they replace.
+  const replaced = new Set(reg.integrations.flatMap((r) => r.replaces));
+  const items = [...connectItems(cat).filter((it) => !replaced.has(it.key)),
+    ...reg.integrations.map((r) => ({ key: r.id, label: r.label, desc: r.desc, how: r.how, groups: [r.group], href: r.href, step: r.step, add: r.add, ids: [r.id], connected: r.connected, devices: r.devices }))];
+  const isOn = (it) => !!it.connected || it.ids.some((id) => conn.direct.includes(id)) || (it.domain && conn.domains.includes(it.domain));
   const total = Object.values(conn.counts || {}).reduce((s, n) => s + n, 0), fromHa = conn.counts?.ha || 0, live = items.filter(isOn).length;
   const ha = conn.ha?.connected;
   main.append(el('div', { class: 'connect-hero card' },
@@ -166,7 +170,7 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
     return el('div', { class: `connect-card${on ? ' on' : ''}` },
       el('div', { class: 'row', style: 'gap:12px;align-items:center' }, monogram(it.label), el('div', { style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, it.label), el('div', { class: 'row', style: 'gap:6px;margin-top:3px' }, on ? el('span', { class: 'pill good' }, '✓ Connected') : null, tag))),
       el('p', { class: 'small muted' }, it.desc || ''),
-      it.how === 'soon' ? el('button', { class: 'btn small', disabled: true }, 'Coming soon') : el('button', { class: `btn small${on ? '' : ' primary'}`, onclick: () => startConnect(it, conn) }, on ? 'Change' : it.how === 'ha' && !ha ? 'Set up' : 'Connect'));
+      it.how === 'soon' ? el('button', { class: 'btn small', disabled: true }, 'Coming soon') : it.href ? el('a', { class: `btn small${on ? '' : ' primary'}`, href: it.href }, on ? 'Open' : 'Connect') : el('button', { class: `btn small${on ? '' : ' primary'}`, onclick: () => startConnect(it, conn) }, on ? 'Change' : it.how === 'ha' && !ha ? 'Set up' : 'Connect'));
   };
   const draw = () => {
     const t = q.value.trim().toLowerCase();

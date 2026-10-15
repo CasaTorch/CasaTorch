@@ -240,5 +240,24 @@ t('Meraki MT sensors become devices the alerts understand', () => {
   assert.deepEqual([d.id, d.name, d.kind, d.tempC, d.water, d.open, d.battery, d.humidity], ['meraki:Q2XX-1', 'Garage sensor', 'sensor', 2.5, true, false, 12, 40]);
 });
 
+await t('integrations: one integration() call gives a camera cached pictures, ETags and a Connect card', async () => {
+  let calls = 0;
+  H.integration({ id: 'testcam', label: 'Test cameras', group: 'cameras', desc: 'x', connected: () => true,
+    list: async () => [H.camDevice('testcam', 'c1', { name: 'Porch' })],
+    camera: { every: 60_000, known: async (id) => id === 'c1', snapshot: async () => { calls++; return { buf: Buffer.from('fakejpeg'), type: 'image/jpeg' }; } } });
+  const d = H.camDevice('testcam', 'c1', { name: 'Porch' });
+  assert.equal(d.snapshot, '/api/cam/testcam/c1/snapshot'); assert.equal(d.stream, undefined); assert.equal(d.every, 60_000);
+  const srv = H.app.listen(0, '127.0.0.1'); await new Promise((ok) => srv.once('listening', ok)); const B = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const r1 = await fetch(B + d.snapshot), etag = r1.headers.get('etag'); assert.equal(r1.status, 200); assert.equal(await r1.text(), 'fakejpeg');
+    const r2 = await fetch(B + d.snapshot, { headers: { 'If-None-Match': etag } }); assert.equal(r2.status, 304);
+    assert.equal(calls, 1, 'the second look came from the cache');
+    assert.equal((await fetch(B + '/api/cam/testcam/other/snapshot')).status, 404, 'unknown cameras are refused');
+    assert.equal((await fetch(B + '/api/cam/testcam/c1/live')).status, 404, 'no live video unless the integration offers it');
+    const reg = await (await fetch(B + '/api/integrations')).json();
+    assert.ok(reg.integrations.some((x) => x.id === 'testcam' && x.connected && x.label === 'Test cameras'));
+  } finally { srv.close(); }
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);
