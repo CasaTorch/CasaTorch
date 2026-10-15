@@ -59,7 +59,7 @@ jobs:
       - run: mkdir -p dist && tar xzf bundle.tgz -C dist
       - run: CASATORCH_VERSION=${CASATORCH_VERSION#v} deploy/packaging/linux/build-deb.sh ${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
-        with: { name: deb-${{ matrix.arch }}, path: dist/casatorch_${{ matrix.arch }}.deb }
+        with: { name: "deb-${{ matrix.arch }}", path: "dist/casatorch_${{ matrix.arch }}.deb" }
 
   raspberry-pi:
     needs: linux
