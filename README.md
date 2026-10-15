@@ -132,9 +132,11 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 | **Ring** doorbells and cameras (Labs) | **iPhone, iPad and Android apps** |
 | **Weekly report** - every Monday: energy and cost, always-on load, alerts, internet and server downtime, with tips (written by your AI if connected) | |
 | **Server monitor** - your NAS, servers and self-hosted apps: up or down, response time, uptime, certificate expiry, alerts | |
-| **Energy history** - 2 years by day and by device (free keeps 7 days) | |
+| **Energy history** - 2 years by day and by device (free keeps 7 days), and a bill forecast | |
+| **Smart alerts** - doorbell/motion only when nobody's home; critical alerts repeat until someone taps "Got it" | |
+| **Cisco Meraki** MV cameras and MT sensors | |
 | **Network monitoring** - UniFi and Cisco Meraki (every device online/offline, clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), with alerts | |
-| | Smart alerts, self-healing, multi-home, backups |
+| | Self-healing, multi-home |
 
 Full comparison: [docs/EDITIONS.md](docs/EDITIONS.md). Where phones, tablets and the cloud fit in:
 [docs/ROADMAP.md](docs/ROADMAP.md).
