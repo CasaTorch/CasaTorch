@@ -24,6 +24,8 @@ async function allDevices() {
 /** Every device, demo or real, with the names the household gave them (Settings > Names). */
 async function houseDevices() {
   const r = isDemo() ? { devices: JSON.parse(fs.readFileSync(path.join(APP_DIR, '..', 'demo', 'floorplan', 'devices.json'), 'utf8')), errors: [] } : await allDevices();
+  // The demo "without Home Assistant" (CASATORCH_DEMO_NOHA=1): only the brands CasaTorch reaches by itself - for honest side-by-side pictures.
+  if (isDemo() && process.env.CASATORCH_DEMO_NOHA === '1') r.devices = r.devices.filter((d) => d.provider !== 'ha');
   const names = uiPrefs().deviceNames || {};
   for (const d of r.devices) { d.originalName = d.name; if (names[d.id]) d.name = names[d.id]; }
   return r;
