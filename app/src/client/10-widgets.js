@@ -265,8 +265,12 @@ widget({ id: 'photos', title: 'Photo reel', icon: 'camera', bare: true, live: tr
   const order = [...photos].sort(() => Math.random() - 0.5);
   const mk = () => el('img', { alt: '', style: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity 1.4s' });
   let front = mk(), back = mk(), i = 0; front.src = order[0].url; back.style.opacity = 0;
-  b.replaceChildren(el('div', { style: 'position:absolute;inset:0;overflow:hidden;background:#000' }, front, back)); b.parentElement.style.padding = '0';
-  if (order.length > 1) b._reel = setInterval(() => { if (!b.isConnected) return clearInterval(b._reel); i = (i + 1) % order.length; back.onload = () => { back.style.opacity = 1; front.style.opacity = 0; [front, back] = [back, front]; }; back.src = order[i].url; }, 9000);
+  /* Sample photos carry their photographer and license; your own photos show nothing over them. */
+  const credit = el('a', { class: 'photo-credit', target: '_blank', rel: 'noopener' });
+  const label = (p) => { credit.hidden = !p.credit; credit.textContent = p.credit ? `Sample photo · ${p.credit}` : ''; if (p.source) credit.href = p.source; else credit.removeAttribute('href'); };
+  label(order[0]);
+  b.replaceChildren(el('div', { style: 'position:absolute;inset:0;overflow:hidden;background:#000' }, front, back, credit)); b.parentElement.style.padding = '0';
+  if (order.length > 1) b._reel = setInterval(() => { if (!b.isConnected) return clearInterval(b._reel); i = (i + 1) % order.length; const p = order[i]; back.onload = () => { back.style.opacity = 1; front.style.opacity = 0; [front, back] = [back, front]; label(p); }; back.src = p.url; }, 9000);
 } });
 
 widget({ id: 'ask', title: 'Ask the house', icon: 'spark', pro: true, live: true, min: [3, 2], size: [5, 3], render(b) {

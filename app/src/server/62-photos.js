@@ -22,7 +22,7 @@ app.post('/api/photos', express.raw({ type: '*/*', limit: '30mb' }), (req, res) 
   res.json({ ok: true, photo: { id, url: `/api/photos/${id}` } });
 });
 app.get('/api/photos/:id', (req, res) => {
-  if (req.params.id.startsWith('demo-')) return res.type('image/svg+xml').send(demoPhotoSvg(req.params.id));
+  if (req.params.id.startsWith('demo-')) { const c = demoCredits()[Number(req.params.id.slice(5))]; return c && /^scenic-\d+\.jpg$/.test(c.file) ? res.set('Cache-Control', 'public, max-age=86400').sendFile(path.join(DEMO_PHOTO_DIR, c.file)) : res.status(404).end(); }
   if (!/^[a-f0-9]{16}\.(jpg|png|gif|webp|heic)$/.test(req.params.id)) return res.status(404).end();
   const f = path.join(PHOTO_DIR, req.params.id); if (!fs.existsSync(f)) return res.status(404).end();
   res.setHeader('Content-Type', PHOTO_TYPES.find(([ext]) => req.params.id.endsWith(`.${ext}`))[1]); res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Cache-Control', 'private, max-age=86400');
@@ -33,10 +33,9 @@ app.delete('/api/photos/:id', (req, res) => {
   try { fs.unlinkSync(path.join(PHOTO_DIR, req.params.id)); } catch { /* gone already */ }
   res.json({ ok: true });
 });
-/* Demo: painted stand-ins (no real photos ship with CasaTorch). */
-const DEMO_SCENES = [['#f97316', '#7c2d12', 'Beach sunset'], ['#22c55e', '#14532d', 'Hiking trip'], ['#60a5fa', '#1e3a8a', 'Lake day'], ['#e879f9', '#581c87', 'Birthday'], ['#facc15', '#713f12', 'Fall leaves']];
-const demoPhotos = () => DEMO_SCENES.map((_, i) => ({ id: `demo-${i}`, at: nowIso(), url: `/api/photos/demo-${i}`, demo: true }));
-function demoPhotoSvg(id) {
-  const [a, b, label] = DEMO_SCENES[Number(id.split('-')[1]) % DEMO_SCENES.length] || DEMO_SCENES[0];
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="1200" height="800" fill="url(#g)"/><circle cx="880" cy="250" r="110" fill="#fff" opacity=".35"/><path d="M0 620 L260 420 L470 560 L700 360 L1200 640 V800 H0Z" fill="#000" opacity=".28"/><text x="60" y="740" font-family="sans-serif" font-size="44" fill="#fff" opacity=".85">${label} (demo photo)</text></svg>`;
-}
+/* Demo: scenic sample photos (no people), free-licensed from Wikimedia Commons - each one's
+   author and license travel with it (demo/photos/credits.json) and show on the tile. */
+const DEMO_PHOTO_DIR = path.join(APP_DIR, '..', 'demo', 'photos');
+const demoCredits = () => { try { return JSON.parse(fs.readFileSync(path.join(DEMO_PHOTO_DIR, 'credits.json'), 'utf8')); } catch { return []; } };
+const demoPhotos = () => demoCredits().map((c, i) => ({ id: `demo-${i}`, at: nowIso(), url: `/api/photos/demo-${i}`, demo: true, caption: c.caption,
+  credit: `${c.author.replace(/\s+/g, ' ').slice(0, 60)}, ${c.license}`, source: c.source }));
