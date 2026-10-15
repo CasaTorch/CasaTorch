@@ -47,7 +47,6 @@ CasaTorch never phones home to check it.
 | Server monitor: NAS, servers and self-hosted apps - up or down, storage, temperatures | | ✓ | Coming |
 | AI reports: a plain-English weekly report on energy, security, the network and anything unusual | | ✓ | Coming |
 | Basic support: e-mail and Discord, members-only Pro channel | | ✓ | Now |
-| Service & Developer Access: custom features, hands-on deployment help, priority replies ($100/yr, includes Pro) - see [SUPPORT.md](SUPPORT.md) | | add-on | Now |
 
 \* The 3D Home tile needs Pro. 3D Home works with no special hardware if you draw your floors; LiDAR scanning needs an iPhone 12 Pro or newer *Pro* model, or an iPad Pro (2020 or newer).
 
