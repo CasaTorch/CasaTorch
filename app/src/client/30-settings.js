@@ -33,10 +33,10 @@ function helpCard() {
   const item = (title, text, price, action) => el('div', { style: 'padding:12px 0;border-top:1px solid var(--line)' }, el('div', { class: 'row between' }, el('b', {}, title), price ? el('span', { class: 'pill' }, price) : null), el('div', { class: 'small muted', style: 'margin:4px 0 8px' }, text), action);
   return el('div', { class: 'card' }, el('h2', {}, 'Help & services'),
     el('div', { class: 'row wrap', style: 'margin-bottom:6px' }, link(`${SITE}/discord`, 'Join the Discord', 'btn primary'), link('mailto:support@casatorch.com', 'E-mail support'), link(`${SITE}/docs`, 'Docs')),   // scrub-ok: the public support address
-    item('Basic support', 'E-mail and Discord help from the CasaTorch team, and the members-only Pro channel.', 'Included with Pro'),
+    item('Help', 'E-mail help from the CasaTorch team and the community Discord - for everyone.', 'Included'),
     item('Service & Developer Access', 'A direct line to a CasaTorch developer: custom features written for your home, hands-on help installing CasaTorch and setting up your wall panels, priority replies. Includes Pro.', '$100 / year', link(`${SITE}/developer`, 'Learn more', 'btn small')),
     item('Home network planning', 'A one-on-one consultation to plan your Wi-Fi, wiring, cameras, sensors and NAS - with a written plan of what to buy and where it goes.', null, link(`${SITE}/network-planning`, 'Book a consultation', 'btn small')),
-    item('CasaTorch Box', 'A Raspberry Pi 5 with CasaTorch already installed - for a second home, or a friend. Plug it in and go.', null, link(`${SITE}/box`, 'Order a Box', 'btn small')));
+    item('CasaTorch Box', 'A small box with CasaTorch already on it - for a second home, or a friend. Box Lite or Box, plug it in and go.', null, link(`${SITE}/box`, 'Order a Box', 'btn small')));
 }
 function lookCard() {
   const u = { ...S.ui };
