@@ -774,10 +774,10 @@
       },
       "branches": {
         "unifi": {
-          "note": "Network integration for UniFi (every device, Wi-Fi health and alerts) is coming to CasaTorch Pro. Today CasaTorch shows your internet status and runs speed tests."
+          "note": "With CasaTorch Pro, connect UniFi after setup in the Network tab: every UniFi device online or offline, and how many are connected. CasaTorch also shows your internet status and runs speed tests."
         },
         "meraki": {
-          "note": "Network integration for Cisco Meraki (every device, Wi-Fi health and alerts) is coming to CasaTorch Pro. Today CasaTorch shows your internet status and runs speed tests."
+          "note": "With CasaTorch Pro, connect Cisco Meraki after setup in the Network tab: every Meraki device's status, with alerts. CasaTorch also shows your internet status and runs speed tests."
         },
         "omada": {
           "note": "Omada support is planned. CasaTorch will still show your internet speed and devices from your DNS blocker."
