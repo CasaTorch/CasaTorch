@@ -682,12 +682,12 @@ function yardClick(g) {
 /* Find a car's sensors by their names - Tesla, and most EVs in Home Assistant, name them the same way. */
 function guessCar(devs) {
   const ent = (d) => d.id.replace(/^ha:[a-z_]+\./, '');
-  const plug = devs.find((d) => (d.bin || d.kind === 'switch') && /charge_cable|charger_cable|charging_cable|plugged|plug_state|_cable$/.test(ent(d)));
-  const stem = plug ? ent(plug).replace(/_?(charge_cable|charger_cable|charging_cable|plugged_in|plugged|plug_state|cable)$/, '') : '';
-  const near = (list) => list.sort((a, b) => (ent(b).startsWith(stem) ? 1 : 0) - (ent(a).startsWith(stem) ? 1 : 0))[0];
-  const power = near(devs.filter((d) => d.pw && /charger_power|charging_power|charge_power|charge_rate|charger_rate/.test(ent(d))));
-  const battery = near(devs.filter((d) => d.bat && /battery_level|battery|state_of_charge|_soc$/.test(ent(d)) && (!stem || ent(d).startsWith(stem))));
-  const home = near(devs.filter((d) => d.pres && /location|device_tracker|_car|tesla/.test(d.id) && (!stem || ent(d).startsWith(stem))));
+  const home = devs.find((d) => d.pres && /^ha:device_tracker\..*_location$/.test(d.id)) || devs.find((d) => d.pres && /tesla|car|vehicle|ev_/.test(d.id));
+  const stem = home ? ent(home).replace(/_location$/, '') : '';
+  const best = (list, ...res) => { for (const re of res) { const hit = list.find((d) => re.test(ent(d)) && (!stem || ent(d).startsWith(stem))) || list.find((d) => re.test(ent(d))); if (hit) return hit; } return null; };
+  const plug = best(devs.filter((d) => d.bin || d.kind === 'switch'), /charge_cable|charging_cable|charger_cable/, /vehicle_connected|plugged|plug_state/);
+  const power = best(devs.filter((d) => d.pw), /charger_power|charging_power|charge_power|charge_rate|charger_rate/, /wall_connector.*power|charger.*power/);
+  const battery = best(devs.filter((d) => d.bat), /battery_level$|state_of_charge|_soc$/, /tesla.*battery|car.*battery|vehicle.*battery/);
   return { plugged: plug?.id, power: power?.id, battery: battery?.id, home: home?.id };
 }
 function edYard() {
