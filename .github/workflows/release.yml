@@ -86,7 +86,9 @@ jobs:
       - run: mkdir -p dist && tar xzf bundle.tgz -C dist
       - run: deploy/packaging/fetch-node.sh win-x64 dist/node-win
       - run: choco install innosetup --no-progress -y
+      # Git Bash would turn "/DAppVersion=..." into a file path; MSYS_NO_PATHCONV keeps it as an Inno Setup option.
       - run: '"/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/DAppVersion=${CASATORCH_VERSION#v}" deploy/packaging/windows/casatorch.iss'
+        env: { MSYS_NO_PATHCONV: "1" }
       - uses: actions/upload-artifact@v4
         with: { name: windows, path: dist/CasaTorch-Setup-Windows.exe }
 
