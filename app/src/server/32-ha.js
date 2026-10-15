@@ -43,7 +43,7 @@ function haDevice(s) {
     case 'media_player': return { ...base, kind: 'media', on: !['off', 'standby', 'unavailable'].includes(s.state), playing: s.state === 'playing', title: [a.media_artist, a.media_title].filter(Boolean).join(' - ') || null, volume: a.volume_level ?? null };
     case 'climate': case 'water_heater': return { ...base, kind: 'climate', mode: s.state, tempC: haC(a.current_temperature), targetC: haC(a.temperature), humidity: a.current_humidity ?? null };
     case 'lock': return { ...base, kind: 'lock', locked: s.state === 'locked' };
-    case 'camera': return { ...base, kind: 'camera', source: 'Home Assistant' };
+    case 'camera': return { ...base, kind: 'camera', source: 'Home Assistant', snapshot: `/api/ha/camera/${encodeURIComponent(s.entity_id)}`, stream: `/api/ha/camera/${encodeURIComponent(s.entity_id)}/live`, every: 3000 };
     case 'cover': case 'valve': return { ...base, kind: 'cover', open: ['open', 'opening'].includes(s.state), position: a.current_position ?? null, risky: RISKY_COVERS.has(cls) };
     case 'scene': case 'script': case 'button': case 'input_button': return { ...base, kind: 'action' };
     case 'vacuum': case 'lawn_mower': return { ...base, kind: 'vacuum' };
@@ -104,14 +104,29 @@ PROVIDERS.ha = {
     await getJSON(`${h.url}/api/services/${domain}/${svc}`, { method: 'POST', headers: { Authorization: `Bearer ${h.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   },
 };
+/* Home Assistant cameras: live video through HA's MJPEG proxy (works for most cameras HA has: Reolink, UniFi
+   Protect, Nest, Ring and more), passed through so the token stays on the box. */
+app.get('/api/ha/camera/:entity/live', async (req, res) => {
+  const h = config.homeAssistant, ent = String(req.params.entity);
+  if (!h?.url || !/^camera\.[\w]+$/.test(ent)) return res.status(404).end();
+  if (!(await haStates().catch(() => [])).some((x) => x.entity_id === ent)) return res.status(404).end();
+  return mjpegPass(req, res, `ha:${ent}`, `${h.url}/api/camera_proxy_stream/${ent}`, { Authorization: `Bearer ${h.token}` });
+});
+/* Ready pictures for Home Assistant's cameras soon after start-up, so the first look is never blank. */
+setTimeout(async () => {
+  const h = config.homeAssistant; if (isDemo() || !h?.url) return;
+  for (const st of (await haStates().catch(() => [])).filter((x) => /^camera\./.test(x.entity_id)).slice(0, 24)) snapRefresh(snapEntry(`ha:${st.entity_id}`, () => haCameraPicture(st.entity_id), 'ha'));
+}, 4000).unref?.();
+async function haCameraPicture(ent) {
+  const h = config.homeAssistant;
+  const r = await fetch(`${h.url}/api/camera_proxy/${ent}`, { headers: { Authorization: `Bearer ${h.token}` }, signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error(`Home Assistant answered ${r.status}`);
+  return { buf: Buffer.from(await r.arrayBuffer()), type: r.headers.get('content-type') || 'image/jpeg' };
+}
 /* Home Assistant cameras: a still picture through HA's camera proxy (the token stays on the box). */
 app.get('/api/ha/camera/:entity', async (req, res) => {
   const h = config.homeAssistant, ent = String(req.params.entity);
   if (!h?.url || !/^camera\.[\w]+$/.test(ent)) return res.status(404).end();
   if (!SNAP.has(`ha:${ent}`) && !(await haStates().catch(() => [])).some((s) => s.entity_id === ent)) return res.status(404).end();   // only cameras Home Assistant really has
-  return sendSnap(req, res, `ha:${ent}`, async () => {
-    const r = await fetch(`${h.url}/api/camera_proxy/${ent}`, { headers: { Authorization: `Bearer ${h.token}` }, signal: AbortSignal.timeout(10000) });
-    if (!r.ok) throw new Error(`Home Assistant answered ${r.status}`);
-    return { buf: Buffer.from(await r.arrayBuffer()), type: r.headers.get('content-type') || 'image/jpeg' };
-  }, 'ha');
+  return sendSnap(req, res, `ha:${ent}`, () => haCameraPicture(ent), 'ha');
 });

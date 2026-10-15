@@ -380,7 +380,7 @@
               },
               {
                 "id": "meraki-mv",
-                "label": "Cisco Meraki MV (coming to Pro)",
+                "label": "Cisco Meraki MV (Pro)",
                 "method": "guide",
                 "guide": "meraki-soon"
               },
@@ -682,7 +682,7 @@
               },
               {
                 "id": "meraki-mt",
-                "label": "Cisco Meraki MT (coming to Pro)",
+                "label": "Cisco Meraki MT (Pro)",
                 "method": "guide",
                 "guide": "meraki-soon"
               },
@@ -1002,6 +1002,6 @@
     "cloud-cams": "Arlo and Eufy are cloud cameras. Add them in Home Assistant with the community integrations (HACS); CasaTorch shows them once they're there.",
     "already-in-ha": "Anything already in Home Assistant shows up in CasaTorch automatically - nothing else to do.",
     "emporia": "Emporia Vue works through a community integration (HACS). Add it in Home Assistant; CasaTorch reads it from there.",
-    "meraki-soon": "Cisco Meraki cameras (MV) and sensors (MT) are coming to CasaTorch Pro with the network integration."
+    "meraki-soon": "Cisco Meraki cameras (MV) and sensors (MT) come in with CasaTorch Pro: after setup, open the Network tab and connect Cisco Meraki with a dashboard API key. Its cameras and sensors then appear on their own."
   }
 }

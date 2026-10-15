@@ -210,7 +210,7 @@ const snapUrl = (d) => (d.snapshot ? d.snapshot : d.provider === 'ha' ? `/api/ha
    sends If-None-Match so an unchanged picture costs nothing, decodes the new one off-screen and only then
    swaps it in. Cameras that are scrolled away, or in a tab nobody is looking at, pause. */
 const CAMS = new Map();
-const camEvery = (d) => (d.provider === 'ring' ? 4000 : d.provider === 'ha' ? 3000 : 2000);
+const camEvery = (d) => Math.max(1000, d.every || (d.provider === 'ring' ? 4000 : d.provider === 'ha' ? 3000 : 2000));   // the integration's own pace
 const camSeen = 'IntersectionObserver' in window ? new IntersectionObserver((es) => { for (const e of es) { const c = e.target.__cam; if (c) c.visible = e.isIntersecting; } }) : null;
 async function camFetch(c, force = false) {
   if (c.busy || (!force && (!c.visible || document.hidden))) return;
@@ -234,7 +234,7 @@ function camView(d) {
   let c = CAMS.get(d.id);
   if (!c) {
     const img = el('img', { alt: d.name, decoding: 'async' }), age = el('span', { class: 'cam-age' }), name = el('span', {}, d.name);
-    const wrap = el('div', { class: 'cam cam-wait', onclick: () => camModal(c.d) }, img, el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, d.stream ? 'Live' : d.source || d.provider)), age);
+    const wrap = el('div', { class: 'cam cam-wait', onclick: () => camModal(c.d) }, img, el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, `${d.source || d.provider}${d.stream ? ' · live on tap' : ''}`)), age);
     c = { d, img, age, name, wrap, visible: true, last: 0, etag: null, url: null, busy: false }; wrap.__cam = c; CAMS.set(d.id, c);
     camSeen?.observe(wrap); camFetch(c, true);
   }

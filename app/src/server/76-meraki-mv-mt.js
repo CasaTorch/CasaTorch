@@ -26,28 +26,29 @@ function mtDevice(r, names) {
   }
   return d;
 }
-PROVIDERS.meraki = {
+integration({
+  id: 'meraki', pro: true,
   async list() {
     const s = merakiSrc(); if (!s || !proStatus().pro) return [];
-    const cams = merakiDevs('camera').map((c) => ({ id: `meraki:${c.serial}`, provider: 'meraki', kind: 'camera', name: c.name, online: c.online, source: 'Cisco Meraki', snapshot: `/api/meraki/${encodeURIComponent(c.serial)}/snapshot` }));
+    const cams = merakiDevs('camera').map((c) => camDevice('meraki', c.serial, { name: c.name, online: c.online, source: 'Cisco Meraki' }));
     const names = new Map(merakiDevs('sensor').map((d) => [d.serial, d.name]));
     const sensors = names.size ? (await merakiReadings(s)).filter((r) => r.serial).map((r) => mtDevice(r, names)) : [];
     return [...cams, ...sensors];
   },
-};
-SNAP_EVERY.meraki = 15000;
-app.get('/api/meraki/:serial/snapshot', requirePro, async (req, res) => {
-  const s = merakiSrc(), serial = String(req.params.serial);
-  if (!s || !merakiDevs('camera').some((c) => c.serial === serial)) return res.status(404).json({ error: 'no such Meraki camera' });
-  return sendSnap(req, res, `meraki:${serial}`, async () => {
-    const g = await netRequest(`${merakiBase(s)}/devices/${encodeURIComponent(serial)}/camera/generateSnapshot`, { method: 'POST', headers: merakiH(s), body: {} });
-    if (!g?.url) throw new Error('Meraki did not return a picture');
-    for (let i = 0; i < 10; i++) {   // the picture takes a few seconds to appear at its address
-      await new Promise((ok) => setTimeout(ok, i ? 1000 : 1500));
-      const r = await fetch(g.url, { signal: AbortSignal.timeout(8000) }).catch(() => null);
-      const type = r?.headers.get('content-type') || '';
-      if (r?.ok && type.startsWith('image/')) return { buf: Buffer.from(await r.arrayBuffer()), type };
-    }
-    throw new Error('the Meraki picture was not ready in time');
-  }, 'meraki');
+  camera: {
+    every: 15_000, idle: 5 * 60_000,   // Meraki makes each picture in its cloud: a few seconds each, and rate-limited
+    known: (serial) => merakiDevs('camera').some((c) => c.serial === serial),
+    async snapshot(serial) {
+      const s = merakiSrc(); if (!s) throw new Error('Meraki is not connected');
+      const g = await netRequest(`${merakiBase(s)}/devices/${encodeURIComponent(serial)}/camera/generateSnapshot`, { method: 'POST', headers: merakiH(s), body: {} });
+      if (!g?.url) throw new Error('Meraki did not return a picture');
+      for (let i = 0; i < 10; i++) {   // the picture takes a few seconds to appear at its address
+        await new Promise((ok) => setTimeout(ok, i ? 1000 : 1500));
+        const r = await fetch(g.url, { signal: AbortSignal.timeout(8000) }).catch(() => null);
+        const type = r?.headers.get('content-type') || '';
+        if (r?.ok && type.startsWith('image/')) return { buf: Buffer.from(await r.arrayBuffer()), type };
+      }
+      throw new Error('the Meraki picture was not ready in time');
+    },
+  },
 });

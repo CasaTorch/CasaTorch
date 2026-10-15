@@ -173,3 +173,12 @@ app.post('/api/network/refresh', requireRole('member'), async (_req, res) => {
   if (isDemo() || !proStatus().pro) return res.json({ ok: true });
   await runNetwork(true).catch(() => {}); res.json({ ok: true });
 });
+/* On the Connect page: connected here, in the Network tab. */
+const netHas = (kind) => () => (isDemo() ? ['unifi', 'pihole'].includes(kind) : netSources().some((s) => s.kind === kind));   // the demo house has UniFi and Pi-hole
+integration({ id: 'net-unifi', label: 'UniFi', group: 'network', how: 'pro', href: '#network', replaces: ['net-unifi'], desc: 'Every UniFi access point, switch and gateway online or offline, and how many devices are connected.', connected: netHas('unifi') });
+integration({ id: 'net-meraki', label: 'Cisco Meraki', group: 'network', how: 'pro', href: '#network', replaces: ['net-meraki'], desc: 'Every Meraki device\'s status, with alerts. Also brings in Meraki cameras and sensors.', connected: netHas('meraki') });
+integration({ id: 'pihole', label: 'Pi-hole', group: 'network', how: 'pro', href: '#network', replaces: ['pihole'], desc: 'Queries, how much is blocked, and an alert if blocking is switched off.', connected: netHas('pihole') });
+integration({ id: 'adguard', label: 'AdGuard Home', group: 'network', how: 'pro', href: '#network', replaces: ['adguard'], desc: 'Queries, how much is blocked, and an alert if blocking is switched off.', connected: netHas('adguard') });
+integration({ id: 'meraki-mv', label: 'Cisco Meraki MV cameras', group: 'cameras', how: 'pro', href: '#network', replaces: ['meraki-mv'], desc: 'Pictures from your Meraki cameras. Connect Cisco Meraki in the Network tab and they appear.', connected: () => netHas('meraki')() && merakiDevs('camera').length > 0 });
+integration({ id: 'meraki-mt', label: 'Cisco Meraki MT sensors', group: 'sensors', how: 'pro', href: '#network', replaces: ['meraki-mt'], desc: 'Temperature, humidity, leaks, doors and batteries, with alerts. Connect Cisco Meraki in the Network tab.', connected: () => netHas('meraki')() && merakiDevs('sensor').length > 0 });
+integration({ id: 'servers', label: 'Your servers and apps', group: 'network', how: 'pro', href: '#network', desc: 'NAS, Plex, Home Assistant, any self-hosted app: up or down, response time and certificates.', connected: () => isDemo() || (config.monitors || []).length > 0 });
