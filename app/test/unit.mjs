@@ -181,5 +181,51 @@ await t('server monitor: up, a server error, and a closed port', async () => {
   assert.equal(tcp.up, true); assert.equal(closed.up, false);
 });
 
+await t('network: Pi-hole v6 and v5, AdGuard, UniFi and Meraki are read correctly; bad keys are clear errors', async () => {
+  const http = req('node:http'); const seen = [];
+  const srv = http.createServer((q, r) => {
+    const u = new URL(q.url, 'http://x'); seen.push(`${q.method} ${u.pathname}`); const J = (code, o) => { r.statusCode = code; r.setHeader('Content-Type', 'application/json'); r.end(JSON.stringify(o)); };
+    let body = ''; q.on('data', (c) => { body += c; }); q.on('end', () => {
+      const p = u.pathname;
+      if (p.startsWith('/v6/api/auth')) return q.method === 'DELETE' ? J(200, {}) : JSON.parse(body).password === 'pw' ? J(200, { session: { valid: true, sid: 'S1', validity: 300 } }) : J(401, { error: {} });
+      if (p === '/v6/api/stats/summary') return q.headers['x-ftl-sid'] === 'S1' ? J(200, { queries: { total: 1000, blocked: 250, percent_blocked: 25 }, clients: { active: 12 }, gravity: { domains_being_blocked: 90000 } }) : J(401, {});
+      if (p === '/v6/api/dns/blocking') return J(200, { blocking: 'disabled' });
+      if (p === '/v5/api/auth') return J(404, {});
+      if (p === '/v5/admin/api.php') return u.searchParams.get('auth') === 'tok' ? J(200, { dns_queries_today: 500, ads_blocked_today: 50, ads_percentage_today: 10, unique_clients: 4, status: 'enabled' }) : J(200, []);
+      if (p.startsWith('/ag/control/')) { if (q.headers.authorization !== `Basic ${Buffer.from('admin:pw').toString('base64')}`) return J(401, {}); return p.endsWith('status') ? J(200, { protection_enabled: true, version: 'v0.107' }) : J(200, { num_dns_queries: 200, num_blocked_filtering: 20, top_clients: [{ a: 1 }, { b: 2 }] }); }
+      if (p.startsWith('/proxy/network/integration/v1/')) {
+        if (q.headers['x-api-key'] !== 'key') return J(401, {});
+        if (p.endsWith('/sites')) return J(200, { offset: 0, limit: 50, count: 1, totalCount: 1, data: [{ id: 's1', name: 'Default' }] });
+        if (p.endsWith('/devices')) return J(200, { data: [{ name: 'UDM', model: 'UDM-Pro', state: 'ONLINE', ipAddress: '192.168.1.1' }, { name: 'Garage AP', model: 'U6', state: 'OFFLINE' }] });
+        if (p.endsWith('/clients')) return J(200, { data: [{}], totalCount: 42 });
+      }
+      if (p.startsWith('/meraki/')) {
+        if (q.headers.authorization !== 'Bearer mk') return J(401, {});
+        if (p === '/meraki/organizations') return J(200, [{ id: 'o1', name: 'Home' }]);
+        if (p === '/meraki/organizations/o1/devices/statuses') return J(200, [{ name: 'MX', model: 'MX67', status: 'online', lanIp: '10.0.0.1' }, { name: 'MR', model: 'MR36', status: 'offline' }, { name: 'MS', model: 'MS120', status: 'alerting' }]);
+      }
+      J(404, {});
+    });
+  });
+  await new Promise((ok) => srv.listen(0, '127.0.0.1', ok)); const B = `http://127.0.0.1:${srv.address().port}`;
+  process.env.CASATORCH_MERAKI_BASE = `${B}/meraki`;
+  try {
+    const p6 = await H.NET.pihole({ url: `${B}/v6` }, 'pw');
+    assert.deepEqual([p6.summary.queries, p6.summary.blocked, p6.summary.percentBlocked, p6.summary.clients, p6.summary.protection], [1000, 250, 25, 12, false]);
+    assert.ok(seen.includes('DELETE /v6/api/auth'), 'the Pi-hole session is closed');
+    await assert.rejects(H.NET.pihole({ url: `${B}/v6` }, 'wrong'), /refused/);
+    const p5 = await H.NET.pihole({ url: `${B}/v5` }, 'tok'); assert.equal(p5.summary.queries, 500); assert.equal(p5.summary.protection, true);
+    await assert.rejects(H.NET.pihole({ url: `${B}/v5` }, 'bad'), /token was refused/);
+    const ag = await H.NET.adguard({ url: `${B}/ag`, user: 'admin' }, 'pw'); assert.equal(ag.summary.percentBlocked, 10); assert.equal(ag.summary.clients, 2);
+    const uf = await H.NET.unifi({ url: B }, 'key'); assert.deepEqual([uf.summary.site, uf.summary.devices, uf.summary.offline, uf.summary.clients], ['Default', 2, 1, 42]);
+    await assert.rejects(H.NET.unifi({ url: B }, 'nope'), /refused/);
+    const mk = await H.NET.meraki({}, 'mk'); assert.deepEqual([mk.summary.devices, mk.summary.offline, mk.summary.alerting], [3, 1, 1]); assert.equal(mk.devices.find((d) => d.name === 'MS').online, true);
+  } finally { srv.close(); delete process.env.CASATORCH_MERAKI_BASE; }
+});
+t('network: only home-network addresses may use their own certificate', () => {
+  for (const h of ['192.168.1.1', '10.0.0.2', '172.16.5.1', 'unifi.local', 'pihole', 'router.home.arpa']) assert.ok(H.isLanHost(h), h);   // scrub-ok: example addresses
+  for (const h of ['api.meraki.com', '8.8.8.8', '172.32.0.1', 'example.com']) assert.ok(!H.isLanHost(h), h);
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);

@@ -89,10 +89,63 @@ function serversCard(mo, redraw) {
     rows.length ? el('div', { class: 'srvs' }, rows) : el('p', { class: 'muted' }, 'Nothing watched yet. Add your NAS, a media server, Home Assistant or any self-hosted app.'));
   return card;
 }
+/* Network monitoring (Pro): Pi-hole, AdGuard Home, UniFi, Meraki. */
+const NET_HELP = {
+  pihole: ['Address', 'http://192.168.1.5', 'Password', 'Pi-hole 6: your web password, or an app password from Settings › Web interface / API. Pi-hole 5: the API token from Settings › API.'],
+  adguard: ['Address', 'http://192.168.1.5:3000', 'Password', 'The user name and password you sign in to AdGuard Home with.'],
+  unifi: ['Address of your UniFi console', 'https://192.168.1.1', 'API key', 'In UniFi Network: Settings › Control Plane › Integrations › Create API key. Needs UniFi Network 9 or newer on a console (Dream Machine, Cloud Key, UniFi OS Server).'],
+  meraki: [null, null, 'API key', 'In the Meraki dashboard: your name (top right) › My profile › API access › Generate new API key. A read-only admin account is enough.'],
+};
+const fmtN = (v) => (v == null ? '-' : new Intl.NumberFormat('en-US').format(v));
+function netSummary(x) {
+  const s = x.summary || {};
+  if (x.kind === 'pihole' || x.kind === 'adguard') return [`${fmtN(s.queries)} queries`, s.percentBlocked != null ? `${s.percentBlocked}% blocked` : null, s.clients != null ? `${fmtN(s.clients)} clients` : null, s.protection === false ? 'blocking is OFF' : s.protection ? 'blocking on' : null].filter(Boolean).join(' · ');
+  return [`${fmtN(s.devices)} device${s.devices === 1 ? '' : 's'}`, s.offline ? `${s.offline} offline` : 'all online', s.alerting ? `${s.alerting} alerting` : null, s.clients != null ? `${fmtN(s.clients)} clients` : null, s.site || s.org ? `(${s.site || s.org})` : null].filter(Boolean).join(' · ');
+}
+function networkCard(nw, redraw) {
+  const card = el('div', { class: 'card netsrc', style: 'margin-top:14px' });
+  const head = el('h2', { style: 'margin:0' }, 'Network devices', el('span', { class: 'pill pro' }, 'Pro'));
+  if (!nw.pro) {
+    card.append(head, el('p', { class: 'muted', style: 'margin-top:10px' }, 'Connect UniFi, Cisco Meraki, Pi-hole or AdGuard Home: every access point and switch online or offline, how many devices are connected, and how much your DNS filter blocks - with an alert when something drops off.'), el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'));
+    return card;
+  }
+  const add = el('button', { class: 'btn small', onclick: () => {
+    const kind = el('select', {}, Object.entries(nw.kinds).map(([v, l]) => el('option', { value: v }, l)));
+    const url = el('input', { type: 'url', autocomplete: 'off' }), user = el('input', { autocomplete: 'off', value: 'admin' }), secret = el('input', { type: 'password', autocomplete: 'new-password' });
+    const region = el('select', {}, [['us', 'United States and most countries'], ['ca', 'Canada'], ['in', 'India'], ['cn', 'China']].map(([v, l]) => el('option', { value: v }, l)));
+    const urlF = el('label', { class: 'field' }, el('span', {}), url), userF = el('label', { class: 'field' }, el('span', {}, 'User name'), user), secF = el('label', { class: 'field' }, el('span', {}), secret), regF = el('label', { class: 'field' }, el('span', {}, 'Dashboard region'), region);
+    const help = el('p', { class: 'small muted' }), msg = el('p', { class: 'small', style: 'min-height:1.2em' });
+    const sync = () => { const h = NET_HELP[kind.value]; urlF.hidden = !h[0]; if (h[0]) { urlF.firstChild.textContent = h[0]; url.placeholder = h[1]; } secF.firstChild.textContent = h[2]; userF.hidden = kind.value !== 'adguard'; regF.hidden = kind.value !== 'meraki'; help.textContent = h[3]; };
+    kind.onchange = sync; sync();
+    const save = el('button', { class: 'btn primary', onclick: async () => {
+      save.disabled = true; msg.style.color = ''; msg.textContent = 'Connecting...';
+      try { const r = await post('/api/network', { kind: kind.value, url: url.value, user: user.value, secret: secret.value, region: region.value }); m.remove(); toast(`${r.source.kindName} connected`); redraw(); }
+      catch (e) { msg.textContent = e.message; msg.style.color = 'var(--bad)'; save.disabled = false; }
+    } }, 'Connect');
+    const m = modal(el('div', {}, el('label', { class: 'field' }, el('span', {}, 'What to connect'), kind), urlF, userF, regF, secF, help,
+      el('p', { class: 'tiny muted' }, 'CasaTorch only reads - it never changes your network. The key or password is kept encrypted on this CasaTorch.'), msg, el('div', { class: 'row', style: 'justify-content:flex-end' }, save)), { title: 'Connect your network' });
+  } }, icon('plus'), 'Connect');
+  const rows = nw.sources.map((x) => {
+    const bad = x.ok === false, down = (x.devices || []).filter((d) => !d.online);
+    const del = el('button', { class: 'btn ghost small', 'aria-label': `Disconnect ${x.name}`, onclick: async () => { try { await api(`/api/network/${encodeURIComponent(x.id)}`, { method: 'DELETE' }); redraw(); } catch (e) { toast(e.message); } } }, icon('x'));
+    const list = (x.devices || []).length ? el('details', { class: 'netdevs' }, el('summary', {}, `${x.devices.length} device${x.devices.length === 1 ? '' : 's'}${down.length ? ` - ${down.length} offline` : ''}`),
+      el('div', { class: 'netgrid' }, [...down, ...x.devices.filter((d) => d.online)].map((d) => el('div', { class: 'netdev' }, el('span', { class: `dot ${d.online ? (d.alerting ? 'warn' : 'good') : 'bad'}` }), el('span', { class: 'ellipsis' }, d.name), el('span', { class: 'tiny muted ellipsis' }, [d.model, d.ip].filter(Boolean).join(' · ')))))) : null;
+    return el('div', { class: 'netrow' },
+      el('div', { class: 'row', style: 'gap:12px' }, el('span', { class: `dot ${bad ? 'bad' : x.summary?.offline || x.summary?.protection === false ? 'warn' : 'good'}` }),
+        el('div', { class: 'grow' }, el('div', { class: 'row wrap', style: 'gap:8px' }, el('b', {}, x.name), x.name !== x.kindName ? el('span', { class: 'tiny muted' }, x.kindName) : null),
+          el('div', { class: 'small muted' }, bad ? `Can't connect: ${x.error}` : netSummary(x))),
+        nw.demo ? null : del),
+      list);
+  });
+  const refresh = el('button', { class: 'btn ghost small', 'aria-label': 'Refresh', onclick: async () => { refresh.disabled = true; try { await post('/api/network/refresh'); redraw(); } catch (e) { toast(e.message); refresh.disabled = false; } } }, icon('reset'));
+  card.append(el('div', { class: 'row between', style: 'margin-bottom:10px' }, head, el('div', { class: 'row', style: 'gap:6px' }, nw.sources.length ? refresh : null, add)),
+    rows.length ? el('div', { class: 'netrows' }, rows) : el('p', { class: 'muted' }, 'Nothing connected yet. Connect UniFi, Cisco Meraki, Pi-hole or AdGuard Home.'));
+  return card;
+}
 tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
   const draw = async () => {
-    const [n, mo] = await Promise.all([api('/api/internet'), api('/api/monitors').catch(() => ({ pro: false, monitors: [], max: 30 }))]);
-    mo.demo = !!S.status?.demo;
+    const [n, mo, nw] = await Promise.all([api('/api/internet'), api('/api/monitors').catch(() => ({ pro: false, monitors: [], max: 30 })), api('/api/network').catch(() => ({ pro: false, sources: [], kinds: {} }))]);
+    mo.demo = nw.demo = !!S.status?.demo;
     const btn = el('button', { class: 'btn primary' }, icon('bolt'), 'Run a speed test');
     btn.onclick = async () => { btn.disabled = true; btn.lastChild.textContent = 'Testing (about 20 s)...'; try { await post('/api/internet/speedtest'); toast('Speed test done'); await draw(); } catch (err) { toast(err.message); btn.disabled = false; } };
     const net = el('div', { class: 'card' }, el('h2', {}, 'Internet'), el('div', { class: 'row' }, el('span', { class: `dot ${n.online ? 'good' : 'bad'}` }), el('b', {}, n.online ? 'Online' : 'Down')),
@@ -101,8 +154,8 @@ tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
     const sp = el('div', { class: 'card' }, el('h2', {}, 'Speed'), n.speed ? el('div', { class: 'row', style: 'gap:30px' }, el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(n.speed.downMbps)), el('span', { class: 'lbl' }, 'Mbps down')), el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(n.speed.upMbps)), el('span', { class: 'lbl' }, 'Mbps up'))) : el('p', { class: 'muted' }, 'No test yet.'),
       el('p', { class: 'small muted' }, n.speed ? `Tested ${fmtWhen(n.speed.at)}. CasaTorch tests every 4 hours.` : 'CasaTorch tests every 4 hours.'), btn);
     const lan = el('div', { class: 'card' }, el('h2', {}, 'Home network'), el('dl', { class: 'kv' }, el('dt', {}, 'Router'), el('dd', {}, n.gateway || '-'), el('dt', {}, 'Devices seen'), el('dd', {}, n.lanDevices ?? '-'), el('dt', {}, 'This box'), el('dd', {}, n.host || '-')),
-      el('p', { class: 'small muted' }, 'Every device, Wi-Fi health and alerts from Cisco Meraki and UniFi are coming to CasaTorch Pro.'));
-    main.replaceChildren(el('div', { class: 'cards' }, net, sp, lan), serversCard(mo, draw));
+      el('p', { class: 'small muted' }, 'Using UniFi, Cisco Meraki, Pi-hole or AdGuard Home? Connect it below (Pro).'));
+    main.replaceChildren(el('div', { class: 'cards' }, net, sp, lan), networkCard(nw, draw), serversCard(mo, draw));
   };
   await draw(); return draw;
 } });

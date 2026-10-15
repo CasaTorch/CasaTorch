@@ -44,7 +44,8 @@ CasaTorch never phones home to check it.
 | Multiple homes (cabin, parents' house) in one app | | ✓ | Coming |
 | Extra wall-panel layouts and theme packs | | ✓ | Coming |
 | Encrypted backup of your settings | | ✓ | Coming |
-| Network integration: Cisco Meraki and UniFi (every device, Wi-Fi health, alerts), Pi-hole, AdGuard Home - free keeps internet status and speed tests | | ✓ | Coming |
+| Network monitoring: UniFi and Cisco Meraki (every device online/offline, connected clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), alerts when a device drops off - free keeps internet status and speed tests | | ✓ | Now |
+| Wi-Fi health and per-client detail for UniFi and Meraki | | ✓ | Coming |
 | Server monitor: NAS, servers and self-hosted apps - up or down, response time, 24-hour uptime, certificate expiry, alerts | | ✓ | Now |
 | Server monitor: storage and temperatures (needs an agent on the server) | | ✓ | Coming |
 | E-mail help | ✓ | ✓ | Now |

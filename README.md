@@ -133,7 +133,7 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 | **Weekly report** - every Monday: energy and cost, always-on load, alerts, internet and server downtime, with tips (written by your AI if connected) | |
 | **Server monitor** - your NAS, servers and self-hosted apps: up or down, response time, uptime, certificate expiry, alerts | |
 | **Energy history** - 2 years by day and by device (free keeps 7 days) | |
-| | **Network integration** - Cisco Meraki and UniFi (every device, Wi-Fi health, alerts), Pi-hole, AdGuard Home |
+| **Network monitoring** - UniFi and Cisco Meraki (every device online/offline, clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), with alerts | |
 | | Smart alerts, self-healing, multi-home, backups |
 
 Full comparison: [docs/EDITIONS.md](docs/EDITIONS.md). Where phones, tablets and the cloud fit in:
