@@ -7,7 +7,7 @@
  * ====================================================================== */
 const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
 let myEvents = []; try { myEvents = JSON.parse(fs.readFileSync(EVENTS_FILE, 'utf8')); } catch { /* none yet */ }
-const saveMyEvents = () => { const tmp = `${EVENTS_FILE}.tmp`; fs.writeFileSync(tmp, JSON.stringify(myEvents, null, 1), { mode: 0o600 }); fs.renameSync(tmp, EVENTS_FILE); };
+const saveMyEvents = () => writeFileSafe(EVENTS_FILE, JSON.stringify(myEvents, null, 1), 0o600);
 const REPEATS = { none: null, daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY', yearly: 'YEARLY' };
 function myEventIcs(e, tz) {   // our shape -> the parser's shape, so repeats reuse expandEvents
   const [y, m, d] = e.date.split('-').map(Number);

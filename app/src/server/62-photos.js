@@ -4,7 +4,7 @@
  * the name), up to 30 MB each.
  * ====================================================================== */
 const PHOTO_DIR = path.join(DATA_DIR, 'photos');
-fs.mkdirSync(PHOTO_DIR, { recursive: true });
+fs.mkdirSync(PHOTO_DIR, { recursive: true, mode: 0o700 });
 const PHOTO_TYPES = [['jpg', 'image/jpeg', (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff], ['png', 'image/png', (b) => b.subarray(0, 4).toString('hex') === '89504e47'],
   ['gif', 'image/gif', (b) => b.subarray(0, 4).toString() === 'GIF8'], ['webp', 'image/webp', (b) => b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP'],
   ['heic', 'image/heic', (b) => b.subarray(4, 8).toString() === 'ftyp' && /hei|mif|avi/.test(b.subarray(8, 12).toString())]];
@@ -18,7 +18,7 @@ app.post('/api/photos', express.raw({ type: '*/*', limit: '30mb' }), (req, res) 
   if (!t) return res.status(415).json({ error: 'that is not a photo CasaTorch can show (JPEG, PNG, WebP, GIF or HEIC)' });
   if (photoList().length >= 2000) return res.status(409).json({ error: 'the photo reel is full (2000 photos) - remove some first' });
   const id = `${crypto.randomBytes(8).toString('hex')}.${t[0]}`;
-  fs.writeFileSync(path.join(PHOTO_DIR, id), b, { mode: 0o600 });
+  writeFileSafe(path.join(PHOTO_DIR, id), b, 0o600);
   res.json({ ok: true, photo: { id, url: `/api/photos/${id}` } });
 });
 app.get('/api/photos/:id', (req, res) => {

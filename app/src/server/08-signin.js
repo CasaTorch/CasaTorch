@@ -22,35 +22,16 @@
  *    security change, readable by admins in Settings > Security.
  * ====================================================================== */
 const USERS_FILE = path.join(DATA_DIR, 'users.json'), SESS_FILE = path.join(DATA_DIR, 'sessions.json');
-const AUDIT_FILE = path.join(DATA_DIR, 'audit.log'), KEY_FILE = path.join(DATA_DIR, 'secret.key');
+const AUDIT_FILE = path.join(DATA_DIR, 'audit.log');
 const TERMS_VERSION = '2026-10-14';
 const ROLES = ['viewer', 'member', 'admin', 'owner'], rank = (r) => ROLES.indexOf(r);
 const IDLE_DAYS = 30, PANEL_DAYS = 365;
-const writeSecretJson = (file, obj) => { fs.writeFileSync(`${file}.tmp`, JSON.stringify(obj, null, 2), { mode: 0o600 }); fs.renameSync(`${file}.tmp`, file); };
+const writeSecretJson = (file, obj) => writeFileSafe(file, JSON.stringify(obj, null, 2), 0o600);
 const readJsonFile = (file, dflt) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return dflt; } };
 const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 const newId = () => crypto.randomBytes(9).toString('base64url');
 const clientIp = (req) => String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
 
-/* ---- secrets at rest ---- */
-let secretKey = null;
-function keyOf() {
-  if (secretKey) return secretKey;
-  try { secretKey = Buffer.from(fs.readFileSync(KEY_FILE, 'utf8').trim(), 'base64'); if (secretKey.length !== 32) throw new Error('bad key'); }
-  catch { secretKey = crypto.randomBytes(32); fs.writeFileSync(KEY_FILE, secretKey.toString('base64'), { mode: 0o600 }); }
-  return secretKey;
-}
-function seal(text) {
-  const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', keyOf(), iv);
-  const enc = Buffer.concat([c.update(String(text), 'utf8'), c.final()]);
-  return `v1.${iv.toString('base64url')}.${enc.toString('base64url')}.${c.getAuthTag().toString('base64url')}`;
-}
-function unseal(s) {
-  const [v, iv, enc, tag] = String(s || '').split('.');
-  if (v !== 'v1') return null;
-  try { const d = crypto.createDecipheriv('aes-256-gcm', keyOf(), Buffer.from(iv, 'base64url')); d.setAuthTag(Buffer.from(tag, 'base64url')); return Buffer.concat([d.update(Buffer.from(enc, 'base64url')), d.final()]).toString('utf8'); }
-  catch { return null; }
-}
 function verifySecret(stored, given) {
   const [kind, salt, hash] = String(stored || '').split('$');
   if (kind !== 'scrypt' || !salt || !hash) return false;
@@ -473,5 +454,4 @@ app.get('/api/auth/google/callback', async (req, res) => {
   } catch (err) { audit(req, 'google-failed', { why: String(err.message).slice(0, 120) }); res.redirect('/login.html?error=google-failed'); }
 });
 
-/** The door PIN, for unlocking and other risky actions. */
-const pinOk = (pin) => !config.signIn?.pin || verifySecret(config.signIn.pin, pin || '');
+

@@ -187,7 +187,7 @@ app.get('/api/setup/current', async (_req, res) => {
     reminders: { list: c.reminders || [] },
     // gear: Home Assistant picks come back ticked; direct gear is kept as is unless set up again here
     cameras: c.cameraPrefs || (c.cameras || []).length ? { has: 'yes', kinds: haKinds(c.cameraPrefs?.kinds), detect: c.cameraPrefs?.detection === false ? 'no' : 'yes' } : { has: 'no' },
-    controls: c.controls || c.hue || (c.shelly || []).length ? { has: 'yes', kinds: haKinds(c.controls?.kinds), locksNeedPin: c.controls?.locksNeedPin === false ? 'no' : 'yes' } : { has: 'no' },
+    controls: c.controls || c.hue || (c.shelly || []).length ? { has: 'yes', kinds: haKinds(c.controls?.kinds) } : { has: 'no' },
     sensors: c.sensors?.kinds || c.yolink ? { has: 'yes', kinds: haKinds(c.sensors?.kinds), alertOn: c.sensors?.alertOn || ['leak', 'smoke', 'battery'] } : { has: 'no' },
     network: { kind: c.network?.provider || undefined, speedtest: c.network?.speedtest === false ? 'no' : 'yes' },
     energy: c.energy ? { track: 'yes', utility: c.energy.utility || 'other', rate: c.energy.ratePerKwh ?? '', budget: c.energy.budget ?? '' } : {},
@@ -205,7 +205,6 @@ app.post('/api/setup/finish', (req, res) => {
   if (!acct.username || !/^[a-zA-Z0-9._@-]{3,40}$/.test(String(acct.username))) return res.status(400).json({ error: 'pick a username: 3-40 letters, numbers, dots or dashes' });
   if (!keepPw) { const pwErr = passwordProblem(acct.password, acct.username); if (pwErr) return res.status(400).json({ error: pwErr }); }
   if (acct.terms !== true && owner?.terms?.version !== TERMS_VERSION) return res.status(400).json({ error: 'please read and accept the Terms of Use and Privacy Notice' });
-  if (acct.pin && !/^\d{4,8}$/.test(String(acct.pin))) return res.status(400).json({ error: 'the PIN is 4 to 8 digits' });
   if (acct.license && !checkLicenseKey(acct.license).valid) return res.status(400).json({ error: `license key: ${checkLicenseKey(acct.license).why}` });
   const picked = (step) => (a[step]?.has === 'yes' || a[step]?.track === 'yes' ? (Array.isArray(a[step].kinds) ? a[step].kinds : []) : []);
   const opt = (step, id) => (picked(step).includes(id) ? a[step][id] || {} : null);
@@ -225,7 +224,7 @@ app.post('/api/setup/finish', (req, res) => {
     ...prev, version: 2, demo: undefined, setupAt: prev.setupAt || nowIso(), port: PORT,
     house: { name: a.house?.name || 'My House', timezone: a.house?.timezone || 'UTC', units: a.house?.units || 'F', currency: a.house?.currency || 'USD' },
     location: a.house?.location?.lat != null ? { name: a.house.location.name || null, lat: Number(a.house.location.lat), lon: Number(a.house.location.lon) } : prev.location || null,
-    signIn: { enabled: true, pin: acct.pin ? hashSecret(acct.pin) : prev.signIn?.pin || null },
+    signIn: { enabled: true },
     license: acct.license || prev.license || undefined,
     myCalendar: a.calendars?.mine !== 'no',
     calendars: (a.calendars?.list || []).filter((c) => c?.url).map((c) => ({ name: c.name || 'Calendar', url: String(c.url).trim(), color: c.color || '#60a5fa' })),
@@ -239,7 +238,7 @@ app.post('/api/setup/finish', (req, res) => {
     shelly: shellyHosts.length ? shellyHosts.map((host) => ({ host })) : prev.shelly || [],
     yolink: yl?.uaid ? { uaid: String(yl.uaid).trim(), secret: String(yl.secret || '').trim() } : prev.yolink || null,
     ring: draft.ring || prev.ring || undefined,
-    controls: a.controls?.has === 'yes' ? { kinds: picked('controls'), locksNeedPin: a.controls.locksNeedPin !== 'no' } : null,
+    controls: a.controls?.has === 'yes' ? { kinds: picked('controls') } : null,
     sensors: a.sensors?.has === 'yes' ? { kinds: picked('sensors'), alertOn: a.sensors.alertOn || [] } : { alertOn: ['leak', 'smoke', 'battery'] },
     network: { provider: a.network?.kind || 'other', meraki: a.network?.meraki || a.cameras?.['meraki-mv'] || a.sensors?.['meraki-mt'] || null, unifi: a.network?.unifi || null,
       dns: a.network?.dns && a.network.dns !== 'none' ? { kind: a.network.dns, url: a.network.dnsUrl || null, key: a.network.dnsKey || null } : null, speedtest: a.network?.speedtest !== 'no' },

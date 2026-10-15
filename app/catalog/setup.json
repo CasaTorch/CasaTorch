@@ -91,13 +91,6 @@
           "minLength": 10
         },
         {
-          "id": "pin",
-          "label": "PIN for unlocking doors and other risky actions (4-8 digits)",
-          "type": "pin",
-          "required": false,
-          "help": "Leave empty to require a PIN on nothing. You can set it later."
-        },
-        {
           "id": "license",
           "label": "CasaTorch Pro license key (optional)",
           "type": "textarea",
@@ -582,24 +575,7 @@
               }
             ]
           },
-          "fields": [
-            {
-              "id": "locksNeedPin",
-              "label": "Ask for the PIN before unlocking doors?",
-              "type": "choice",
-              "options": [
-                [
-                  "yes",
-                  "Yes (recommended)"
-                ],
-                [
-                  "no",
-                  "No"
-                ]
-              ],
-              "default": "yes"
-            }
-          ]
+          "fields": []
         }
       }
     },
