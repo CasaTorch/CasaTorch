@@ -153,7 +153,7 @@ t('weekly report: a first week with no earlier data has no comparison', () => {
 await t('history: a sample records the day and counts new alerts once', async () => {
   const now = Date.parse('2026-10-14T18:00:00Z');
   H.alerts.events.unshift({ at: new Date(now - 60_000).toISOString(), id: 'leak:x:1', severity: 'critical', title: 'Water detected: Laundry' }, { at: new Date(now - 90_000).toISOString(), id: 'cleared:x', severity: 'ok', title: 'Cleared: x' });
-  H.hist.seenAlertAt = null; H.hist.last = null;
+  H.hist.seenAlertAt = null; H.hist.last = null; H.hist.days = {};   // the test data folder survives between runs
   await H.historySample(now);
   await H.historySample(now + 5 * 60_000);
   const day = H.hist.days['2026-10-14'];
