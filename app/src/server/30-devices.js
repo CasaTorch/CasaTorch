@@ -42,7 +42,7 @@ function housePower(devices) {
   if (meters.length) { const m = meters.sort((a, b) => b.powerW - a.powerW)[0]; return { watts: Math.round(m.powerW), from: m.name }; }
   let sum = 0; const seen = [];
   for (const d of withW) {
-    if (d.pairedTo || d.powerW <= 0 || /solar|pv_|production|generation/i.test(`${d.id} ${d.name}`)) continue;
+    if (d.pairedTo || d.powerW <= 0 || d.powerW > 100_000 || /solar|pv_|production|generation/i.test(`${d.id} ${d.name}`)) continue;
     if (d.powerW >= 50 && seen.some((w) => Math.abs(w - d.powerW) <= Math.max(5, d.powerW * 0.02))) continue;
     seen.push(d.powerW); sum += d.powerW;
   }

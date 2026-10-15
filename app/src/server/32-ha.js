@@ -33,7 +33,7 @@ function haPairPlugs(list) {
 function haDevice(s) {
   const [domain] = s.entity_id.split('.'), a = s.attributes || {};
   if (HA_SKIP.has(domain) || a.hidden) return null;
-  const name = a.friendly_name || s.entity_id, on = s.state === 'on', cls = a.device_class || null, unit = a.unit_of_measurement || null;
+  const name = String(a.friendly_name || s.entity_id.split('.')[1].replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())).slice(0, 120), on = s.state === 'on', cls = a.device_class || null, unit = a.unit_of_measurement || null;
   const base = { id: `ha:${s.entity_id}`, provider: 'ha', domain, haClass: cls, name, state: s.state, online: !['unavailable', 'unknown'].includes(s.state) || domain === 'sensor' };
   switch (domain) {
     case 'light': return { ...base, kind: 'light', on, brightness: a.brightness != null ? Math.round(a.brightness / 2.55) : null, rgb: Array.isArray(a.rgb_color) && a.rgb_color.length === 3 ? `#${a.rgb_color.map((v) => Math.max(0, Math.min(255, v | 0)).toString(16).padStart(2, '0')).join('')}` : null, kelvin: a.color_temp_kelvin ?? null };
@@ -54,7 +54,7 @@ function haDevice(s) {
       return { ...base, kind: 'sensor', ...(map[cls] ? { [map[cls]]: on } : { on }) };
     }
     case 'sensor': {
-      if (cls === 'power' || unit === 'W' || unit === 'kW') return { ...base, kind: 'sensor', powerW: (num(s.state) || 0) * (unit === 'kW' ? 1000 : 1), meter: true };
+      if (cls === 'power' || unit === 'W' || unit === 'kW') return { ...base, kind: 'sensor', powerW: num(s.state) == null ? null : num(s.state) * (unit === 'kW' ? 1000 : unit === 'MW' ? 1e6 : 1), meter: true, online: num(s.state) != null };   // 'unavailable' is unknown, not 0 W
       if (cls === 'temperature') return { ...base, kind: 'sensor', tempC: haC(s.state, unit) };
       if (cls === 'humidity') return { ...base, kind: 'sensor', humidity: num(s.state) };
       if (cls === 'battery') return { ...base, kind: 'sensor', battery: num(s.state) };

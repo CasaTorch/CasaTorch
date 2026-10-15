@@ -18,15 +18,20 @@ function alertRaise(a) {
 async function alertConditions() {
   const found = {};
   const add = (id, x) => { found[id] = { id, ...x }; };
-  const want = new Set(config.sensors?.alertOn || ['leak', 'smoke', 'battery']);
+  const want = new Set(config.sensors?.alertOn || ['leak', 'smoke', 'battery']), offline = [];
   const { devices } = await allDevices();
   for (const d of devices) {
     if (d.water && want.has('leak')) add(`leak:${d.id}`, { severity: 'critical', title: `Water detected: ${d.name}`, source: d.provider });
     if (d.smoke && want.has('smoke')) add(`smoke:${d.id}`, { severity: 'critical', title: `Smoke alarm: ${d.name}`, source: d.provider });
-    if (d.battery != null && d.battery <= 15 && want.has('battery')) add(`battery:${d.id}`, { severity: 'notice', title: `Low battery (${d.battery}%): ${d.name}`, source: d.provider });
-    if (d.online === false) add(`offline:${d.id}`, { severity: 'warning', title: `${d.name} is not responding`, source: d.provider });
+    if (d.battery != null && d.battery <= 15 && want.has('battery') && !/phone|ipad|tablet|laptop|macbook|watch|car\b|_car_|vehicle|tesla|\bev\b|ups/i.test(`${d.id} ${d.name}`)) add(`battery:${d.id}`, { severity: 'notice', title: `Low battery (${d.battery}%): ${d.name}`, source: d.provider });
+    // "Not responding": every device CasaTorch reaches itself, but from Home Assistant only the ones that
+    // matter (cameras, locks, thermostats, leak and smoke sensors) - a big Home Assistant always has some
+    // unplugged gadget, and that must not bury the real alerts.
+    if (d.online === false && (d.provider !== 'ha' || ['camera', 'lock', 'climate'].includes(d.kind) || d.water != null || d.smoke != null)) offline.push(d);
     if (want.has('temp') && d.tempC != null && (d.tempC < 3 || d.tempC > 35)) add(`temp:${d.id}`, { severity: 'warning', title: `${d.name} is ${d.tempC < 3 ? 'near freezing' : 'very hot'}`, source: d.provider });
   }
+  for (const d of offline.slice(0, 10)) add(`offline:${d.id}`, { severity: 'warning', title: `${d.name} is not responding`, source: d.provider });
+  if (offline.length > 10) add('offline:more', { severity: 'notice', title: `${offline.length - 10} more devices are not responding`, source: 'casatorch' });
   const net = await internetNow().catch(() => null);
   if (net && !net.online) add('internet', { severity: 'critical', title: 'The internet is down', source: 'internet' });
   const now = nowIso();
