@@ -457,17 +457,6 @@
     "area": "Laundry"
   },
   {
-    "id": "ha:sensor.wall_connector_power",
-    "provider": "ha",
-    "domain": "sensor",
-    "online": true,
-    "kind": "sensor",
-    "haClass": "power",
-    "name": "EV charger power",
-    "powerW": 7200,
-    "meter": true
-  },
-  {
     "id": "ha:climate.upstairs",
     "provider": "ha",
     "domain": "climate",
@@ -635,7 +624,7 @@
   },
   {
     "id": "camera:doorbell",
-    "provider": "ring",
+    "provider": "camera",
     "kind": "camera",
     "name": "Front door bell",
     "source": "Ring",
