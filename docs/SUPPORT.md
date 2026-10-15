@@ -4,11 +4,10 @@
 
 | | Who it's for | What you get | Price |
 | --- | --- | --- | --- |
-| **Community** | Everyone | The CasaTorch Discord community, GitHub issues, these docs | Free |
-| **Basic support** | Pro members | E-mail and Discord support from the CasaTorch team, a members-only Pro channel. Reply within 2 business days | Included with Pro |
-| **Service & Developer Access** | People who want CasaTorch built around their home | Everything in Pro and Basic support, plus a direct line to a CasaTorch developer:<br>- **Custom features** written for your home: a new integration, a widget, an automation (small to medium jobs; big projects are quoted first)<br>- **Hands-on deployment help**: a screen-share session to install CasaTorch, connect your gear and set up your wall panels<br>- Priority replies (1 business day) and a private channel | **$100 / year** (includes Pro) |
+| **Community** | Everyone | GitHub issues, these docs, and a Discord community (opening soon) | Free |
+| **Help** | Everyone | E-mail support from the CasaTorch team | Free |
 
-Join the community: **casatorch.com/discord** · E-mail: **support@casatorch.com** <!-- scrub-ok: public support address -->
+E-mail: **support@casatorch.com** <!-- scrub-ok: public support address -->
 
 ## Home network planning
 
@@ -21,7 +20,7 @@ with the person who built CasaTorch:
 - A written plan afterwards: what to buy, where it goes (marked on your CasaTorch floor plan), and the
   order to set it up
 
-Book at **casatorch.com/network-planning**.
+Ask for a quote: **sales@casatorch.com** <!-- scrub-ok: public sales address -->
 
 ## The CasaTorch Box
 
