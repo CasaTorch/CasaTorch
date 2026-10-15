@@ -18,7 +18,7 @@
 <li><b>Accounts:</b> names, usernames, e-mail addresses (optional), password hashes (never the password), encrypted authenticator secrets, hashed recovery codes, and whether each person accepted these terms and when.</li>
 <li><b>Sessions and security log:</b> when and from which network address and browser someone signed in, signed out, failed to sign in, or changed security settings - so the owner can spot misuse. The log keeps the most recent 5,000 events.</li>
 <li><b>Your home:</b> device names and states, floor plans and scans, photos you upload, calendars and reminders, and the settings you choose.</li>
-<li><b>Connections:</b> sign-in tokens for services you connect (for example Home Assistant or Ring). Ring and power-company passwords are never stored.</li>
+<li><b>Connections:</b> sign-in tokens for services you connect (for example Home Assistant or Ring), and the keys or passwords for network gear you connect (UniFi, Cisco Meraki, Pi-hole, AdGuard Home), encrypted. Ring and power-company passwords are never stored.</li>
 </ul>
 
 <h2>What leaves your network, and only if you turn it on</h2>
@@ -26,6 +26,7 @@
 <li><b>Sign in with Google:</b> Google tells this CasaTorch your Google account ID, e-mail and name when you choose it. Google's privacy policy applies.</li>
 <li><b>AI assistant and weekly report:</b> your question and a short summary of your home's current state - and, for the weekly report, the week's energy figures, alert titles and device names - go to the AI provider you choose (for example Anthropic or OpenAI), under their terms; or to a model on your own network. Without an AI connected, the report is written on your CasaTorch.</li>
 <li><b>Weather, news, sports, calendars:</b> CasaTorch fetches these from their providers; weather uses your home's approximate location.</li>
+<li><b>Cisco Meraki</b> (if you connect it): CasaTorch reads your devices' status from Meraki's online service with your API key.</li>
 <li><b>Pro license checks</b> happen offline - the key is verified on your hardware.</li>
 </ul>
 
