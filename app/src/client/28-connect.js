@@ -64,6 +64,83 @@ async function startConnect(item, conn) {
   { title: `Connect ${item.label}` });
   if (needPw) setTimeout(() => pw.focus(), 50);
 }
+/* ---- Home Assistant's own setup questions, asked here (owner/admin) ---- */
+const HA_FIELD = { username: 'Username', password: 'Password', host: 'Address (IP or name)', api_key: 'API key', email: 'E-mail', port: 'Port', pin: 'PIN', code: 'Code', name: 'Name', verify_ssl: 'Check the security certificate' };
+const HA_ERR = { invalid_auth: 'Wrong username or password.', cannot_connect: 'Could not reach it - check the address and that it is turned on.', unknown: 'Something went wrong in Home Assistant.', invalid_host: 'That address is not right.', timeout_connect: 'It did not answer in time.' };
+const HA_ABORT = { already_configured: 'Already in Home Assistant ✓', already_in_progress: 'Already being set up in Home Assistant - finish it there or try again in a minute.', single_instance_allowed: 'Already in Home Assistant ✓', no_devices_found: 'None found on your network.', not_supported: 'This Home Assistant does not support it.', reauth_successful: 'Signed in again ✓' };
+function haFlowModal({ domain, flowId, label }, onDone) {
+  const body = el('div', { class: 'haflow' }); let v = null, closed = false;
+  const m = modal(body, { title: `Add ${label}` });
+  const obs = new MutationObserver(() => { if (!m.isConnected) { closed = true; obs.disconnect(); if (v?.flowId && !['create_entry', 'abort'].includes(v.type)) api(`/api/ha/flow/${v.flowId}`, { method: 'DELETE' }).catch(() => {}); } });
+  obs.observe(document.body, { childList: true, subtree: true });
+  const wait = (t) => body.replaceChildren(el('p', { class: 'muted' }, t));
+  const run = async (p) => { try { v = await p; } catch (e) { v = { type: 'error', error: e.message }; } if (!closed) draw(); };
+  const send = (input) => { wait('Working…'); run(post(`/api/ha/flow/${v.flowId}`, { input })); };
+  function field(f, input) {
+    const name = f.name, sel = f.selector || {}, lab = HA_FIELD[name] || pretty(name), req = !!f.required && !f.optional;
+    if (f.type === 'constant') return null;
+    if (sel.boolean || f.type === 'boolean') { input[name] ??= !!f.default; return el('label', { class: 'field check' }, el('input', { type: 'checkbox', checked: input[name] || null, onchange: (e) => { input[name] = e.target.checked; } }), lab); }
+    if (sel.select || f.type === 'select') {
+      const raw = sel.select?.options || f.options || [], opts = Array.isArray(raw) ? raw.map((o) => (Array.isArray(o) ? o : typeof o === 'object' ? [o.value, o.label] : [o, o])) : Object.entries(raw);
+      input[name] ??= f.default ?? (req ? opts[0]?.[0] : '');
+      return el('label', { class: 'field' }, el('span', {}, lab), el('select', { onchange: (e) => { input[name] = e.target.value; } }, ...(req ? [] : [el('option', { value: '' }, '-')]), ...opts.map(([val, t]) => el('option', { value: val, selected: String(input[name]) === String(val) ? true : null }, t))));
+    }
+    const secret = sel.text?.type === 'password' || /password|secret|token|key/i.test(name), numeric = sel.number || ['integer', 'float'].includes(f.type);
+    if (f.default != null) input[name] ??= f.default;
+    return el('label', { class: 'field' }, el('span', {}, `${lab}${req ? '' : ' (optional)'}`), el('input', { type: secret ? 'password' : numeric ? 'number' : 'text', value: input[name] ?? '', autocomplete: secret ? 'new-password' : 'off', oninput: (e) => { input[name] = numeric ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value; } }));
+  }
+  function draw() {
+    body.replaceChildren();
+    if (v.type === 'error') return body.append(el('p', { class: 'bad' }, `✗ ${v.error}`), el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { class: 'btn', onclick: () => m.remove() }, 'Close')));
+    if (v.type === 'create_entry') { onDone?.(); return body.append(el('p', { class: 'good' }, `✓ Added to Home Assistant${v.title ? `: ${v.title}` : ''}.`), el('p', { class: 'muted small' }, 'Its devices show up in CasaTorch within a minute - add them from Add widget › Rooms & devices.'), el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { class: 'btn primary', onclick: () => m.remove() }, 'Done'))); }
+    if (v.type === 'abort') { const ok = (HA_ABORT[v.reason] || '').includes('✓'); if (ok) onDone?.(); return body.append(el('p', { class: ok ? 'good' : 'bad' }, HA_ABORT[v.reason] || `Home Assistant stopped: ${pretty(v.reason)}`), el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { class: 'btn', onclick: () => m.remove() }, 'Close'))); }
+    if (v.type === 'external') return body.append(el('p', {}, `${label} needs you to sign in on its own page. It opens in a new tab - come back here when it says you're done.`),
+      el('div', { class: 'row', style: 'gap:8px;justify-content:flex-end' }, el('a', { class: 'btn', href: v.url, target: '_blank', rel: 'noopener' }, 'Open the sign-in page'), el('button', { class: 'btn primary', onclick: () => send({}) }, 'I\'ve signed in')));
+    if (v.type === 'progress') { wait('Home Assistant is working on it…'); setTimeout(() => { if (!closed) run(api(`/api/ha/flow/${v.flowId}`)); }, 2500); return; }
+    if (v.type === 'menu') { const opts = Array.isArray(v.menu) ? v.menu.map((x) => [x, pretty(x)]) : Object.entries(v.menu || {}); return body.append(el('p', {}, 'Choose one:'), el('div', { class: 'col', style: 'gap:8px' }, ...opts.map(([id, t]) => el('button', { class: 'btn', onclick: () => { wait('Working…'); run(post(`/api/ha/flow/${v.flowId}`, { input: { next_step_id: id } })); } }, t)))); }
+    const input = {}, fields = (v.fields || []).map((f) => field(f, input)).filter(Boolean), ph = v.placeholders || {};
+    if (!fields.length) body.append(el('p', {}, ph.name ? `Add ${ph.name} to Home Assistant?` : `Add ${label} to Home Assistant?`));
+    else if (v.step && !['user', 'zeroconf_confirm', 'confirm'].includes(v.step)) body.append(el('p', { class: 'muted small' }, pretty(v.step)));
+    for (const [k, e] of Object.entries(v.errors || {})) body.append(el('p', { class: 'bad small' }, `${k === 'base' ? '' : `${HA_FIELD[k] || pretty(k)}: `}${HA_ERR[e] || pretty(e)}`));
+    const msg = el('p', { class: 'bad small' });
+    body.append(...fields, msg, el('div', { class: 'row', style: 'gap:8px;justify-content:flex-end' },
+      el('button', { class: 'btn ghost', onclick: () => m.remove() }, 'Cancel'),
+      el('button', { class: 'btn primary', onclick: () => {
+        const out = {};
+        for (const f of v.fields || []) { const val = input[f.name]; if (val === '' || val == null) { if (f.required && !f.optional && f.type !== 'constant') { msg.textContent = `${HA_FIELD[f.name] || pretty(f.name)} is needed.`; return; } continue; } out[f.name] = val; }
+        send(out);
+      } }, v.last === false ? 'Next' : fields.length ? 'Connect' : 'Add')));
+    body.querySelector('input')?.focus();
+  }
+  wait('Asking Home Assistant…');
+  run(flowId ? api(`/api/ha/flow/${flowId}`) : post('/api/ha/flow', { domain }));
+}
+/* "Found on your network" and "Add any Home Assistant integration" - shown when Home Assistant is connected. */
+async function haDiscoveredCard(conn) {
+  const box = el('div', { class: 'card ha-found' }), list = el('div', { class: 'ha-found-list' });
+  const load = async () => {
+    let r; try { r = await api('/api/ha/discovered'); } catch (e) { box.hidden = /admin|403/i.test(e.message); list.replaceChildren(el('p', { class: 'muted small' }, `Could not ask Home Assistant: ${e.message}`)); return; }
+    list.replaceChildren(...(r.found.length ? r.found.map((f) => el('div', { class: 'ha-found-row' }, monogram(f.name || f.domain), el('div', { class: 'grow', style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, f.name || pretty(f.domain)), el('small', { class: 'muted' }, `${pretty(f.domain)} · found by Home Assistant`)),
+      el('button', { class: 'btn small ghost', title: 'Don\'t show this again', onclick: async () => { await post('/api/ha/discovered/ignore', { key: f.key }).catch(() => {}); load(); } }, 'Hide'),
+      el('button', { class: 'btn small primary', onclick: () => haFlowModal({ flowId: f.flowId, domain: f.domain, label: f.name || pretty(f.domain) }, load) }, 'Add')))
+      : [el('p', { class: 'muted small' }, 'Nothing new right now. When Home Assistant spots a new device on your network - a TV, speaker, printer or hub - it shows up here, ready to add.')]));
+  };
+  box.append(el('div', { class: 'row', style: 'gap:10px;align-items:center;margin-bottom:8px' }, icon('search', 18), el('b', { class: 'grow' }, 'Found on your network'), el('button', { class: 'btn small', onclick: () => haAnyModal(conn, load) }, icon('plus'), 'Add any Home Assistant integration')), list);
+  load(); return box;
+}
+async function haAnyModal(conn, after) {
+  const q = el('input', { type: 'search', placeholder: 'Search - e.g. Sonos, Tesla, Lutron, Roku', 'aria-label': 'Search Home Assistant integrations' }), out = el('div', { class: 'ha-any-list' });
+  const m = modal(el('div', {}, el('p', { class: 'muted small', style: 'margin-top:0' }, 'Everything your Home Assistant can add. Pick one and answer its questions here - usually an address, or a sign-in.'), q, out), { title: 'Add a Home Assistant integration', wide: true });
+  out.append(el('p', { class: 'muted' }, 'Loading…'));
+  let r; try { r = await api('/api/ha/integrations'); } catch (e) { out.replaceChildren(el('p', { class: 'bad' }, e.message)); return; }
+  const have = new Set(r.have || []);
+  const draw = () => {
+    const t = q.value.trim().toLowerCase(), hits = r.list.filter((x) => !t || `${x.name} ${x.domain}`.toLowerCase().includes(t)).slice(0, 60);
+    out.replaceChildren(...hits.map((x) => el('button', { class: 'ha-any-row', onclick: () => { m.remove(); haFlowModal({ domain: x.domain, label: x.name }, after); } }, monogram(x.name), el('span', { class: 'grow' }, x.name), have.has(x.domain) ? el('span', { class: 'pill' }, 'added') : null, x.cloud ? el('span', { class: 'pill' }, 'cloud') : null)),
+      hits.length ? null : el('p', { class: 'muted small' }, 'Nothing by that name. Some brands are added through HACS (Home Assistant\'s community store) - that part happens in Home Assistant.'));
+  };
+  q.oninput = draw; draw(); setTimeout(() => q.focus(), 50);
+}
 tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
   setTop('Connect', 'Everything CasaTorch works with - add anything in a few clicks');
   const [cat, conn] = await Promise.all([api('/api/catalog'), api('/api/connections').catch(() => ({ ha: {}, domains: [], direct: [], counts: {} }))]);
@@ -79,6 +156,7 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
       : el('button', { class: 'btn primary', onclick: () => startConnect({ label: 'Home Assistant', step: 'homeassistant', how: 'direct' }, conn) }, 'Connect Home Assistant'),
       ha ? null : el('a', { class: 'btn', href: 'https://www.home-assistant.io/green', target: '_blank', rel: 'noopener' }, 'Don\'t have it? Home Assistant Green'))));
   main.append(el('div', { class: 'connect-stats' }, el('div', {}, el('b', {}, live), el('span', {}, 'connected')), el('div', {}, el('b', {}, total), el('span', {}, 'devices')), el('div', {}, el('b', {}, fromHa), el('span', {}, 'from Home Assistant')), el('div', {}, el('b', {}, items.length), el('span', {}, 'brands & services built in'))));
+  if (ha) main.append(await haDiscoveredCard(conn));
   let group = 'all', filter = 'any';
   const q = el('input', { type: 'search', placeholder: 'Search brands - Ring, Hue, Meraki, ecobee…', 'aria-label': 'Search integrations' });
   const chips = el('div', { class: 'chips' }), grid = el('div', { class: 'connect-grid' });
