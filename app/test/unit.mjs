@@ -115,5 +115,13 @@ t('safety: never unlock, open a garage/gate or disarm - even when Home Assistant
   assert.ok(!B({ id: 'ha:switch.clock_display', kind: 'switch', name: 'Clock display' }, 'on'), '"clock" is not "lock"');
 });
 
+t('power: the house total never counts a plug or a car charger twice', () => {
+  const P = (list) => H.housePower(list).watts;
+  assert.equal(P([{ id: 'ha:switch.kettle', kind: 'plug', powerW: 1500 }, { id: 'ha:sensor.kettle_power', kind: 'sensor', powerW: 1500, pairedTo: 'ha:switch.kettle' }]), 1500);
+  assert.equal(P([{ id: 'ha:sensor.wall_connector_power', kind: 'sensor', powerW: 7200 }, { id: 'ha:sensor.car_charger_power', kind: 'sensor', powerW: 7180 }, { id: 'p', kind: 'plug', powerW: 100 }]), 7300);
+  assert.equal(P([{ id: 'ha:sensor.house_power', name: 'House power', kind: 'sensor', powerW: 2400 }, { id: 'p', kind: 'plug', powerW: 100 }]), 2400, 'a whole-house meter wins');
+  assert.equal(P([{ id: 'ha:sensor.solar_power', kind: 'sensor', powerW: 3000 }, { id: 'p', kind: 'plug', powerW: 40 }]), 40, 'solar production is not use');
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);

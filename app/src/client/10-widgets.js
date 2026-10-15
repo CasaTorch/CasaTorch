@@ -90,8 +90,8 @@ widget({ id: 'alerts', title: 'Alerts', icon: 'bell', min: [2, 2], size: [3, 2],
 } });
 
 widget({ id: 'energy', title: 'Energy', icon: 'bolt', min: [2, 2], size: [3, 3], render(b, ctx, { w, h }) {
-  const ds = (ctx.data.devices?.devices || []).filter((d) => typeof d.powerW === 'number').sort((a, c) => c.powerW - a.powerW);
-  const total = ds.reduce((s, d) => s + d.powerW, 0), rate = ctx.data.settings?.energy?.ratePerKwh;
+  const ds = (ctx.data.devices?.devices || []).filter((d) => typeof d.powerW === 'number' && !d.pairedTo).sort((a, c) => c.powerW - a.powerW);
+  const total = ctx.data.devices?.power?.watts ?? ds.reduce((s, d) => s + d.powerW, 0), rate = ctx.data.settings?.energy?.ratePerKwh;
   if (!ds.length) return b.replaceChildren(empty('No power-metering plugs yet.'));
   const parts = [el('div', { class: 'row', style: 'gap:22px;align-items:flex-end' }, el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(total), el('span', { style: 'font-size:18px;color:var(--muted)' }, ' W')), el('span', { class: 'lbl' }, 'using now')),
     rate && (w >= 4 || h >= 3) ? el('div', { class: 'stat' }, el('span', { style: 'font-size:22px;font-weight:700' }, `$${(total / 1000 * 24 * rate).toFixed(2)}`), el('span', { class: 'lbl' }, 'a day at this rate')) : null)];
@@ -191,7 +191,7 @@ widget({ id: 'room', title: 'Room', icon: 'home', multi: true, hidden: true, min
   const area = b._t?.area, ds = (ctx.data.devices?.devices || []).filter((d) => d.area === area);
   if (!ds.length) return b.replaceChildren(empty(`Nothing is in "${area || 'this room'}" right now.`));
   const temp = ds.find((d) => d.tempC != null && d.kind !== 'climate')?.tempC ?? ds.find((d) => d.tempC != null)?.tempC;
-  const on = ds.filter((d) => d.kind === 'light' && d.on).length, lights = ds.filter((d) => d.kind === 'light').length, watts = ds.reduce((s, d) => s + (typeof d.powerW === 'number' ? d.powerW : 0), 0);
+  const on = ds.filter((d) => d.kind === 'light' && d.on).length, lights = ds.filter((d) => d.kind === 'light').length, watts = ds.reduce((s, d) => s + (typeof d.powerW === 'number' && !d.pairedTo ? d.powerW : 0), 0);
   const facts = [temp != null ? el('b', {}, tempOf(temp)) : null, lights ? el('span', {}, `${on}/${lights} lights on`) : null, watts ? el('span', {}, `${Math.round(watts)} W`) : null, el('span', {}, `${ds.length} device${ds.length === 1 ? '' : 's'}`)].filter(Boolean);
   const perRow = Math.max(1, Math.floor(w / 2));
   b.replaceChildren(el('div', { class: 'row small muted', style: 'gap:14px;margin-bottom:10px;flex-wrap:wrap' }, facts),

@@ -166,7 +166,7 @@ app.get('/api/floorplan/live', async (_req, res) => {
   const d = fpData();
   const [{ devices }, weather] = await Promise.all([houseDevices(), fpWeather()]);
   const byId = new Map(devices.map((x) => [x.id, x]));
-  const powerW = devices.filter((x) => x.powerW != null).reduce((a, x) => a + x.powerW, 0);
+  const powerW = housePower(devices).watts;
   res.json({
     pins: d.pins.map((p) => ({ ...p, device: byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })), weather,
     devices: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),

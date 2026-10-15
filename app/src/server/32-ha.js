@@ -25,7 +25,7 @@ function haPairPlugs(list) {
     const k = key(sw), mine = sensors.filter((x) => key(x).startsWith(`${k}_`));
     const p = mine.find((x) => x.powerW != null);
     const e = mine.find((x) => x.kind === 'value' && /kwh/i.test(x.unit || '') && /today|daily|day/.test(key(x))) || mine.find((x) => x.kind === 'value' && /kwh/i.test(x.unit || ''));
-    if (p) Object.assign(sw, { powerW: sw.on ? p.powerW : 0, kind: 'plug' });
+    if (p) { Object.assign(sw, { powerW: sw.on ? p.powerW : 0, kind: 'plug' }); p.pairedTo = sw.id; }   // the sensor stays a sensor, but isn't counted twice
     if (e && num(e.value) != null) sw.energyKWh = num(e.value);
   }
   return list;

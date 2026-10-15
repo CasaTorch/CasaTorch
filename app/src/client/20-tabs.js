@@ -72,11 +72,11 @@ tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
 /* ---- Energy ---- */
 tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {
   const draw = async () => {
-    const [{ devices = [] }, st] = await Promise.all([api('/api/devices'), api('/api/settings').catch(() => ({}))]);
+    const [{ devices = [], power }, st] = await Promise.all([api('/api/devices'), api('/api/settings').catch(() => ({}))]);
     const rate = st.energy?.ratePerKwh, cur = st.energy?.currency || 'USD';
     const money = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(v);
-    const ds = devices.filter((d) => typeof d.powerW === 'number').sort((a, b) => b.powerW - a.powerW);
-    const total = ds.reduce((s, d) => s + d.powerW, 0), max = Math.max(1, ...ds.map((d) => d.powerW));
+    const ds = devices.filter((d) => typeof d.powerW === 'number' && !d.pairedTo).sort((a, b) => b.powerW - a.powerW);
+    const total = power?.watts ?? ds.reduce((s, d) => s + d.powerW, 0), max = Math.max(1, ...ds.map((d) => d.powerW));
     main.replaceChildren(el('div', { class: 'cards' },
       el('div', { class: 'card' }, el('h2', {}, 'Using now'), el('div', { class: 'big' }, `${Math.round(total)} W`), el('div', { class: 'muted small', style: 'margin-top:6px' }, `on ${ds.length} metered device${ds.length === 1 ? '' : 's'}`)),
       el('div', { class: 'card' }, el('h2', {}, 'If it stays like this'), rate ? el('div', {}, el('div', { class: 'big' }, money(total / 1000 * 24 * rate)), el('div', { class: 'muted small', style: 'margin-top:6px' }, `a day · ${money(total / 1000 * 24 * 30 * rate)} a month at ${money(rate)}/kWh`)) : el('p', { class: 'muted' }, 'Add your electricity rate in Settings to see the cost.'))),

@@ -56,7 +56,12 @@ fs.writeFileSync(path.join(out, 'demo-ground.glb'), floorGlb(12, 9, [...outer(12
   Desk0: [[0.2, 0, 6], [1, 0.75, 7.6]], Chair0: [[1.2, 0, 6.5], [1.7, 0.9, 7]], Washer0: [[11, 0, 7.2], [11.8, 0.9, 8]], Dryer0: [[11, 0, 8.05], [11.8, 0.9, 8.85]] }));
 fs.writeFileSync(path.join(out, 'demo-upstairs.glb'), floorGlb(12, 9, [...outer(12, 9), [4, 0, 4, 4.5], [8, 0, 8, 4.5], [0, 4.5, 5, 4.5], [6.5, 4.5, 12, 4.5], [8, 4.5, 8, 9]], {
   Bed0: [[0.5, 0, 0.5], [2.5, 0.55, 2.6]], Bed1: [[4.6, 0, 0.5], [6.6, 0.55, 2.6]], Bed2: [[8.6, 0, 0.5], [10.6, 0.55, 2.6]], Desk1: [[10.4, 0, 6.4], [11.8, 0.75, 7.4]], Storage2: [[0.2, 0, 5], [0.8, 2, 7]] }));
-fs.writeFileSync(path.join(out, 'floorplan.json'), JSON.stringify({
+// Top floor: a loft (games and movies), a home gym, a guest room and a bath.
+fs.writeFileSync(path.join(out, 'demo-top.glb'), floorGlb(12, 9, [...outer(12, 9), [5, 0, 5, 5], [0, 5, 12, 5], [8, 5, 8, 9]], {
+  Sofa1: [[0.6, 0, 3.6], [3.6, 0.8, 4.5]], Television1: [[1.2, 0.6, 0.15], [3.4, 1.8, 0.25]], Storage3: [[0.4, 0, 0.3], [4.4, 0.5, 0.8]],
+  Treadmill0: [[6, 0, 0.5], [7, 1.3, 2.4]], Bench0: [[9, 0, 1], [11, 0.5, 1.6]], Bed3: [[0.6, 0, 6.2], [2.6, 0.55, 8.6]], Storage4: [[6.5, 0, 8.2], [7.8, 2, 8.8]], Bathtub0: [[9, 0, 7.4], [11.6, 0.6, 8.6]] }));
+// The plan file is hand-tuned (rooms, pins, the yard): only written the first time.
+if (!fs.existsSync(path.join(out, 'floorplan.json'))) fs.writeFileSync(path.join(out, 'floorplan.json'), JSON.stringify({
   floors: [{ id: 'ground', name: 'Ground floor', file: 'demo-ground.glb', level: 0, heightM: 2.8, rotationY: 0, scale: 1, offset: [0, 0], rooms: [{"name": "Living room", "color": "#38bdf8", "pos": [3.5, 2.75]}, {"name": "Kitchen", "color": "#fbbf24", "pos": [9.5, 2.75]}, {"name": "Office", "color": "#a78bfa", "pos": [2, 7.25]}, {"name": "Hall", "color": "#34d399", "pos": [8, 7.25]}] }, { id: 'upstairs', name: 'Upstairs', file: 'demo-upstairs.glb', level: 1, heightM: 2.8, rotationY: 0, scale: 1, offset: [0, 0], rooms: [{"name": "Bedroom 1", "color": "#f472b6", "pos": [2, 2.25]}, {"name": "Bedroom 2", "color": "#a78bfa", "pos": [6, 2.25]}, {"name": "Bedroom 3", "color": "#38bdf8", "pos": [10, 2.25]}, {"name": "Landing", "color": "#34d399", "pos": [4, 6.75]}, {"name": "Study", "color": "#22d3ee", "pos": [10, 6.75]}] }],
   style: { theme: 'neon', colors: {} },
   pins: [
