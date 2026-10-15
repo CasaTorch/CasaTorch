@@ -358,8 +358,8 @@ function setupFor(stepId, opt) {
 function welcome() {
   if (W.rerun) { const k = Object.entries(W.keeps).filter(([, v]) => v).map(([n]) => n); return [el('h1', {}, 'Change your setup'), el('p', { class: 'intro' }, `Your current answers are filled in. Anything you don't change is kept${k.length ? `, including what's already connected (${k.join(', ')})` : ''}.`)]; }
   return [el('h1', {}, 'Welcome to CasaTorch'),
-    el('p', { class: 'intro' }, 'About 10 minutes. First the everyday things - your town for the weather, calendars, teams, headlines, reminders. Then your gear: CasaTorch connects to Hue, Shelly, YoLink, Frigate, Reolink and Ring itself, and to thousands more through Home Assistant if you have it. Skip anything; add it later.'),
-    el('p', { class: 'note' }, 'Stuck at any point? Ask in the CasaTorch community: ', el('a', { href: 'https://casatorch.com/discord', target: '_blank', rel: 'noopener' }, 'casatorch.com/discord'), '.'),
+    el('p', { class: 'intro' }, 'About 10 to 20 minutes, and you can skip anything. First the everyday things - your town for the weather, calendars, teams, headlines, reminders. Then your gear: CasaTorch connects to Hue, Shelly, YoLink, Frigate, Reolink and Ring itself, and to thousands more through Home Assistant if you have it. Skip anything; add it later.'),
+    el('p', { class: 'note' }, 'Stuck at any point? E-mail ', el('a', { href: 'mailto:support@casatorch.com' }, 'support@casatorch.com'), ' - a real person answers.'),   // scrub-ok: public support address
     el('div', { class: 'card' }, el('h3', {}, 'Just looking?'), el('p', { class: 'note' }, 'See CasaTorch with a sample house, including the 3D floor plan. No setup needed.'),
       el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/'; } }, 'Try the demo'))];
 }
