@@ -1,6 +1,6 @@
 /* ======================================================================
  * Pro keys without copy and paste.
- *  - "Get my key by e-mail": someone who bought Pro or a CasaTorch Box types
+ *  - "Get my key by e-mail": someone who bought Pro types
  *    the e-mail they bought with, casatorch.com e-mails them a 6-digit code,
  *    and the key comes back here. Only the e-mail and the code are sent.
  *  - Renewal: a monthly or yearly key close to its end date is swapped for
