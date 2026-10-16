@@ -15,6 +15,10 @@
 import { RingApi } from 'ring-client-api';
 import { RingRestClient } from 'ring-client-api/rest-client';
 const ring = { api: null, cameras: [], pending: null, events: [], error: null };
+/* ring-client-api's push listener logs a full stack trace when Ring sends a notification it can't decode
+   (it drops that one and carries on). Say it in one line instead of alarming anyone reading the log. */
+{ const logErr = console.error.bind(console); let last = 0;
+  console.error = (...a) => { const e = a[0]; if (e?.code === 'ERR_CRYPTO_ECDH_INVALID_PUBLIC_KEY' && /push-receiver/.test(String(e.stack))) { if (Date.now() - last > 600_000) { last = Date.now(); console.warn('Ring: skipped a notification that could not be decoded (harmless).'); } return; } logErr(...a); }; }
 async function ringConnect() {
   if (!config.ring?.refreshToken || ring.api) return;
   try {

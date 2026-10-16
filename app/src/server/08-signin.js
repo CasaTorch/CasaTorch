@@ -252,7 +252,7 @@ app.post('/api/auth/terms', express.json({ limit: '4kb' }), (req, res) => {
 });
 app.post('/api/auth/logout', (req, res) => { const tok = cookieOf(req); if (tok) { delete sessions[sha256(tok)]; saveSessions(); } if (req.user) audit(req, 'signed-out'); res.setHeader('Set-Cookie', `casatorch_session=; ${cookieFlags(req)}; Max-Age=0`); res.json({ ok: true }); });
 app.post('/api/logout', (req, res) => { const tok = cookieOf(req); if (tok) { delete sessions[sha256(tok)]; saveSessions(); } res.setHeader('Set-Cookie', `casatorch_session=; ${cookieFlags(req)}; Max-Age=0`); res.json({ ok: true }); });
-app.get('/api/health', (_req, res) => res.json({ ok: true, version: VERSION }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, version: VERSION, install: INSTALL }));
 
 /* ---- invites: the owner adds someone, they pick their own username and password ---- */
 app.get('/api/auth/invite', (req, res) => {
@@ -344,7 +344,10 @@ app.post('/api/auth/sessions/others', (req, res) => { const u = me(req, res); if
 const inviteLink = (req, u, reset = false) => {
   const tok = crypto.randomBytes(24).toString('base64url');
   u.invite = { hash: sha256(tok), exp: new Date(Date.now() + 7 * 86400_000).toISOString(), reset };
-  return `${req.protocol}://${req.headers.host}/login.html?invite=${tok}`;
+  // Made on this computer (localhost)? Give the address other devices on the network can open instead.
+  let host = String(req.headers.host || '');
+  if (/^(localhost|127\.|\[::1\])/i.test(host) && typeof lanAddress === 'function' && lanAddress()) host = `${lanAddress()}:${host.split(':').pop().replace(/\D/g, '') || PORT}`;
+  return `${req.protocol}://${host}/login.html?invite=${tok}`;
 };
 app.get('/api/users', requireRole('admin'), (_req, res) => res.json({ users: users.list.map(safeUser), panels: (users.panels || []).map(({ id, name, role, createdAt, lastUsed }) => ({ id, name, role, createdAt, lastUsed })), policy: users.policy, google: users.google ? { clientId: users.google.clientId, hasSecret: !!users.google.secret } : null, roles: ROLES }));
 app.post('/api/users', requireRole('admin'), express.json({ limit: '4kb' }), (req, res) => {

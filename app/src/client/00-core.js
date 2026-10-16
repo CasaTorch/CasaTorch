@@ -98,6 +98,7 @@ async function boot() {
   tick(); setInterval(tick, 15_000);
   window.addEventListener('hashchange', () => show(location.hash.slice(1)));
   show(location.hash.slice(1) || 'home');
+  setTimeout(tourOffer, 700);   // first visit in this browser: offer the tour (34-tour.js)
   setInterval(() => { if (document.hidden || document.body.classList.contains('editing-on')) return; loadStatus(); if (refresher) refresher(); }, 30_000);
 }
 document.addEventListener('DOMContentLoaded', () => boot());

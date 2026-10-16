@@ -32,7 +32,7 @@ function helpCard() {
   const link = (href, label, cls = 'btn') => el('a', { class: cls, href, target: '_blank', rel: 'noopener' }, label);
   const item = (title, text, price, action) => el('div', { style: 'padding:12px 0;border-top:1px solid var(--line)' }, el('div', { class: 'row between' }, el('b', {}, title), price ? el('span', { class: 'pill' }, price) : null), el('div', { class: 'small muted', style: 'margin:4px 0 8px' }, text), action);
   return el('div', { class: 'card' }, el('h2', {}, 'Help & services'),
-    el('div', { class: 'row wrap', style: 'margin-bottom:6px' }, link('mailto:support@casatorch.com', 'E-mail support', 'btn primary'), link(`${SITE}/docs`, 'Guides')),   // scrub-ok: the public support address
+    el('div', { class: 'row wrap', style: 'margin-bottom:6px' }, link('mailto:support@casatorch.com', 'E-mail support', 'btn primary'), link(`${SITE}/docs`, 'Guides'), el('button', { class: 'btn', onclick: () => tour() }, icon('spark'), 'Take the tour')),   // scrub-ok: the public support address
     item('Help', 'E-mail help from the CasaTorch team - for everyone. A community Discord is opening soon.', 'Included'),
     item('Home network design', 'Wi-Fi, wiring, cameras and sensors planned around your home, from someone with home and enterprise network design experience (Cisco Catalyst, Cisco Meraki). A clear, fixed quote first.', null, link('mailto:sales@casatorch.com?subject=Network%20project%20quote', 'Ask for a quote', 'btn small')),   // scrub-ok: the public sales address
     item('CasaTorch Box', 'A small box with CasaTorch already on it - for a second home, or a friend. Box Lite or Box, plug it in and go.', null, link(`${SITE}/box`, 'Order a Box', 'btn small')));

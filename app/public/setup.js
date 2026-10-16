@@ -357,11 +357,17 @@ function setupFor(stepId, opt) {
 /* ---------- pages ---------- */
 function welcome() {
   if (W.rerun) { const k = Object.entries(W.keeps).filter(([, v]) => v).map(([n]) => n); return [el('h1', {}, 'Change your setup'), el('p', { class: 'intro' }, `Your current answers are filled in. Anything you don't change is kept${k.length ? `, including what's already connected (${k.join(', ')})` : ''}.`)]; }
+  const step = (n, t, d) => el('div', { class: 'wstep' }, el('span', { class: 'wnum' }, n), el('div', {}, el('b', {}, t), el('div', { class: 'note' }, d)));
   return [el('h1', {}, 'Welcome to CasaTorch'),
-    el('p', { class: 'intro' }, 'About 10 to 20 minutes, and you can skip anything. First the everyday things - your town for the weather, calendars, teams, headlines, reminders. Then your gear: CasaTorch connects to Hue, Shelly, YoLink, Frigate, Reolink and Ring itself, and to thousands more through Home Assistant if you have it. Skip anything; add it later.'),
+    el('p', { class: 'intro' }, 'One screen for the smart home you already have: lights, cameras, sensors, calendars and more. CasaTorch runs here on your own hardware, and your settings stay here.'),
+    el('div', { class: 'wsteps' },
+      step('1', 'The everyday things', 'Your town for the weather, calendars, sports teams, headlines and reminders.'),
+      step('2', 'Your devices', 'Hue, Shelly, YoLink, Frigate, Reolink and Ring (Pro) connect directly. Thousands more come in through Home Assistant, if you use it.'),
+      step('3', 'Your dashboard', 'Then a one-minute tour of where everything is. Change anything later in Settings.')),
+    el('p', { class: 'note' }, 'About 10 to 20 minutes. Every step can be skipped and added later.'),
     el('p', { class: 'note' }, 'Stuck at any point? E-mail ', el('a', { href: 'mailto:support@casatorch.com' }, 'support@casatorch.com'), ' - a real person answers.'),   // scrub-ok: public support address
     el('div', { class: 'card' }, el('h3', {}, 'Just looking?'), el('p', { class: 'note' }, 'See CasaTorch with a sample house, including the 3D floor plan. No setup needed.'),
-      el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/'; } }, 'Try the demo')),
+      el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/?tour'; } }, 'Try the demo')),
     restoreBox()];
 }
 /* Moving from another CasaTorch: restore its backup instead of setting up again. */
@@ -507,7 +513,7 @@ $('#back').onclick = () => { if (W.i > 0) { W.i--; go(); scrollTo(0, 0); } };
 $('#next').onclick = async () => {
   if (W.i > W.steps.length) {
     const msg = $('#finishMsg'); msg.replaceChildren('Saving…');
-    try { const r = await api('/api/setup/finish', { body: { answers: { ...W.a, _added: W.added } } }); if (r.ok) { location.href = W.focus ? '/#connect' : '/'; return; } msg.replaceChildren(el('div', { class: 'err' }, r.error)); }
+    try { const r = await api('/api/setup/finish', { body: { answers: { ...W.a, _added: W.added } } }); if (r.ok) { location.href = W.focus ? '/#connect' : W.rerun ? '/' : '/?tour'; return; } msg.replaceChildren(el('div', { class: 'err' }, r.error)); }
     catch (e) { msg.replaceChildren(el('div', { class: 'err' }, e.message)); }
     return;
   }
