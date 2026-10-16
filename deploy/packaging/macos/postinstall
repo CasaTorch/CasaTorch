@@ -3,6 +3,13 @@ DATA="/Library/Application Support/CasaTorch"
 mkdir -p "$DATA" && chown -R nobody:nobody "$DATA" && chmod 700 "$DATA"
 launchctl bootstrap system /Library/LaunchDaemons/com.casatorch.server.plist 2>/dev/null || launchctl kickstart -k system/com.casatorch.server
 # Wait for it to answer, then open setup for whoever is at the screen.
-i=0; while [ $i -lt 40 ]; do curl -fs http://127.0.0.1:8090/api/health >/dev/null 2>&1 && break; sleep 0.5; i=$((i+1)); done
-U=$(stat -f%Su /dev/console 2>/dev/null); [ -n "$U" ] && [ "$U" != root ] && sudo -u "$U" open http://localhost:8090/ 2>/dev/null
+# If another copy already answers on 8090 (one started from Terminal, say), this one can't start: say so
+# instead of opening the other copy as if it were this one. It starts by itself once the port is free.
+U=$(stat -f%Su /dev/console 2>/dev/null); [ "$U" = root ] && U=
+H=; i=0; while [ $i -lt 40 ]; do H=$(curl -fs http://127.0.0.1:8090/api/health 2>/dev/null) && break; sleep 0.5; i=$((i+1)); done
+case "$H" in
+  *'"install":"macos"'*) [ -n "$U" ] && sudo -u "$U" open http://localhost:8090/ 2>/dev/null ;;
+  '') [ -n "$U" ] && sudo -u "$U" open http://localhost:8090/ 2>/dev/null ;;   # still starting - the page retries
+  *) [ -n "$U" ] && sudo -u "$U" osascript -e 'display dialog "CasaTorch is installed, but another copy of CasaTorch is already running on this Mac (port 8090) - probably one started from Terminal.\n\nQuit that copy (Control+C in its Terminal window) and the installed CasaTorch starts by itself within a few seconds. Then open http://localhost:8090" buttons {"OK"} default button "OK" with title "CasaTorch" with icon caution' >/dev/null 2>&1 & ;;
+esac
 exit 0

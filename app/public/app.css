@@ -349,3 +349,13 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .netdevs { margin: 8px 0 0 21px; } .netdevs summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .netgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 18px; margin-top: 10px; }
 .netdev { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 8px; align-items: center; font-size: 14px; } .netdev .tiny { grid-column: 2; }
+/* The tour (34-tour.js): a spotlight on one menu item and a card beside it. */
+#tour { position: fixed; inset: 0; z-index: 70; }
+#tour.dim { background: rgba(2, 4, 10, .72); backdrop-filter: blur(3px); }
+#tour .tour-spot { position: fixed; border-radius: 16px; box-shadow: 0 0 0 9999px rgba(2, 4, 10, .72), 0 0 0 2px var(--accent), 0 0 24px 4px var(--glow-a); transition: left .25s ease, top .25s ease, width .25s ease, height .25s ease; pointer-events: none; }
+#tour .tour-card { position: fixed; width: min(340px, calc(100vw - 24px)); background: var(--solid); border: 1px solid var(--line-2); border-radius: 18px; padding: 14px 16px 16px; box-shadow: 0 24px 70px rgba(0, 0, 0, .55); transition: left .25s ease, top .25s ease; }
+#tour .tour-card h3 { margin: 6px 0 6px; font-size: 18px; }
+#tour .tour-card p { margin: 0 0 14px; color: var(--muted); line-height: 1.5; font-size: 14px; }
+.tour-offer { text-align: center; padding: 6px 4px 0; } .tour-offer h3 { margin: 10px 0 6px !important; font-size: 20px !important; } .tour-offer p { line-height: 1.5; margin: 0; }
+.tour-offer .row { justify-content: center !important; }
+.tour-mark { width: 56px; height: 56px; margin: 0 auto; border-radius: 18px; display: grid; place-items: center; color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }

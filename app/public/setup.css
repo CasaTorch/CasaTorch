@@ -57,3 +57,7 @@ textarea { font: inherit; padding: 11px 12px; border-radius: 12px; border: 1px s
 .grid2 { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; } @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
 .results button { display: block; width: 100%; text-align: left; margin: 4px 0; }
 .focus-note { margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(94, 184, 255, .35); background: rgba(94, 184, 255, .10); line-height: 1.5; }
+.wsteps { display: grid; gap: 10px; margin: 18px 0 8px; }
+.wstep { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--text) 3%, transparent); }
+.wstep .note { margin-top: 2px; line-height: 1.45; }
+.wnum { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: #06101e; background: linear-gradient(135deg, var(--accent), var(--accent2)); }
