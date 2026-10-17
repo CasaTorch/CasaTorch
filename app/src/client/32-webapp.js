@@ -30,7 +30,9 @@ async function phoneCard() {
     /* 2. Alerts on this device */
     add(el('h3', { class: 'sub' }, 'Alerts on this device'));
     if (!isSecureContext) {
-      add(el('p', { class: 'small muted' }, `Phones only allow app installs and alerts on a secure (https) address, and this page is on ${location.host} (http). Turn on Secure access (on this page) and open CasaTorch at its https address on your phone.`),
+      const secure = el('p', { class: 'small muted' }, `Phones only allow app installs and alerts on a secure (https) address, and this page is on ${location.host} (http). At home, open CasaTorch at its secure address (Settings › Secure address at home); away from home, use Secure access (Pro).`);
+      api('/api/local-https/target').then((j) => { if (j.url) secure.replaceChildren('Phones only allow app installs and alerts on a secure (https) address. ', el('a', { href: j.url + location.pathname + location.hash }, 'Open the secure address'), ' on this device, then install and turn on alerts there.'); }).catch(() => {});
+      add(secure,
         info?.haPhone ? el('p', { class: 'small good' }, '✓ Alerts already go to the Home Assistant app on your phones.') : el('p', { class: 'small muted' }, 'Using Home Assistant? Its phone app can get CasaTorch alerts today - turn it on below.'));
     } else if (!('PushManager' in window) || !('Notification' in window)) {
       add(el('p', { class: 'small muted' }, isIOS && !isStandalone() ? 'On iPhone and iPad, alerts work in the installed app: add CasaTorch to your Home Screen first (above), open it from there, and come back here.' : 'This browser can\'t show alerts.'));

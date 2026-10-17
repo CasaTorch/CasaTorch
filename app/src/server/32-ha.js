@@ -78,9 +78,9 @@ const HA_SERVICES = {
   switch: { on: 'turn_on', off: 'turn_off', toggle: 'toggle' }, input_boolean: { on: 'turn_on', off: 'turn_off', toggle: 'toggle' }, automation: { on: 'turn_on', off: 'turn_off', toggle: 'toggle' },
   siren: { on: 'turn_on', off: 'turn_off', toggle: 'toggle' }, humidifier: { on: 'turn_on', off: 'turn_off', toggle: 'toggle' }, fan: { on: 'turn_on', off: 'turn_off', toggle: 'toggle' },
   media_player: { toggle: 'media_play_pause', play: 'media_play', pause: 'media_pause', next: 'media_next_track', on: 'turn_on', off: 'turn_off' },
-  cover: { open: 'open_cover', close: 'close_cover', stop: 'stop_cover', toggle: 'toggle' }, valve: { open: 'open_valve', close: 'close_valve', toggle: 'toggle' },
+  cover: { open: 'open_cover', close: 'close_cover', stop: 'stop_cover', toggle: 'toggle' }, valve: { open: 'open_valve', close: 'close_valve', stop: 'stop_valve', toggle: 'toggle' },
   scene: { run: 'turn_on' }, script: { run: 'turn_on' }, button: { run: 'press' }, input_button: { run: 'press' },
-  vacuum: { start: 'start', dock: 'return_to_base', stop: 'stop' }, lawn_mower: { start: 'start_mowing', dock: 'dock' },
+  vacuum: { start: 'start', dock: 'return_to_base', stop: 'stop' }, lawn_mower: { start: 'start_mowing', dock: 'dock', stop: 'pause' },
   lock: { lock: 'lock' },
   climate: { target: 'set_temperature', mode: 'set_hvac_mode', on: 'turn_on', off: 'turn_off' }, water_heater: { target: 'set_temperature' },
   alarm_control_panel: { arm_home: 'alarm_arm_home', arm_away: 'alarm_arm_away', arm_night: 'alarm_arm_night' },   // never disarm

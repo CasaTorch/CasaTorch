@@ -300,7 +300,8 @@ app.post('/api/setup/finish', (req, res) => {
     news: { feeds },
     reminders: (a.reminders?.list || []).filter((r) => r?.title).map((r) => ({ title: r.title, days: Array.isArray(r.days) ? r.days.map(Number) : null, time: r.time || null })),
     homeAssistant: draft.ha && usesHa ? { url: draft.ha.url, token: draft.ha.token } : usesHa ? prev.homeAssistant || null : null,
-    cameras: cams.length ? cams : prev.cameras || [],
+    // Cameras set up again in this run replace that kind (Frigate, Reolink, snapshot); the other kinds stay as they were.
+    cameras: [...(prev.cameras || []).filter((c) => !cams.some((n) => n.type === c.type)), ...cams],
     cameraPrefs: a.cameras?.has === 'yes' ? { kinds: picked('cameras'), detection: a.cameras.detect !== 'no' } : null,
     hue: draft.hue || prev.hue || null,
     shelly: shellyHosts.length ? shellyHosts.map((host) => ({ host })) : prev.shelly || [],

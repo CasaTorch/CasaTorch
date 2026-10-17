@@ -38,7 +38,7 @@ async function speedTest() {
   finally { speed.running = false; }
   return speed.last;
 }
-if (config.network?.speedtest !== false) setInterval(() => { if (isConfigured() && !isDemo()) speedTest().catch(() => {}); }, 4 * 3600_000).unref?.();
+setInterval(() => { if (isConfigured() && !isDemo() && config.network?.speedtest !== false) speedTest().catch(() => {}); }, 4 * 3600_000).unref?.();   // the setting is read each time, so a change works without a restart
 async function internetNow() {
   const gw = gatewayIp();
   const [ipinfo, cf, google, router] = await Promise.all([
