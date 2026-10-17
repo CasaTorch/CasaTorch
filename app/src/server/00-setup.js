@@ -53,14 +53,14 @@ function unseal(s) {
 }
 /* Which config.json values are secrets: anything called token, refreshToken, apiKey, secret, password or
    clientSecret, anywhere in the file, plus the Hue bridge's username (it is the bridge's password). */
-const SECRET_KEYS = /^(token|refreshToken|apiKey|secret|password|clientSecret|privateKey)$/;
+const SECRET_KEYS = /^(token|refreshToken|apiKey|secret|password|clientSecret|privateKey|license|snapshotUrl)$/;   // snapshot addresses can carry a camera login
 const SEALED = /^v1\.[\w-]+\.[\w-]*\.[\w-]+$/;
 function mapSecrets(obj, fn, trail = '') {
   if (Array.isArray(obj)) return obj.map((v) => mapSecrets(v, fn, trail));
   if (!obj || typeof obj !== 'object') return obj;
   const out = {};
   for (const [k, v] of Object.entries(obj)) {
-    const secret = typeof v === 'string' && v !== '' && (SECRET_KEYS.test(k) || (trail === 'hue' && k === 'username'));
+    const secret = typeof v === 'string' && v !== '' && (SECRET_KEYS.test(k) || (trail === 'hue' && k === 'username') || (trail === 'dns' && k === 'key') || (trail === 'yolink' && k === 'uaid') || (trail === 'calendars' && k === 'url'));   // a private calendar link is a password too
     out[k] = secret ? fn(v) : mapSecrets(v, fn, k);
   }
   return out;
@@ -68,6 +68,13 @@ function mapSecrets(obj, fn, trail = '') {
 const sealConfig = (c) => mapSecrets(c, (v) => (SEALED.test(v) ? v : seal(v)));
 const openConfig = (c) => mapSecrets(c, (v) => (SEALED.test(v) ? (unseal(v) ?? '') : v));
 let plaintextOnDisk = false;
+
+/* Never fetch the cloud's own metadata service (it hands out credentials when CasaTorch runs on a cloud
+   server). Every address CasaTorch is given - cameras, monitors, app tests, AI, Home Assistant - goes
+   through fetch, so this one check covers them. */
+const BLOCKED_HOSTS = /^(169\.254\.\d+\.\d+|\[?fd00:ec2::254\]?|100\.100\.100\.200|metadata\.google\.internal|metadata|instance-data)$/i;
+const blockedUrl = (u) => { try { return BLOCKED_HOSTS.test(new URL(String(u?.url || u)).hostname); } catch { return false; } };
+{ const realFetch = globalThis.fetch; globalThis.fetch = (u, o) => (blockedUrl(u) ? Promise.reject(new TypeError('That address is not allowed.')) : realFetch(u, o)); }
 
 let config = {};
 /* As a Home Assistant add-on, CasaTorch reaches Home Assistant through the Supervisor with the add-on's

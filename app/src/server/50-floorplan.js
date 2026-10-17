@@ -24,7 +24,7 @@ let demoFp = null;   // the demo can be edited, but only in memory
 const fpWrite = (d) => { if (isDemo()) { demoFp = d; return; } writeFileSafe(FP_FILE, JSON.stringify(d, null, 2), 0o600); };
 const DEMO_FP = path.join(APP_DIR, '..', 'demo', 'floorplan');
 /* The dark look was once called "neon"; plans saved then are read as "night". */
-const fpTheme = (d) => { if (d?.style?.theme === 'neon') d.style.theme = 'night'; if (d?.style?.colors?.neon) { d.style.colors.night ||= d.style.colors.neon; delete d.style.colors.neon; } if (d?.view?.theme === 'neon') d.view.theme = 'night'; return d; };
+const fpTheme = (d) => { if (d?.style?.theme === 'neon' || d?.style?.theme === 'blueprint') d.style.theme = 'night'; if (d?.style?.colors?.neon) { d.style.colors.night ||= d.style.colors.neon; delete d.style.colors.neon; } if (d?.view?.theme === 'neon') d.view.theme = 'night'; return d; };
 const fpData = () => fpTheme(isDemo() ? (demoFp ||= JSON.parse(fs.readFileSync(path.join(DEMO_FP, 'floorplan.json'), 'utf8'))) : fpRead());
 /* three.js: compressed (Brotli/gzip, kept in memory) and cached for a week - 2.7 MB becomes about 0.6 MB. */
 app.use((req, res, next) => (req.path.startsWith('/vendor/three/') ? staticPacked(req, res, next) : next()));
@@ -97,13 +97,13 @@ app.get('/api/floorplan/floors/:id/background', (req, res) => {
   if (!f?.plan?.bg || !/^[\w-]+\.(png|jpg|webp)$/.test(f.plan.bg)) return res.status(404).end();
   res.setHeader('X-Content-Type-Options', 'nosniff'); res.sendFile(path.join(FP_DIR, f.plan.bg));
 });
-/* How the 3D home looks for everyone: theme (real/night/blueprint/day) and any colors changed per theme. */
+/* How the 3D home looks for everyone: theme (real/night/day) and any colors changed per theme. */
 app.put('/api/floorplan/style', requirePro, express.json(), (req, res) => {
   const d = fpData(), b = req.body || {}, KEYS = ['bg', 'wall', 'floor', 'furniture', 'edge', 'door', 'window'];
   const colors = {};
-  for (const t of ['real', 'night', 'blueprint', 'day']) { const c = b.colors?.[t] ?? (t === 'night' ? b.colors?.neon : null); if (c && typeof c === 'object') { const ok = Object.fromEntries(KEYS.filter((k) => FP_HEX.test(c[k])).map((k) => [k, c[k]])); if (Object.keys(ok).length) colors[t] = ok; } }
+  for (const t of ['real', 'night', 'day']) { const c = b.colors?.[t] ?? (t === 'night' ? b.colors?.neon : null); if (c && typeof c === 'object') { const ok = Object.fromEntries(KEYS.filter((k) => FP_HEX.test(c[k])).map((k) => [k, c[k]])); if (Object.keys(ok).length) colors[t] = ok; } }
   const ex = b.extras || {}, extras = { ...(FP_HEX.test(ex.roof) ? { roof: ex.roof } : {}), ...(FP_HEX.test(ex.flow) ? { flow: ex.flow } : {}), ...(fin(ex.glow, 0.3, 2.5) ? { glow: +ex.glow } : {}) };
-  d.style = { theme: ['real', 'night', 'blueprint', 'day'].includes(b.theme) ? b.theme : 'real', colors, extras };
+  d.style = { theme: ['real', 'night', 'day'].includes(b.theme) ? b.theme : b.theme === 'blueprint' ? 'night' : 'real', colors, extras };
   fpWrite(d); res.json({ ok: true, style: d.style });
 });
 app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req, res) => {

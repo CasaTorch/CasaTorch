@@ -57,7 +57,7 @@ function atParseUrl(raw) {
   let u; try { u = new URL(/^[a-z]+:\/\//i.test(s) ? s : `https://${s}`); } catch { return null; }
   if (!/^https?:$/.test(u.protocol) || !u.hostname || u.username || u.password) return null;
   const host = u.hostname.replace(/^\[|\]$/g, '');
-  if (!atHostOk(host) && !net.isIP(host)) return null;
+  if ((!atHostOk(host) && !net.isIP(host)) || blockedUrl(u.toString())) return null;
   return { url: u.toString(), host };
 }
 

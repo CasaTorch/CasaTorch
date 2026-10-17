@@ -30,7 +30,12 @@ const writeSecretJson = (file, obj) => writeFileSafe(file, JSON.stringify(obj, n
 const readJsonFile = (file, dflt) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return dflt; } };
 const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 const newId = () => crypto.randomBytes(9).toString('base64url');
-const clientIp = (req) => String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+const clientIp = (req) => {
+  const sock = String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+  // Secure access (42-remote.js) arrives from cloudflared on this box: the visitor's address is in CF-Connecting-IP.
+  if (/^(127\.|::1$)/.test(sock) && config.remote?.hostname && String(req.headers.host || '').toLowerCase().startsWith(String(config.remote.hostname).toLowerCase())) return String(req.headers['cf-connecting-ip'] || sock).slice(0, 64);
+  return sock;
+};
 
 function verifySecret(stored, given) {
   const [kind, salt, hash] = String(stored || '').split('$');
@@ -131,6 +136,14 @@ function totpOk(secret, code, lastStep = 0) {
   return 0;
 }
 const recoveryCodes = () => Array.from({ length: 10 }, () => { const r = crypto.randomBytes(5).toString('hex'); return `${r.slice(0, 5)}-${r.slice(5)}`; });
+/* Recovery codes are stored with a slow, salted hash, so a stolen users.json can't be turned back into codes. */
+const rcHash = (code) => { const salt = crypto.randomBytes(12).toString('base64url'); return `rc1$${salt}$${crypto.scryptSync(String(code), salt, 32, { N: 16384 }).toString('base64url')}`; };
+const rcMatch = (stored, code) => {
+  if (!String(stored).startsWith('rc1$')) return stored === sha256(code);   // codes made before 0.4.3
+  const [, salt, h] = String(stored).split('$');
+  const a = crypto.scryptSync(String(code), salt, 32, { N: 16384 }), b = Buffer.from(h, 'base64url');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+};
 async function totpEnrolment(u) {
   const secret = b32enc(crypto.randomBytes(20)), label = encodeURIComponent(`CasaTorch (${config.house?.name || 'home'}):${u.username}`);
   const uri = `otpauth://totp/${label}?secret=${secret}&issuer=CasaTorch&algorithm=SHA1&digits=6&period=30`;
@@ -141,7 +154,7 @@ function secondFactorOk(u, code) {
   if (!u.totp?.on) return false;
   const c = String(code || '').trim().toLowerCase();
   if (/^[0-9a-f]{5}-[0-9a-f]{5}$/.test(c)) {
-    const i = (u.totp.recovery || []).indexOf(sha256(c)); if (i < 0) return false;
+    const i = (u.totp.recovery || []).findIndex((h) => rcMatch(h, c)); if (i < 0) return false;
     u.totp.recovery.splice(i, 1); saveUsers(); return 'recovery';
   }
   const step = totpOk(unseal(u.totp.secret), c, u.totp.lastStep || 0); if (!step) return false;
@@ -182,11 +195,7 @@ app.use('/api', (req, res, next) => {
 });
 /* Before setup, only setup itself may change anything. Without this, a settings change from any device on the
    network could make CasaTorch look set up - skipping the setup wizard and leaving it with no sign-in. */
-app.use('/api', (req, res, next) => {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || isConfigured() || isDemo()) return next();
-  if (/^\/(setup|license\/claim|auth)\//.test(req.path)) return next();
-  res.status(409).json({ error: 'Finish setup first.' });
-});
+/* (Before setup, only setup may change anything: see 01-security.js.) */
 app.use((req, res, next) => {
   if (!signInOn()) return next();
   const s = sessionOf(req), u = s && userById(s.userId);
@@ -242,7 +251,7 @@ app.post('/api/auth/enroll', express.json({ limit: '4kb' }), async (req, res) =>
   if (!req.body?.code) { const e = await totpEnrolment(u); t.pending = e.secret; return res.json({ uri: e.uri, qr: e.qr, secret: e.secret }); }
   if (!t.pending || !totpOk(t.pending, req.body.code)) return res.status(400).json({ error: 'That code is not right - check the time on your phone and try again.' });
   const codes = recoveryCodes();
-  u.totp = { on: true, secret: seal(t.pending), recovery: codes.map(sha256), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
+  u.totp = { on: true, secret: seal(t.pending), recovery: codes.map(rcHash), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
   saveUsers(); audit(req, '2fa-on', { user: u.username }); t.passed.add('enroll'); t.recovery = codes;
   const step = nextStep(t, u);
   if (step) return res.json({ step, ticket: t.id, recovery: codes, terms: TERMS_VERSION });
@@ -319,7 +328,7 @@ app.post('/api/auth/2fa/enable', express.json({ limit: '4kb' }), (req, res) => {
   if (!p || p.exp < Date.now()) return res.status(400).json({ error: 'Start again - that took too long.' });
   if (!totpOk(p.secret, req.body?.code)) return res.status(400).json({ error: 'That code is not right - check the time on your phone and try again.' });
   const codes = recoveryCodes();
-  u.totp = { on: true, secret: seal(p.secret), recovery: codes.map(sha256), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
+  u.totp = { on: true, secret: seal(p.secret), recovery: codes.map(rcHash), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
   pendingTotp.delete(u.id); saveUsers(); endSessionsOf(u.id, req.session.key); audit(req, '2fa-on');
   res.json({ ok: true, recovery: codes });
 });
@@ -333,8 +342,9 @@ app.post('/api/auth/2fa/disable', express.json({ limit: '4kb' }), (req, res) => 
 app.post('/api/auth/2fa/recovery', express.json({ limit: '4kb' }), (req, res) => {
   const u = me(req, res); if (!u) return;
   if (!u.totp?.on) return res.status(400).json({ error: 'Turn on two-step sign-in first.' });
+  if (limited(`pw:${u.id}`, 5)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes.' });
   if (!verifySecret(u.password, req.body?.password || '')) { failed(`pw:${u.id}`); return res.status(403).json({ error: 'Your password is not right.' }); }
-  const codes = recoveryCodes(); u.totp.recovery = codes.map(sha256); saveUsers(); audit(req, 'recovery-codes-new');
+  const codes = recoveryCodes(); u.totp.recovery = codes.map(rcHash); saveUsers(); audit(req, 'recovery-codes-new');
   res.json({ ok: true, recovery: codes });
 });
 app.delete('/api/auth/sessions/:id', (req, res) => {
@@ -394,6 +404,7 @@ app.put('/api/users/:id', requireRole('admin'), express.json({ limit: '4kb' }), 
 app.post('/api/users/:id/reset', requireRole('admin'), (req, res) => {
   const u = users.list.find((x) => x.id === req.params.id); if (!u) return res.status(404).json({ error: 'no such person' });
   if (u.role === 'owner' && req.user?.role !== 'owner') return res.status(403).json({ error: 'Only the owner can reset an owner.' });
+  if (!users.list.some((x) => x !== u && x.password && (x.role === 'owner' || x.role === 'admin'))) return res.status(400).json({ error: 'That would leave nobody who can sign in and manage CasaTorch. Change your password in Settings › Security instead.' });
   const link = inviteLink(req, u, true); u.password = null; delete u.totp; saveUsers(); endSessionsOf(u.id); audit(req, 'user-reset', { of: u.username });
   res.json({ ok: true, link });
 });

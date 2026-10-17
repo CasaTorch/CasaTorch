@@ -29,6 +29,8 @@ CasaTorch never phones home to check it.
 | App tests: common apps timed step by step, latency, jitter, loss, the path hop by hop (up to 8) | ✓ | ✓ | Now |
 | App tests for your own websites, every minute, alerts, up to 30 | | ✓ | Now |
 | **Your day** | | | |
+| Nudges: your own reminders (trash night, the dog's dinner, bills due) that light up every screen, with an icon or photo | ✓ | ✓ | Now |
+| Nudges sent to phones, anywhere, even in quiet hours | | ✓ | Now |
 | Weather, family calendar (built in - no Google needed - plus Google/iCloud/Outlook links), sports scores, news, reminders | ✓ | ✓ | Now |
 | Photo reel: upload photos from any phone or computer, slideshow on the wall | ✓ | ✓ | Now |
 | **Your home** | | | |

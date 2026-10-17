@@ -8,7 +8,7 @@ tab({ id: 'alerts', label: 'Alerts', icon: 'bell', async render(main) {
       x.repeating ? el('button', { class: 'btn small', onclick: async (e) => { e.target.disabled = true; try { await post(`/api/alerts/${encodeURIComponent(x.id)}/ack`); toast('Got it - no more reminders for this one'); draw(); } catch (err) { toast(err.message); e.target.disabled = false; } } }, icon('check'), 'Got it') : null));
     const past = el('div', { class: 'card' }, el('h2', {}, 'Recent'));
     past.append(a.recent?.length ? el('ul', { class: 'list' }, a.recent.slice(0, 50).map((x) => el('li', {}, el('span', { class: `dot ${x.severity === 'ok' ? 'good' : x.severity === 'critical' ? 'bad' : 'warn'}` }), el('div', { class: 'grow' }, x.title), el('span', { class: 'small muted' }, fmtWhen(x.at))))) : el('p', { class: 'muted' }, 'Nothing yet.'));
-    main.replaceChildren(el('div', { class: 'cards' }, now, past));
+    main.replaceChildren(el('div', { class: 'cards' }, typeof nudgesCard === 'function' ? nudgesCard(draw) : null, now, past));
   };
   await draw(); return draw;
 } });
@@ -63,7 +63,7 @@ function serversCard(mo, redraw) {
   const card = el('div', { class: 'card servers', style: 'margin-top:14px' });
   const head = el('h2', { style: 'margin:0' }, 'Servers and apps', el('span', { class: 'pill pro' }, 'Pro'));
   if (!mo.pro) {
-    card.append(head, el('p', { class: 'muted', style: 'margin-top:10px' }, 'Watch your NAS, servers and self-hosted apps: up or down, how fast they answer, and certificates about to expire - with a phone alert when something stops responding.'), el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'));
+    card.append(head, proPanel('Watch your NAS, servers and self-hosted apps: up or down, how fast they answer, and certificates about to expire - with a phone alert when something stops responding.'));
     return card;
   }
   const add = el('button', { class: 'btn small', onclick: () => {
@@ -112,7 +112,7 @@ function networkCard(nw, redraw) {
   const card = el('div', { class: 'card netsrc', style: 'margin-top:14px' });
   const head = el('h2', { style: 'margin:0' }, 'Network devices', el('span', { class: 'pill pro' }, 'Pro'));
   if (!nw.pro) {
-    card.append(head, el('p', { class: 'muted', style: 'margin-top:10px' }, 'Connect UniFi, Cisco Meraki, Pi-hole or AdGuard Home: every access point and switch online or offline, how many devices are connected, and how much your DNS filter blocks - with an alert when something drops off.'), el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'));
+    card.append(head, proPanel('Connect UniFi, Cisco Meraki, Pi-hole or AdGuard Home: every access point and switch online or offline, how many devices are connected, and how much your DNS filter blocks - with an alert when something drops off.'));
     return card;
   }
   const add = el('button', { class: 'btn small', onclick: () => {
@@ -199,7 +199,7 @@ function reportCard(rep, money, redraw) {
   const card = el('div', { class: 'card report' });
   const head = el('h2', {}, 'Weekly report', el('span', { class: 'pill pro' }, 'Pro'));
   if (!rep.pro) {
-    card.append(head, el('p', { class: 'muted' }, 'Every Monday, a short summary of the week: energy and what it cost, what stays on all night, the alerts and the internet - with a few tips. Written by your own AI if you connect one.'), el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'));
+    card.append(head, proPanel('Every Monday, a short summary of the week: energy and what it cost, what stays on all night, the alerts and the internet - with a few tips. Written by your own AI if you connect one.'));
     return card;
   }
   const list = rep.reports || []; let i = 0;

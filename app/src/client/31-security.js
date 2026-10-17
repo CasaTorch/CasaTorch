@@ -132,6 +132,13 @@ async function safetyCard() {
   const card = el('div', { class: 'card' }, el('h2', {}, icon('lock', 15), 'Safety'),
     el('p', { class: 'small muted', style: 'margin-top:0' }, 'CasaTorch never unlocks doors, opens garage doors or gates, or disarms alarms. It also holds back switches, buttons and scripts whose names look like one of those (a "garage" relay, an "unlock" script). Covers can always be closed.'));
   const list = el('div'); card.append(list);
+  if (owner) {   // other names CasaTorch answers to: a reverse proxy, your own domain
+    const st = await api('/api/settings').catch(() => ({}));
+    const hosts = el('input', { value: (st.security?.allowedHosts || []).join(', '), placeholder: 'dash.example.com', autocomplete: 'off' });
+    card.append(el('details', { style: 'margin-top:12px' }, el('summary', { class: 'small' }, 'Allowed names'),
+      el('p', { class: 'small muted' }, 'CasaTorch only answers to its address on your network, home-network names (like casatorch.local) and its own secure names - so a web page elsewhere can\'t reach it by pointing a name at it. Using CasaTorch behind your own reverse proxy or domain? Add that name here.'),
+      el('div', { class: 'row', style: 'gap:8px' }, hosts, el('button', { class: 'btn small', onclick: async () => { try { await post('/api/settings', { allowedHosts: hosts.value }, 'PUT'); toast('Saved'); } catch (e) { toast(e.message); } } }, 'Save'))));
+  }
   let all = false, q = '';
   const draw = async () => {
     const r = await api('/api/safety').catch(() => ({ held: [] }));

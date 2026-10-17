@@ -74,10 +74,10 @@ t('passwords: short, common or username-based ones are refused', () => { assert.
 
 t('config: every token, key and password is sealed on disk, nothing else', () => {
   const c = { house: { name: 'Home' }, homeAssistant: { url: 'http://ha.local:8123', token: 'eyJhbGciOi.secret' }, ring: { refreshToken: 'rt-123' }, ai: { provider: 'anthropic', apiKey: 'sk-ant-xyz' },
-    yolink: { uaid: 'ua-1', secret: 'ys-2' }, hue: { host: '10.0.0.5', username: 'hue-user' }, cameras: [{ id: 'c1', name: 'Porch', username: 'admin', password: 'pw!' }], meraki: { apiKey: '' } };
+    yolink: { uaid: 'ua-1', secret: 'ys-2' }, hue: { host: '10.0.0.5', username: 'hue-user' }, cameras: [{ id: 'c1', name: 'Porch', username: 'admin', password: 'pw!', snapshotUrl: 'http://admin:pw2@cam/snap.jpg' }], meraki: { apiKey: '' }, calendars: [{ name: 'Family', url: 'https://calendar.google.com/private-abc/basic.ics' }], network: { dns: { kind: 'pihole', key: 'pihole-pw' } } };
   const disk = H.sealConfig(c), text = JSON.stringify(disk);
-  for (const secret of ['eyJhbGciOi.secret', 'rt-123', 'sk-ant-xyz', 'ys-2', 'hue-user', 'pw!']) assert.ok(!text.includes(secret), `${secret} left in the clear`);
-  for (const plain of ['http://ha.local:8123', 'ua-1', '10.0.0.5', 'Porch', 'anthropic']) assert.ok(text.includes(plain), `${plain} should stay readable`);
+  for (const secret of ['eyJhbGciOi.secret', 'rt-123', 'sk-ant-xyz', 'ys-2', 'ua-1', 'hue-user', 'pw!', 'pw2@cam', 'private-abc', 'pihole-pw']) assert.ok(!text.includes(secret), `${secret} left in the clear`);
+  for (const plain of ['http://ha.local:8123', '10.0.0.5', 'Porch', 'anthropic', 'Family', 'pihole']) assert.ok(text.includes(plain), `${plain} should stay readable`);
   assert.equal(disk.meraki.apiKey, '');
   assert.deepEqual(H.openConfig(disk), c);
   assert.deepEqual(H.openConfig(H.sealConfig(disk)), c, 'sealing twice is harmless');
@@ -318,6 +318,25 @@ t('App tests: reads traceroute, tracepath and tracert, and sorts hops into home,
   assert.deepEqual(hops.map((h) => h.zone), ['home', 'provider', 'provider', 'provider', 'provider', 'internet', 'internet']);
   assert.equal(H.atParseUrl('zoom.us').url, 'https://zoom.us/');
   for (const bad of ['-oProxy=x', 'ftp://a.b', 'https://u:p@a.b/', 'https://a..b/']) assert.equal(H.atParseUrl(bad), null, bad);
+});
+
+t('security: only home names reach CasaTorch (no DNS rebinding), and cloud metadata is never fetched', () => {
+  for (const h of ['localhost:8090', '127.0.0.1:8090', '192.168.1.20:8090', '[::1]:8090', 'casatorch:8090', 'casatorch.local:8090', 'nas.lan', 'homehub', 'box.home.arpa']) assert.ok(H.hostAllowed(h), h);   // scrub-ok: examples
+  for (const h of ['evil.example.com', 'attacker.com:8090', '', 'lan-zzzzzzzz.casatorch.com:8443']) assert.ok(!H.hostAllowed(h), h);
+  for (const u of ['http://169.254.169.254/latest/meta-data/', 'http://metadata.google.internal/', 'http://100.100.100.200/']) assert.ok(H.blockedUrl(u), u);
+  for (const u of ['http://192.168.1.5:5000/api/version', 'https://zoom.us/']) assert.ok(!H.blockedUrl(u), u);   // scrub-ok
+});
+
+t('nudges: once, daily, days of the week, monthly (short months too) and yearly', () => {
+  const h = (date, dow) => ({ date, dow, day: Number(date.slice(8)), md: date.slice(5) });
+  const n = (o) => ({ on: true, time: '09:00', ...o });
+  assert.ok(H.nudgeOnDay(n({ repeat: 'once', date: '2026-10-20' }), h('2026-10-20', 2)));
+  assert.ok(!H.nudgeOnDay(n({ repeat: 'once', date: '2026-10-20' }), h('2026-10-21', 3)));
+  assert.ok(H.nudgeOnDay(n({ repeat: 'weekly', days: [2] }), h('2026-10-20', 2)) && !H.nudgeOnDay(n({ repeat: 'weekly', days: [2] }), h('2026-10-21', 3)));
+  assert.ok(H.nudgeOnDay(n({ repeat: 'monthly', date: '2026-01-31' }), h('2026-02-28', 6)), 'the 31st falls on the last day of February');
+  assert.ok(!H.nudgeOnDay(n({ repeat: 'monthly', date: '2026-01-31' }), h('2026-03-30', 1)));
+  assert.ok(H.nudgeOnDay(n({ repeat: 'yearly', date: '2020-03-22' }), h('2026-03-22', 0)));
+  assert.ok(!H.nudgeOnDay(n({ repeat: 'daily', on: false }), h('2026-03-22', 0)), 'off is off');
 });
 
 console.log(`\n${n} passed`);

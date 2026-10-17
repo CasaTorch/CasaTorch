@@ -28,11 +28,11 @@ const TLS_DIR = path.join(DATA_DIR, 'tls');
 const lt = { state: 'off', why: null, server: null, expires: null, busy: false, fails: 0, nextTry: 0 };
 const LT_STATE = path.join(TLS_DIR, 'state.json');
 function ltConf() {
-  try { return JSON.parse(fs.readFileSync(LT_STATE, 'utf8')); } catch { /* none yet */ }
+  try { const c = JSON.parse(fs.readFileSync(LT_STATE, 'utf8')); if (c.secret && SEALED.test(c.secret)) c.secret = unseal(c.secret) || ''; return c; } catch { /* none yet */ }
   if (config.localTls) { const c = config.localTls; ltSaveConf(c); const { localTls: _moved, ...rest } = config; try { saveConfig(rest); } catch { /* fine */ } return c; }   // kept in config.json before 0.4.1
   return null;
 }
-function ltSaveConf(c) { fs.mkdirSync(TLS_DIR, { recursive: true, mode: 0o700 }); writeFileSafe(LT_STATE, JSON.stringify(c, null, 2), 0o600); }
+function ltSaveConf(c) { fs.mkdirSync(TLS_DIR, { recursive: true, mode: 0o700 }); writeFileSafe(LT_STATE, JSON.stringify({ ...c, secret: c.secret ? seal(c.secret) : c.secret }, null, 2), 0o600); }   // the name's secret is sealed on disk
 const ltPrivate = (ip) => { const m = String(ip || '').match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/); if (!m) return false; const [a, b, c, d] = m.slice(1).map(Number); if ([a, b, c, d].some((x) => x > 255)) return false; return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168); };
 const ltUrl = (host) => `https://${host}${HTTPS_PORT === 443 ? '' : `:${HTTPS_PORT}`}`;
 async function ltCall(method, body) {

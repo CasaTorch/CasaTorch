@@ -91,7 +91,7 @@ const TESTS = {
     if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
     const stats = await getJson(`${url}/api/stats`).catch(() => null);
     const cams = stats?.cameras ? Object.keys(stats.cameras) : [];
-    return { ok: true, cameras: cams, message: `Frigate ${(await r.text()).trim()}${cams.length ? ` with ${cams.length} camera${cams.length === 1 ? '' : 's'}: ${cams.join(', ')}` : ''}` };
+    const ver = (await r.text()).trim().slice(0, 40); return { ok: true, cameras: cams, message: `Frigate ${/^[\w.+-]+$/.test(ver) ? ver : ''}${cams.length ? ` with ${cams.length} camera${cams.length === 1 ? '' : 's'}: ${cams.join(', ')}` : ''}` };
   },
   /* Meraki: the key, then which network - the answer feeds a follow-up question. */
   async meraki({ apiKey }) {
@@ -317,6 +317,7 @@ app.post('/api/setup/finish', (req, res) => {
   };
   for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
   try { saveConfig(next); } catch (err) { return res.status(500).json({ error: `could not save the settings: ${err.message}` }); }
+  if (typeof nudgesFromSetup === 'function') nudgesFromSetup(next.reminders);
   if (!isDemo()) authSetOwner({ username: acct.username, passwordHash: keepPw ? null : hashSecret(acct.password), acceptedTerms: acct.terms === true });
   setupReopened = 0; draft.ring = null; draft.hue = null;
   if (next.ring && typeof ringConnect === 'function' && proStatus().pro) ringConnect();

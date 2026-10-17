@@ -30,6 +30,40 @@ const frameAncestors = () => {
   return [...list].join(' ');
 };
 app.set('trust proxy', 'loopback');
+/* Which names CasaTorch answers to. A web page on some other site can't point its own name at this box
+   ("DNS rebinding") and talk to it: only addresses, home-network names, and CasaTorch's own secure names are
+   accepted. Others can be added (Settings › Security, or CASATORCH_ALLOWED_HOSTS=name1,name2). */
+const HOME_SUFFIX = /\.(local|lan|home|home\.arpa|internal|localdomain|intranet|corp|private|ts\.net)$/i;
+function hostAllowed(hostHeader) {
+  const h = String(hostHeader || '').toLowerCase().replace(/:\d+$/, '').replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if (!h) return false;
+  if (net.isIP(h) || !h.includes('.') || HOME_SUFFIX.test(h)) return true;
+  if (LOCAL_TLS.url && h === new URL(LOCAL_TLS.url).hostname) return true;
+  if (config.remote?.hostname && h === String(config.remote.hostname).toLowerCase()) return true;
+  try { if (config.homeAssistant?.url && h === new URL(config.homeAssistant.url).hostname) return true; } catch { /* not a URL */ }
+  const extra = [...String(process.env.CASATORCH_ALLOWED_HOSTS || '').split(','), ...(config.security?.allowedHosts || [])].map((x) => String(x).trim().toLowerCase()).filter(Boolean);
+  return extra.includes(h);
+}
+app.use((req, res, next) => {
+  if (hostAllowed(req.headers.host)) return next();
+  res.status(421).type('text/plain').send(`CasaTorch doesn't answer to "${String(req.headers.host || '').slice(0, 80)}". Open it with its address on your network (like http://192.168.1.20:8090) or casatorch.com/home. To use this name, add it in Settings › Security › Safety › Allowed names, or set CASATORCH_ALLOWED_HOSTS.`);
+});
+/* Changes only from CasaTorch's own pages: a request another site's page makes is refused. Registered here,
+   before every route - setup's included. */
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const origin = req.headers.origin, site = req.headers['sec-fetch-site'];
+  if (site && !['same-origin', 'none'].includes(site)) return res.status(403).json({ error: 'refused: that request did not come from CasaTorch' });
+  if (origin) { try { if (new URL(origin).host !== req.headers.host) return res.status(403).json({ error: 'refused: that request did not come from CasaTorch' }); } catch { return res.status(403).json({ error: 'refused' }); } }
+  next();
+});
+/* Before setup, only setup itself may change anything (no sign-in links, no Google or two-step policy, no
+   settings): a fresh box on the network can't be quietly given a way back in before its owner finishes setup. */
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || isConfigured() || isDemo()) return next();
+  if (/^\/(setup|license\/claim)\//.test(req.path)) return next();
+  res.status(409).json({ error: 'Finish setup first.' });
+});
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'", `script-src 'self' ${inlineScriptHashes}`.trim(), "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' data: https://fonts.gstatic.com",
