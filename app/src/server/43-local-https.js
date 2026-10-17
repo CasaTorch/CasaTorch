@@ -129,7 +129,7 @@ async function ltAuto() {
 app.get('/api/local-https', requireRole('admin'), (_req, res) => {
   const c = ltConf() || {};
   res.json({ on: !!c.on, optOut: !!c.optOut, auto: !c.on && !c.optOut && !isDemo() && process.env.CASATORCH_LOCAL_HTTPS !== 'off', hostname: c.hostname || null, url: c.hostname ? ltUrl(c.hostname) : null, state: c.on ? lt.state : 'off', why: lt.why, expires: lt.expires,
-    ip: c.ip || null, detected: ltAddress(), port: HTTPS_PORT, demo: isDemo() });
+    ip: c.ip || null, detected: ltAddress(), port: HTTPS_PORT, demo: isDemo(), find: findOn() });
 });
 app.post('/api/local-https/on', requireRole('admin'), express.json(), async (req, res) => {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
