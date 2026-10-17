@@ -29,7 +29,7 @@ function weatherView(j, tz) {
   const nowSym = now.data.next_1_hours?.summary?.symbol_code || now.data.next_6_hours?.summary?.symbol_code;
   return {
     place: config.location?.name || null, units: config.house?.units === 'C' ? 'C' : 'F', updated: j.properties?.meta?.updated_at || null,
-    now: { temp: tempOut(d.air_temperature), symbol: nowSym, words: symbolWord(nowSym), wind: speedOut(d.wind_speed || 0), windMs: d.wind_speed ?? null, gustMs: d.wind_speed_of_gust ?? null, windDir: d.wind_from_direction ?? null, humidity: Math.round(d.relative_humidity || 0) },
+    now: { temp: tempOut(d.air_temperature), symbol: nowSym, words: symbolWord(nowSym), wind: speedOut(d.wind_speed || 0), windMs: d.wind_speed ?? null, gustMs: d.wind_speed_of_gust ?? null, windDir: d.wind_from_direction ?? null, humidity: Math.round(d.relative_humidity || 0), cloud: d.cloud_area_fraction != null ? Math.round(d.cloud_area_fraction) : null, rainMm: now.data.next_1_hours?.details?.precipitation_amount ?? null },
     hours: ts.slice(0, 12).map((t) => ({ at: t.time, temp: tempOut(t.data.instant.details.air_temperature), symbol: t.data.next_1_hours?.summary?.symbol_code || null, rainMm: t.data.next_1_hours?.details?.precipitation_amount ?? null })),
     days: [...days.values()].slice(0, 7).map((x) => ({ date: x.date, hi: tempOut(x.hi), lo: tempOut(x.lo), rainMm: Math.round(x.rain * 10) / 10, symbol: mode(x.symbols) || null, words: symbolWord(mode(x.symbols)) })),
     credit: 'Weather: MET Norway',

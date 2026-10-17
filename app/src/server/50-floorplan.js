@@ -181,7 +181,7 @@ async function fpWeather() {
     const d0 = w.days?.[0];
     const loc = isDemo() ? { lat: 37.77, lon: -122.42 } : config.location || {};
     const n = w.now, windMs = n.windMs ?? (n.wind != null ? n.wind / (config.house?.units === 'C' ? 3.6 : 2.237) : null);   // older weather (and the demo) has only the display speed
-    return { temp: w.now.temp, words: w.now.words, kind: fpKind(w.now.symbol), windMs, gustMs: n.gustMs ?? null, windDir: n.windDir ?? (isDemo() ? 245 : null), place: w.place || null, hi: d0?.hi ?? null, lo: d0?.lo ?? null, tz: houseTz(), lat: loc.lat ?? null, lon: loc.lon ?? null,
+    return { temp: w.now.temp, words: w.now.words, kind: fpKind(w.now.symbol), windMs, gustMs: n.gustMs ?? null, windDir: n.windDir ?? (isDemo() ? 245 : null), cloudPct: n.cloud ?? null, rainMm: n.rainMm ?? null, place: w.place || null, hi: d0?.hi ?? null, lo: d0?.lo ?? null, tz: houseTz(), lat: loc.lat ?? null, lon: loc.lon ?? null,
       days: (w.days || []).slice(0, 5).map((x) => ({ label: new Date(`${x.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' }), hi: x.hi, lo: x.lo, kind: fpKind(x.symbol) })) };
   } catch { return null; }
 }

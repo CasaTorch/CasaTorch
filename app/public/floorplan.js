@@ -12,7 +12,7 @@ import './device-controls.js';   // window.CasaControls: every device's controls
 const toGlb = async (...a) => (await import('./floorplan-import.js')).toGlb(...a);
 const mergeGlb = async (...a) => (await import('./floorplan-import.js')).mergeGlb(...a);
 import { Yard, AREA_KINDS, ITEM_KINDS } from './floorplan-yard.js';
-import { buildRoof, PowerNet, weatherIcon, sunPosition, nightness, kelvinToHex, WeatherFx } from './floorplan-house.js';
+import { buildRoof, PowerNet, weatherIcon, sunPosition, nightness, kelvinToHex, WeatherFx, SkyDome, moonPhase } from './floorplan-house.js';
 import { createDock, createImmersive } from './floorplan-dock.js';
 import { THEMES, COLOR_KEYS, ROOM_COLORS, lookOf, classify, guessCats, itemOf, prettyItem, sectionRooms, makeFx, fxMaterial, MAX_GLOW, MAX_ROOMS } from './floorplan-look.js';
 
@@ -118,7 +118,7 @@ function zoomToPins(list) {   // fly in until the bubble's devices sit apart
 }
 controls.addEventListener('change', () => { wallsDirty = true; dirty = true; clusterDirty = true; });
 addEventListener('resize', kick);
-const power = new PowerNet(scene), weather = new WeatherFx(scene), yard = new Yard(scene);
+const power = new PowerNet(scene), weather = new WeatherFx(scene), yard = new Yard(scene), skyDome = new SkyDome(scene); 
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const flyTo = (target, pos, ms = 750) => { if (calm) ms = 1; tween = { t0: performance.now(), ms, ft: controls.target.clone(), fp: camera.position.clone(), tt: target, tp: pos }; };
 (function loop(now) {
@@ -131,7 +131,8 @@ const flyTo = (target, pos, ms = 750) => { if (calm) ms = 1; tween = { t0: perfo
   if (!dirty && !tween && !flash && !flashWas && now - drawnAt < (moving ? 40 : 250)) return;   // nothing new to draw yet
   power.tick(now / 1000);
   const dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
-  flash = weather.tick(dt, now / 1000);
+  flash = weather.tick(dt, now / 1000, S.live?.weather?.windMs != null ? windToward().multiplyScalar(S.live.weather.windMs) : null);
+  if (skyDome.visible) skyDome.tick(now / 1000, camera);
   if (S.plan && yard.group.visible && wxOn()) yard.wind(now / 1000, S.live?.weather?.windMs, windToward());
   if (now - skyAt > 2000 || flash || flashWas) { skyAt = now; updateSky(); } flashWas = flash;
   if (yard.group.visible && wxOn() && yard.group.children.length && now - (S.treeShadowAt || 0) > 500) { S.treeShadowAt = now; renderer.shadowMap.needsUpdate = true; }   // swaying trees
@@ -165,7 +166,7 @@ function skyPaint(k, lowSun) {
   const g = skyCanvas.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
   gr.addColorStop(0, `#${top.getHexString()}`); gr.addColorStop(0.62, `#${mix(top, horizon, 0.7).getHexString()}`); gr.addColorStop(1, `#${horizon.getHexString()}`);
   g.fillStyle = gr; g.fillRect(0, 0, 2, 256); skyTex.needsUpdate = true;
-  return horizon;
+  return [top, horizon];
 }
 let grassT = null;
 function grassTex() {
@@ -187,21 +188,36 @@ function updateSky() {
   const L = look(), w = S.live?.weather, theme = curTheme();
   let k = 0, el = 0.9, az = 2.4;
   if (sunOn() && w?.lat != null && w?.lon != null) { const sp = sunPosition(S.timeAt || new Date(), w.lat, w.lon); el = sp.el; az = sp.az; k = nightness(el); }
+  /* Clouds: the forecast's cloud cover where there is one, else from the kind of weather. Cloud dims the sun and softens
+     shadows (an overcast day has none), rain darkens the sky and wets the lawn. */
+  const wk = w?.kind, fx = wxOn();
+  const cover = !fx ? 0.12 : w?.cloudPct != null ? Math.max(0, Math.min(1, w.cloudPct / 100)) : ({ sun: 0.05, moon: 0.05, partly: 0.4, cloud: 0.85, fog: 0.8, rain: 0.95, storm: 1, snow: 0.9 }[wk] ?? 0.3);
+  const dark = fx ? ({ rain: 0.75, storm: 1, snow: 0.3, fog: 0.2 }[wk] || 0) : 0;
   const north = deg(S.plan?.settings?.northDeg || 0), dir = new V3(Math.sin(az) * Math.cos(Math.max(el, 0.05)), Math.sin(Math.max(el, 0.05)), -Math.cos(az) * Math.cos(Math.max(el, 0.05))).applyAxisAngle(new V3(0, 1, 0), -north);
   const B = S.sceneBox || S.houseBox, c = B ? B.getCenter(new V3()) : new V3(), R = B ? B.getSize(new V3()).length() * 0.6 + 4 : 20;
+  const sunDir = dir.clone().normalize();
   const sunWas = sun.position.clone(); sun.position.copy(c).add(dir.multiplyScalar(R * 2)); sun.target.position.copy(c); sun.target.updateMatrixWorld();
   if (sunWas.distanceToSquared(sun.position) > 1e-4) reshadow(); else kick();
   const cam = sun.shadow.camera; if (cam.right !== R) { cam.left = -R; cam.right = R; cam.top = R; cam.bottom = -R; cam.near = 0.5; cam.far = R * 4; cam.updateProjectionMatrix(); }
   const lowSun = Math.min(1, Math.max(0, el / 0.45)), day = 1 - k;
   if (Math.abs((S.night ?? -1) - k) > 0.05) { S.night = k; drawBeams(); }
   sun.color.set('#ffb36b').lerp(new THREE.Color('#ffffff'), lowSun);
-  sun.intensity = sunOn() ? L.sun * 1.7 * Math.min(1, Math.max(0, Math.sin(el) * 2.4)) : L.sun;
-  const cast = !Q.noShadow && sunOn() && sun.intensity > 0.05; if (sun.castShadow !== cast) { sun.castShadow = cast; reshadow(); }
-  hemi.intensity = L.hemi[2] * (0.32 + 0.68 * day) + flash * 2.5;
+  sun.intensity = (sunOn() ? L.sun * 1.7 * Math.min(1, Math.max(0, Math.sin(el) * 2.4)) : L.sun) * (1 - 0.8 * cover ** 1.6);
+  const cast = !Q.noShadow && sunOn() && sun.intensity > 0.05 && cover < 0.86; if (sun.castShadow !== cast) { sun.castShadow = cast; reshadow(); }
+  hemi.intensity = L.hemi[2] * (0.32 + 0.68 * day) * (1 + 0.18 * cover - 0.25 * dark) + flash * 2.5;
   const nightMix = { day: 0.92, night: 0.55, blueprint: 0.35, real: 0.95 }[theme] ?? 0.5;
-  if (L.real) { const horizon = skyPaint(k, lowSun); scene.background = skyTex; scene.fog.color.copy(horizon); if (grid.isMesh) grid.material.color.set(L.ground).multiplyScalar(0.25 + 0.75 * day); }
-  else { scene.background = new THREE.Color(L.bg).lerp(new THREE.Color('#04060d'), k * nightMix); scene.fog.color.copy(scene.background); for (const m of [grid.material].flat().filter(Boolean)) { m.transparent = true; m.opacity = 1 - k * 0.75; } }
-  renderer.toneMappingExposure = L.real ? 0.75 + 0.35 * day : 1;
+  if (L.real) {
+    const [top, horizon] = skyPaint(k, lowSun);
+    let moonDir = new V3(0, -1, 0); const phase = moonPhase(S.timeAt || new Date());
+    if (w?.lat != null && w?.lon != null) { const mp = sunPosition(new Date((S.timeAt || new Date()).getTime() - phase * 24.84 * 3600_000), w.lat, w.lon); moonDir = new V3(Math.sin(mp.az) * Math.cos(mp.el), Math.sin(mp.el), -Math.cos(mp.az) * Math.cos(mp.el)).applyAxisAngle(new V3(0, 1, 0), -north); }
+    skyDome.update({ top, horizon, sunDir, moonDir, sunEl: el, night: k, cover, dark, phase, wind: windToward(), windMs: w?.windMs });
+    skyDome.visible = true; scene.background = horizon.clone();
+    scene.fog.color.copy(horizon).lerp(new THREE.Color(k > 0.5 ? '#0b0f18' : '#9aa3ad'), cover * 0.6);
+    const fogNear = wk === 'fog' && fx ? 18 : 60, fogFar = wk === 'fog' && fx ? 110 : wk === 'rain' || wk === 'storm' ? 200 : 260; if (scene.fog.near !== fogNear || scene.fog.far !== fogFar) { scene.fog.near = fogNear; scene.fog.far = fogFar; }
+    if (grid.isMesh) grid.material.color.set(L.ground).multiplyScalar((0.25 + 0.75 * day) * (1 - 0.22 * dark));
+  }
+  else { skyDome.visible = false; scene.background = new THREE.Color(L.bg).lerp(new THREE.Color('#04060d'), k * nightMix); scene.fog.color.copy(scene.background); for (const m of [grid.material].flat().filter(Boolean)) { m.transparent = true; m.opacity = 1 - k * 0.75; } }
+  renderer.toneMappingExposure = L.real ? (0.75 + 0.35 * day) * (1 - 0.12 * cover) : 1;
   const boost = 1 + k * 0.9;
   if (Math.abs(boost - (S.glowBoost || 1)) > 0.05) { S.glowBoost = boost; drawPins(); }
   document.documentElement.dataset.night = k > 0.5 ? '1' : '0';
@@ -389,7 +405,7 @@ function layout(fit) {
   if (card) { const F = S.F[card.o.userData.floor]; card.o.visible = !!F && F.G.visible && (!cur || F === cur); }
   for (const o of S.pinObjs) { const F = S.F[o.userData.floor]; o.visible = !!F && F.G.visible && (!cur || F === cur) && (prefs.cameras || o.userData.kind !== 'camera'); }
   wallsDirty = true;
-  if (S.houseBox) { weather.set(wxOn() ? S.live?.weather?.kind : null, S.houseBox); weather.visible = wxOn() && !S.room; }
+  if (S.houseBox) { weather.set(wxOn() ? S.live?.weather?.kind : null, S.houseBox, S.live?.weather?.rainMm != null ? 0.5 + S.live.weather.rainMm / 4 : 1); weather.visible = wxOn() && !S.room; }
   controls.autoRotate = !!prefs.spin && !S.tour && (!document.body.classList.contains('panelmode') || Date.now() - lastTouch > 120_000); controls.autoRotateSpeed = 0.45;
   drawChips(); drawTools(); drawLeft(); drawTiles(); drawInfo(); drawPower(); drawBeams(); reshadow(); clusterDirty = true;
   if (fit) fitView();
@@ -929,7 +945,7 @@ const FS_CARDS = [['all', 'All cards'], ['tiles', 'Numbers only'], ['none', 'Jus
 const immersive = createImmersive({ el, ic, T,
   cycleCards: () => { const i = FS_CARDS.findIndex(([k]) => k === (prefs.fsCards || 'all')); prefs.fsCards = FS_CARDS[(i + 1) % FS_CARDS.length][0]; savePrefs(); fsCardsApply(); },
   spin: () => { prefs.spin = !prefs.spin; savePrefs(); layout(false); },
-  onChange: (on) => { fsCardsApply(); if (on && dock.arranging()) dock.setArrange(false); setTimeout(() => { resize(); kick(); }, 60); const b = $('#fsBtn'); if (b) b.classList.toggle('on', on); } });
+  onChange: (on) => { fsCardsApply(); if (on && dock.arranging()) dock.setArrange(false); if (on && isReal() && !calm) { const t = controls.target.clone(), back = camera.position.clone().sub(t), dist = back.length(), flat = new V3(back.x, 0, back.z).normalize(); flyTo(t, t.clone().add(flat.multiplyScalar(dist * Math.cos(0.26))).add(new V3(0, dist * Math.sin(0.26), 0)), 1400); } setTimeout(() => { resize(); kick(); }, 60); const b = $('#fsBtn'); if (b) b.classList.toggle('on', on); } });
 function fsCardsApply() { const k = prefs.fsCards || 'all'; document.body.classList.toggle('fs-tiles', k === 'tiles'); document.body.classList.toggle('fs-none', k === 'none'); immersive.label(T(FS_CARDS.find(([x]) => x === k)[1])); }
 /* Where the power is coming from, when the house has the sensors for it (solar, a home battery, the grid). */
 function energyCard(E) {
