@@ -132,7 +132,8 @@ async function localHttpsCard() {
     const st = { ready: ['good', 'Working'], certificate: ['warn', 'Getting the certificate… (about a minute)'], error: ['bad', 'Not working'], off: ['warn', 'Starting…'] }[r.state] || ['warn', r.state];
     add(el('div', { class: 'row', style: 'gap:8px;align-items:center' }, el('span', { class: `dot ${st[0]}` }), el('b', {}, st[1])),
       el('p', {}, el('a', { href: r.url }, r.url)),
-      el('p', { class: 'small muted' }, `Points at ${r.ip}${r.expires ? ` · certificate renews itself before ${fmt(r.expires, { dateStyle: 'medium' })}` : ''}. Bookmark this address on your computers and wall tablets.`),
+      r.find ? el('p', {}, 'The easy way in at home: ', el('a', { href: 'https://casatorch.com/home', target: '_blank', rel: 'noopener' }, el('b', {}, 'casatorch.com/home')), el('span', { class: 'small muted' }, ' - on any phone or computer on your Wi-Fi it opens this CasaTorch. Bookmark it or add it to the home screen.')) : null,
+      el('p', { class: 'small muted' }, `Points at ${r.ip}${r.expires ? ` · certificate renews itself before ${fmt(r.expires, { dateStyle: 'medium' })}` : ''}.${r.find ? '' : ' Bookmark this address on your computers and wall tablets (casatorch.com/home needs "Help me find this CasaTorch" on, in Settings › Updates).'}`),
       r.why ? el('p', { class: 'small bad' }, r.why) : null,
       r.state === 'ready' && location.protocol === 'http:' ? el('p', { class: 'small' }, 'You\'re on the plain address. ', el('a', { href: r.url + location.pathname + location.hash }, 'Switch to the secure one')) : null,
       el('details', {}, el('summary', { class: 'small muted' }, 'Doesn\'t open on some devices?'),
