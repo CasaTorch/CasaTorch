@@ -79,10 +79,19 @@ async function show(id) {
   if (window.innerWidth <= 760 && S.ui) drawNav();   // the phone bar's More lights up for a page inside it
   // live video left on the old page would keep downloading in the background: stop it
   for (const img of document.querySelectorAll('#view .cam.live img')) { img.onerror = null; img.removeAttribute('src'); }
-  const main = el('div'); $('#view').replaceChildren(main); refresher = null;   // a fresh box per visit: a slow, older render can't write into the new page
+  const main = el('div', { class: 'view-in' }); $('#view').replaceChildren(main); refresher = null;   // a fresh box per visit: a slow, older render can't write into the new page
   setTop(tabLabel(t));
   try { const r = (await t.render(main, sub || null)) || null; if (main.isConnected) refresher = r; }
   catch (err) { main.append(el('div', { class: 'card empty' }, `Could not load this: ${err.message}`)); }
+}
+/* Once the dashboard is up and the browser is idle, the 3D Home's files are fetched ahead (Pro only, only if its
+   button is on the bar), so opening it is instant. Skipped on metered or "save data" connections. */
+function warmUp() {
+  const c = navigator.connection;
+  if (c?.saveData || /2g/.test(c?.effectiveType || '') || !isPro() || !navTabs().some((t) => t.id === 'house3d')) return;
+  const go = () => ['/floorplan.html', '/floorplan.css', '/floorplan.js', '/floorplan-house.js', '/floorplan-dock.js', '/floorplan-yard.js', '/floorplan-look.js', '/floorplan-draw.js', '/vendor/three/build/three.module.js', '/vendor/three/examples/jsm/controls/OrbitControls.js']
+    .forEach((href) => document.head.append(el('link', { rel: 'prefetch', href })));
+  (window.requestIdleCallback || ((f) => setTimeout(f, 2500)))(go, { timeout: 6000 });
 }
 /* The main bar: the household's order and names, only the buttons they want; on a phone the first four and "More". */
 const navTabs = () => TABS.filter((t) => !S.ui.tabs?.[t.id]?.hidden).map((t, i) => [t, S.ui.tabs?.[t.id]?.order ?? 50 + i]).sort((a, b) => a[1] - b[1]).map(([t]) => t);
@@ -114,15 +123,21 @@ function drawBanner() {
 function tick() { $('#clock').textContent = fmt(new Date().toISOString(), { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 async function loadStatus() {
   api('/api/updates').then((u) => { S.updates = u; drawBanner(); }).catch(() => {});
-  try { S.status = await api('/api/status'); S.units = S.status.units || 'F'; const a = await api('/api/alerts').catch(() => null); S.alertsOpen = a?.now?.length || 0; } catch { /* offline: keep what we had */ }
+  // status and alerts together, not one after the other
+  const [st, a] = await Promise.all([api('/api/status').catch(() => null), api('/api/alerts').catch(() => null)]);
+  if (st) { S.status = st; S.units = st.units || 'F'; }
+  if (a) S.alertsOpen = a.now?.length || 0;
   drawBanner(); drawNav(); statusBar.draw();
 }
 async function boot() {
+  // everything the first screen needs is asked for at once: one round trip of waiting, not five
+  const pUi = api('/api/ui').catch(() => null), pStatus = loadStatus();
   try { S.settings = await api('/api/settings'); S.tz = S.settings.house?.timezone || undefined; } catch { /* default zone */ }
-  if (S.settings && !S.settings.demo) await CasaI18n.use(S.settings.house?.lang || 'en');   // the demo keeps whatever this browser picked
-  try { S.ui = { ...S.ui, ...(await api('/api/ui')) }; } catch { /* defaults */ }
+  const [ui] = await Promise.all([pUi, S.settings && !S.settings.demo ? CasaI18n.use(S.settings.house?.lang || 'en') : null]);   // the demo keeps whatever this browser picked
+  if (ui) S.ui = { ...S.ui, ...ui };
   applyUi();
-  await loadStatus();
+  await pStatus; drawNav();
+  warmUp();
   tick(); setInterval(tick, 15_000);
   window.addEventListener('hashchange', () => show(location.hash.slice(1)));
   show(location.hash.slice(1) || 'home');
