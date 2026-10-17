@@ -35,7 +35,7 @@ function appAddresses(req) {
 const appHome = (req) => ({ id: installId(), name: config.house?.name || 'Home', version: VERSION, addresses: appAddresses(req), pro: !!proStatus().pro });
 const cleanDevice = (d) => ({ name: String(d?.name || 'Phone').replace(/[^\p{L}\p{N} '’._-]/gu, '').trim().slice(0, 40) || 'Phone', platform: ['ios', 'ipados', 'android'].includes(d?.platform) ? d.platform : 'phone', model: String(d?.model || '').slice(0, 40), app: String(d?.app || '').slice(0, 16) });
 /* Who's asking, before any sign-in: so the app can show the home's name and check it's a CasaTorch. */
-app.get('/api/app/hello', (req, res) => res.json({ casatorch: true, home: { name: config.house?.name || 'Home', version: VERSION }, signIn: signInOn(), configured: isConfigured(), demo: isDemo() }));
+app.get('/api/app/hello', (req, res) => res.json({ casatorch: true, home: { name: config.house?.name || 'Home', version: VERSION }, signIn: signInOn(), configured: isConfigured(), demo: isDemo(), secure: LOCAL_TLS?.url || null, remote: config.remote?.hostname ? `https://${config.remote.hostname}` : null }));   // where to sign in encrypted
 app.post('/api/app/hello', (req, res) => res.json({ casatorch: true }));
 
 /* ---- signing in on the phone ---- */
@@ -132,6 +132,8 @@ app.put('/api/app/push', express.json({ limit: '2kb' }), (req, res) => {
   const s = appSession(req, res); if (!s) return;
   const pd = (push.apps || []).find((x) => x.session === s.id); if (!pd) return res.status(404).json({ error: 'Alerts aren\'t on for this phone.' });
   if (Object.hasOwn(LEVELS, String(req.body?.level))) pd.level = req.body.level;
+  // the phone's push address changed (Apple and Google rotate them now and then): the app sends the new one
+  if (req.body?.token !== undefined) { if (!/^[\w:.-]{20,4096}$/.test(String(req.body.token))) return res.status(400).json({ error: 'That isn\'t a phone this can send to.' }); pd.token = String(req.body.token); delete pd.lastError; }
   savePush(); res.json({ ok: true });
 });
 app.delete('/api/app/push', (req, res) => { const s = appSession(req, res); if (!s) return; push.apps = (push.apps || []).filter((x) => x.session !== s.id); savePush(); res.json({ ok: true }); });

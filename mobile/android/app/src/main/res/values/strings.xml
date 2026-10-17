@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CasaTorch</string>
+    <string name="ch_alerts">Alerts</string>
+    <string name="ch_alerts_desc">Doors, motion, packages and other things your home wants you to know</string>
+    <string name="ch_urgent">Urgent alerts</string>
+    <string name="ch_urgent_desc">Smoke, water, alarms and anything else marked urgent</string>
+    <string name="locked">CasaTorch is locked</string>
+    <string name="unlock">Unlock</string>
+</resources>

@@ -1,0 +1,107 @@
+# The CasaTorch app for iPhone and iPad. Make the Xcode project with XcodeGen:
+#   brew install xcodegen && cd mobile/ios && xcodegen
+# then open CasaTorch.xcodeproj, pick your team under Signing & Capabilities, and run.
+# Push alerts also need GoogleService-Info.plist from your Firebase project in CasaTorch/ (see mobile/README.md);
+# without it the app works, with alerts switched off.
+name: CasaTorch
+options:
+  bundleIdPrefix: com.casatorch
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_STRICT_CONCURRENCY: minimal
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: "11.4.0"
+targets:
+  CasaTorch:
+    type: application
+    platform: iOS
+    scheme: {}
+    sources:
+      - path: CasaTorch
+      - path: ../shell
+        type: folder
+        buildPhase: resources
+    info:
+      path: CasaTorch/Info.plist
+      properties:
+        CFBundleDisplayName: CasaTorch
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        KeychainGroup: $(AppIdentifierPrefix)com.casatorch.shared
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchLogo
+          UIImageRespectsSafeAreaInsets: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        UIBackgroundModes: [remote-notification]
+        UIStatusBarStyle: UIStatusBarStyleDefault
+        UIViewControllerBasedStatusBarAppearance: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.casatorch.pair
+            CFBundleURLSchemes: [casatorch]
+        NSCameraUsageDescription: CasaTorch uses the camera to scan the pairing code from your CasaTorch, and to scan rooms for your 3D home.
+        NSFaceIDUsageDescription: CasaTorch uses Face ID to unlock the app and keep your home's sign-in safe.
+        NSLocalNetworkUsageDescription: CasaTorch connects to your CasaTorch on your home network.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        FirebaseAppDelegateProxyEnabled: true
+    entitlements:
+      path: CasaTorch/CasaTorch.entitlements
+      properties:
+        aps-environment: development
+        # the app's own group first: sign-ins go there and stay out of the alerts extension's reach
+        keychain-access-groups: [$(AppIdentifierPrefix)com.casatorch.app, $(AppIdentifierPrefix)com.casatorch.shared]
+        com.apple.developer.usernotifications.time-sensitive: true
+    dependencies:
+      - target: NotificationService
+      - package: Firebase
+        product: FirebaseMessaging
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.casatorch.app
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+  NotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: NotificationService
+    info:
+      path: NotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: CasaTorch Alerts
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        KeychainGroup: $(AppIdentifierPrefix)com.casatorch.shared
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: NotificationService/NotificationService.entitlements
+      properties:
+        keychain-access-groups: [$(AppIdentifierPrefix)com.casatorch.shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.casatorch.app.alerts
+        TARGETED_DEVICE_FAMILY: "1,2"
