@@ -483,6 +483,9 @@ function review() {
   add('Sensors', a.sensors?.has === 'yes' ? labelsOf('sensors', a.sensors.kinds) : 'none');
   add('Network', `${W.steps.find((s) => s.id === 'network')?.question.options.find(([v]) => v === a.network?.kind)?.[1] || '-'}${a.network?.dns && a.network.dns !== 'none' ? ` · ${a.network.dns}` : ''}`);
   add('Energy', a.energy?.track === 'yes' ? `${a.energy.utility === 'other' || !a.energy.utility ? `${a.energy.rate || '?'} per kWh` : a.energy.utility}${a.energy.budget ? ` · budget ${a.energy.budget}/month` : ''}${a.energy.kinds?.length ? ` · ${labelsOf('energy', a.energy.kinds)}` : ''}` : 'off');
+  const sec = el('dd', {}, 'On by default - setting itself up');   // 43-local-https.js starts it before setup
+  dl.append(el('dt', {}, 'Secure address at home'), sec);
+  fetch('/api/local-https/target').then((r) => r.json()).then((j) => { sec.textContent = j.url ? `On · ${j.url}` : j.off ? 'Off (turn it on in Settings)' : location.protocol === 'https:' ? 'On' : 'On by default - setting itself up (needs the internet once). Turn it off in Settings if you like.'; }).catch(() => {});
   return [el('h1', {}, T('All set?')), el('p', { class: 'intro' }, T('Check this over. Finish saves it and opens your dashboard; you can change anything later in Settings.')), dl, el('div', { id: 'finishMsg' })];
 }
 

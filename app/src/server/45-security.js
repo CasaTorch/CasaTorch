@@ -116,7 +116,7 @@ function securityChecklist() {
   const admins = (typeof users !== 'undefined' && users?.list ? users.list : []).filter((u) => ['owner', 'admin'].includes(u.role) && u.password);
   add('signin', isDemo() || signInOn(), 'Everyone signs in', 'Settings › Security: CasaTorch asks for a password on every phone and computer.', '#settings');
   add('2fa', admins.length && admins.every((u) => u.totp?.on), 'Two-step sign-in for owners and admins', 'Settings › Your account & security › Two-step sign-in. Takes two minutes with any authenticator app.', '#settings');
-  add('https', config.localTls?.on && LOCAL_TLS.url, 'Secure address at home (https)', 'Settings › Secure address at home: sign-ins and everything else are encrypted on your Wi-Fi.', '#settings');
+  add('https', ltConf()?.on && LOCAL_TLS.url, 'Secure address at home (https)', 'Settings › Secure address at home: sign-ins and everything else are encrypted on your Wi-Fi.', '#settings');
   const up = typeof updateView === 'function' ? updateView() : null;
   add('updates', !up?.available, 'CasaTorch is up to date', up?.available ? `Version ${up.latest} is ready - Settings › Updates.` : 'Updates fix security problems; automatic updates keep you current.', '#settings');
   let backup = false; try { backup = fs.readFileSync(AUDIT_FILE, 'utf8').split('\n').slice(-5000).some((l) => l.includes('"backup-made"') && Date.now() - Date.parse(JSON.parse(l).at) < 90 * 86400_000); } catch { /* none */ }

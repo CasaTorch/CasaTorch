@@ -23,6 +23,6 @@ app.use((req, res, next) => {
   res.sendFile(path.join(APP_DIR, 'public', 'go-secure.html'));
 });
 /* Where the go-secure page should try (public: it runs before sign-in, and says nothing private). */
-app.get('/api/local-https/target', (_req, res) => res.json({ url: LOCAL_TLS.url }));
+app.get('/api/local-https/target', (_req, res) => res.json({ url: LOCAL_TLS.url, off: process.env.CASATORCH_LOCAL_HTTPS === 'off' || !!ltConf()?.optOut }));
 /* The go-secure page's check: answers on the https address, readable from the plain one (nothing in it). */
 app.get('/api/local-https/ping', (_req, res) => { res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); res.setHeader('Access-Control-Allow-Origin', '*'); res.status(204).end(); });
