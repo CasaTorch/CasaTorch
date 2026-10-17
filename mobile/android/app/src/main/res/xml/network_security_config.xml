@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Your CasaTorch's secure address is used whenever it answers. Plain http is allowed only because a box that was
+     just set up (or has no secure address yet) is reachable on the home network that way; the app only ever
+     opens addresses your own CasaTorch gave it. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors><certificates src="system" /></trust-anchors>
+    </base-config>
+</network-security-config>

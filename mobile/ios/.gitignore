@@ -1,0 +1,8 @@
+*.xcodeproj/
+build/
+DerivedData/
+CasaTorch/GoogleService-Info.plist
+CasaTorch/Info.plist
+CasaTorch/CasaTorch.entitlements
+NotificationService/Info.plist
+NotificationService/NotificationService.entitlements

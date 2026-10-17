@@ -1748,7 +1748,7 @@ function edFloors() {
     } catch (e) { proErr(e); await reload().catch(() => {}); }
   }
   /* In the CasaTorch app on an iPhone or iPad with LiDAR: scan a room right here; the scan comes straight in, as if you had uploaded it. */
-  const N = window.CasaNative, canScan = !!N?.lidar;
+  const N = window.CasaNative, canScan = !!N?.hasLidar;
   async function scanHere() {
     try {
       const avail = await N.lidar(); if (!avail?.available) { toast(avail?.why || 'This phone has no LiDAR scanner.'); return; }

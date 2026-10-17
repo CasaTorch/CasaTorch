@@ -210,7 +210,7 @@ app.use((req, res, next) => {
   if (!signInOn()) return next();
   const s = sessionOf(req), u = s && userById(s.userId);
   if (u && !(users.policy?.require2fa && !u.panel && !u.totp?.on)) { req.user = u; req.session = s; }
-  if (OPEN.some((r) => r.test(req.path))) return next();
+  if (OPEN.some((r) => r.test(req.path)) || (req.method === 'OPTIONS' && req.path.startsWith('/api/app/'))) return next();   // (the app's CORS checks, answered in 68-app.js)
   if (SETUP_PATHS.some((r) => r.test(req.path))) { if (!isConfigured() || (req.user && rank(req.user.role) >= rank('admin'))) return next(); }
   else if (req.user) {
     if (needsTerms(req.user) && !/^\/api\/auth\//.test(req.path)) {

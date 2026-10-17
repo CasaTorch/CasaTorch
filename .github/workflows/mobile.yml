@@ -1,0 +1,36 @@
+# Builds the phone apps on every change to mobile/: an Android debug APK (attached to the run) and an iOS simulator
+# build. Store builds are signed on your own Mac / with your own key - see mobile/README.md.
+name: Mobile apps
+on:
+  push: { branches: [main], paths: ["mobile/**", ".github/workflows/mobile.yml"] }
+  pull_request: { paths: ["mobile/**", ".github/workflows/mobile.yml"] }
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.11.1" }
+      - name: Shared screens parse
+        run: node --check mobile/shell/shell.js && node --check mobile/shell/bridge.js
+      - name: Build (debug) and lint
+        run: gradle -p mobile/android assembleDebug lintDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with: { name: casatorch-android-debug, path: mobile/android/app/build/outputs/apk/debug/*.apk, retention-days: 14 }
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Make the Xcode project
+        working-directory: mobile/ios
+        run: xcodegen
+      - name: Build for the simulator (unsigned)
+        working-directory: mobile/ios
+        run: |
+          xcodebuild -project CasaTorch.xcodeproj -scheme CasaTorch -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build | tail -40
