@@ -14,13 +14,15 @@ const deviceName = () => { const ua = navigator.userAgent; return /iPhone/.test(
 async function mySubscription() { if (!('serviceWorker' in navigator)) return null; const r = await navigator.serviceWorker.getRegistration(); return r ? r.pushManager.getSubscription() : null; }
 
 async function phoneCard() {
-  const card = el('div', { class: 'card' }, el('h2', {}, icon('bell', 15), 'Phone app & alerts'));
+  const card = el('div', { class: 'card' }, el('h2', {}, icon('bell', 15), window.CasaNative ? 'Alerts for everyone' : 'Web app & alerts'));
   const body = el('div'); card.append(body);
   const add = (...kids) => body.append(...kids.filter((k) => k != null && k !== false));
   const draw = async () => {
     const info = await api('/api/push').catch(() => null);
     const me = await api('/api/auth/me').catch(() => null), admin = !me || me.signIn === false || ['owner', 'admin'].includes(me.user?.role);
     body.replaceChildren();
+    if (window.CasaNative) { /* in the CasaTorch app, this phone's alerts are on the card above - only the house-wide settings here */ }
+    else {
     /* 1. Install */
     const install = isStandalone() ? el('p', { class: 'small good' }, '✓ You\'re using the installed app.')
       : installPrompt ? el('button', { class: 'btn', onclick: async () => { installPrompt.prompt(); await installPrompt.userChoice.catch(() => {}); installPrompt = null; draw(); } }, icon('plus'), 'Install CasaTorch on this device')
@@ -59,6 +61,7 @@ async function phoneCard() {
           draw();
         } }, icon('bell'), 'Turn on alerts here'));
       }
+    }
     }
     const others = (info?.devices || []).filter((d) => d.id !== (() => { try { return localStorage.getItem('casatorch-push-id'); } catch { return null; } })());
     if (others.length) add(el('h3', { class: 'sub' }, 'Your other devices with alerts'), ...others.map((d) => el('div', { class: 'row between', style: 'gap:8px;margin:6px 0' }, el('span', {}, d.name, d.broken ? el('small', { class: 'muted' }, ' · not reachable') : null),

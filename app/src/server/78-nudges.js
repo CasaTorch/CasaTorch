@@ -83,6 +83,7 @@ async function nudgePush(n) {
       await Promise.allSettled(push.subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(msg), { TTL: 3600, urgency: 'normal', vapidDetails: { subject: 'mailto:support@casatorch.com', publicKey: k.publicKey, privateKey: k.privateKey }, timeout: 10_000 })));   // scrub-ok: public support address
     })(),
     haPhone(msg),
+    (push.apps || []).length && !isDemo() ? appPushSend(push.apps, { ...msg, sound: n.sound && n.sound !== 'none' ? n.sound : null }) : null,
   ]);
 }
 

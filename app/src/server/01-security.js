@@ -49,9 +49,14 @@ app.use((req, res, next) => {
   res.status(421).type('text/plain').send(`CasaTorch doesn't answer to "${String(req.headers.host || '').slice(0, 80)}". Open it with its address on your network (like http://192.168.1.20:8090) or casatorch.com/home. To use this name, add it in Settings › Security › Safety › Allowed names, or set CASATORCH_ALLOWED_HOSTS.`);
 });
 /* Changes only from CasaTorch's own pages: a request another site's page makes is refused. Registered here,
-   before every route - setup's included. */
+   before every route - setup's included. The one exception is the CasaTorch phone app, whose built-in screens run from
+   their own origins: its sign-in calls carry no cookies (nothing to forge), and once signed in it sends its own token. */
+const APP_ORIGINS = new Set(['casatorch-app://app', 'https://appassets.androidplatform.net']);
+const APP_OPEN = /^\/(?:api\/)?app\/(login|mfa|enroll|terms|claim|hello)$/;
+const fromApp = (req) => (!req.headers.origin || APP_ORIGINS.has(req.headers.origin)) && !/(?:^|;\s*)casatorch_session=/.test(String(req.headers.cookie || '')) && (APP_OPEN.test(req.path) || /^Bearer [A-Za-z0-9_-]{20,200}$/.test(String(req.headers.authorization || '')));
 app.use('/api', (req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (fromApp(req)) return next();
   const origin = req.headers.origin, site = req.headers['sec-fetch-site'];
   if (site && !['same-origin', 'none'].includes(site)) return res.status(403).json({ error: 'refused: that request did not come from CasaTorch' });
   if (origin) { try { if (new URL(origin).host !== req.headers.host) return res.status(403).json({ error: 'refused: that request did not come from CasaTorch' }); } catch { return res.status(403).json({ error: 'refused' }); } }

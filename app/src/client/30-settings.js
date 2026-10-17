@@ -187,7 +187,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     ['people', 'People & sign-in', 'user', 'Your account, two-step sign-in, people in the house and the security log', async () => securityCards()],
     ['safety', 'Safety', 'shield', 'What CasaTorch will never switch, and your exceptions', async () => [await safetyCard()], admin],
     ['connections', 'Connections & AI', 'link', 'Home Assistant and your brands, Ask the house, secure access', async () => [conn, aiCard(s), await remoteCard(), await localHttpsCard()]],
-    ['phones', 'Phones & alerts', 'phone', 'Alerts on your phones, quiet hours, the app', async () => [await phoneCard()]],
+    ['phones', 'Phones & alerts', 'phone', 'The CasaTorch app, alerts on your phones, quiet hours', async () => [...(await appCards()), await phoneCard()]],
     ['updates', 'Updates & backup', 'download', 'Versions, automatic updates and an encrypted backup', async () => [await updatesCard(), await backupCard(s)]],
     ['pro', 'CasaTorch Pro', 'spark', 'Your plan and license key', async () => [pro]],
     ['help', 'Help', 'help', 'Guides, the tour and getting help', async () => [helpCard()]],
