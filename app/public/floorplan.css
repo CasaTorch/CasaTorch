@@ -195,3 +195,32 @@ input[type=color] { width: 34px; height: 30px; padding: 2px; flex: none; } input
 .pin[data-n]::after { content: attr(data-n); position: absolute; top: -8px; right: -8px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--hl); color: #fff; font: 700 11px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
 .pin[data-n] { cursor: zoom-in; }   /* (it is already placed absolutely; the count sits on its corner) */
 .findbox { display: grid; gap: 4px; margin: 10px 0 4px; } .findbox input { width: 100%; }
+/* outdoor flood lights */
+.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; } .chk input { margin: 0; }
+.beamset { margin-top: 6px; padding: 6px 8px; border-radius: 10px; background: color-mix(in srgb, var(--warm) 10%, transparent); display: grid; gap: 4px; } .beamset .row { margin: 0; } .beamset input[type=range] { flex: 1; min-width: 0; }
+/* the house at a glance: tiles on the right, a drawer with the detail */
+#tiles { position: fixed; right: 14px; top: 104px; width: 200px; z-index: 4; display: grid; gap: 8px; align-content: start; max-height: calc(100% - 190px); overflow-y: auto; scrollbar-width: none; }
+#tiles[hidden], body.drawer #tiles { display: none; }
+.tile { all: unset; box-sizing: border-box; display: grid; gap: 2px; padding: 10px 12px; border-radius: 16px; background: var(--panel); backdrop-filter: var(--blur); border: 1px solid var(--line); cursor: pointer; color: var(--text); transition: border-color .15s, transform .15s; }
+.tile:hover, .tile:focus-visible { border-color: var(--hl); transform: translateY(-1px); } .tile:focus-visible { outline: 2px solid var(--hl); outline-offset: 2px; }
+.tile .tl { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); } .tile .tl .ic svg { width: 14px; height: 14px; }
+.tile b { font-size: 22px; line-height: 1.15; font-weight: 700; } .tile small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile.good b { color: var(--good, #34d399); } .tile.warm b { color: var(--warm); } .tile.warn { border-color: color-mix(in srgb, var(--warm) 60%, transparent); } .tile.warn b { color: var(--warm); }
+.tile.bad { border-color: var(--bad); animation: pulse 1.6s infinite; } .tile.bad b { color: var(--bad); } .tile.on { border-color: var(--hl); }
+.tile.exit { text-align: center; padding: 8px; } .tile.exit small { color: var(--text); }
+body.drawer #side[data-kind=info] { width: 380px; animation: drawerin .22s ease-out; overflow-y: auto; }
+@keyframes drawerin { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { body.drawer #side[data-kind=info] { animation: none; } .tile.bad { animation: none; } }
+.drow.bad { border-color: var(--bad); } .drow.bad .ic { color: var(--bad); }
+.ibars { display: grid; gap: 6px; margin: 4px 0 8px; } .ibar { display: grid; grid-template-columns: minmax(0, 1fr) 1.2fr auto; gap: 8px; align-items: center; font-size: 13px; }
+.ibar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ibar i { display: block; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--text) 8%, transparent); position: relative; overflow: hidden; }
+.ibar i::after { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--w); border-radius: 4px; background: var(--hl); } .ibar small { color: var(--muted); min-width: 44px; text-align: right; }
+.battery { position: relative; height: 34px; border-radius: 10px; border: 1px solid var(--line-2); overflow: hidden; margin: 6px 0 10px; display: grid; place-items: center; }
+.battery i { position: absolute; inset: 0 auto 0 0; width: var(--w); background: color-mix(in srgb, var(--good, #34d399) 45%, transparent); } .battery b { position: relative; }
+/* wall panel mode: nothing to edit, a little bigger to read across the room */
+body.panelmode #modeSeg, body.panelmode #guideBtn, body.panelmode #tools { display: none; }
+body.panelmode #tiles { width: 230px; } body.panelmode .tile b { font-size: 26px; }
+@media (max-width: 900px) {
+  #tiles { left: 14px; right: 14px; width: auto; top: auto; bottom: 76px; max-height: none; display: flex; overflow-x: auto; overflow-y: hidden; }
+  #tiles .tile { flex: 0 0 150px; } body.drawer #side[data-kind=info] { width: auto; } body.panelmode #tiles { bottom: 14px; }
+}
