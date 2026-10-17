@@ -31,8 +31,7 @@ function gameView(ev, league) {
     broadcast: c.broadcasts?.[0]?.names?.[0] || c.geoBroadcasts?.[0]?.media?.shortName || null };
 }
 /** Today's scoreboard for each league you follow + each team's next game. Live games refresh every minute. */
-async function sportsNow() {
-  const teams = config.sports?.teams || [];
+async function sportsNow(teams = config.sports?.teams || []) {
   if (!teams.length) return { games: [] };
   const games = new Map();
   for (const league of [...new Set(teams.map((t) => t.league))]) {

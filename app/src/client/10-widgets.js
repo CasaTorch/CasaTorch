@@ -9,43 +9,96 @@ const dayName = (ymd) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', wee
 const fits = (h, per, head = 46) => Math.max(1, Math.floor((h * ROW_PX + (h - 1) * GAP_PX - head) / per));
 const empty = (text, link, label) => el('div', { class: 'allclear' }, el('div', {}, el('div', { class: 'small' }, text), link ? el('a', { class: 'btn small', href: link, style: 'margin-top:10px' }, label) : null));
 
-widget({ id: 'clock', title: 'Clock', icon: 'clock', bare: true, min: [2, 1], size: [4, 2], render(b, ctx, { w, h }) {
-  const now = new Date().toISOString(), hr = Number(fmt(now, { hour: 'numeric', hour12: false }));
-  const greet = hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
-  const wx = ctx.data.home?.weather?.now;
-  b.replaceChildren(el('div', { style: 'margin:auto 0' },
-    h >= 2 && w >= 3 ? el('div', { class: 'muted small', style: 'margin-bottom:6px' }, `${greet}${ctx.data.home?.house ? ` · ${ctx.data.home.house}` : ''}`) : null,
-    el('div', { class: 'clock-big', style: h === 1 ? 'font-size:36px' : null }, fmt(now, { hour: 'numeric', minute: '2-digit' })),
-    h >= 2 ? el('div', { class: 'row', style: 'margin-top:8px;gap:12px' }, el('span', { class: 'muted' }, fmt(now, { weekday: 'long', month: 'long', day: 'numeric' })), wx && w >= 4 ? el('span', { class: 'muted' }, `${wxIcon(wx.symbol)} ${wx.temp}°`) : null) : null));
-} });
-
-widget({ id: 'weather', title: 'Weather', icon: 'sun', min: [2, 2], size: [5, 4], render(b, ctx, { w, h }) {
-  const wx = ctx.data.home?.weather;
-  if (!wx || wx.error || !wx.now) return b.replaceChildren(empty(wx?.error ? 'Weather is not loading right now.' : 'Add your town in setup to see the weather.'));
-  const today = wx.days?.[0];
-  const parts = [el('div', { class: 'wx-now' }, el('span', { class: 'wx-ic', style: w <= 2 ? 'font-size:30px' : null }, wxIcon(wx.now.symbol)),
-    el('div', {}, el('div', { class: 'big', style: w <= 2 ? 'font-size:34px' : null }, `${wx.now.temp}°`), w >= 3 ? el('div', { class: 'muted small' }, `${wx.now.words}${today ? ` · H ${today.hi}° L ${today.lo}°` : ''}`) : null),
-    w >= 5 ? el('div', { class: 'small muted', style: 'margin-left:auto;text-align:right' }, wx.place || '', el('br'), `Wind ${wx.now.wind ?? '-'} ${wx.units === 'C' ? 'km/h' : 'mph'} · ${wx.now.humidity ?? '-'}%`) : null)];
-  if (h >= 3 && w >= 3) parts.push(el('div', { class: 'hours' }, (wx.hours || []).slice(0, Math.max(3, Math.floor(w * 1.1))).map((x) => el('div', {}, fmt(x.at, { hour: 'numeric' }), el('i', {}, wxIcon(x.symbol)), el('b', {}, `${x.temp}°`)))));
-  if (h >= 5 || (h >= 4 && w >= 4)) {
-    const days = (wx.days || []).slice(0, Math.min(7, fits(h - 3, 32, 0) + 1));
-    const lo = Math.min(...days.map((d) => d.lo)), hi = Math.max(...days.map((d) => d.hi));
-    parts.push(el('ul', { class: 'list days' }, days.map((d) => el('li', {}, el('b', {}, dayName(d.date)), el('span', {}, wxIcon(d.symbol)),
-      w >= 5 ? el('div', { style: 'padding:0 12px;align-self:center' }, el('div', { class: 'temp-bar', style: `margin-left:${((d.lo - lo) / Math.max(1, hi - lo)) * 100}%;width:${((d.hi - d.lo) / Math.max(1, hi - lo)) * 100}%` })) : el('span', { class: 'muted small ellipsis' }, d.words || ''),
-      el('span', { class: 'num' }, `${d.hi}° `, el('span', { class: 'muted' }, `${d.lo}°`))))));
-  }
-  if (h >= 4) parts.push(el('div', { class: 'tiny faint', style: 'margin-top:auto' }, wx.credit || ''));
-  b.replaceChildren(...parts);
-} });
-
-widget({ id: 'calendar', title: 'Coming up', icon: 'calendar', min: [3, 2], size: [4, 4],
-  headerExtra: () => el('button', { class: 'btn ghost small', title: 'Add an event', 'aria-label': 'Add an event', onclick: () => eventEditor(null, () => show(current)) }, icon('plus')),
+widget({ id: 'clock', title: 'Clock', icon: 'clock', bare: true, live: true, cat: 'time', essential: true, blurb: 'The time and date, digital or a clock face', min: [2, 1], size: [4, 2],
+  options: [
+    { key: 'style', type: 'select', label: 'Style', default: 'digital', choices: [['digital', 'Digital'], ['analog', 'Clock face'], ['both', 'Both']] },
+    { key: 'seconds', type: 'toggle', label: 'Seconds', text: 'Show seconds' },
+    { key: 'h24', type: 'toggle', label: '24-hour time', text: 'Use 24-hour time' },
+    { key: 'greet', type: 'toggle', label: 'Greeting', text: 'Good morning, good evening…', default: true },
+  ],
   render(b, ctx, { w, h }) {
-    const cal = ctx.data.home?.calendar;
-    const ev = (cal?.events || []).filter((e) => Date.parse(e.end || e.start) > Date.now()).slice(0, fits(h, 52));
-    if (!ev.length) return b.replaceChildren(empty('Nothing coming up.', '#calendar', 'Open the calendar'));
+    const o = optsOf(b._t || {}), style = o.style || 'digital', secs = !!o.seconds;
+    clearInterval(b._tick);
+    const face = el('canvas', { class: 'clock-face', 'aria-hidden': 'true' });
+    const big = el('div', { class: 'clock-big', style: h === 1 ? 'font-size:36px' : null });
+    const sub = el('div', { class: 'row', style: 'margin-top:8px;gap:12px' });
+    const greetEl = el('div', { class: 'muted small', style: 'margin-bottom:6px' });
+    const draw = () => {
+      if (!b.isConnected && b._drawn) { clearInterval(b._tick); return; }
+      b._drawn = true;
+      const now = new Date().toISOString(), hr = Number(fmt(now, { hour: 'numeric', hourCycle: 'h23' }));
+      const greet = hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+      greetEl.textContent = `${greet}${ctx.data.home?.house ? ` · ${ctx.data.home.house}` : ''}`;
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: S.tz, hour: 'numeric', minute: '2-digit', ...(secs ? { second: '2-digit' } : {}), hourCycle: o.h24 ? 'h23' : 'h12' }).formatToParts(new Date(now));
+      const ampm = parts.find((x) => x.type === 'dayPeriod')?.value;
+      big.replaceChildren(parts.filter((x) => x.type !== 'dayPeriod').map((x) => x.value).join('').trim(), ampm && w >= 3 ? el('span', { class: 'clock-ampm' }, ampm) : '');
+      const wx = ctx.data.home?.weather?.now;
+      sub.replaceChildren(...[el('span', { class: 'muted' }, fmt(now, { weekday: w >= 3 ? 'long' : 'short', month: w >= 3 ? 'long' : 'short', day: 'numeric' })), wx && w >= 4 ? el('span', { class: 'muted' }, `${wxIcon(wx.symbol)} ${wx.temp}°`) : null].filter(Boolean));
+      if (style !== 'digital') drawFace(face, now, secs);
+    };
+    const showFace = style !== 'digital', showDigits = style !== 'analog';
+    const text = el('div', { style: 'margin:auto 0;min-width:0' }, h >= 2 && w >= 3 && o.greet !== false ? greetEl : null, showDigits ? big : null, h >= 2 ? sub : null);
+    b.replaceChildren(el('div', { class: 'clock-wrap' }, showFace ? face : null, showDigits || h >= 2 ? text : null));
+    draw();
+    b._tick = setInterval(draw, secs || showFace ? 1000 : 15_000);
+  } });
+/* A clock face drawn on a canvas, in the house's time zone, crisp on any screen. */
+function drawFace(cv, iso, secs) {
+  const box = cv.getBoundingClientRect(), size = Math.max(40, Math.min(box.width || 120, box.height || 120)), dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (cv.width !== Math.round(size * dpr)) { cv.width = cv.height = Math.round(size * dpr); }
+  const c = cv.getContext('2d'), r = (size / 2) * dpr; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height); c.translate(r, r);
+  const cs = getComputedStyle(cv), fg = cs.getPropertyValue('--text').trim() || '#e8eefc', mut = cs.getPropertyValue('--muted').trim() || '#93a1bd', acc = cs.getPropertyValue('--accent').trim() || '#5eb8ff';
+  c.lineCap = 'round';
+  for (let i = 0; i < 60; i++) { const a = (i / 60) * Math.PI * 2, big = i % 5 === 0; c.strokeStyle = big ? fg : mut; c.globalAlpha = big ? 0.9 : 0.35; c.lineWidth = (big ? 2.2 : 1) * dpr; c.beginPath(); c.moveTo(Math.sin(a) * r * (big ? 0.8 : 0.86), -Math.cos(a) * r * (big ? 0.8 : 0.86)); c.lineTo(Math.sin(a) * r * 0.93, -Math.cos(a) * r * 0.93); c.stroke(); }
+  c.globalAlpha = 1;
+  const p = (o) => Number(fmt(iso, o));
+  const hh = p({ hour: 'numeric', hourCycle: 'h23' }) % 12, mm = p({ minute: 'numeric' }), ss = new Date(iso).getSeconds();
+  const hand = (frac, len, wdt, col) => { const a = frac * Math.PI * 2; c.strokeStyle = col; c.lineWidth = wdt * dpr; c.beginPath(); c.moveTo(-Math.sin(a) * r * 0.1, Math.cos(a) * r * 0.1); c.lineTo(Math.sin(a) * r * len, -Math.cos(a) * r * len); c.stroke(); };
+  hand((hh + mm / 60) / 12, 0.5, 4, fg); hand((mm + ss / 60) / 60, 0.74, 3, fg); if (secs) hand(ss / 60, 0.8, 1.5, acc);
+  c.fillStyle = acc; c.beginPath(); c.arc(0, 0, 3.5 * dpr, 0, Math.PI * 2); c.fill();
+}
+
+widget({ id: 'weather', title: 'Weather', icon: 'sun', cat: 'time', essential: true, multi: true, blurb: 'Now, the next hours and the week - here or anywhere', min: [2, 2], size: [5, 4],
+  options: [
+    { key: 'place', type: 'place', label: 'Where', homeLabel: 'Your home' },
+    { key: 'hours', type: 'toggle', label: 'Next hours', text: 'Show the next hours (when there\'s room)', default: true },
+    { key: 'week', type: 'toggle', label: 'This week', text: 'Show the week (when there\'s room)', default: true },
+    { key: 'details', type: 'toggle', label: 'Details', text: 'Wind and humidity', default: true },
+  ],
+  async render(b, ctx, { w, h }) {
+    const o = optsOf(b._t || {});
+    const wx = o.place?.lat != null ? await wget(`/api/w/weather?lat=${o.place.lat}&lon=${o.place.lon}&name=${encodeURIComponent(o.place.name || '')}`, 15 * 60_000).catch((err) => ({ error: err.message })) : ctx.data.home?.weather;
+    if (!wx || wx.error || !wx.now) return b.replaceChildren(empty(wx?.error ? 'Weather is not loading right now.' : 'Add your town in Settings to see the weather.'));
+    const today = wx.days?.[0];
+    const parts = [el('div', { class: 'wx-now' }, el('span', { class: 'wx-ic', style: w <= 2 ? 'font-size:30px' : null }, wxIcon(wx.now.symbol)),
+      el('div', { style: 'min-width:0' }, el('div', { class: 'big', style: w <= 2 ? 'font-size:34px' : null }, `${wx.now.temp}°`), w >= 3 ? el('div', { class: 'muted small ellipsis' }, `${wx.now.words}${today ? ` · H ${today.hi}° L ${today.lo}°` : ''}`) : null, w <= 4 && o.place && h >= 2 ? el('div', { class: 'tiny muted ellipsis' }, wx.place || '') : null),
+      w >= 5 ? el('div', { class: 'small muted', style: 'margin-left:auto;text-align:right' }, wx.place || '', o.details !== false ? [el('br'), `Wind ${wx.now.wind ?? '-'} ${wx.units === 'C' ? 'km/h' : 'mph'} · ${wx.now.humidity ?? '-'}%`] : null) : null)];
+    if (o.hours !== false && h >= 3 && w >= 3) parts.push(el('div', { class: 'hours' }, (wx.hours || []).slice(0, Math.max(3, Math.floor(w * 1.1))).map((x) => el('div', {}, fmt(x.at, { hour: 'numeric' }), el('i', {}, wxIcon(x.symbol)), el('b', {}, `${x.temp}°`)))));
+    const weekRoom = o.hours === false ? h >= 3 : (h >= 5 || (h >= 4 && w >= 4));
+    if (o.week !== false && weekRoom) {
+      const days = (wx.days || []).slice(0, Math.min(7, fits(h - (o.hours === false ? 1 : 3), 32, 0) + 1));
+      const lo = Math.min(...days.map((d) => d.lo)), hi = Math.max(...days.map((d) => d.hi));
+      parts.push(el('ul', { class: 'list days' }, days.map((d) => el('li', {}, el('b', {}, dayName(d.date)), el('span', {}, wxIcon(d.symbol)),
+        w >= 5 ? el('div', { style: 'padding:0 12px;align-self:center' }, el('div', { class: 'temp-bar', style: `margin-left:${((d.lo - lo) / Math.max(1, hi - lo)) * 100}%;width:${((d.hi - d.lo) / Math.max(1, hi - lo)) * 100}%` })) : el('span', { class: 'muted small ellipsis' }, d.words || ''),
+        el('span', { class: 'num' }, `${d.hi}° `, el('span', { class: 'muted' }, `${d.lo}°`))))));
+    }
+    if (h >= 4) parts.push(el('div', { class: 'tiny faint', style: 'margin-top:auto' }, wx.credit || ''));
+    b.replaceChildren(...parts);
+  } });
+
+widget({ id: 'calendar', title: 'Coming up', icon: 'calendar', cat: 'personal', essential: true, multi: true, blurb: 'What\'s next on your calendars', min: [3, 2], size: [4, 4],
+  headerExtra: () => el('button', { class: 'btn ghost small', title: 'Add an event', 'aria-label': 'Add an event', onclick: () => eventEditor(null, () => show(current)) }, icon('plus')),
+  options: [
+    { key: 'days', type: 'select', label: 'How far ahead', numeric: true, default: 7, choices: [[1, 'Today'], [2, 'Today and tomorrow'], [3, 'Next 3 days'], [7, 'This week']] },
+    { key: 'cals', type: 'calendars', label: 'Calendars' },
+    { key: 'allDay', type: 'toggle', label: 'All-day events', text: 'Show all-day events', default: true },
+  ],
+  render(b, ctx, { w, h }) {
+    const o = optsOf(b._t || {}), cal = ctx.data.home?.calendar, until = Date.now() + (o.days || 7) * 86400_000, cals = new Set(o.cals || []);
+    const ev = (cal?.events || []).filter((e) => Date.parse(e.end || e.start) > Date.now() && Date.parse(e.start) < until && (!cals.size || cals.has(e.calendar)) && (o.allDay !== false || !e.allDay)).slice(0, fits(h, 52));
+    if (!ev.length) return b.replaceChildren(empty(o.days === 1 ? 'Nothing else today.' : 'Nothing coming up.', '#calendar', 'Open the calendar'));
     b.replaceChildren(...ev.map((e) => el('div', { class: 'ev' }, el('span', { class: 'bar', style: `background:${safeColor(e.color)}` }),
-      el('div', { class: 'grow' }, el('div', { class: 'ellipsis' }, e.title), el('div', { class: 'when' }, e.allDay ? `${fmt(e.start, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })} · all day` : fmtWhen(e.start), w >= 4 && e.calendar ? ` · ${e.calendar}` : '')))));
+      el('div', { class: 'grow', style: 'min-width:0' }, el('div', { class: 'ellipsis' }, e.title), el('div', { class: 'when' }, e.allDay ? `${fmt(e.start, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })} · all day` : fmtWhen(e.start), w >= 4 && e.calendar ? ` · ${e.calendar}` : '')))));
   } });
 
 function gameRow(g, w) {
@@ -54,21 +107,31 @@ function gameRow(g, w) {
   return el('div', { class: 'game' }, side(g.away, g.home), sc(g.away, g.home), side(g.home, g.away), sc(g.home, g.away),
     el('div', { class: 'tiny muted', style: 'grid-column:1/-1;margin-top:2px' }, el('span', { class: `pill${g.state === 'in' ? ' live' : ''}` }, g.state === 'in' ? 'LIVE' : g.state === 'post' ? 'Final' : fmtWhen(g.start)), ` ${g.leagueName || ''}${g.state === 'in' ? ` · ${g.detail}` : ''}${g.broadcast && w >= 4 ? ` · ${g.broadcast}` : ''}`));
 }
-widget({ id: 'sports', title: 'Your teams', icon: 'trophy', min: [2, 2], size: [3, 4], render(b, ctx, { w, h }) {
-  const sp = ctx.data.home?.sports;
-  if (!sp) return b.replaceChildren(empty('Pick your teams in setup.'));
-  const games = (sp.games || []).slice(0, fits(h, 84));
-  b.replaceChildren(...(games.length ? games.map((g) => gameRow(g, w)) : [empty('No games this week.')]));
-} });
+widget({ id: 'sports', title: 'Your teams', icon: 'trophy', cat: 'info', multi: true, blurb: 'Live scores and next games - pick any teams', keywords: 'scores nfl nba mlb nhl soccer', min: [2, 2], size: [3, 4],
+  options: [{ key: 'teams', type: 'teams', label: 'Teams', help: 'NFL, NBA, MLB, NHL, college, MLS, Premier League and more.' }, { key: 'liveOnly', type: 'toggle', label: 'Only live', text: 'Only games on right now (and the next one)' }],
+  async render(b, ctx, { w, h }) {
+    const o = optsOf(b._t || {}), mine = Array.isArray(o.teams) && o.teams.length;
+    const sp = mine ? await wget(`/api/w/sports?t=${o.teams.map((x) => `${x.league}:${x.id}`).join(',')}`, 60_000).catch((err) => ({ error: err.message })) : ctx.data.home?.sports;
+    if (!sp) return b.replaceChildren(empty('Pick your teams: tap Edit layout, then customize this widget.'));
+    let games = sp.games || [];
+    if (o.liveOnly) { const live = games.filter((g) => g.state === 'in'); games = live.length ? live : games.filter((g) => g.state === 'pre').slice(0, 1); }
+    games = games.slice(0, fits(h, 84));
+    b.replaceChildren(...(games.length ? games.map((g) => gameRow(g, w)) : [empty(sp.error ? 'Scores are not loading right now.' : 'No games this week.')]));
+  } });
 
-widget({ id: 'news', title: 'Headlines', icon: 'news', min: [3, 2], size: [4, 4], render(b, ctx, { w, h }) {
-  const n = ctx.data.home?.news;
-  if (!n) return b.replaceChildren(empty('Pick news sources in setup.'));
-  const items = (n.items || []).slice(0, fits(h, w >= 5 ? 50 : 62));
-  b.replaceChildren(...(items.length ? [el('ul', { class: 'list' }, items.map((i) => el('li', { style: 'display:block' }, el('a', { href: safeHref(i.link), target: '_blank', rel: 'noopener noreferrer', style: 'color:inherit;text-decoration:none;display:block' }, el('div', { class: w >= 5 ? 'ellipsis' : null }, i.title), el('div', { class: 'tiny muted' }, `${i.source}${i.at ? ` · ${ago(i.at)}` : ''}`)))))] : [empty('Headlines are not loading right now.')]));
-} });
+widget({ id: 'news', title: 'Headlines', icon: 'news', cat: 'info', multi: true, blurb: 'Headlines from your sources', min: [3, 2], size: [4, 4],
+  options: (t, ctx) => {
+    const srcs = [...new Set((ctx.data.home?.news?.items || []).map((i) => i.source).filter(Boolean))];
+    return [srcs.length > 1 ? { key: 'sources', type: 'chips', label: 'Sources', choices: srcs.map((x) => [x, x]), help: 'Pick none for all of them.' } : null, { key: 'times', type: 'toggle', label: 'Times', text: 'Show the source and how long ago', default: true }].filter(Boolean);
+  },
+  render(b, ctx, { w, h }) {
+    const o = optsOf(b._t || {}), n = ctx.data.home?.news, want = new Set(o.sources || []);
+    if (!n) return b.replaceChildren(empty('Pick news sources in Settings.'));
+    const items = (n.items || []).filter((i) => !want.size || want.has(i.source)).slice(0, fits(h, w >= 5 ? (o.times === false ? 34 : 50) : 62));
+    b.replaceChildren(...(items.length ? [el('ul', { class: 'list' }, items.map((i) => el('li', { style: 'display:block' }, el('a', { href: safeHref(i.link), target: '_blank', rel: 'noopener noreferrer', style: 'color:inherit;text-decoration:none;display:block' }, el('div', { class: w >= 5 ? 'ellipsis' : null }, i.title), o.times === false ? null : el('div', { class: 'tiny muted' }, `${i.source}${i.at ? ` · ${ago(i.at)}` : ''}`)))))] : [empty('Headlines are not loading right now.')]));
+  } });
 
-widget({ id: 'internet', title: 'Internet', icon: 'wifi', min: [2, 2], size: [3, 2], render(b, ctx, { w, h }) {
+widget({ id: 'internet', title: 'Internet', icon: 'wifi', cat: 'home', blurb: 'Online, speed and ping', min: [2, 2], size: [3, 2], render(b, ctx, { w, h }) {
   const n = ctx.data.home?.internet;
   if (!n || n.error) return b.replaceChildren(el('div', { class: 'muted' }, 'Checking...'));
   const parts = [el('div', { class: 'row' }, el('span', { class: `dot ${n.online ? 'good' : 'bad'}` }), el('b', {}, n.online ? 'Online' : 'Down'), w >= 3 ? el('span', { class: 'muted small ellipsis' }, n.provider || '') : null)];
@@ -77,24 +140,24 @@ widget({ id: 'internet', title: 'Internet', icon: 'wifi', min: [2, 2], size: [3,
   b.replaceChildren(...parts);
 } });
 
-widget({ id: 'today', title: 'Today', icon: 'list', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
+widget({ id: 'today', title: 'Today', icon: 'list', cat: 'personal', blurb: 'Today\'s nudges and the house note', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
   const d = ctx.data.home || {};
   const items = [d.note ? el('div', { style: 'margin-bottom:8px' }, d.note) : null, ...(d.reminders || []).slice(0, fits(h, 34)).map((r) => el('div', { class: 'row', style: 'padding:4px 0' }, el('span', { class: 'dot warn' }), el('span', { class: 'grow ellipsis' }, r.title), r.at ? el('span', { class: 'tiny muted' }, hm(r.at)) : null))].filter(Boolean);
   b.replaceChildren(...(items.length ? items : [empty('No reminders today.')]));
 } });
 
-widget({ id: 'alerts', title: 'Alerts', icon: 'bell', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
+widget({ id: 'alerts', title: 'Alerts', icon: 'bell', cat: 'safety', essential: true, blurb: 'What needs you right now', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
   const now = ctx.data.alerts?.now || [];
   if (!now.length) return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('checkc'), el('div', { style: 'margin-top:6px' }, 'All clear'))));
   b.replaceChildren(...now.slice(0, fits(h, 66)).map((a) => el('a', { href: '#alerts', class: `alert ${a.severity}` }, el('div', { class: 'grow' }, el('div', { class: 'ellipsis' }, a.title), el('div', { class: 'tiny muted' }, a.since ? `since ${fmtWhen(a.since)}` : a.source || '')))));
 } });
 
-widget({ id: 'energy', title: 'Energy', icon: 'bolt', min: [2, 2], size: [3, 3], render(b, ctx, { w, h }) {
+widget({ id: 'energy', title: 'Energy', icon: 'bolt', cat: 'home', blurb: 'Watts now and what it costs', options: [{ key: 'cost', type: 'toggle', label: 'Cost', text: 'Show what it costs a day', default: true }], min: [2, 2], size: [3, 3], render(b, ctx, { w, h }) {
   const ds = (ctx.data.devices?.devices || []).filter((d) => typeof d.powerW === 'number' && !d.pairedTo).sort((a, c) => c.powerW - a.powerW);
   const total = ctx.data.devices?.power?.watts ?? ds.reduce((s, d) => s + d.powerW, 0), rate = ctx.data.settings?.energy?.ratePerKwh;
   if (!ds.length) return b.replaceChildren(empty('No power-metering plugs yet.'));
   const parts = [el('div', { class: 'row', style: 'gap:22px;align-items:flex-end' }, el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(total), el('span', { style: 'font-size:18px;color:var(--muted)' }, ' W')), el('span', { class: 'lbl' }, 'using now')),
-    rate && (w >= 4 || h >= 3) ? el('div', { class: 'stat' }, el('span', { style: 'font-size:22px;font-weight:700' }, `$${(total / 1000 * 24 * rate).toFixed(2)}`), el('span', { class: 'lbl' }, 'a day at this rate')) : null)];
+    rate && optsOf(b._t || {}).cost !== false && (w >= 4 || h >= 3) ? el('div', { class: 'stat' }, el('span', { style: 'font-size:22px;font-weight:700' }, `$${(total / 1000 * 24 * rate).toFixed(2)}`), el('span', { class: 'lbl' }, 'a day at this rate')) : null)];
   if (h >= 3) { const max = ds[0].powerW || 1; parts.push(el('div', { class: 'bars', style: 'margin-top:14px' }, ds.slice(0, fits(h - 1, 26, 30)).map((d) => el('div', { class: 'bar-row', style: w < 4 ? 'grid-template-columns:1fr 50px' : null }, el('span', { class: 'ellipsis small' }, d.name), w >= 4 ? el('div', { class: 'track' }, el('div', { class: 'fill', style: `width:${(d.powerW / max) * 100}%` })) : null, el('span', { class: 'small num', style: 'text-align:right' }, `${Math.round(d.powerW)} W`))))); }
   b.replaceChildren(...parts);
 } });
@@ -160,7 +223,7 @@ function pickDevices(selected, done) {
     setTimeout(() => q.focus(), 50);
   });
 }
-widget({ id: 'entities', title: 'Pinned devices', icon: 'sliders', multi: true, min: [2, 2], size: [4, 3],
+widget({ id: 'entities', title: 'Pinned devices', icon: 'sliders', multi: true, cat: 'home', blurb: 'Any devices or Home Assistant entities you pick - add as many as you like', keywords: 'home assistant entity sensor', min: [2, 2], size: [4, 3],
   headerExtra: (ctx, t, saved) => el('button', { class: 'btn ghost small', title: 'Choose devices', 'aria-label': 'Choose devices', onclick: () => pickDevices(t.ids, (ids) => { t.ids = ids; saved(); }) }, icon('gear')),
   render(b, ctx, { w, h }) {
     const all = ctx.data.devices?.devices || [];
@@ -224,12 +287,21 @@ widget({ id: 'room', title: 'Room', icon: 'home', multi: true, hidden: true, min
   b.replaceChildren(el('div', { class: 'row small muted', style: 'gap:14px;margin-bottom:10px;flex-wrap:wrap' }, facts),
     el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr));overflow:auto` }, ds.filter((d) => d.kind !== 'camera').slice(0, perRow * Math.max(1, fits(h, 66, 80))).map((d) => devButton(d, true))));
 } });
-widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', min: [2, 2], size: [4, 3], render(b, ctx, { w, h }) {
-  const ds = (ctx.data.devices?.devices || []).filter((d) => ['light', 'switch', 'plug', 'media'].includes(d.kind));
-  if (!ds.length) return b.replaceChildren(empty('No lights or plugs yet.'));
-  const perRow = Math.max(1, Math.floor(w / 2)), rows = fits(h, 66);
-  b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr))` }, ds.slice(0, perRow * rows).map((d) => devButton(d, true))));
-} });
+widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', cat: 'home', essential: true, multi: true, blurb: 'Tap to switch lights, plugs and speakers', min: [2, 2], size: [4, 3],
+  options: (t, ctx) => {
+    const areas = [...new Set((ctx.data.devices?.devices || []).map((d) => d.area).filter(Boolean))].sort();
+    return [{ key: 'kinds', type: 'chips', label: 'What to show', choices: [['light', 'Lights'], ['switch', 'Switches'], ['plug', 'Plugs'], ['fan', 'Fans'], ['media', 'Speakers & TVs']], help: 'Pick none for lights, switches, plugs and speakers.' },
+      areas.length ? { key: 'area', type: 'select', label: 'Room', default: '', choices: [['', 'Every room'], ...areas.map((a) => [a, a])] } : null,
+      { key: 'onFirst', type: 'toggle', label: 'Order', text: 'What\'s on comes first' }].filter(Boolean);
+  },
+  render(b, ctx, { w, h }) {
+    const o = optsOf(b._t || {}), kinds = new Set(o.kinds?.length ? o.kinds : ['light', 'switch', 'plug', 'media']);
+    let ds = (ctx.data.devices?.devices || []).filter((d) => kinds.has(d.kind) && (!o.area || d.area === o.area));
+    if (o.onFirst) ds = [...ds].sort((a, c) => (c.on || c.playing ? 1 : 0) - (a.on || a.playing ? 1 : 0));
+    if (!ds.length) return b.replaceChildren(empty(o.area ? `Nothing to switch in ${o.area}.` : 'No lights or plugs yet.'));
+    const perRow = Math.max(1, Math.floor(w / 2)), rows = fits(h, 66);
+    b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr))` }, ds.slice(0, perRow * rows).map((d) => devButton(d, true))));
+  } });
 
 const snapUrl = (d) => (d.snapshot ? d.snapshot : d.provider === 'ha' ? `/api/ha/camera/${encodeURIComponent(d.id.slice(3))}` : `/api/${d.provider === 'ring' ? 'ring' : 'cameras'}/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`);
 /* Camera tiles: one lasting element per camera, so a dashboard refresh never blanks the picture. Each one
@@ -286,34 +358,48 @@ function camModal(d) {
   // closing the window stops a live stream at once
   new MutationObserver((_, o) => { if (!m.isConnected) { img.onerror = null; const u = img.src; img.removeAttribute('src'); if (u.startsWith('blob:')) URL.revokeObjectURL(u); o.disconnect(); } }).observe(document.body, { childList: true });
 }
-widget({ id: 'camera', title: 'Cameras', icon: 'camera', min: [3, 2], size: [4, 3], render(b, ctx, { w, h }) {
-  const cams = (ctx.data.devices?.devices || []).filter((d) => d.kind === 'camera');
-  if (!cams.length) return b.replaceChildren(empty('No cameras yet.'));
-  const across = w >= 8 ? 2 : 1, down = h >= 6 ? 2 : 1;
-  b.replaceChildren(el('div', { class: 'tile-cams', style: `grid-template-columns:repeat(${across},1fr);grid-template-rows:repeat(${down},1fr)` }, cams.slice(0, across * down).map(camView)));
-} });
+widget({ id: 'camera', title: 'Cameras', icon: 'camera', cat: 'safety', essential: true, multi: true, blurb: 'Your cameras, live - pick which, and let them take turns', keywords: 'ring frigate reolink doorbell video', min: [3, 2], size: [4, 3], noPreview: true,
+  options: [
+    { key: 'ids', type: 'devices', label: 'Cameras', filter: (d) => d.kind === 'camera', empty: 'No cameras yet - connect them on the Connect tab.', help: 'Pick none for every camera.' },
+    { key: 'cycle', type: 'select', label: 'Take turns', numeric: true, default: 0, choices: [[0, 'Off - show what fits'], [8, 'Every 8 seconds'], [15, 'Every 15 seconds'], [30, 'Every 30 seconds']], help: 'When there are more cameras than fit, show the next ones in turn.' },
+  ],
+  render(b, ctx, { w, h }) {
+    const o = optsOf(b._t || {}), want = o.ids?.length ? o.ids : null;
+    const all = (ctx.data.devices?.devices || []).filter((d) => d.kind === 'camera');
+    const cams = want ? want.map((id) => all.find((d) => d.id === id)).filter(Boolean) : all;
+    if (!cams.length) return b.replaceChildren(empty('No cameras yet.'));
+    const across = w >= 8 ? 2 : 1, down = h >= 6 ? 2 : 1, fit = across * down;
+    clearInterval(b._cycle);
+    const shown = () => { const start = cams.length > fit && o.cycle ? ((b._at || 0) % cams.length) : 0; return Array.from({ length: Math.min(fit, cams.length) }, (_, i) => cams[(start + i) % cams.length]); };
+    const draw = () => b.replaceChildren(el('div', { class: 'tile-cams', style: `grid-template-columns:repeat(${across},1fr);grid-template-rows:repeat(${down},1fr)` }, shown().map(camView)));
+    draw();
+    if (o.cycle && cams.length > fit) b._cycle = setInterval(() => { if (!b.isConnected) return clearInterval(b._cycle); if (document.hidden || document.body.classList.contains('editing-on')) return; b._at = (b._at || 0) + fit; draw(); }, o.cycle * 1000);
+  } });
 
-widget({ id: 'photos', title: 'Photo reel', icon: 'camera', bare: true, live: true, min: [2, 2], size: [5, 4], async render(b) {
-  const { photos = [] } = await api('/api/photos').catch(() => ({}));
-  clearInterval(b._reel);
-  if (!photos.length) { b.parentElement.style.padding = ''; return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('camera'), el('div', { style: 'margin:8px 0' }, 'Your photos, on a slow loop'), el('a', { class: 'btn small primary', href: '#photos' }, 'Add photos')))); }
-  const order = [...photos].sort(() => Math.random() - 0.5);
-  const mk = () => el('img', { alt: '', style: 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity 1.4s' });
-  let front = mk(), back = mk(), i = 0; front.src = order[0].url; back.style.opacity = 0;
-  /* Sample photos carry their photographer and license; your own photos show nothing over them. */
-  const credit = el('a', { class: 'photo-credit', target: '_blank', rel: 'noopener' });
-  const label = (p) => { credit.hidden = !p.credit; credit.textContent = p.credit ? `Sample photo · ${p.credit}` : ''; const src = safeHref(p.source); if (src) credit.href = src; else credit.removeAttribute('href'); };
-  label(order[0]);
-  b.replaceChildren(el('div', { style: 'position:absolute;inset:0;overflow:hidden;background:#000' }, front, back, credit)); b.parentElement.style.padding = '0';
-  if (order.length > 1) b._reel = setInterval(() => { if (!b.isConnected) return clearInterval(b._reel); i = (i + 1) % order.length; const p = order[i]; back.onload = () => { back.style.opacity = 1; front.style.opacity = 0; [front, back] = [back, front]; label(p); }; back.src = p.url; }, 9000);
-} });
+widget({ id: 'photos', title: 'Photo reel', icon: 'camera', bare: true, live: true, cat: 'personal', blurb: 'Your photos on a slow loop', min: [2, 2], size: [5, 4], noPreview: true,
+  options: [{ key: 'every', type: 'select', label: 'Next photo', numeric: true, default: 9, choices: [[5, 'Every 5 seconds'], [9, 'Every 9 seconds'], [20, 'Every 20 seconds'], [60, 'Every minute']] }, { key: 'fit', type: 'select', label: 'Framing', default: 'cover', choices: [['cover', 'Fill the widget'], ['contain', 'Whole photo']] }],
+  async render(b) {
+    const o = optsOf(b._t || {});
+    const { photos = [] } = await api('/api/photos').catch(() => ({}));
+    clearInterval(b._reel);
+    if (!photos.length) { b.parentElement.style.padding = ''; return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('camera'), el('div', { style: 'margin:8px 0' }, 'Your photos, on a slow loop'), el('a', { class: 'btn small primary', href: '#photos' }, 'Add photos')))); }
+    const order = [...photos].sort(() => Math.random() - 0.5);
+    const mk = () => el('img', { alt: '', style: `position:absolute;inset:0;width:100%;height:100%;object-fit:${o.fit === 'contain' ? 'contain' : 'cover'};transition:opacity 1.4s` });
+    let front = mk(), back = mk(), i = 0; front.src = order[0].url; back.style.opacity = 0;
+    /* Sample photos carry their photographer and license; your own photos show nothing over them. */
+    const credit = el('a', { class: 'photo-credit', target: '_blank', rel: 'noopener' });
+    const label = (p) => { credit.hidden = !p.credit; credit.textContent = p.credit ? `Sample photo · ${p.credit}` : ''; const src = safeHref(p.source); if (src) credit.href = src; else credit.removeAttribute('href'); };
+    label(order[0]);
+    b.replaceChildren(el('div', { style: 'position:absolute;inset:0;overflow:hidden;background:#000' }, front, back, credit)); b.parentElement.style.padding = '0';
+    if (order.length > 1) b._reel = setInterval(() => { if (!b.isConnected) return clearInterval(b._reel); if (document.hidden) return; i = (i + 1) % order.length; const p = order[i]; back.onload = () => { back.style.opacity = 1; front.style.opacity = 0; [front, back] = [back, front]; label(p); }; back.src = p.url; }, (o.every || 9) * 1000);
+  } });
 
-widget({ id: 'ask', title: 'Ask the house', icon: 'spark', pro: true, live: true, min: [3, 2], size: [5, 3], render(b) {
+widget({ id: 'ask', title: 'Ask the house', icon: 'spark', pro: true, live: true, cat: 'home', blurb: 'Ask anything about your home', noPreview: true, min: [3, 2], size: [5, 3], render(b) {
   if (!isPro()) return b.replaceChildren(empty('Ask anything about your home - included with Pro.', '#settings', 'See Pro'));
   b.replaceChildren(askBox({ compact: true }));
 } });
 
-widget({ id: 'house3d', title: '3D Home', icon: 'cube', pro: true, live: true, min: [4, 3], size: [6, 5], render(b) {
+widget({ id: 'house3d', title: '3D Home', icon: 'cube', pro: true, live: true, cat: 'home', blurb: 'Your LiDAR floor plan, live', noPreview: true, min: [4, 3], size: [6, 5], render(b) {
   if (!isPro()) return b.replaceChildren(empty('Your LiDAR scan as a live floor plan - included with Pro.', '#house3d', 'Learn more'));
   b.replaceChildren(el('iframe', { src: '/floorplan.html?embed=1', title: '3D floor plan', style: 'flex:1;border:0;border-radius:14px;background:#05070d;width:100%' }));
 } });

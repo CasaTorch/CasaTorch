@@ -79,4 +79,4 @@ app.get('/api/ring/:id/snapshot', requirePro, async (req, res) => {
    so they get a new picture every 20 s while someone is looking and every 10 minutes otherwise (and always
    right away on a ring or motion). Wired ones: every 4 s while watched. */
 const ringBeat = (c) => (c.hasBattery ? { every: 20_000, idle: 10 * 60_000 } : { every: 4000, idle: 60_000 });
-PROVIDERS.ring = { async list() { return proStatus().pro ? ring.cameras.map((c) => ({ id: `ring:${c.id}`, provider: 'ring', kind: 'camera', name: c.name, battery: c.batteryLevel ?? null, online: !c.isOffline, source: c.hasBattery ? 'Ring (battery)' : 'Ring', snapshot: `/api/ring/${c.id}/snapshot`, every: c.hasBattery ? 20_000 : 4000 })) : []; } };
+PROVIDERS.ring = { async list() { return proStatus().pro ? ring.cameras.map((c) => ({ id: `ring:${c.id}`, provider: 'ring', kind: 'camera', name: c.name, battery: c.batteryLevel ?? null, online: !c.isOffline, doorbell: !!c.isDoorbot, source: c.hasBattery ? 'Ring (battery)' : 'Ring', snapshot: `/api/ring/${c.id}/snapshot`, every: c.hasBattery ? 20_000 : 4000 })) : []; } };
