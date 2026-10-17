@@ -811,7 +811,7 @@
           "provider": {
             "id": "utility",
             "label": "Your power company's bill and usage (needs Home Assistant)",
-            "help": "With Home Assistant, sign in with your power company's website login (your password goes to Home Assistant only); its usage readings then show in CasaTorch. CasaTorch works out costs from your price per kWh - enter it in Settings › Energy. Without Home Assistant, just enter your price per kWh.",
+            "help": "With Home Assistant, sign in with your power company's website login (your password goes to Home Assistant only); its usage readings then show in CasaTorch. CasaTorch works out costs from your price per kWh - enter it in Settings › Everyday. Without Home Assistant, just enter your price per kWh.",
             "method": "ha",
             "domain": "opower",
             "otherLabel": "Mine isn't listed"

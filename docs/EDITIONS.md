@@ -25,7 +25,9 @@ CasaTorch never phones home to check it.
 | Doors and locks with "Lock all", the alarm (arm only), smoke and leak sensors | ✓ | ✓ | Now |
 | Devices on your home network, with an alert when a new one joins; daily check for risky open services | ✓ | ✓ | Now |
 | Security checklist and recent security events | ✓ | ✓ | Now |
-| Secure address at home (https on your home network) | ✓ | ✓ | Now |
+| Secure address at home (https on your home network), on by default | ✓ | ✓ | Now |
+| App tests: common apps timed step by step, latency, jitter, loss, the path hop by hop (up to 8) | ✓ | ✓ | Now |
+| App tests for your own websites, every minute, alerts, up to 30 | | ✓ | Now |
 | **Your day** | | | |
 | Weather, family calendar (built in - no Google needed - plus Google/iCloud/Outlook links), sports scores, news, reminders | ✓ | ✓ | Now |
 | Photo reel: upload photos from any phone or computer, slideshow on the wall | ✓ | ✓ | Now |
