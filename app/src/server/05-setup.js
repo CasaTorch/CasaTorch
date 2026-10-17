@@ -54,9 +54,10 @@ function getJson(url, { headers = {}, method = 'GET', body, insecure = false, ti
     return fetch(url, { method, headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout) })
       .then(async (r) => { const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch { /* text */ } if (!r.ok) throw Object.assign(new Error(j?.message || j?.error || `HTTP ${r.status}`), { status: r.status, body: j }); return j; });
   }
+  if (blockedUrl(url)) return Promise.reject(new TypeError('That address is not allowed.'));   // the same rule as fetch (00-setup.js)
   return new Promise((ok, fail) => {
     const req = https.request(url, { method, headers: { Accept: 'application/json', ...headers }, rejectUnauthorized: false, timeout }, (r) => {
-      let t = ''; r.on('data', (c) => { t += c; }); r.on('end', () => { let j = null; try { j = JSON.parse(t); } catch { /* text */ } r.statusCode < 300 ? ok(j) : fail(Object.assign(new Error(j?.message || `HTTP ${r.statusCode}`), { status: r.statusCode })); });
+      let t = ''; r.on('data', (c) => { t += c; if (t.length > 8 * 1024 * 1024) { req.destroy(); fail(new Error('the answer was too big')); } }); r.on('end', () => { let j = null; try { j = JSON.parse(t); } catch { /* text */ } r.statusCode < 300 ? ok(j) : fail(Object.assign(new Error(j?.message || `HTTP ${r.statusCode}`), { status: r.statusCode })); });
     });
     req.on('timeout', () => req.destroy(new Error('timed out'))); req.on('error', fail); if (body) req.write(JSON.stringify(body)); req.end();
   });
@@ -174,7 +175,7 @@ app.get('/api/setup/ha/callback', async (req, res) => {
 });
 app.get('/api/setup/ha/signin-result', (_req, res) => { const r = haSigninResult; haSigninResult = null; res.json(r ? { ...r, url: draft.ha?.url || null } : { ok: false, error: 'no sign-in yet' }); });
 app.post('/api/setup/test/:kind', async (req, res) => {
-  const t = TESTS[req.params.kind];
+  const t = Object.hasOwn(TESTS, req.params.kind) ? TESTS[req.params.kind] : null;   // only the tests above, never Object's own properties
   if (!t) return res.status(404).json({ ok: false, error: 'unknown test' });
   try { res.json(await t(req.body || {})); } catch (err) { res.json({ ok: false, error: why(err) }); }
 });

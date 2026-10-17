@@ -43,6 +43,7 @@ const AI = {
   },
 };
 AI.compatible = { ...AI.openai, name: 'OpenAI-compatible server', base: (c) => String(c.url || '').replace(/\/+$/, '') };
+const aiOf = (id) => (Object.hasOwn(AI, String(id)) ? AI[id] : null);   // only the providers above
 async function aiFetch(url, { method = 'GET', headers = {}, body, timeout = 60000 } = {}) {
   const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json', ...headers }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout) });
   const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch { /* text */ }
@@ -130,7 +131,7 @@ app.post('/api/ask', express.json({ limit: '64kb' }), requirePro, async (req, re
   if (askLog.length >= 20) return res.status(429).json({ error: 'That\'s a lot of questions - wait a minute.' });
   askLog.push(now);
   const snap = await houseSnapshot();
-  const c = config.ai, p = c && AI[c.provider];
+  const c = config.ai, p = c && aiOf(c.provider);
   if (!p || !c.model) {
     if (isDemo()) return res.json({ ...demoAnswer(q, snap), demo: true });
     return res.status(409).json({ error: 'Connect an AI first: Settings > Ask the house.', setup: true });
@@ -142,7 +143,7 @@ app.post('/api/ask', express.json({ limit: '64kb' }), requirePro, async (req, re
 
 /* Settings > Ask the house */
 app.post('/api/settings/ai/models', requireRole('admin'), express.json(), async (req, res) => {
-  const b = req.body || {}, p = AI[b.provider];
+  const b = req.body || {}, p = aiOf(b.provider);
   if (!p) return res.status(400).json({ error: 'pick a provider' });
   // The saved key is only reused for the same provider at the same address - never sent somewhere new.
   const sameHome = config.ai?.provider === b.provider && (b.url || null) === (config.ai?.url || null) || (config.ai?.provider === b.provider && !b.url);
@@ -153,7 +154,7 @@ app.post('/api/settings/ai/models', requireRole('admin'), express.json(), async 
 app.put('/api/settings/ai', requireRole('admin'), express.json(), (req, res) => {
   const b = req.body || {};
   if (b.provider === 'none') { if (!isDemo()) { const { ai, ...rest } = config; saveConfig(rest); } return res.json({ ok: true }); }
-  if (!AI[b.provider] || !b.model) return res.status(400).json({ error: 'pick a provider and a model' });
+  if (!aiOf(b.provider) || !b.model) return res.status(400).json({ error: 'pick a provider and a model' });
   const keep = config.ai?.provider === b.provider && (b.url ? String(b.url).trim() : null) === (config.ai?.url || null) ? config.ai.apiKey : null;   // a new address needs the key typed again
   const ai = { provider: b.provider, model: String(b.model).slice(0, 120), url: b.url ? String(b.url).trim() : null, apiKey: b.apiKey ? String(b.apiKey).trim() : keep };
   if (!isDemo()) saveConfig({ ...config, ai });

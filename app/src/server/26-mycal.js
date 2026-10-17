@@ -31,6 +31,7 @@ function cleanEvent(b, id) {
 }
 app.get('/api/mycal', (_req, res) => res.json({ events: myEvents }));
 app.post('/api/mycal', express.json(), (req, res) => {
+  if (myEvents.length >= 5000) return res.status(400).json({ error: 'The calendar is full (5,000 events) - remove some first.' });   // every screen expands them all on each look
   try { const e = cleanEvent(req.body || {}, crypto.randomBytes(6).toString('hex')); myEvents.push(e); if (!isDemo()) saveMyEvents(); res.json({ ok: true, event: e }); }
   catch (err) { res.status(400).json({ error: err.message }); }
 });

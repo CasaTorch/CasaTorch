@@ -38,6 +38,7 @@ tab({ id: 'controls', label: 'Controls', icon: 'sliders', async render(main) {
   search.oninput = () => { query = search.value; paint(devicesCache); };
   const draw = async () => {
     const { devices = [], errors = [] } = await api('/api/devices'); devicesCache = devices;
+    if (!main.isConnected) return;   // left for another page while this was loading
     setTop(tabLabel({ id: 'controls', label: 'Controls' }), `${devices.filter((d) => d.provider === 'ha').length ? 'Includes everything from Home Assistant' : ''}`, [el('button', { class: 'btn', onclick: () => renameDevices(devices, draw) }, icon('edit'), 'Rename devices')]);
     paint(devices, errors);
   };
@@ -191,7 +192,7 @@ function historyChart(days, money) {
     box.replaceChildren(svg);
   };
   let lastW = 0;
-  const ro = new ResizeObserver(() => { if (Math.abs(box.clientWidth - lastW) > 4) { lastW = box.clientWidth; paint(); } });
+  const ro = new ResizeObserver(() => { if (!box.isConnected) { if (lastW) ro.disconnect(); return; } if (Math.abs(box.clientWidth - lastW) > 4) { lastW = box.clientWidth; paint(); } });   // let go once the chart is off the page
   ro.observe(box);
   return box;
 }
@@ -230,9 +231,10 @@ function reportCard(rep, money, redraw) {
   return card;
 }
 tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {
-  let span = 30;
+  let span = 30, hist = null;   // the history changes every few minutes: a live refresh reuses it for a minute
+  const history = async () => { const days = Math.max(span, 15); if (hist && hist.days === days && Date.now() - hist.at < 60_000) return hist.h; const h = await api(`/api/history?days=${days}`).catch(() => null); hist = h ? { days, at: Date.now(), h } : null; return h; };
   const draw = async () => {
-    const [{ devices = [], power }, st, h, rep] = await Promise.all([api('/api/devices'), api('/api/settings').catch(() => ({})), api(`/api/history?days=${Math.max(span, 15)}`).catch(() => null), api('/api/reports').catch(() => ({ pro: false, reports: [] }))]);
+    const [{ devices = [], power }, st, h, rep] = await Promise.all([api('/api/devices'), api('/api/settings').catch(() => ({})), history(), api('/api/reports').catch(() => ({ pro: false, reports: [] }))]);
     const rate = st.energy?.ratePerKwh, cur = st.energy?.currency || 'USD';
     const money = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(v);
     const ds = devices.filter((d) => typeof d.powerW === 'number' && !d.pairedTo).sort((a, b) => b.powerW - a.powerW);

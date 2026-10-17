@@ -231,8 +231,8 @@ function flowEl(domain, hint, done, extra) {
     if (v.type === 'error') { box.append(el('div', { class: 'err' }, `✗ ${v.error}`), el('button', { type: 'button', class: 'small', onclick: start }, 'Try again')); return; }
     if (v.type === 'create_entry') { box.append(el('div', { class: 'ok' }, `✓ Added to Home Assistant${v.title ? `: ${v.title}` : ''}`)); return; }
     if (v.type === 'abort') { box.append(el('div', { class: okAbort(v.reason) ? 'ok' : 'warn' }, ABORTS[v.reason] || `Home Assistant stopped: ${pretty(v.reason)}`)); if (!okAbort(v.reason)) box.append(el('button', { type: 'button', class: 'small', onclick: start }, 'Try again')); return; }
-    if (v.type === 'external') { box.append(el('p', { class: 'note' }, 'Finish signing in on the page that opens, then come back.'), el('div', { class: 'row' }, el('a', { href: v.url, target: '_blank', rel: 'noopener' }, 'Open the sign-in page'), el('button', { type: 'button', class: 'small', onclick: () => send({}) }, 'I\'ve signed in'))); return; }
-    if (v.type === 'progress') { box.append(el('p', { class: 'note' }, 'Home Assistant is working on it…')); setTimeout(() => send({}), 3000); return; }
+    if (v.type === 'external') { box.append(el('p', { class: 'note' }, 'Finish signing in on the page that opens, then come back.'), el('div', { class: 'row' }, el('a', { href: /^https?:\/\//i.test(String(v.url || '')) ? v.url : null, target: '_blank', rel: 'noopener' }, 'Open the sign-in page'), el('button', { type: 'button', class: 'small', onclick: () => send({}) }, 'I\'ve signed in'))); return; }
+    if (v.type === 'progress') { box.append(el('p', { class: 'note' }, 'Home Assistant is working on it…')); setTimeout(() => { if (box.isConnected) send({}); }, 3000); return; }   // stop asking once this panel is gone
     if (v.type === 'menu') {
       const opts = Array.isArray(v.menu) ? v.menu.map((m) => [m, pretty(m)]) : Object.entries(v.menu || {});
       box.append(el('p', { class: 'q' }, 'Choose one:'), el('div', { class: 'opts' }, ...opts.map(([id, l]) => el('button', { type: 'button', class: 'opt', onclick: () => send({ next_step_id: id }) }, l))));
@@ -335,7 +335,7 @@ function setupFor(stepId, opt) {
     if (W.haDomains.includes(opt.domain) || added) { card.append(el('div', { class: 'ok' }, added ? `✓ Added to Home Assistant: ${added.title}` : '✓ Already in Home Assistant')); return card; }
     if (opt.method === 'ha-ui') {
       card.append(el('p', { class: 'note' }, opt.hint || 'This one signs in on a page only Home Assistant can show.'),
-        el('button', { type: 'button', class: 'small', onclick: async () => { const r = await api(`/api/setup/ha/link?domain=${opt.domain}`); window.open(r.url, '_blank', 'noopener'); } }, 'Set it up in Home Assistant'));
+        el('button', { type: 'button', class: 'small', onclick: async () => { const r = await api(`/api/setup/ha/link?domain=${encodeURIComponent(opt.domain)}`); window.open(r.url, '_blank', 'noopener'); } }, 'Set it up in Home Assistant'));
       return card;
     }
     const f = flowEl(opt.domain, opt.hint, () => go());
@@ -553,9 +553,31 @@ async function setupCodeGate() {
     const input = el('input', { type: 'text', id: 'setupcode', autocomplete: 'one-time-code', autocapitalize: 'characters', spellcheck: 'false', maxlength: '12', placeholder: 'ABCD-2345', 'aria-describedby': 'codehelp', class: 'codein' });
     const msg = el('p', { class: 'err', role: 'alert' });
     const go2 = async (e) => { e?.preventDefault(); msg.textContent = ''; try { await api('/api/setup/code', { body: { code: input.value } }); done(); } catch (err) { msg.textContent = err.message; input.select(); } };
+    const askBox = el('div', { class: 'card' });
+    const askIdle = () => askBox.replaceChildren(el('h3', {}, T('Or allow this device from the computer CasaTorch runs on')),
+      el('p', { class: 'note' }, T('No code to type: ask here, then press Allow on that computer\'s setup page.')),
+      el('button', { type: 'button', class: 'small', onclick: ask }, T('Ask to allow this device')));
+    async function ask() {
+      let a; try { a = await api('/api/setup/ask', { body: {} }); } catch (err) { askBox.replaceChildren(el('p', { class: 'err' }, err.message)); setTimeout(askIdle, 6000); return; }
+      if (a.done) return done();
+      askBox.replaceChildren(el('h3', {}, T('Waiting to be allowed…')),
+        el('p', { class: 'note' }, T('On the computer CasaTorch is installed on, open the setup page (it opened there when you installed, or go to http://localhost:8090 on it). It shows this request - check the number matches, then press Allow.')),
+        el('p', { class: 'asknum' }, a.num), el('button', { type: 'button', class: 'small ghost', onclick: () => { stopped = true; askIdle(); } }, T('Cancel')));
+      let stopped = false;
+      const poll = async () => {
+        if (stopped) return;
+        let r; try { r = await api(`/api/setup/ask/${encodeURIComponent(a.id)}`); } catch { askBox.replaceChildren(el('p', { class: 'note' }, T('That request ran out after 5 minutes.'))); setTimeout(askIdle, 4000); return; }
+        if (r.ok) return done();
+        if (r.denied) { askBox.replaceChildren(el('p', { class: 'err' }, T('It was not allowed on the other computer.'))); setTimeout(askIdle, 5000); return; }
+        setTimeout(poll, 2000);
+      };
+      setTimeout(poll, 2000);
+    }
+    if (['computer', 'addon'].includes(c.how)) askIdle();
     $('#page').replaceChildren(el('h1', {}, T('Enter your setup code')),
-      el('p', { class: 'intro', id: 'codehelp' }, T('So only you can set up this CasaTorch - not anyone else on your network - setup asks for a code, once.')),
+      el('p', { class: 'intro', id: 'codehelp' }, T('So only you can set up this CasaTorch - not anyone else on your network - setting up from this device needs your OK once: type the setup code, or allow this device from the computer CasaTorch runs on. Then set up right here.')),
       el('form', { class: 'codeform', onsubmit: go2 }, input, el('button', { type: 'submit', class: 'primary' }, T('Continue'))), msg,
+      ['computer', 'addon'].includes(c.how) ? askBox : null,
       el('div', { class: 'card' }, el('h3', {}, T('Where is it?')), ...(WHERE[c.how] || WHERE.computer).map((t) => el('p', { class: 'note' }, T(t)))),
       el('p', { class: 'note' }, `${T('Still stuck? E-mail')} `, el('a', { href: 'mailto:support@casatorch.com' }, 'support@casatorch.com'), '.'));   // scrub-ok: public support address
     input.focus();
@@ -566,12 +588,29 @@ async function setupCodeGate() {
 function phoneCard() {
   if (!W.phone?.code) return null;
   const q = el('div', { class: 'qr', role: 'img', 'aria-label': 'QR code that opens setup on your phone' }); if (W.phone.qr) q.innerHTML = W.phone.qr;   // made by this CasaTorch
-  return el('div', { class: 'card phonecard' }, W.phone.qr ? q : null, el('div', {}, el('h3', {}, T('Rather set up on your phone?')),
-    el('p', { class: 'note' }, T('Scan this with your phone\'s camera (on your home Wi-Fi). Setup opens there with your setup code filled in.')),
-    el('p', { class: 'note' }, `${T('Setup code')}: `, el('b', { class: 'code' }, W.phone.code))));
+  return el('details', { class: 'card phonedetails' }, el('summary', {}, T('Prefer to set up on your phone or another computer?')),
+    el('div', { class: 'phonecard' }, W.phone.qr ? q : null, el('div', {},
+      el('p', { class: 'note' }, T('You can set up right here, or on any device on your home Wi-Fi. Scan this with your phone\'s camera and setup opens there with your setup code filled in.')),
+      el('p', { class: 'note' }, `${T('Setup code')}: `, el('b', { class: 'code' }, W.phone.code), ` - ${T('or, on the other device, choose Ask to allow this device and press Allow here.')}`))));
+}
+/* On the computer CasaTorch runs on: another device asking to set up shows here, to allow or not. */
+let askPolling = false;
+function watchAsks() {
+  if (askPolling || !W.phone?.code) return; askPolling = true;
+  const bar = el('div', { class: 'askbar', role: 'status', 'aria-live': 'polite' }); document.body.append(bar);
+  const tick = async () => {
+    let r; try { r = await api('/api/setup/asks'); } catch { r = { asks: [] }; }
+    const a = (r.asks || [])[0];
+    if (!a) bar.replaceChildren(); else bar.replaceChildren(el('div', {}, el('b', {}, `${a.what} ${T('wants to set up CasaTorch')}`), el('div', { class: 'note' }, `${T('Number')}: `, el('b', { class: 'asknum small' }, a.num), ` - ${T('only allow it if that\'s you and the number matches.')}`)),
+      el('button', { type: 'button', class: 'primary small', onclick: async () => { await api(`/api/setup/asks/${encodeURIComponent(a.id)}`, { body: { allow: true } }).catch(() => {}); tick(); } }, T('Allow')),
+      el('button', { type: 'button', class: 'ghost small', onclick: async () => { await api(`/api/setup/asks/${encodeURIComponent(a.id)}`, { body: { allow: false } }).catch(() => {}); tick(); } }, T('Don\'t allow')));
+    setTimeout(tick, 2500);
+  };
+  tick();
 }
 (async () => {
   await setupCodeGate();
+  watchAsks();
   const st = await api('/api/setup/state');
   if (!st.open) { $('#page').replaceChildren(el('h1', {}, 'CasaTorch is already set up'), el('p', {}, el('a', { href: '/' }, 'Open the dashboard'))); document.querySelector('footer').hidden = true; return; }
   W.cat = await api('/api/setup/catalog');

@@ -25,12 +25,20 @@ async function cached(key, ttl, fn) {
   // Many screens asking at once (or a slow Home Assistant): one fetch, everyone waits for the same answer.
   if (INFLIGHT.has(key)) return INFLIGHT.get(key);
   const p = (async () => {
-    try { const value = await fn(); CACHE.set(key, { at: Date.now(), value }); return value; }
+    try { const value = await fn(); CACHE.delete(key); CACHE.set(key, { at: Date.now(), ttl, value }); return value; }   // re-added, so the Map stays oldest-first
     catch (err) { if (hit) return { ...hit.value, stale: true, error: String(err.message || err) }; throw err; }
     finally { INFLIGHT.delete(key); }
   })();
   INFLIGHT.set(key, p); return p;
 }
+/* Nothing is kept forever: an answer is forgotten a day after it went stale (a removed calendar or feed),
+   and there are never more than 500 (the oldest go first). */
+const CACHE_MAX = 500;
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of CACHE) if (now - v.at > (v.ttl || 0) + 86400_000) CACHE.delete(k);
+  for (const k of CACHE.keys()) { if (CACHE.size <= CACHE_MAX) break; CACHE.delete(k); }
+}, 10 * 60_000).unref?.();
 
 /* RSS 2.0 and Atom, without a library: titles, links, dates. */
 const decodeXml = (s) => String(s || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, '')

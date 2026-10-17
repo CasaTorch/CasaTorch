@@ -64,7 +64,7 @@ function durationMs(ev) {
 /* The wall-clock date and time of an instant in a zone (all-day events use UTC fields). */
 function localParts(t, tz) {
   if (!tz) { const d = new Date(t); return [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()]; }
-  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(t).map((x) => [x.type, x.value]));
+  const p = Object.fromEntries(tzFmt(tz).formatToParts(t).map((x) => [x.type, x.value]));   // the same cached formatter as zonedToUtc
   return [+p.year, +p.month, +p.day, +p.hour, +p.minute, +p.second];
 }
 /** Every occurrence overlapping [from, to). Repeats step on the event's local calendar, so a

@@ -56,8 +56,13 @@ app.get('/api/live/events', (req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.write(`retry: 5000\ndata: ${JSON.stringify({ type: 'hello', live: LIVE.ok })}\n\n`);
   LIVE.clients.add(res);
-  const beat = setInterval(() => { try { res.write(': keep-alive\n\n'); } catch { /* closing */ } }, 25_000);
-  req.on('close', () => { clearInterval(beat); LIVE.clients.delete(res); });
+  // Signed out elsewhere (or removed): the open stream ends too, at the next beat.
+  const sk = req.session?.key;
+  const beat = setInterval(() => {
+    if (sk && signInOn() && !sessions[sk]) { res.end(); return; }
+    try { res.write(': keep-alive\n\n'); } catch { /* closing */ }
+  }, 25_000);
+  res.on('close', () => { clearInterval(beat); LIVE.clients.delete(res); });
 });
 /* Start, and follow Home Assistant being added, changed or removed in setup. */
 setTimeout(haLiveStart, 2000).unref?.();

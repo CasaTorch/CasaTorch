@@ -116,10 +116,12 @@ function eventsCard(events) {
 }
 
 tab({ id: 'security', label: 'Security', icon: 'shield', async render(main) {
+  SEC.wallCard = null; SEC.wallKey = null;   // a new visit: the wall from last time had its live video stopped
   const draw = async () => {
     const [{ devices = [] }, s] = await Promise.all([api('/api/devices'), api('/api/security')]);
     const cams = devices.filter((d) => d.kind === 'camera');
     const issues = devices.filter((d) => d.water || d.smoke || d.triggered).length + devices.filter((d) => d.kind === 'lock' && d.locked === false).length + s.devices.filter((d) => !d.known).length + s.devices.filter((d) => d.ports.some((p) => !p.expected && p.level === 'warning')).length;
+    if (!main.isConnected) return;   // left for another page while this was loading
     setTop(T('Security'), issues ? `${issues} thing${issues === 1 ? '' : 's'} to look at` : 'All clear', []);
     const key = JSON.stringify([cams.map((d) => [d.id, d.name, !!d.stream]), s.wall, SEC.wallEdit]);
     if (key !== SEC.wallKey || !SEC.wallCard) { SEC.wallKey = key; SEC.wallCard = wallCard(cams, s.wall, draw); }   // the wall keeps playing while the rest refreshes

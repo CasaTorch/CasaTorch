@@ -45,7 +45,7 @@ const polyline = (pts) => { const path = new THREE.CurvePath(); for (let i = 1; 
 export class PowerNet {
   constructor(scene) { this.scene = scene; this.group = new THREE.Group(); this.group.renderOrder = 2; scene.add(this.group); this.flows = []; this.label = null; }
   clear() {
-    for (const o of [...this.group.children]) { this.group.remove(o); o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose(); }
+    for (const o of [...this.group.children]) { this.group.remove(o); o.traverse((x) => { x.geometry?.dispose(); x.material?.map?.dispose(); x.material?.dispose(); }); }   // the panel box's outline too
     this.flows = [];
     if (this.label) { this.label.parent?.remove(this.label); this.label.element.remove(); this.label = null; }
   }

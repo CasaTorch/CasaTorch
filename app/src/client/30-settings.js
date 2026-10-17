@@ -104,7 +104,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
 
   const pw = el('input', { type: 'password', placeholder: 'Your CasaTorch password', autocomplete: 'current-password' });
   const rerun = el('button', { class: 'btn' }, 'Run setup again');
-  rerun.onclick = async () => { try { const r = await post('/api/settings/rerun-setup', { password: pw.value }); location.href = r.url; } catch (err) { toast(err.message); } };
+  rerun.onclick = async () => { try { const r = await post('/api/settings/rerun-setup', { password: pw.value }); location.href = sameOrigin(r.url, '/setup.html'); } catch (err) { toast(err.message); } };
   const out = el('button', { class: 'btn ghost' }, 'Sign out');
   out.onclick = async () => { await fetch('/api/logout', { method: 'POST' }); location.href = '/login.html'; };
   const acct = el('div', { class: 'card' }, el('h2', {}, T('This CasaTorch')), el('dl', { class: 'kv' }, el('dt', {}, 'House'), el('dd', {}, s.house?.name || '-'), el('dt', {}, 'Time zone'), el('dd', {}, s.house?.timezone || '-'), el('dt', {}, 'Version'), el('dd', {}, s.version)),
@@ -200,7 +200,7 @@ async function updatesCard() {
   checkBtn.onclick = async () => { checkBtn.disabled = true; try { S.updates = await post('/api/updates', { checkNow: true }); drawBanner(); show('settings'); } catch (err) { toast(err.message); } checkBtn.disabled = false; };
   return el('div', { class: 'card' }, el('h2', {}, T('Updates')),
     el('dl', { class: 'kv' }, el('dt', {}, 'This version'), el('dd', {}, u.version), el('dt', {}, 'Installed as'), el('dd', {}, INSTALLS[u.install] || u.install), el('dt', {}, 'Newest'), el('dd', {}, u.latest ? `${u.latest}${u.available ? ' - available' : ' - you have it'}` : !u.check ? 'not checking' : u.error ? 'could not check right now' : u.checked ? '-' : 'checks within a few minutes of starting')),
-    u.available ? el('p', { class: 'small' }, u.how, ' ', el('a', { href: u.download, target: '_blank', rel: 'noopener' }, 'Downloads')) : null,
+    u.available ? el('p', { class: 'small' }, u.how, ' ', el('a', { href: safeHref(u.download), target: '_blank', rel: 'noopener' }, 'Downloads')) : null,
     sw('Check for updates once a day', u.check, (e) => save({ check: e.target.checked }), 'Sends only the version number to casatorch.com.'),
     u.canAuto ? sw('Install updates automatically overnight', u.auto, (e) => save({ auto: e.target.checked })) : null,
     f ? sw('Open this CasaTorch from casatorch.com/home', f.announce, async (e) => { try { await post('/api/find', { announce: e.target.checked }); toast('Saved'); } catch (err) { toast(err.message); } }, `Shares only its home-network address${f.address ? ` (${f.address})` : ''}, and only with browsers on your own internet connection.`) : null,

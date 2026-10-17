@@ -18,9 +18,12 @@ const HIST_KEEP_DAYS = 730, HIST_BASIC_DAYS = 7, SAMPLE_MS = 5 * 60_000;
 const hist = { v: 1, days: {}, last: null, seenAlertAt: null, reports: [] };
 try { Object.assign(hist, JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'))); } catch { /* first run */ }
 const saveHist = () => { try { writeFileSafe(HISTORY_FILE, JSON.stringify(hist), 0o600); } catch { /* next time */ } };
-const dayOf = (ms, tz = houseTz()) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
-const hourOf = (ms, tz = houseTz()) => Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }).format(new Date(ms)));
-const weekdayOf = (ms, tz = houseTz()) => new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(new Date(ms));
+/* One formatter per kind and time zone, made once (making one is slow; dayOf runs for every alert, every 5 minutes). */
+const HIST_FMT = new Map();
+const histFmt = (kind, tz, opts) => { const k = `${kind}|${tz}`; let f = HIST_FMT.get(k); if (!f) { f = new Intl.DateTimeFormat(kind === 'day' ? 'en-CA' : 'en-US', { timeZone: tz, ...opts }); if (HIST_FMT.size < 60) HIST_FMT.set(k, f); } return f; };
+const dayOf = (ms, tz = houseTz()) => histFmt('day', tz, { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+const hourOf = (ms, tz = houseTz()) => Number(histFmt('hour', tz, { hour: 'numeric', hourCycle: 'h23' }).format(new Date(ms)));
+const weekdayOf = (ms, tz = houseTz()) => histFmt('wd', tz, { weekday: 'short' }).format(new Date(ms));
 const addDays = (key, n) => new Date(Date.parse(`${key}T12:00:00Z`) + n * 86400_000).toISOString().slice(0, 10);
 const isSolar = (d) => /solar|pv_|production|generation|inverter/i.test(`${d.id} ${d.name}`);
 const blankDay = () => ({ wh: 0, peakW: 0, peakAt: null, nightMinW: null, n: 0, dev: {}, alerts: {}, titles: {}, netDownMin: 0 });
@@ -155,7 +158,7 @@ function ruleReport(s) {
   return { summary: parts.join(' '), tips: tips.slice(0, 5) };
 }
 async function aiReport(s) {
-  const c = config.ai, p = c && AI[c.provider];
+  const c = config.ai, p = c && aiOf(c.provider);
   if (!p || !c.model) return null;
   const system = `You write the weekly home report for CasaTorch, a home dashboard. From the JSON stats only, write:
 - "summary": 2-3 plain, friendly sentences about the week (energy and how it compares, anything that needs attention).

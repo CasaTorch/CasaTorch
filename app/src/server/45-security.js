@@ -173,14 +173,14 @@ const DEMO_SEC_EVENTS = () => { const t = (m) => new Date(Date.now() - m * 60_00
   { at: t(1440), title: 'Cleared: Water detected: Laundry leak sensor', severity: 'ok', source: 'ha' }]; };
 app.post('/api/security/devices/:mac', requireRole('member'), express.json({ limit: '4kb' }), (req, res) => {
   if (isDemo()) return res.json({ ok: true, demo: true });
-  const d = sec.devices[normMac(req.params.mac)]; if (!d) return res.status(404).json({ error: 'That device isn\'t on the list any more.' });
+  const mac = normMac(req.params.mac), d = Object.hasOwn(sec.devices, mac) ? sec.devices[mac] : null; if (!d) return res.status(404).json({ error: 'That device isn\'t on the list any more.' });
   if ('known' in (req.body || {})) d.known = !!req.body.known;
   if ('name' in (req.body || {})) d.name = String(req.body.name || '').trim().slice(0, 40) || null;
   saveSec(); res.json({ ok: true });
 });
 app.post('/api/security/expected', requireRole('member'), express.json({ limit: '4kb' }), (req, res) => {
   if (isDemo()) return res.json({ ok: true, demo: true });
-  const mac = normMac(req.body?.mac), port = Number(req.body?.port); if (!sec.devices[mac] || !RISKY_PORTS.some(([p]) => p === port)) return res.status(400).json({ error: 'unknown device or port' });
+  const mac = normMac(req.body?.mac), port = Number(req.body?.port); if (!Object.hasOwn(sec.devices, mac) || !RISKY_PORTS.some(([p]) => p === port)) return res.status(400).json({ error: 'unknown device or port' });
   if (req.body?.expected) sec.expected[`${mac}:${port}`] = true; else delete sec.expected[`${mac}:${port}`];
   saveSec(); res.json({ ok: true });
 });

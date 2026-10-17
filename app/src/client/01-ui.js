@@ -43,7 +43,7 @@ const statusBar = {
   conns: null, wx: null, timer: null, answerEl: null,
   visible() { return S.ui.statusBar === 'always' || (isPanel() && S.ui.statusBar !== 'off') || (isPanel() && S.ui.statusBar === 'off' && false); },
   async load() {
-    const [c, h] = await Promise.all([api('/api/connections').catch(() => null), api('/api/home').catch(() => null)]);
+    const [c, h] = await Promise.all([api('/api/status-bar').catch(() => null), api('/api/home').catch(() => null)]);
     if (c) this.conns = c.items; if (h?.weather?.now) this.wx = h.weather.now;
     this.draw();
   },
@@ -76,12 +76,12 @@ const statusBar = {
     const go = async () => {
       const q = input.value.trim(); if (!q) return;
       close(); this.answerEl = el('div', { class: 'sb-answer' }, el('span', { class: 'typing' }, el('i'), el('i'), el('i'))); wrap.append(this.answerEl);
-      askHistory.push({ role: 'user', content: q });
+      askPush({ role: 'user', content: q });
       let r; try { r = await post('/api/ask', { question: q, history: askHistory.slice(0, -1).slice(-8).map(({ role, content }) => ({ role, content })) }); } catch (err) { r = { answer: err.body?.setup ? 'Connect an AI first: Settings > Ask the house.' : err.message, actions: [] }; }
-      askHistory.push({ role: 'assistant', content: r.answer, actions: r.actions });
+      askPush({ role: 'assistant', content: r.answer, actions: r.actions });
       input.value = '';
       const box = el('div', { class: 'sb-answer' }, el('div', { class: 'row between', style: 'align-items:flex-start;gap:12px' }, el('div', {}, r.answer), el('button', { class: 'btn ghost small', 'aria-label': 'Close', onclick: close }, icon('x'))));
-      if (r.actions?.length) box.append(el('div', { class: 'acts' }, r.actions.map((a) => { const b = el('button', { class: 'btn small' }, icon('check'), a.label); b.onclick = async () => { b.disabled = true; try { await post(`/api/devices/${encodeURIComponent(a.deviceId)}/${a.action}`); b.replaceChildren(icon('check'), 'Done'); } catch (err) { toast(err.message); b.disabled = false; } }; return b; })));
+      if (r.actions?.length) box.append(el('div', { class: 'acts' }, r.actions.map((a) => { const b = el('button', { class: 'btn small' }, icon('check'), a.label); b.onclick = async () => { b.disabled = true; try { await post(`/api/devices/${encodeURIComponent(a.deviceId)}/${encodeURIComponent(a.action)}`); b.replaceChildren(icon('check'), 'Done'); } catch (err) { toast(err.message); b.disabled = false; } }; return b; })));
       this.answerEl.replaceWith(box); this.answerEl = box;
       clearTimeout(this.hideT); this.hideT = setTimeout(close, 45_000);
     };

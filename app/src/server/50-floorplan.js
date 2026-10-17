@@ -18,6 +18,7 @@ const FP_DIR = path.join(DATA_DIR, 'floorplan');
 const FP_HEX = /^#[0-9a-f]{6}$/i;
 const fin = (v, lo, hi) => Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi;
 const FP_FILE = path.join(FP_DIR, 'floorplan.json');
+const FP_MAX = 60;   // floors (and rooms scanned one at a time); each can be a big .glb on disk
 fs.mkdirSync(FP_DIR, { recursive: true, mode: 0o700 });
 const fpRead = () => { try { return JSON.parse(fs.readFileSync(FP_FILE, 'utf8')); } catch { return { floors: [], pins: [] }; } };
 let demoFp = null;   // the demo can be edited, but only in memory
@@ -43,6 +44,7 @@ app.post('/api/floorplan/floors', requirePro, express.raw({ type: '*/*', limit: 
   const buf = req.body;
   if (!Buffer.isBuffer(buf) || buf.length < 20 || buf.subarray(0, 4).toString() !== 'glTF') return res.status(400).json({ error: 'That is not a .glb file. In your scanning app, export as GLB (binary glTF).' });
   const d = fpData(), id = `f${Date.now().toString(36)}`;
+  if (d.floors.length >= FP_MAX) return res.status(400).json({ error: `Up to ${FP_MAX} floors and rooms - remove one first.` });
   writeFileSafe(path.join(FP_DIR, `${id}.glb`), buf, 0o600);
   const level = fin(req.query.level, 0, 9) ? Math.round(Number(req.query.level)) : Math.min(9, d.floors.reduce((m, f) => Math.max(m, (f.level || 0) + 1), 0));   // a room of an existing floor says which; otherwise the next one up
   d.floors.push({ id, name: String(req.query.name || `Floor ${level + 1}`).slice(0, 40), file: `${id}.glb`, level, heightM: 3, rotationY: 0, scale: 1, offset: [0, 0] });
@@ -63,7 +65,9 @@ app.put('/api/floorplan/floors/:id', requirePro, express.json(), (req, res) => {
   fpWrite(d); res.json({ ok: true, floor: f });
 });
 app.delete('/api/floorplan/floors/:id', requirePro, (req, res) => {
-  const d = fpData(); d.floors = d.floors.filter((x) => x.id !== req.params.id); d.pins = d.pins.filter((p) => p.floor !== req.params.id);
+  const d = fpData(), gone = d.floors.find((x) => x.id === req.params.id); d.floors = d.floors.filter((x) => x !== gone); d.pins = d.pins.filter((p) => p.floor !== req.params.id);
+  // The demo's edits live only in memory, so its uploads go with them (the sample floors are in demo/, never touched).
+  if (isDemo() && /^f[0-9a-z]+(-[0-9a-z]+)?\.glb$/.test(gone?.file || '')) fs.rm(path.join(FP_DIR, gone.file), { force: true }, () => {});
   fpWrite(d); res.json({ ok: true });   // the .glb stays on disk until a cleanup; nothing is lost by a mis-tap
 });
 /* Replace a floor's model: rooms scanned one at a time and joined in the editor come back as one .glb.
@@ -81,6 +85,7 @@ app.put('/api/floorplan/floors/:id/model', requirePro, express.raw({ type: '*/*'
 /* ---- drawn floors: rooms + walls (meters), optionally over a floor-plan picture ---- */
 app.post('/api/floorplan/floors/drawn', requirePro, express.json(), (req, res) => {
   const d = fpData(), id = `d${Date.now().toString(36)}`, level = d.floors.length;
+  if (d.floors.length >= FP_MAX) return res.status(400).json({ error: `Up to ${FP_MAX} floors and rooms - remove one first.` });
   const f = { id, kind: 'drawn', name: String(req.body?.name || `Floor ${level + 1}`).slice(0, 40), level, heightM: 2.7, rotationY: 0, scale: 1, offset: [0, 0], plan: { rooms: [], walls: [], bg: null, bgW: 15, bgOpacity: 0.6 } };
   d.floors.push(f); fpWrite(d); res.json({ ok: true, floor: f });
 });

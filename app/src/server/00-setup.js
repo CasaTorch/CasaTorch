@@ -72,8 +72,8 @@ let plaintextOnDisk = false;
 /* Never fetch the cloud's own metadata service (it hands out credentials when CasaTorch runs on a cloud
    server). Every address CasaTorch is given - cameras, monitors, app tests, AI, Home Assistant - goes
    through fetch, so this one check covers them. */
-const BLOCKED_HOSTS = /^(169\.254\.\d+\.\d+|\[?fd00:ec2::254\]?|100\.100\.100\.200|metadata\.google\.internal|metadata|instance-data)$/i;
-const blockedUrl = (u) => { try { return BLOCKED_HOSTS.test(new URL(String(u?.url || u)).hostname); } catch { return false; } };
+const BLOCKED_HOSTS = /^(169\.254\.\d+\.\d+|\[?fd00:ec2::254\]?|100\.100\.100\.200|\[?::ffff:(a9fe:[0-9a-f]{1,4}|6464:64c8)\]?|metadata\.google\.internal|metadata|instance-data)$/i;   // the IPv6 forms are the same addresses written another way
+const blockedUrl = (u) => { try { return BLOCKED_HOSTS.test(new URL(String(u?.url || u)).hostname.replace(/\.$/, '')); } catch { return false; } };
 { const realFetch = globalThis.fetch; globalThis.fetch = (u, o) => (blockedUrl(u) ? Promise.reject(new TypeError('That address is not allowed.')) : realFetch(u, o)); }
 
 let config = {};

@@ -44,7 +44,7 @@ widget({ id: 'calendar', title: 'Coming up', icon: 'calendar', min: [3, 2], size
     const cal = ctx.data.home?.calendar;
     const ev = (cal?.events || []).filter((e) => Date.parse(e.end || e.start) > Date.now()).slice(0, fits(h, 52));
     if (!ev.length) return b.replaceChildren(empty('Nothing coming up.', '#calendar', 'Open the calendar'));
-    b.replaceChildren(...ev.map((e) => el('div', { class: 'ev' }, el('span', { class: 'bar', style: `background:${e.color || 'var(--accent)'}` }),
+    b.replaceChildren(...ev.map((e) => el('div', { class: 'ev' }, el('span', { class: 'bar', style: `background:${safeColor(e.color)}` }),
       el('div', { class: 'grow' }, el('div', { class: 'ellipsis' }, e.title), el('div', { class: 'when' }, e.allDay ? `${fmt(e.start, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })} · all day` : fmtWhen(e.start), w >= 4 && e.calendar ? ` · ${e.calendar}` : '')))));
   } });
 
@@ -65,7 +65,7 @@ widget({ id: 'news', title: 'Headlines', icon: 'news', min: [3, 2], size: [4, 4]
   const n = ctx.data.home?.news;
   if (!n) return b.replaceChildren(empty('Pick news sources in setup.'));
   const items = (n.items || []).slice(0, fits(h, w >= 5 ? 50 : 62));
-  b.replaceChildren(...(items.length ? [el('ul', { class: 'list' }, items.map((i) => el('li', { style: 'display:block' }, el('a', { href: i.link, target: '_blank', rel: 'noopener noreferrer', style: 'color:inherit;text-decoration:none;display:block' }, el('div', { class: w >= 5 ? 'ellipsis' : null }, i.title), el('div', { class: 'tiny muted' }, `${i.source}${i.at ? ` · ${ago(i.at)}` : ''}`)))))] : [empty('Headlines are not loading right now.')]));
+  b.replaceChildren(...(items.length ? [el('ul', { class: 'list' }, items.map((i) => el('li', { style: 'display:block' }, el('a', { href: safeHref(i.link), target: '_blank', rel: 'noopener noreferrer', style: 'color:inherit;text-decoration:none;display:block' }, el('div', { class: w >= 5 ? 'ellipsis' : null }, i.title), el('div', { class: 'tiny muted' }, `${i.source}${i.at ? ` · ${ago(i.at)}` : ''}`)))))] : [empty('Headlines are not loading right now.')]));
 } });
 
 widget({ id: 'internet', title: 'Internet', icon: 'wifi', min: [2, 2], size: [3, 2], render(b, ctx, { w, h }) {
@@ -255,7 +255,14 @@ async function camFetch(c, force = false) {
   } catch { c.wrap.classList.add('cam-err'); c.wrap.classList.remove('cam-wait'); }
   finally { c.busy = false; }
 }
-setInterval(() => { const now = Date.now(); for (const c of CAMS.values()) if (c.wrap.isConnected && now - c.last >= camEvery(c.d)) camFetch(c); }, 400);
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, c] of CAMS) {
+    if (c.wrap.isConnected) { c.gone = 0; if (now - c.last >= camEvery(c.d)) camFetch(c); continue; }
+    // a camera no page shows any more (another tab, or it was removed): after a minute, let its picture go
+    if (!c.gone) c.gone = now; else if (now - c.gone > 60_000 && !c.busy) { camSeen?.unobserve(c.wrap); if (c.url) URL.revokeObjectURL(c.url); CAMS.delete(id); }
+  }
+}, 400);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) for (const c of CAMS.values()) if (c.wrap.isConnected) camFetch(c); });
 function camView(d) {
   let c = CAMS.get(d.id);
@@ -272,11 +279,12 @@ function camView(d) {
 function camModal(d) {
   const img = el('img', { alt: d.name, class: 'cam-full' }), note = el('div', { class: 'tiny muted', style: 'margin-top:8px' }, d.stream ? 'Live video' : 'A new picture every second');
   const m = modal(el('div', {}, img, note), { wide: true, title: d.name });
-  const stills = () => { let etag = null; const tick = async () => { if (!m.isConnected) return; try { const r = await fetch(snapUrl(d), { cache: 'no-store', headers: etag ? { 'If-None-Match': etag } : {} }); if (r.ok) { const u = URL.createObjectURL(await r.blob()), t = new Image(); t.src = u; await t.decode().catch(() => {}); const o = img.src; img.src = u; etag = r.headers.get('ETag'); if (o.startsWith('blob:')) URL.revokeObjectURL(o); } } catch { /* next tick */ } setTimeout(tick, 1000); }; tick(); };
-  if (d.stream) { img.src = `${d.stream}?t=${Date.now()}`; img.onerror = () => { note.textContent = 'Live video unavailable - showing pictures'; stills(); }; }
+  let started = false;
+  const stills = () => { if (started) return; started = true; let etag = null; const tick = async () => { if (!m.isConnected) return; try { const r = await fetch(snapUrl(d), { cache: 'no-store', headers: etag ? { 'If-None-Match': etag } : {} }); if (r.ok && m.isConnected) { const u = URL.createObjectURL(await r.blob()), t = new Image(); t.src = u; await t.decode().catch(() => {}); const o = img.src; img.src = u; etag = r.headers.get('ETag'); if (o.startsWith('blob:')) URL.revokeObjectURL(o); } } catch { /* next tick */ } setTimeout(tick, 1000); }; tick(); };
+  if (d.stream) { img.src = `${d.stream}${d.stream.includes('?') ? '&' : '?'}t=${Date.now()}`; img.onerror = () => { if (!m.isConnected) return; note.textContent = 'Live video unavailable - showing pictures'; stills(); }; }
   else stills();
   // closing the window stops a live stream at once
-  new MutationObserver((_, o) => { if (!m.isConnected) { img.src = ''; o.disconnect(); } }).observe(document.body, { childList: true });
+  new MutationObserver((_, o) => { if (!m.isConnected) { img.onerror = null; const u = img.src; img.removeAttribute('src'); if (u.startsWith('blob:')) URL.revokeObjectURL(u); o.disconnect(); } }).observe(document.body, { childList: true });
 }
 widget({ id: 'camera', title: 'Cameras', icon: 'camera', min: [3, 2], size: [4, 3], render(b, ctx, { w, h }) {
   const cams = (ctx.data.devices?.devices || []).filter((d) => d.kind === 'camera');
@@ -294,7 +302,7 @@ widget({ id: 'photos', title: 'Photo reel', icon: 'camera', bare: true, live: tr
   let front = mk(), back = mk(), i = 0; front.src = order[0].url; back.style.opacity = 0;
   /* Sample photos carry their photographer and license; your own photos show nothing over them. */
   const credit = el('a', { class: 'photo-credit', target: '_blank', rel: 'noopener' });
-  const label = (p) => { credit.hidden = !p.credit; credit.textContent = p.credit ? `Sample photo · ${p.credit}` : ''; if (p.source) credit.href = p.source; else credit.removeAttribute('href'); };
+  const label = (p) => { credit.hidden = !p.credit; credit.textContent = p.credit ? `Sample photo · ${p.credit}` : ''; const src = safeHref(p.source); if (src) credit.href = src; else credit.removeAttribute('href'); };
   label(order[0]);
   b.replaceChildren(el('div', { style: 'position:absolute;inset:0;overflow:hidden;background:#000' }, front, back, credit)); b.parentElement.style.padding = '0';
   if (order.length > 1) b._reel = setInterval(() => { if (!b.isConnected) return clearInterval(b._reel); i = (i + 1) % order.length; const p = order[i]; back.onload = () => { back.style.opacity = 1; front.style.opacity = 0; [front, back] = [back, front]; label(p); }; back.src = p.url; }, 9000);

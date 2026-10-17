@@ -12,6 +12,7 @@
  * ====================================================================== */
 const NUDGE_FILE = path.join(DATA_DIR, 'nudges.json'), NUDGE_DIR = path.join(DATA_DIR, 'nudges');
 const NUDGE_ICONS = ['trash', 'paw', 'pill', 'bill', 'plant', 'cake', 'car', 'school', 'laundry', 'bell'];
+const NUDGE_SOUNDS = ['none', 'chime', 'bell', 'dingdong', 'marimba', 'birds', 'alarm'];   // played by the screens (client 37-nudges.js makes them)
 const NUDGE_REPEAT = ['once', 'daily', 'weekly', 'monthly', 'yearly'];
 const NUDGE_MAX = 100, NUDGE_SHOW_MIN = 60;   // a nudge stays up an hour unless someone answers it
 const ng = { list: [], active: [] };
@@ -69,7 +70,7 @@ async function nudgeTick() {
   }
   const now = Date.now(), before = ng.active.length;
   ng.active = ng.active.filter((a) => Date.parse(a.until) > now && ng.list.some((n) => n.id === a.id));
-  if (changed || ng.active.length !== before) nudgeSave();
+  if (changed || ng.active.length !== before) { nudgeSave(); if (typeof liveNudge === 'function') liveNudge(); }   // every screen shows (or clears) it within a second, not at its next check
 }
 setInterval(() => { nudgeTick().catch(() => {}); }, 20_000).unref?.();
 /* A nudge you asked to be sent is sent - quiet hours don't hold it back (you chose the time). */
@@ -79,14 +80,14 @@ async function nudgePush(n) {
     (async () => {
       if (!push.subs.length) return;
       const k = vapid();
-      await Promise.allSettled(push.subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(msg), { TTL: 3600, urgency: 'normal', vapidDetails: { subject: 'mailto:support@casatorch.com', publicKey: k.publicKey, privateKey: k.privateKey } })));   // scrub-ok: public support address
+      await Promise.allSettled(push.subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(msg), { TTL: 3600, urgency: 'normal', vapidDetails: { subject: 'mailto:support@casatorch.com', publicKey: k.publicKey, privateKey: k.privateKey }, timeout: 10_000 })));   // scrub-ok: public support address
     })(),
     haPhone(msg),
   ]);
 }
 
 /* ---- what the app gets ---- */
-const nudgeView = (n) => ({ id: n.id, title: n.title, icon: n.icon || null, photo: !!n.photo, time: n.time, repeat: n.repeat, days: n.days || [], date: n.date || null, flash: n.flash !== false, push: !!n.push, on: n.on !== false, lastFired: n.lastFired || null });
+const nudgeView = (n) => ({ id: n.id, title: n.title, icon: n.icon || null, sound: NUDGE_SOUNDS.includes(n.sound) ? n.sound : 'none', photo: !!n.photo, time: n.time, repeat: n.repeat, days: n.days || [], date: n.date || null, flash: n.flash !== false, push: !!n.push, on: n.on !== false, lastFired: n.lastFired || null });
 function nudgeClean(b, old = {}) {
   const title = String(b.title ?? old.title ?? '').trim().slice(0, 60);
   if (!title) throw new Error('Give it a name, like "Trash night".');
@@ -99,11 +100,14 @@ function nudgeClean(b, old = {}) {
   if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Pick a date.');
   const icon = NUDGE_ICONS.includes(b.icon) ? b.icon : old.icon && NUDGE_ICONS.includes(old.icon) ? old.icon : 'bell';
   const wantPush = 'push' in b ? !!b.push : !!old.push;
-  return { title, time, repeat, days, date, icon, flash: 'flash' in b ? b.flash !== false : old.flash !== false, push: wantPush, on: 'on' in b ? b.on !== false : old.on !== false };
+  const sound = NUDGE_SOUNDS.includes(b.sound) ? b.sound : NUDGE_SOUNDS.includes(old.sound) ? old.sound : 'none';
+  return { title, time, repeat, days, date, icon, sound, flash: 'flash' in b ? b.flash !== false : old.flash !== false, push: wantPush, on: 'on' in b ? b.on !== false : old.on !== false };
 }
+/* Any change (Done, 10 more minutes, a new or edited nudge, Try it): every open screen hears at once. */
+app.use('/api/nudges', (req, res, next) => { if (req.method !== 'GET') res.on('finish', () => { if (res.statusCode < 400 && typeof liveNudge === 'function') liveNudge(); }); next(); });
 app.get('/api/nudges', (_req, res) => {
   if (isDemo()) return res.json(nudgeDemo());
-  res.json({ pro: !!proStatus().pro, icons: NUDGE_ICONS, phones: push.subs.length + (config.alerts?.phone === 'homeassistant' ? 1 : 0), list: ng.list.map(nudgeView), today: nudgesToday().map((n) => n.id) });
+  res.json({ pro: !!proStatus().pro, icons: NUDGE_ICONS, sounds: NUDGE_SOUNDS, phones: push.subs.length + (config.alerts?.phone === 'homeassistant' ? 1 : 0), list: ng.list.map(nudgeView), today: nudgesToday().map((n) => n.id) });
 });
 /* What should be on the screens right now (every screen asks every 30 seconds). */
 app.get('/api/nudges/active', (_req, res) => {
@@ -173,6 +177,6 @@ app.get('/api/nudges/:id/photo', (req, res) => {
   res.sendFile(path.join(NUDGE_DIR, n.photo));
 });
 function nudgeDemo() {
-  const mk = (id, title, icon, time, repeat, extra = {}) => ({ id, title, icon, photo: false, time, repeat, days: [], date: null, flash: true, push: true, on: true, lastFired: null, ...extra });
+  const mk = (id, title, icon, time, repeat, extra = {}) => ({ id, title, icon, photo: false, time, repeat, days: [], date: null, flash: true, push: true, on: true, lastFired: null, sound: 'chime', ...extra });
   return { pro: true, demo: true, icons: NUDGE_ICONS, phones: 2, today: ['d1', 'd2'], list: [mk('d1', 'Trash night', 'trash', '19:30', 'weekly', { days: [2] }), mk('d2', "Dog's dinner", 'paw', '17:30', 'daily'), mk('d3', 'Electric bill due', 'bill', '09:00', 'monthly', { date: '2026-01-15' }), mk('d4', "Mom's birthday", 'cake', '08:00', 'yearly', { date: '2026-03-22' }), mk('d5', 'Water the plants', 'plant', '08:30', 'weekly', { days: [1, 4] })] };
 }

@@ -73,13 +73,49 @@ app.post('/api/setup/code', express.json({ limit: '2kb' }), (req, res) => {
   if (limited(`setupcode:${ip}`, 8) || limited('setupcode:all', 60)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' });
   const got = cleanCode(req.body?.code);
   if (got.length !== code.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(code))) return res.status(403).json({ error: 'That code isn\'t right. Check it and try again - it\'s 8 letters and numbers, like ABCD-2345.' });
-  res.setHeader('Set-Cookie', `ct_setup=${setupProof()}; Path=/; HttpOnly; SameSite=Lax${req.secure ? '; Secure' : ''}`);
+  res.setHeader('Set-Cookie', setupCookie(req));
   res.json({ ok: true });
+});
+/* "Allow this device": set up on a phone or another computer without typing the code. That device asks; the computer
+   CasaTorch runs on (or Home Assistant's own panel) shows who's asking with a two-digit number, and only there can it
+   be allowed. Requests expire after 5 minutes; at most 5 wait at once, and 5 an hour from one address. */
+const setupAsks = new Map();
+const setupCookie = (req) => `ct_setup=${setupProof()}; Path=/; HttpOnly; SameSite=Lax${req.secure ? '; Secure' : ''}`;
+function askWhat(ua) {
+  ua = String(ua || '');
+  const dev = /iPhone/.test(ua) ? 'An iPhone' : /iPad/.test(ua) ? 'An iPad' : /Android/.test(ua) ? 'An Android phone or tablet' : /Macintosh/.test(ua) ? 'A Mac' : /Windows/.test(ua) ? 'A Windows computer' : /Linux|CrOS/.test(ua) ? 'A computer' : 'A device';
+  const br = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : '';
+  return br ? `${dev} (${br})` : dev;
+}
+const askSweep = () => { const now = Date.now(); for (const [k, a] of setupAsks) if (now - a.at > 5 * 60_000) setupAsks.delete(k); };
+app.post('/api/setup/ask', (req, res) => {
+  if (!setupCode()) return res.json({ done: true });
+  askSweep();
+  const ip = typeof clientIp === 'function' ? clientIp(req) : req.ip;
+  if (limited(`setupask:${ip}`, 5, 60 * 60_000) || setupAsks.size >= 5) return res.status(429).json({ error: 'Too many requests are waiting. Use the setup code instead, or try again in a few minutes.' });
+  const a = { id: crypto.randomBytes(18).toString('base64url'), what: askWhat(req.headers['user-agent']), num: String(crypto.randomInt(10, 100)), at: Date.now(), ok: null };
+  setupAsks.set(a.id, a);
+  res.json({ id: a.id, num: a.num });
+});
+app.get('/api/setup/ask/:id', (req, res) => {   // the asking device waits here
+  const a = setupAsks.get(String(req.params.id)); if (!a) return res.status(404).json({ error: 'That request ran out. Ask again.' });
+  if (a.ok === true) { setupAsks.delete(a.id); res.setHeader('Set-Cookie', setupCookie(req)); return res.json({ ok: true }); }
+  if (a.ok === false) { setupAsks.delete(a.id); return res.json({ denied: true }); }
+  res.json({ waiting: true });
+});
+app.get('/api/setup/asks', (req, res) => {   // only the computer CasaTorch runs on (or Home Assistant's panel) sees who's asking
+  if (!setupTrusted(req)) return res.status(403).json({ error: 'Only on the computer CasaTorch runs on.' });
+  askSweep(); res.json({ asks: [...setupAsks.values()].filter((a) => a.ok === null).map(({ id, what, num }) => ({ id, what, num })) });
+});
+app.post('/api/setup/asks/:id', express.json({ limit: '1kb' }), (req, res) => {
+  if (!setupTrusted(req)) return res.status(403).json({ error: 'Only on the computer CasaTorch runs on.' });
+  const a = setupAsks.get(String(req.params.id)); if (!a) return res.status(404).json({ error: 'That request ran out.' });
+  a.ok = req.body?.allow === true; res.json({ ok: true });
 });
 /* Everything else in setup (and claiming a Pro license during setup) needs the proof. */
 app.use('/api', (req, res, next) => {
   if (!setupCode()) return next();
-  if (!/^\/(setup|license\/claim)\//.test(req.path) || /^\/setup\/(state|code)$/.test(req.path)) return next();
+  if (!/^\/(setup|license\/claim)\//.test(req.path) || /^\/setup\/(state|code|ask|ask\/[\w-]+)$/.test(req.path)) return next();
   if (setupProven(req)) return next();
   res.status(401).json({ error: 'Enter the setup code first.', needCode: true });
 });

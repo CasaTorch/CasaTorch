@@ -37,6 +37,23 @@ const proErr = (e) => toast(e.status === 402 ? 'Editing the 3D home is part of C
 const V3 = THREE.Vector3, deg = THREE.MathUtils.degToRad;
 const fill = (node, ...kids) => { node.replaceChildren(...kids.flat().filter((k) => k != null && k !== false)); return node; };
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+/* Free what a 3D object holds on the graphics card: its shapes, materials and their pictures (all of its parts too).
+   keep: materials or textures shared with other things, left alone. Labels on it are taken off the page. */
+const TEX_KEYS = ['map', 'alphaMap', 'aoMap', 'bumpMap', 'emissiveMap', 'envMap', 'lightMap', 'metalnessMap', 'normalMap', 'roughnessMap', 'specularMap'];
+function disposeMaterial(m, keep) {
+  if (!m || keep?.has(m)) return;
+  for (const k of TEX_KEYS) if (m[k]?.isTexture && !keep?.has(m[k])) m[k].dispose();
+  m.dispose();
+}
+function disposeTree(root, keep) {
+  if (!root) return;
+  root.traverse((o) => {
+    if (o.isCSS2DObject) o.element.remove();
+    o.geometry?.dispose();
+    for (const m of [o.material].flat()) disposeMaterial(m, keep);
+    for (const k of ['full', 'own', 'ownLow']) if (o.userData?.[k]?.isMaterial) disposeMaterial(o.userData[k], keep);
+  });
+}
 
 /* ---------- icons (simple line icons, our own) ---------- */
 const PATHS = { light: 'M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z', plug: 'M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4', media: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
@@ -192,7 +209,7 @@ function applyLook() {
   const L = look();
   scene.background = new THREE.Color(L.bg); scene.fog = new THREE.Fog(L.bg, 70, 180);
   hemi.color.set(L.hemi[0]); hemi.groundColor.set(L.hemi[1]); hemi.intensity = L.hemi[2]; sun.intensity = L.sun; skyAt = 0;
-  const y = grid.position.y; scene.remove(grid);
+  const y = grid.position.y; scene.remove(grid); grid.geometry?.dispose(); for (const m of [grid.material].flat()) m?.dispose();   // the lawn's grass picture is shared and stays
   if (L.real) { grid = new THREE.Mesh(new THREE.CircleGeometry(160, 72).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: L.ground, map: grassTex(), roughness: 1 })); grid.receiveShadow = true; }   // a lawn to the horizon
   else grid = new THREE.GridHelper(140, 140, L.grid[0], L.grid[1]);
   grid.position.y = y; scene.add(grid);
@@ -261,14 +278,22 @@ function floorMats(fx, clip) {
   return { wall: c(fxMaterial({}, fx)), floor: fxMaterial({}, fx, 0.5), furniture: fxMaterial({}, fx), door: c(fxMaterial({ transparent: true, opacity: 0.45, depthWrite: false }, fx)),
     window: c(fxMaterial({ transparent: true, opacity: 0.25, depthWrite: false }, fx)), opening: fxMaterial({ transparent: true, opacity: 0, depthWrite: false }, fx) };
 }
-async function loadFloors() {
-  S.liveSig = null;   // the pins go with the old floors: draw them again
+function disposeFloor(F) {
   /* Labels on the old floors are page elements: take them off the page too, or they stay behind, stacked in the middle. */
-  for (const F of Object.values(S.F)) { F.G.traverse((o) => { if (o.isCSS2DObject) o.element.remove(); }); scene.remove(F.G); }
+  scene.remove(F.G);
+  disposeTree(F.G);
+  for (const m of [...Object.values(F.mats), ...Object.values(F.low), F.edgeMat, F.furnEdgeMat, F.doorEdge, F.edgeLow, F.doorEdgeLow]) m?.dispose();
+}
+let floorsGen = 0;
+async function loadFloors() {
+  const gen = ++floorsGen;   // a newer load (a quick second reload) wins; this one stops and frees what it made
+  S.liveSig = null;   // the pins go with the old floors: draw them again
+  for (const F of Object.values(S.F)) disposeFloor(F);
   S.pinObjs = []; closeCard();
   S.F = {};
   for (const f of S.plan.floors) {
-    const inner = f.kind === 'drawn' ? await drawnFloor(f) : await new Promise((ok, bad) => loader.load(`/api/floorplan/floors/${f.id}/model`, (g) => ok(g.scene), undefined, bad)).catch(() => null);
+    const inner = f.kind === 'drawn' ? await drawnFloor(f) : await new Promise((ok, bad) => loader.load(`/api/floorplan/floors/${encodeURIComponent(f.id)}/model`, (g) => ok(g.scene), undefined, bad)).catch(() => null);
+    if (gen !== floorsGen) { disposeTree(inner); return; }
     if (!inner) { toast(`Could not load ${f.name}`); continue; }
     if (f.kind !== 'drawn') { inner.scale.setScalar(f.scale || 1); inner.rotation.y = deg(f.rotationY || 0); }
     const G = new THREE.Group(); G.userData.floor = f.id; G.add(inner); G.position.set(f.offset?.[0] || 0, 0, f.offset?.[1] || 0); scene.add(G); G.updateMatrixWorld(true);
@@ -313,7 +338,7 @@ async function loadFloors() {
 }
 /* The roof sits on the top floor (and lifts away when you pick a floor or a room). */
 function buildRoofs() {
-  for (const F of Object.values(S.F)) if (F.roof) { F.roof.parent?.remove(F.roof); F.roof = null; }
+  for (const F of Object.values(S.F)) if (F.roof) { F.roof.parent?.remove(F.roof); disposeTree(F.roof); F.roof = null; }
   const top = Object.values(S.F).sort((a, b) => (b.f.level || 0) - (a.f.level || 0))[0];
   if (!top || top.original) return;
   const b = top.box.clone(); b.min.x -= top.G.position.x; b.max.x -= top.G.position.x; b.min.z -= top.G.position.z; b.max.z -= top.G.position.z;
@@ -665,8 +690,8 @@ function drawPins() {
     const list = (glows[F.f.id] || []).slice(0, MAX_GLOW);
     list.forEach((g, i) => { const w = F.G.localToWorld(new V3(...g.p.pos)), c = new THREE.Color(g.color); F.fx.uGlowPos.value[i].copy(w); F.fx.uGlowCol.value[i].set(c.r * g.k, c.g * g.k, c.b * g.k); F.fx.uGlowRoom.value[i] = roomAt(F, g.p.pos[0], g.p.pos[2]); });
     F.fx.uGlowN.value = list.length;
-    const by = pinsByRoom(F);
-    F.roomLabs.forEach((l, i) => { const on = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length, t = by[i].find((p) => p.device.tempC != null); l.element.querySelector('small').textContent = prefs.overlay !== 'rooms' ? overlayText(roomStats(F)[i]) || '' : [t ? temp(t.device.tempC) : '', on ? `${on} on` : ''].filter(Boolean).join(' · '); });
+    const by = pinsByRoom(F), stats = prefs.overlay !== 'rooms' ? roomStats(F) : null;   // once per floor, not once per room
+    F.roomLabs.forEach((l, i) => { const on = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length, t = by[i].find((p) => p.device.tempC != null); l.element.querySelector('small').textContent = stats ? overlayText(stats[i]) || '' : [t ? temp(t.device.tempC) : '', on ? `${on} on` : ''].filter(Boolean).join(' · '); });
     const lightsOn = (S.live?.pins || []).filter((p) => p.floor === F.f.id && p.device.kind === 'light' && p.device.on).length;
     const openN = (S.live?.pins || []).filter((p) => p.floor === F.f.id && p.device.open && p.device.kind !== 'cover').length;
     fill(F.label.element, el('b', {}, F.f.name), el('small', {}, [F.rooms.length ? `${F.rooms.length} room${F.rooms.length === 1 ? '' : 's'}` : '', lightsOn ? `${lightsOn} light${lightsOn === 1 ? '' : 's'} on` : '', openN ? `${openN} open` : ''].filter(Boolean).join(' · ')));
@@ -691,6 +716,7 @@ const snapUrl = (d) => d.snapshot || (d.provider === 'ha' ? `/api/ha/camera/${en
    still every second, swapped in only once it has loaded so it never flickers. */
 let camStop = null;
 function cameraModal(d, name = d.name) {
+  camStop?.();   // a camera window already open: stop its video first
   /* As live as the camera allows, best first:
      1. WebRTC through the server's camera relay (go2rtc) - a few hundred milliseconds behind, with sound off.
      2. The camera's own MJPEG stream, for cameras CasaTorch reaches directly (Frigate) - about a second.
@@ -738,10 +764,10 @@ function cameraModal(d, name = d.name) {
     if (d.stream && (d.live || d.provider !== 'ha')) mjpeg(); else stills();
   })();
   const ago = setInterval(() => { if (lastPic && Date.now() - lastPic > 4000) say(`Picture from ${Math.round((Date.now() - lastPic) / 1000)} s ago`); }, 1000);
+  modal(el('div', { class: 'box cam' }, el('div', { class: 'rhead' }, ic('camera'), el('div', {}, el('h2', {}, name), el('small', {}, badge)), el('button', { type: 'button', class: 'iconbtn', title: 'Close', 'aria-label': 'Close', onclick: closeModal }, ic('close'))), box));
   camStop = () => { closed = true; clearInterval(ago); stop(); camStop = null; };
-  modal(el('div', { class: 'box cam' }, el('div', { class: 'rhead' }, ic('camera'), el('div', {}, el('h2', {}, name), el('small', {}, badge)), el('button', { type: 'button', class: 'iconbtn', title: 'Close', onclick: closeModal }, ic('close'))), box));
 }
-function modal(content) { const m = $('#modal'); m.replaceChildren(content); m.hidden = false; m.onclick = (e) => { if (e.target === m) closeModal(); }; }
+function modal(content) { camStop?.(); const m = $('#modal'); m.replaceChildren(content); m.hidden = false; m.onclick = (e) => { if (e.target === m) closeModal(); }; }   // anything new in the window stops a camera that was in it
 function closeModal() { camStop?.(); $('#modal').hidden = true; $('#modal').replaceChildren(); }
 addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeCard(); } });
 
@@ -800,7 +826,7 @@ function drawTools() {
   document.querySelector('body > .morepop')?.remove(); if (more && !t.hidden) document.body.append(more);   // on the page, so the scrolling bar can't clip it
 }
 const lightsIn = (pins) => pins.filter((p) => p.device.kind === 'light');
-async function allLights(pins, on) { await Promise.all(lightsIn(pins).filter((p) => !!p.device.on !== on).map((p) => send(`/api/devices/${encodeURIComponent(p.device.id)}/${on ? 'on' : 'off'}`, 'POST', pin ? { pin } : {}).catch(() => {}))); setTimeout(refresh, 700); }
+async function allLights(pins, on) { await Promise.all(lightsIn(pins).filter((p) => !!p.device.on !== on).map((p) => send(`/api/devices/${encodeURIComponent(p.device.id)}/${on ? 'on' : 'off'}`, 'POST', {}).catch(() => {}))); setTimeout(refresh, 700); }
 /* ---------- the control panel on the left: time, weather, the house, then the room you pick ---------- */
 const tz = () => S.live?.weather?.tz || undefined;
 function clockText() {
@@ -1229,12 +1255,13 @@ renderer.domElement.addEventListener('click', (e) => {
 const isClipped = (h) => h.point.y > (h.object.material?.clippingPlanes?.[0]?.constant ?? Infinity);
 function showSel() {
   const F = S.F[S.sel?.floor], ms = F?.items.get(S.sel?.key);
-  scene.children.filter((o) => o.userData.sel).forEach((o) => scene.remove(o));
+  clearSelBox();
   if (!ms) return;
   const b = new THREE.Box3(); ms.forEach((m) => b.expandByObject(m)); b.expandByScalar(0.03);
   const h = new THREE.Box3Helper(b, '#fbbf24'); h.userData.sel = true; scene.add(h);
 }
-const clearSel = () => { S.sel = null; scene.children.filter((o) => o.userData.sel).forEach((o) => scene.remove(o)); };
+function clearSelBox() { scene.children.filter((o) => o.userData.sel).forEach((o) => { scene.remove(o); o.geometry?.dispose(); o.material?.dispose(); }); }
+const clearSel = () => { S.sel = null; clearSelBox(); };
 
 /* ---------- saving ---------- */
 async function savePins() {
@@ -1253,7 +1280,7 @@ async function saveYard(y, quiet) {
 const saveYardSoon = debounce((y) => saveYard(y, true), 400);   // typing a name or dragging a slider: no re-draw of the panel
 let previewLine = null;
 function yardPreview() {
-  if (previewLine) { scene.remove(previewLine); previewLine.geometry.dispose(); previewLine = null; }
+  if (previewLine) { scene.remove(previewLine); previewLine.geometry.dispose(); previewLine.material.dispose(); previewLine = null; }
   const t = S.tool; if (t?.type !== 'yard-area' || !t.pts.length) return;
   const y = groundY() + 0.05, pts = t.pts.map(([x, z]) => new V3(x, y, z));
   previewLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(t.pts.length > 2 ? [...pts, pts[0]] : pts), new THREE.LineBasicMaterial({ color: '#f472b6', depthTest: false }));
@@ -1359,7 +1386,7 @@ function edYard() {
   return el('div', {}, el('p', { class: 'note' }, 'Draw the yard and add trees, bushes and your car so the 3D home looks like your place. Cars from Home Assistant park themselves on your driveway. Drag a car, the charger or a tree on the house to where it really is.'),
     el('h3', {}, 'Draw an area'),
     el('div', { class: 'row wrap' }, ...Object.entries(AREA_KINDS).map(([k, [n]]) => el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'yard-area', kind: k, pts: [] }; editor(); } }, n))),
-    y.areas.length ? el('div', {}, ...y.areas.map((a, i) => el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, el('i', { class: 'swatch', style: `--rc:${AREA_KINDS[a.kind][1]}` }), el('span', {}, AREA_KINDS[a.kind][0]), el('small', {}, `${a.pts.length} corners`)),
+    y.areas.length ? el('div', {}, ...y.areas.map((a, i) => el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, el('i', { class: 'swatch', style: `--rc:${AREA_KINDS[a.kind]?.[1] || '#888'}` }), el('span', {}, AREA_KINDS[a.kind]?.[0] || a.kind), el('small', {}, `${a.pts.length} corners`)),
       el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { y.areas.splice(i, 1); saveYard(y); } }, 'Delete'))))) : null,
     el('h3', {}, 'Add things'),
     el('div', { class: 'row wrap' }, ...Object.entries(ITEM_KINDS).map(([k, n]) => el('button', { type: 'button', class: 'mini', onclick: () => place(k) }, n))),
@@ -1711,7 +1738,12 @@ function drawTotals() {
     ...(t.playing || []).slice(0, 1).map((p) => el('span', { class: 'stat music' }, el('small', {}, 'Playing'), p.title || p.name)),
     ...(t.openDoors ? [chip('bad', 'Open', `${t.openDoors}`, 'security', 'What is open')] : []), ...(t.leaks ? [chip('bad', 'Leak', '!', 'security', 'Water or smoke')] : []));
 }
-async function refresh() {
+let refreshRun = null, refreshNext = null;
+function refresh() {   // one at a time: an older answer can never land after a newer one; a burst of calls becomes one more
+  if (!refreshRun) { refreshRun = refreshOnce().finally(() => { refreshRun = null; }); return refreshRun; }
+  return (refreshNext ||= refreshRun.catch(() => {}).then(() => { refreshNext = null; return refresh(); }));
+}
+async function refreshOnce() {
   try { S.live = await api('/api/floorplan/live'); if (!S.autoCarsTried) setTimeout(autoCars, 0); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color, route, beam }) => ({ deviceId, floor, pos, label, color, route, beam })); const sig = JSON.stringify([S.live.pins, S.live.devices, S.live.totals, S.live.cars, S.live.weather]); if (sig === S.liveSig) return; S.liveSig = sig;   // nothing changed: leave the scene alone
     drawPins(); drawTotals(); if (S.mode === 'edit' && S.tab === 'devices' && !$('#left').contains(document.activeElement) && !S.tool) editor(); }
   catch { S.misses = (S.misses || 0) + 1; if (S.misses === 3) toast('Can\'t reach your devices right now - trying again every few seconds.'); return; }
@@ -1750,7 +1782,7 @@ let liveAt = 0, liveT = null;
     if (document.hidden || (S.mode === 'edit' && $('#left').contains(document.activeElement))) return;
     clearTimeout(liveT); liveT = setTimeout(() => { liveAt = Date.now(); refresh(); }, Math.max(150, 800 - (Date.now() - liveAt)));
   };
-  es.onerror = () => { if (es.readyState === 2) setTimeout(liveStart, 30_000); };
+  es.onerror = () => { if (es.readyState === 2) { es.onmessage = es.onerror = null; setTimeout(liveStart, 30_000); } };
 })();
 /* Esc: close the device card, then leave the room, then stop a tool. */
 addEventListener('keydown', (e) => {

@@ -70,7 +70,7 @@ app.get('/api/alerts', (req, res, next) => {
 });
 /* "Got it": stops the reminders for this alert. It stays on the list until the problem clears. */
 app.post('/api/alerts/:id/ack', requireRole('member'), (req, res) => {
-  const a = alerts.open[req.params.id]; if (!a) return res.status(404).json({ error: 'That alert has already cleared.' });
+  const a = Object.hasOwn(alerts.open, req.params.id) ? alerts.open[req.params.id] : null; if (!a) return res.status(404).json({ error: 'That alert has already cleared.' });
   a.acked = { by: req.user?.name || req.user?.username || 'someone', at: nowIso() }; saveAlerts();
   if (typeof audit === 'function' && req.user) audit(req, 'alert-acknowledged', { alert: a.title });
   res.json({ ok: true, acked: a.acked });

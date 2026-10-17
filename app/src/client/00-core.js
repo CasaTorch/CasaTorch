@@ -42,6 +42,12 @@ const api = async (url, opts = {}) => {
   return j;
 };
 const post = (url, body, method = 'POST') => api(url, { method, body: JSON.stringify(body || {}) });
+/* Links from outside (news feeds, calendars, Home Assistant): only web addresses, never javascript: or data:. */
+const safeHref = (u) => { try { const x = new URL(String(u || ''), location.href); return /^https?:$/.test(x.protocol) ? x.href : null; } catch { return null; } };
+/* A color from a calendar or feed, used inside a style: only plain color values get through. */
+const safeColor = (c, fallback = 'var(--accent)') => (/^(#[0-9a-f]{3,8}|[a-z]{3,20}|(rgb|hsl)a?\([\d\s.,%/-]{1,40}\))$/i.test(String(c || '').trim()) ? String(c).trim() : fallback);
+/* An address from the server to go to: only pages on this CasaTorch. */
+const sameOrigin = (u, fallback = '/') => { try { const x = new URL(String(u || ''), location.origin); return x.origin === location.origin ? x.pathname + x.search + x.hash : fallback; } catch { return fallback; } };
 const S = { status: null, tz: undefined, units: 'F', alertsOpen: 0, settings: null };
 const isPro = () => !!S.status?.pro?.pro;
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ms); }
@@ -69,6 +75,8 @@ async function show(id) {
   const t = TABS.find((x) => x.id === id) || TABS[0];
   current = t.id; document.body.classList.remove('editing-on');
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.tab === t.id));
+  // live video left on the old page would keep downloading in the background: stop it
+  for (const img of document.querySelectorAll('#view .cam.live img')) { img.onerror = null; img.removeAttribute('src'); }
   const main = el('div'); $('#view').replaceChildren(main); refresher = null;   // a fresh box per visit: a slow, older render can't write into the new page
   setTop(tabLabel(t));
   try { const r = (await t.render(main)) || null; if (main.isConnected) refresher = r; }
@@ -104,21 +112,36 @@ async function boot() {
   window.addEventListener('hashchange', () => show(location.hash.slice(1)));
   show(location.hash.slice(1) || 'home');
   setTimeout(tourOffer, 700);   // first visit in this browser: offer the tour (34-tour.js)
-  setInterval(() => { if (document.hidden || document.body.classList.contains('editing-on')) return; loadStatus(); if (refresher) refresher(); }, 30_000);
+  setInterval(() => { if (document.hidden || document.body.classList.contains('editing-on')) return; loadStatus(); runRefresh(); }, 30_000);
   liveStart();
+}
+/* One refresh at a time: a slow answer can't land after a newer one, and a burst of changes becomes one more refresh.
+   Sections you opened (the "details" on a page) stay open when the page is drawn again. */
+let refreshing = false, refreshAgain = false;
+async function runRefresh() {
+  const r = refresher; if (!r) return;
+  if (refreshing) { refreshAgain = true; return; }
+  refreshing = true;
+  const view = $('#view'), keys = () => { const n = {}; return [...view.querySelectorAll('details')].map((d) => { const k = `${d.className}|${(n[d.className] = (n[d.className] || 0) + 1)}`; return [k, d]; }); };
+  const open = new Set(keys().filter(([, d]) => d.open).map(([k]) => k));
+  try { await r(); } catch { /* the next tick tries again */ }
+  finally { refreshing = false; }
+  if (r === refresher && open.size) for (const [k, d] of keys()) if (open.has(k)) d.open = true;
+  if (refreshAgain) { refreshAgain = false; if (r === refresher) runRefresh(); }
 }
 /* Real time: the server says when something in the house changed (34-live.js), and the screen on show refreshes
    - at most about once a second, never while you're editing, and not in a hidden tab. */
-let liveLast = 0, liveTimer = null;
+let liveLast = 0, liveTimer = null, liveNudgeT = null;
 function liveStart() {
   if (typeof EventSource !== 'function') return;
   const es = new EventSource('/api/live/events');
   es.onmessage = (ev) => {
     let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type === 'tick' && !document.hidden && typeof nudgeCheck === 'function') { clearTimeout(liveNudgeT); liveNudgeT = setTimeout(nudgeCheck, 300); }   // a nudge going off shows at once
     if (m.type !== 'tick' || document.hidden || document.body.classList.contains('editing-on') || !refresher) return;
     if (document.activeElement?.closest?.('#view') && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;   // someone is typing: the next change (or the 30-second refresh) catches up
-    clearTimeout(liveTimer); liveTimer = setTimeout(() => { liveLast = Date.now(); try { refresher(); } catch { /* next tick */ } }, Math.max(0, 1000 - (Date.now() - liveLast)));
+    clearTimeout(liveTimer); liveTimer = setTimeout(() => { liveLast = Date.now(); runRefresh(); }, Math.max(0, 1000 - (Date.now() - liveLast)));
   };
-  es.onerror = () => { if (es.readyState === 2) setTimeout(liveStart, 30_000); };
+  es.onerror = () => { if (es.readyState === 2) { es.onmessage = es.onerror = null; setTimeout(liveStart, 30_000); } };
 }
 document.addEventListener('DOMContentLoaded', () => boot());

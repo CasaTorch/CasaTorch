@@ -44,7 +44,7 @@ function tourOffer() {
 }
 
 function tour() {
-  $('#modal')?.remove(); $('#tour')?.remove();
+  $('#modal')?.remove(); $('#tour')?._off?.(); $('#tour')?.remove();
   tourStore.set('taken');
   const startTab = current;
   const navLinks = [...document.querySelectorAll('.nav a[data-tab]')].filter((a) => TOUR_TEXT[a.dataset.tab]);
@@ -88,8 +88,10 @@ function tour() {
     back.style.display = i === 0 ? 'none' : ''; next.textContent = s.end ? (S.status?.demo ? T('Done') : T('Go to Connect')) : i === 0 ? T('Start') : T('Next');
     requestAnimationFrame(place); next.focus({ preventScroll: true });
   }
+  const off = () => { removeEventListener('resize', place); removeEventListener('scroll', place, true); document.removeEventListener('keydown', keys, true); };
+  root._off = off;   // a second tour started over this one takes this one's listeners away
   function finish(toConnect) {
-    root.remove(); removeEventListener('resize', place); removeEventListener('scroll', place, true); document.removeEventListener('keydown', keys, true);
+    root.remove(); off();
     const to = toConnect && !S.status?.demo && TABS.some((t) => t.id === 'connect') ? 'connect' : startTab || 'home';
     if (to !== current) location.hash = to;
   }

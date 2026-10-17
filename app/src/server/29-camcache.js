@@ -22,7 +22,10 @@ const SNAP_IDLE = 60_000, SNAP_WATCH = 60_000;
 function snapEntry(key, fetcher, kind) {
   const beat = typeof kind === 'object' && kind ? kind : { every: SNAP_EVERY[kind] || 3000 };
   let e = SNAP.get(key);
-  if (!e) { e = { buf: null, type: 'image/jpeg', at: 0, etag: null, err: null, inflight: null, fetcher, wanted: 0 }; SNAP.set(key, e); }
+  if (!e) {
+    if (SNAP.size >= 300) { let old = null; for (const [k, x] of SNAP) if (!x.inflight && (!old || x.wanted < old[1].wanted)) old = [k, x]; if (old) SNAP.delete(old[0]); }   // never more than 300 cameras' pictures in memory
+    e = { buf: null, type: 'image/jpeg', at: 0, etag: null, err: null, inflight: null, fetcher, wanted: 0 }; SNAP.set(key, e);
+  }
   e.fetcher = fetcher;   // the camera's settings may have changed
   e.every = beat.every || 3000; e.idle = beat.idle || SNAP_IDLE;
   return e;
@@ -61,7 +64,10 @@ const snapNow = (key) => { const e = SNAP.get(key); if (e) snapRefresh(e); };
 /* The background refresher: watched cameras on their own beat, the rest once a minute. */
 setInterval(() => {
   const now = Date.now();
-  for (const e of SNAP.values()) {
+  for (const [key, e] of SNAP) {
+    // A camera removed from the settings, or one nobody has looked at for a day that keeps failing: stop fetching it.
+    if ((key.startsWith('camera:') && !(config.cameras || []).some((c) => `camera:${c.id}` === key))
+      || (e.err && now - Math.max(e.wanted, e.at) > 86400_000 && now - (e.at || 0) > 3600_000)) { if (!e.inflight) SNAP.delete(key); continue; }
     const watched = now - e.wanted < SNAP_WATCH;
     // timed start-to-start, so a slow camera (or Ring's servers) still gets a new picture on its beat
     const due = now - (e.started || 0) >= (watched ? e.every : e.idle || SNAP_IDLE) && !(e.err && now - (e.errAt || 0) < 10_000);
@@ -85,7 +91,8 @@ async function mjpegPass(req, res, key, url, headers = {}) {
     if (!up.ok || !up.body || !/^multipart\/x-mixed-replace/i.test(type)) { res.status(502).end(); return; }
     res.setHeader('Content-Type', /^multipart\/x-mixed-replace(;\s*boundary=[\w'()+,./:=?-]{1,70})?$/i.test(type) ? type : 'multipart/x-mixed-replace');
     res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-Accel-Buffering', 'no');
-    for await (const chunk of up.body) { if (left) break; if (!res.write(chunk)) await new Promise((ok) => res.once('drain', ok)); }
+    // A slow screen: wait for it to catch up - or for it to leave (then 'drain' never comes).
+    for await (const chunk of up.body) { if (left) break; if (!res.write(chunk)) await new Promise((ok) => { const go = () => { res.off('drain', go); res.off('close', go); ok(); }; res.on('drain', go); res.on('close', go); }); }
     res.end();
   } catch { if (!res.headersSent) res.status(502).end(); else res.end(); }
   finally { done(); }

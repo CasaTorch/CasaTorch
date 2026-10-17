@@ -36,7 +36,7 @@ const REMOVABLE = {
   snapshot: (c) => { c.cameras = (c.cameras || []).filter((x) => x.type !== 'snapshot'); },
 };
 app.delete('/api/connections/:id', requireRole('admin'), (req, res) => {
-  const fn = REMOVABLE[req.params.id]; if (!fn) return res.status(404).json({ error: 'That one is removed somewhere else (Home Assistant, or its own Remove button).' });
+  const fn = Object.hasOwn(REMOVABLE, req.params.id) ? REMOVABLE[req.params.id] : null; if (!fn) return res.status(404).json({ error: 'That one is removed somewhere else (Home Assistant, or its own Remove button).' });
   if (isDemo()) return res.json({ ok: true, demo: true });
   const next = JSON.parse(JSON.stringify(config)); fn(next); saveConfig(next);
   if (typeof audit === 'function') audit(req, 'connection-removed', { id: req.params.id });

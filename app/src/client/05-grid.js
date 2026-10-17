@@ -19,6 +19,7 @@ function gridCols(grid) { const w = grid.clientWidth || window.innerWidth; retur
 const toSpan = (w, cols) => (cols === 12 ? w : cols === 1 ? 1 : Math.max(2, Math.min(cols, Math.round(w * cols / 12))));
 const fromSpan = (s, cols) => (cols === 12 ? s : Math.max(1, Math.min(12, Math.round(s * 12 / cols))));
 
+let gridOff = null;   // the last grid's resize listener (only one Home grid is on the page at a time)
 function makeGrid(host, { tiles, ctx, onSave }) {
   const grid = el('div', { class: 'grid' });
   host.append(grid);
@@ -29,8 +30,10 @@ function makeGrid(host, { tiles, ctx, onSave }) {
   async function paint(node, force) {
     const L = live.get(node); if (!L) return;
     if (L.widget.live && !force && L.painted) return;
-    L.painted = true;
+    if (L.busy && !force) return;   // still drawing the last one: a live refresh can skip a beat
+    L.painted = true; L.busy = true;
     try { await L.widget.render(L.body, ctx, sizeOf(L.t)); } catch (err) { L.body.replaceChildren(el('div', { class: 'muted small' }, `Could not load: ${err.message}`)); }
+    finally { L.busy = false; }
   }
   function tileEl(t) {
     const w = WIDGETS[t.id.split(':')[0]]; if (!w) return null;
@@ -40,7 +43,7 @@ function makeGrid(host, { tiles, ctx, onSave }) {
       w.bare ? null : el('div', { class: 'tile-h' }, icon(w.icon), el('span', { class: 'ttl' }, t.title || w.title), w.pro && !isPro() ? el('span', { class: 'pill pro' }, 'PRO') : null, el('span', { class: 'grow' }), w.headerExtra ? w.headerExtra(ctx, t, () => { onSave(); paint(node, true); }) : null),
       body,
       el('div', { class: 'tools' }, el('button', { class: 'grip', title: 'Drag to move', 'aria-label': `Move ${w.title}` }, icon('grip')),
-        el('button', { title: 'Rename', 'aria-label': `Rename ${w.title}`, onclick: () => renameBox(`Rename "${t.title || w.title}"`, t.title || w.title, w.title, (v) => { t.title = v && v !== w.title ? v : undefined; const ttl = node.querySelector('.ttl'); if (ttl) ttl.textContent = t.title || w.title; onSave(); }) }, icon('edit')), el('button', { title: 'Remove', 'aria-label': `Remove ${w.title}`, onclick: () => { tiles.splice(tiles.indexOf(t), 1); live.delete(node); node.remove(); onSave(); } }, icon('x'))),
+        el('button', { title: 'Rename', 'aria-label': `Rename ${w.title}`, onclick: () => renameBox(`Rename "${t.title || w.title}"`, t.title || w.title, w.title, (v) => { t.title = v && v !== w.title ? v : undefined; const ttl = node.querySelector('.ttl'); if (ttl) ttl.textContent = t.title || w.title; onSave(); }) }, icon('edit')), el('button', { title: 'Remove', 'aria-label': `Remove ${w.title}`, onclick: () => { const i = tiles.indexOf(t); if (i >= 0) tiles.splice(i, 1); live.delete(node); node.remove(); onSave(); } }, icon('x'))),
       el('div', { class: 'sizer', title: 'Drag to resize' }), el('div', { class: 'size-tag' }));
     live.set(node, { t, body, widget: w });
     place(node, t);
@@ -94,7 +97,9 @@ function makeGrid(host, { tiles, ctx, onSave }) {
   }
   function build() { live.clear(); grid.replaceChildren(...tiles.map(tileEl).filter(Boolean)); grid.style.setProperty('--cols', cols); return Promise.all([...live.keys()].map((n) => paint(n, true))); }
   let rt = null;
-  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (!grid.isConnected) return; const c = gridCols(grid); if (c !== cols) { cols = c; build(); } }, 200); });
+  // one listener per visit to Home, gone once this grid is off the page
+  const onResize = () => { clearTimeout(rt); rt = setTimeout(() => { if (!grid.isConnected) { window.removeEventListener('resize', onResize); return; } const c = gridCols(grid); if (c !== cols) { cols = c; build(); } }, 200); };
+  gridOff?.(); window.addEventListener('resize', onResize); gridOff = () => window.removeEventListener('resize', onResize);
   return {
     build,
     refresh: () => Promise.all([...live.keys()].map((n) => paint(n, false))),
