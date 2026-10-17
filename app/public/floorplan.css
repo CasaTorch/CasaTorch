@@ -226,3 +226,5 @@ body.panelmode #tiles { width: 230px; } body.panelmode .tile b { font-size: 26px
 }
 /* the page itself never pinch-zooms (the 3D view zooms instead); panels still scroll */
 html, body { touch-action: pan-x pan-y; } .stage, .labels { touch-action: none; }
+/* the editor uses its own bright look, so the look buttons rest until you leave it */
+body.editing #themeSeg { visibility: hidden; }
