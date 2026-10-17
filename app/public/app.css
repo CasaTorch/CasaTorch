@@ -599,3 +599,7 @@ html.in-app .main { padding-top: max(16px, env(safe-area-inset-top)); padding-le
 html.in-app .hide-in-app, html.in-app .top .btn[title^="Wall-screen"] { display: none !important; }
 @media (max-width: 760px) { html.in-app .rail { padding-bottom: max(8px, env(safe-area-inset-bottom)); } html.in-app .main { padding-bottom: calc(88px + env(safe-area-inset-bottom)); } }
 html.in-app #modal .box { max-height: calc(100vh - env(safe-area-inset-top) - 24px); }
+
+/* page change: a quick fade-up, nothing that slows you down */
+.view-in { animation: viewIn .18s cubic-bezier(.2, .8, .2, 1); } @keyframes viewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .view-in { animation: none; } }
