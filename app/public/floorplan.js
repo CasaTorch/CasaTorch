@@ -82,7 +82,7 @@ const flyTo = (target, pos, ms = 750) => { tween = { t0: performance.now(), ms, 
 })(0);
 
 /* ---------- look ---------- */
-const curTheme = () => (THEMES[prefs.theme] ? prefs.theme : S.plan?.style?.theme in THEMES ? S.plan.style.theme : 'real');
+const curTheme = () => { const t = prefs.theme === 'blueprint' ? 'night' : prefs.theme; return THEMES[t] ? t : S.plan?.style?.theme in THEMES ? S.plan.style.theme : 'real'; };
 function isReal() { return !!THEMES[curTheme()]?.real; }
 /* Real life always follows the sun and shows the yard and the weather; the drawings let you choose. */
 function sunOn() { return prefs.sun || isReal(); }
@@ -1066,7 +1066,7 @@ function guidePanel() {
     el('h3', {}, 'B. Draw it (any device)'),
     el('ol', { class: 'guide' }, el('li', {}, el('b', {}, 'Editor > Floors > Draw a floor'), '. Drag to draw each room (grid squares are 1 m), or trace over a picture of your floor plan.')),
     el('h3', {}, 'Then make it yours'),
-    el('ol', { class: 'guide' }, el('li', {}, el('b', {}, 'Devices'), ': pick one, click where it is.'), el('li', {}, el('b', {}, 'Rooms'), ': rename and color them, or add your own.'), el('li', {}, el('b', {}, 'Colors'), ': choose Real life, Blueprint, Drafting or Day, change any color, or paint a single wall or sofa.')),
+    el('ol', { class: 'guide' }, el('li', {}, el('b', {}, 'Devices'), ': pick one, click where it is.'), el('li', {}, el('b', {}, 'Rooms'), ': rename and color them, or add your own.'), el('li', {}, el('b', {}, 'Colors'), ': choose Real life, Blueprint, or Day, change any color, or paint a single wall or sofa.')),
     S.plan.pro?.pro ? el('p', {}, el('button', { type: 'button', class: 'primary', onclick: () => { setMode('edit'); S.tab = 'floors'; editor(); } }, 'Open the editor')) : el('p', { class: 'note' }, 'The editor is part of CasaTorch Pro.'));
 }
 

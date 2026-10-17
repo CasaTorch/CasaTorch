@@ -20,7 +20,7 @@ app.get('/api/lang', (_req, res) => res.json({ lang: isDemo() ? null : LANGS.inc
 app.get('/api/settings', (_req, res) => {
   const c = config;
   res.json({
-    demo: isDemo(), version: VERSION, install: INSTALL, pro: proStatus(),
+    demo: isDemo(), version: VERSION, install: INSTALL, pro: proStatus(), security: { allowedHosts: config.security?.allowedHosts || [] },
     house: c.house || { name: 'Demo House', timezone: 'America/Los_Angeles', units: 'F' },
     location: c.location ? { name: c.location.name || null } : (isDemo() ? { name: 'Springfield' } : null),
     calendars: (c.calendars || []).map((x) => x.name),
@@ -43,12 +43,18 @@ app.put('/api/settings', express.json(), (req, res) => {
   if ('houseName' in b) next.house = { ...(next.house || {}), name: String(b.houseName || '').trim().slice(0, 60) || 'My House' };
   if ('lang' in b) { if (!LANGS.includes(b.lang)) return res.status(400).json({ error: 'that language isn\'t available yet' }); next.house = { ...(next.house || {}), lang: b.lang }; }
   if ('note' in b) next.note = String(b.note || '').slice(0, 280) || null;
+  if ('allowedHosts' in b) {   // extra names CasaTorch answers to (01-security.js), like a reverse proxy's
+    const list = String(b.allowedHosts || '').split(/[\s,]+/).map((h) => h.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[:/].*$/, '')).filter(Boolean);
+    if (list.some((h) => !/^(?!-)[a-z0-9.-]{1,253}$/.test(h))) return res.status(400).json({ error: 'Enter names only, like dash.example.com.' });
+    next.security = { ...(next.security || {}), allowedHosts: [...new Set(list)].slice(0, 10) };
+  }
   if ('ratePerKwh' in b) { const r = Number(b.ratePerKwh); if (!(r >= 0 && r < 5)) return res.status(400).json({ error: 'the rate is in dollars per kWh, e.g. 0.17' }); next.energy = { ...(next.energy || {}), ratePerKwh: r }; }
   if ('budget' in b) next.energy = { ...(next.energy || {}), budget: Number(b.budget) || null };
   saveConfig(next); res.json({ ok: true });
 });
 /* Re-open the setup wizard from the app (asks for the password again). */
 app.post('/api/settings/rerun-setup', express.json(), (req, res) => {
-  if (signInOn() && (!req.user || rank(req.user.role) < rank('admin') || !verifySecret(req.user.password, req.body?.password || ''))) return res.status(403).json({ error: 'that password is not right' });
+  if (signInOn() && req.user && limited(`pw:${req.user.id}`, 5)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes.' });
+  if (signInOn() && (!req.user || rank(req.user.role) < rank('admin') || !verifySecret(req.user.password, req.body?.password || ''))) { if (req.user) failed(`pw:${req.user.id}`); return res.status(403).json({ error: 'that password is not right' }); }
   setupReopened = Date.now(); res.json({ ok: true, url: '/setup.html' });
 });

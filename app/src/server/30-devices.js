@@ -113,7 +113,7 @@ function energyFlows(devices, useW) {
    Covers can always be closed and stopped; opening is only for blinds, shades, curtains and the like.
    An owner can allow a specific device in Settings > Security if the name caught it by mistake. */
 const SAFE_COVERS = new Set(['blind', 'shade', 'curtain', 'shutter', 'awning', 'window', 'damper', 'water']);   // 'water': a water valve
-const RISKY_NAME = /garage|\bgates?\b|gate_|door(?!bell|_?sensor|_?contact)|\block|unlock|disarm|\balarm|opener|deadbolt/i;
+const RISKY_NAME = /garage|\bgates?\b|gate_|door(?!bell|_?sensor|_?contact)|\block|unlock|disarm|\balarm|opener|deadbolt|\b(puerta|port[oó]n|garaje|cerradura|alarma|verja|cerrojo|tor|t[üu]r|tuer|torantrieb|schloss|riegel|porte|portail|serrure|alarme|verrou|port[ãa]o|porta|garagem|fechadura|cancello|portone|serratura|allarme|poort|deur|hek|slot|alarm)\b|^shelly(plus|pro)?(1|2|uni|i3|i4)\b|^shelly(plus|pro)?1(pm|l)?[-_]/i;   // every language CasaTorch speaks; Shelly relay models keep their default name and often drive garage doors
 function riskOf(d) {
   if (!d) return null;
   if ((config.safety?.allow || []).includes(d.id)) return null;

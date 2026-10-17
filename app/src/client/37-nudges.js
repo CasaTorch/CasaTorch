@@ -1,0 +1,120 @@
+/* ---- Nudges: your home's own reminders (78-nudges.js). A card on the Alerts tab to add and change them,
+   and the card that lights up every screen when one is due. ---- */
+const NUDGE_ICON_NAMES = { trash: 'Trash', paw: 'Pets', pill: 'Medicine', bill: 'Bills', plant: 'Plants', cake: 'Birthday', car: 'Car', school: 'School', laundry: 'Laundry', bell: 'Reminder' };
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const nudgeWhen = (n) => {
+  const t = hm(n.time), d = n.date ? new Date(`${n.date}T12:00:00Z`) : null, md = d ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(d) : '';
+  return { once: `${d ? new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(d) : ''} at ${t}`, daily: `Every day at ${t}`,
+    weekly: `${(n.days || []).length === 5 && !n.days.includes(0) && !n.days.includes(6) ? 'Weekdays' : (n.days || []).map((x) => DOW[x]).join(', ')} at ${t}`,
+    monthly: `Every month on the ${d ? ordinal(d.getUTCDate()) : ''} at ${t}`, yearly: `Every year on ${md} at ${t}` }[n.repeat] || t;
+};
+const ordinal = (n) => `${n}${[, 'st', 'nd', 'rd'][(n % 100 >> 3 ^ 1) && n % 10] || 'th'}`;
+const nudgePic = (n, size = 'md') => (n.photo ? el('img', { class: `nudgepic ${size}`, src: `/api/nudges/${encodeURIComponent(n.id)}/photo?t=${n.lastFired || ''}`, alt: '' }) : el('span', { class: `nudgeicon ${size}`, 'aria-hidden': 'true' }, icon(n.icon || 'bell')));
+/* Pro, shown to Basic: the feature greyed, with what it does and a way to get it. */
+/* A Pro card shown to Basic: a faded preview of what it looks like, what it does, and the way to get it. */
+function proPanel(text, rows = 3) {
+  return el('div', { class: 'propanel' }, el('div', { class: 'propanel-ghost', 'aria-hidden': 'true' }, Array.from({ length: rows }, (_, i) => el('div', { class: 'ghostrow' }, el('i', { class: 'dot' }), el('b', { style: `width:${[46, 62, 38][i % 3]}%` }), el('span', {})))),
+    el('p', {}, text), el('div', { class: 'row wrap', style: 'gap:8px' }, el('a', { class: 'btn primary', href: '#settings' }, icon('spark'), 'Unlock with Pro'), el('span', { class: 'small muted' }, '$5 a month or $49 a year · every new CasaTorch gets a 14-day trial')));
+}
+function proUpsell(text) { return el('a', { class: 'proup', href: '#settings', title: 'Part of CasaTorch Pro' }, el('span', { class: 'pill pro' }, 'Pro'), el('span', {}, text), icon('chevr')); }
+
+/* Who's looking (members and up add and change nudges; viewers see them). */
+let nudgeMe = null;
+const nudgeRole = async () => { nudgeMe ||= await api('/api/auth/me').catch(() => ({})); return nudgeMe?.signIn === false || !nudgeMe?.user ? 'owner' : nudgeMe.user.role; };
+function nudgesCard(redraw) {
+  const card = el('div', { class: 'card nudges', style: 'grid-column:1/-1' });
+  (async () => {
+    const [d, role] = await Promise.all([api('/api/nudges').catch(() => null), nudgeRole()]);
+    if (!d) { card.remove(); return; }
+    const canEdit = !d.demo && role !== 'viewer';
+    const add = canEdit ? el('button', { class: 'btn small primary', onclick: () => nudgeEditor(null, d, redraw) }, icon('plus'), 'Add a nudge') : null;
+    const head = el('div', { class: 'row between wrap', style: 'gap:10px;margin-bottom:10px' }, el('div', {}, el('h2', { style: 'margin:0' }, 'Nudges'), el('p', { class: 'small muted', style: 'margin:4px 0 0' }, 'Your home\'s own reminders - trash night, the dog\'s dinner, bills due, medicine, birthdays. At the time, they light up every screen in the house.')), add);
+    if (!d.list.length) {
+      const ideas = [['Trash night', 'trash', 'weekly', [2], '19:30'], ['Feed the dog', 'paw', 'daily', [], '17:30'], ['Take medicine', 'pill', 'daily', [], '08:00'], ['Rent is due', 'bill', 'monthly', [], '09:00']];
+      card.replaceChildren(head, el('div', { class: 'row wrap', style: 'gap:8px' }, el('span', { class: 'small muted' }, 'Ideas:'), ideas.map(([title, ic, repeat, days, time]) => el('button', { class: 'btn small', disabled: canEdit ? null : true, onclick: () => nudgeEditor({ title, icon: ic, repeat, days, time, date: new Date().toISOString().slice(0, 10), flash: true, push: d.pro }, d, redraw, true) }, icon(ic), title))));
+    } else {
+      const today = new Set(d.today || []);
+      card.replaceChildren(head, el('div', { class: 'nudgelist' }, d.list.map((n) => el('button', { class: `nudgerow${n.on ? '' : ' off'}`, disabled: canEdit ? null : true, onclick: () => nudgeEditor(n, d, redraw), 'aria-label': `${n.title}, ${nudgeWhen(n)}${canEdit ? '. Change it' : ''}` },
+        nudgePic(n, 'sm'), el('div', { class: 'grow', style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, n.title), el('span', { class: 'small muted' }, n.on ? nudgeWhen(n) : 'Off')),
+        today.has(n.id) && n.on ? el('span', { class: 'pill good' }, 'Today') : null,
+        n.push ? el('span', { class: 'tiny muted', title: 'Sent to phones' }, icon('send')) : null))));
+    }
+    if (!d.pro) card.append(el('div', { style: 'margin-top:12px' }, proUpsell('Send nudges to everyone\'s phone, wherever they are')));
+  })();
+  return card;
+}
+function nudgeEditor(n, d, redraw, fresh = false) {
+  const isNew = !n?.id;
+  const v = { title: n?.title || '', icon: n?.icon || 'bell', time: n?.time || '18:00', repeat: n?.repeat || 'weekly', days: [...(n?.days || [])], date: n?.date || new Date().toISOString().slice(0, 10), flash: n?.flash !== false, push: d.pro ? (isNew ? true : !!n?.push) : false, on: n?.on !== false };
+  if (v.repeat === 'weekly' && !v.days.length) v.days = [new Date().getDay()];
+  let photoFile = null, dropPhoto = false;
+  const body = el('div', { class: 'nudgeedit' });
+  const msg = el('p', { class: 'small', style: 'min-height:1.2em;margin:6px 0 0' });
+  const draw = () => {
+    const title = el('input', { value: v.title, maxlength: 60, placeholder: 'Trash night', oninput: (e) => { v.title = e.target.value; } });
+    const icons = el('div', { class: 'nudgeicons', role: 'radiogroup', 'aria-label': 'Picture' }, d.icons.map((k) => el('button', { type: 'button', role: 'radio', 'aria-checked': String(v.icon === k && !photoFile && !(n?.photo && !dropPhoto)), 'aria-label': NUDGE_ICON_NAMES[k], title: NUDGE_ICON_NAMES[k], class: v.icon === k && !photoFile && !(n?.photo && !dropPhoto) ? 'on' : '', onclick: () => { v.icon = k; photoFile = null; dropPhoto = true; draw(); } }, icon(k))));
+    const file = el('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp', hidden: true, onchange: (e) => { const f = e.target.files?.[0]; if (!f) return; if (f.size > 5 * 1024 * 1024) { toast('That picture is over 5 MB.'); return; } photoFile = f; dropPhoto = false; draw(); } });
+    const hasPhoto = photoFile || (n?.photo && !dropPhoto);
+    const photoRow = el('div', { class: 'row wrap', style: 'gap:8px;margin-top:8px' }, file, el('button', { type: 'button', class: 'btn small', onclick: () => file.click() }, icon('plus'), hasPhoto ? 'Change photo' : 'Or use a photo'),
+      hasPhoto ? el('span', { class: 'small good' }, photoFile ? `✓ ${photoFile.name}` : '✓ Photo') : null, hasPhoto ? el('button', { type: 'button', class: 'btn small ghost', onclick: () => { photoFile = null; dropPhoto = true; draw(); } }, 'Use an icon') : null);
+    const time = el('input', { type: 'time', value: v.time, required: true, onchange: (e) => { v.time = e.target.value; } });
+    const repeat = el('select', { onchange: (e) => { v.repeat = e.target.value; draw(); } }, [['once', 'Once'], ['daily', 'Every day'], ['weekly', 'Days of the week'], ['monthly', 'Every month'], ['yearly', 'Every year']].map(([k, l]) => el('option', { value: k, selected: v.repeat === k ? true : null }, l)));
+    const days = v.repeat === 'weekly' ? el('div', { class: 'row wrap', style: 'gap:6px', role: 'group', 'aria-label': 'Days' }, DOW.map((l, i) => el('button', { type: 'button', class: `chipbtn${v.days.includes(i) ? ' on' : ''}`, 'aria-pressed': String(v.days.includes(i)), onclick: () => { v.days = v.days.includes(i) ? v.days.filter((x) => x !== i) : [...v.days, i]; draw(); } }, l))) : null;
+    const date = ['once', 'monthly', 'yearly'].includes(v.repeat) ? el('label', { class: 'field' }, el('span', {}, v.repeat === 'once' ? 'Date' : v.repeat === 'monthly' ? 'Starting (it repeats on this day each month)' : 'Date (it repeats every year)'), el('input', { type: 'date', value: v.date, onchange: (e) => { v.date = e.target.value; } })) : null;
+    const flash = el('input', { type: 'checkbox', checked: v.flash ? true : null, onchange: (e) => { v.flash = e.target.checked; } });
+    const push = el('input', { type: 'checkbox', checked: v.push ? true : null, disabled: d.pro ? null : true, onchange: (e) => { v.push = e.target.checked; } });
+    const on = el('input', { type: 'checkbox', checked: v.on ? true : null, onchange: (e) => { v.on = e.target.checked; } });
+    body.replaceChildren(...[
+      el('label', { class: 'field' }, el('span', {}, 'Name'), title),
+      el('div', { class: 'field' }, el('span', { class: 'small muted' }, 'Picture'), icons, photoRow),
+      el('div', { class: 'row wrap', style: 'gap:12px' }, el('label', { class: 'field', style: 'flex:1;min-width:140px' }, el('span', {}, 'Time'), time), el('label', { class: 'field', style: 'flex:2;min-width:180px' }, el('span', {}, 'Repeats'), repeat)),
+      days, date,
+      el('label', { class: 'check' }, flash, el('span', {}, el('b', {}, 'Show it on every screen'), el('span', { class: 'small muted', style: 'display:block' }, 'A card lights up on every CasaTorch screen until someone taps Done.'))),
+      el('label', { class: `check${d.pro ? '' : ' locked'}` }, push, el('span', {}, el('b', {}, 'Send it to phones '), d.pro ? null : el('span', { class: 'pill pro' }, 'Pro'),
+        el('span', { class: 'small muted', style: 'display:block' }, d.pro ? (d.phones ? 'To every phone with CasaTorch alerts on, wherever it is - even in quiet hours.' : 'No phones have CasaTorch alerts on yet - turn them on in Settings › Phone app & alerts.') : 'Reach everyone\'s phone wherever they are, even in quiet hours.'))),
+      d.pro ? null : proUpsell('Get nudges on your phone with CasaTorch Pro'),
+      isNew ? null : el('label', { class: 'check' }, on, el('span', {}, el('b', {}, 'On'))),
+      msg].filter(Boolean));
+  };
+  draw();
+  const save = el('button', { class: 'btn primary', onclick: async () => {
+    save.disabled = true; msg.textContent = ''; msg.style.color = '';
+    try {
+      const payload = { title: v.title, icon: v.icon, time: v.time, repeat: v.repeat, days: v.days, date: v.date, flash: v.flash, push: v.push, on: v.on };
+      const r = isNew ? await post('/api/nudges', payload) : await post(`/api/nudges/${encodeURIComponent(n.id)}`, payload, 'PUT');
+      const id = r.nudge.id;
+      if (photoFile) { const res = await fetch(`/api/nudges/${encodeURIComponent(id)}/photo`, { method: 'POST', body: photoFile, headers: { 'Content-Type': photoFile.type || 'application/octet-stream' } }); if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'The photo could not be saved.'); }
+      else if (dropPhoto && n?.photo) await api(`/api/nudges/${encodeURIComponent(id)}/photo`, { method: 'DELETE' }).catch(() => {});
+      m.remove(); toast(isNew ? `"${r.nudge.title}" added` : 'Saved'); redraw?.();
+    } catch (e) { msg.textContent = e.message; msg.style.color = 'var(--bad)'; save.disabled = false; }
+  } }, isNew ? 'Add nudge' : 'Save');
+  const test = isNew ? null : el('button', { class: 'btn', onclick: async () => { try { await post(`/api/nudges/${encodeURIComponent(n.id)}/test`, {}); m.remove(); toast('Showing it now'); nudgeCheck(); } catch (e) { toast(e.message); } } }, icon('play'), 'Try it');
+  const del = isNew ? null : el('button', { class: 'btn ghost danger', onclick: async () => { if (!confirm(`Delete "${n.title}"?`)) return; try { await api(`/api/nudges/${encodeURIComponent(n.id)}`, { method: 'DELETE' }); m.remove(); redraw?.(); } catch (e) { toast(e.message); } } }, icon('x'), 'Delete');
+  const m = modal(el('div', {}, body, el('div', { class: 'row between wrap', style: 'gap:8px;margin-top:14px' }, el('div', { class: 'row', style: 'gap:8px' }, del, test), save)), { title: isNew ? (fresh ? 'Add this nudge' : 'Add a nudge') : 'Change nudge' });
+  setTimeout(() => body.querySelector('input')?.focus(), 30);
+}
+
+/* ---- the card that lights up the screens ---- */
+const nudgeSeen = new Set();
+async function nudgeCheck() {
+  if (document.hidden || location.pathname.includes('setup') || !S.status) return;
+  const r = await api('/api/nudges/active').catch(() => null);
+  const list = r?.active || [];
+  const box = document.getElementById('nudgeflash');
+  if (!list.length) { box?.remove(); return; }
+  const n = list[0];
+  if (box?.dataset.id === n.id) return;
+  box?.remove();
+  const canAct = (await nudgeRole()) !== 'viewer';
+  const done = async (how) => { try { await post(`/api/nudges/${encodeURIComponent(n.id)}/${how}`, {}); } catch (e) { toast(e.message); } document.getElementById('nudgeflash')?.remove(); setTimeout(nudgeCheck, 400); };
+  const card = el('div', { id: 'nudgeflash', 'data-id': n.id, role: 'alertdialog', 'aria-live': 'assertive', 'aria-label': `Reminder: ${n.title}` },
+    el('div', { class: 'nudgecard' }, nudgePic(n, 'lg'), el('div', { class: 'small muted', style: 'letter-spacing:.06em;text-transform:uppercase;font-weight:700' }, `Nudge · ${hm(n.time)}`), el('h2', {}, n.title),
+      list.length > 1 ? el('p', { class: 'small muted' }, `and ${list.length - 1} more`) : null,
+      canAct ? el('div', { class: 'row', style: 'gap:10px;justify-content:center' }, el('button', { class: 'btn primary', onclick: () => done('done') }, icon('check'), 'Done'), el('button', { class: 'btn', onclick: () => done('snooze') }, icon('clock'), '10 more minutes'))
+        : el('button', { class: 'btn', onclick: () => card.remove() }, 'Close')));
+  document.body.append(card);
+  if (!nudgeSeen.has(`${n.id}${n.at}`)) { nudgeSeen.add(`${n.id}${n.at}`); try { navigator.vibrate?.(200); } catch { /* fine */ } }
+}
+setInterval(nudgeCheck, 30_000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) nudgeCheck(); });
+setTimeout(nudgeCheck, 4000);
