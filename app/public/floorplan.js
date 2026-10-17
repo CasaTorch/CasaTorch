@@ -359,7 +359,7 @@ function layout(fit) {
     for (const l of F.roomLabs) l.visible = prefs.names && F.G.visible && (cur ? F === cur : !multi);
   }
   grid.position.y = (Number.isFinite(minY) ? minY : 0) - 0.05;
-  yard.visible = (yardOn() || (S.mode === 'edit' && S.tab === 'yard')) && (!cur || cur === Object.values(S.F).sort((a, b) => (a.f.level || 0) - (b.f.level || 0))[0]);
+  yard.visible = yardOn() || (S.mode === 'edit' && S.tab === 'yard');   // the yard, the driveway and the car stay whichever floor you're looking at
   if (card) { const F = S.F[card.o.userData.floor]; card.o.visible = !!F && F.G.visible && (!cur || F === cur); }
   for (const o of S.pinObjs) { const F = S.F[o.userData.floor]; o.visible = !!F && F.G.visible && (!cur || F === cur) && (prefs.cameras || o.userData.kind !== 'camera'); }
   wallsDirty = true;
