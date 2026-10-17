@@ -19,7 +19,9 @@ $trigger = New-ScheduledTaskTrigger -AtStartup
 $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-20' -LogonType ServiceAccount -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $Name -Description 'CasaTorch - one screen for your whole house (http://localhost:8090)' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
-if (-not (Get-NetFirewallRule -DisplayName $Name -ErrorAction SilentlyContinue)) {
+if (Get-NetFirewallRule -DisplayName $Name -ErrorAction SilentlyContinue) {
+  Get-NetFirewallRule -DisplayName $Name | Get-NetFirewallPortFilter | Set-NetFirewallPortFilter -LocalPort 8090,8443   # older installs opened 8090 only
+} else {
   New-NetFirewallRule -DisplayName $Name -Direction Inbound -Protocol TCP -LocalPort 8090,8443 -Action Allow -Profile Private,Domain | Out-Null
 }
 Start-ScheduledTask -TaskName $Name

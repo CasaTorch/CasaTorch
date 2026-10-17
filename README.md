@@ -44,7 +44,7 @@ for developers and command-line fans.
 | Windows 10/11 | `deploy\install.ps1` in PowerShell as Administrator |
 | macOS / anything with Node 20+ | `cd app && npm install && npm start` |
 
-Then open `http://<that machine>:8090`. Hardware advice and wall-screen picks: [docs/HARDWARE.md](docs/HARDWARE.md).
+Then open `casatorch.com/home` on any device at home, or `http://<that machine>:8090`. Hardware advice and wall-screen picks: [docs/HARDWARE.md](docs/HARDWARE.md).
 
 ### Home Assistant users
 
@@ -195,7 +195,9 @@ Details: [docs/SUPPORT.md](docs/SUPPORT.md).
   daily check for risky open services (Telnet, FTP, file sharing, Remote Desktop, VNC, open camera
   streams, unencrypted MQTT), a security checklist and recent security events.
 - **Secure address at home**: https on your home network straight to the box, with a Let's Encrypt
-  certificate made on the box (Settings > Secure address at home).
+  certificate made on the box. On by default, set up before setup runs (Settings > Secure address at home).
+- **App tests** (Network tab): common work and home apps timed step by step, with latency, jitter, loss and
+  the path hop by hop; your own websites, every minute and alerts with Pro.
 
 - **Everyone gets their own sign-in** with a role: owner, admin (settings and people), member (can switch
   things) or viewer (can only look). Nobody can sign up on their own - the owner sends an invite link.
