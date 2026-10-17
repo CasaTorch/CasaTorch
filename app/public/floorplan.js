@@ -30,7 +30,7 @@ const savePrefs = () => {
 const adoptServerView = (v) => { if (v && typeof v === 'object') Object.assign(prefs, v, { v: 2 }); };
 const $ = (s) => document.querySelector(s);
 const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (v == null || v === false) continue; if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'value') e.value = v; else e.setAttribute(k, v === true ? '' : v); } for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k))); return e; };
-const api = async (url, opts = {}) => { const r = await fetch(url, opts); const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status, body: j }); return j; };
+const api = async (url, opts = {}) => { await undoBefore(url, String(opts.method || 'GET').toUpperCase()); const r = await fetch(url, opts); const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status, body: j }); return j; };
 const send = (url, method, body) => api(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const toast = (t) => { const x = el('div', { class: 'toast' }, t); document.body.append(x); setTimeout(() => x.remove(), 3500); };
 const proErr = (e) => toast(e.status === 402 ? 'Editing the 3D home is part of CasaTorch Pro.' : e.message);
@@ -1362,6 +1362,57 @@ function setMode(m) {
 const edFloor = () => curF() || Object.values(S.F)[0];
 /* The editor panel is drawn again whenever something is saved. Someone typing (a room's name, a device's name) keeps typing:
    the field they were in gets the focus and the cursor back, wherever it is in the new panel. */
+/* ---------- undo and redo (the last 10 changes in the editor) ----------
+   Before the editor saves a change, the plan as it was is kept. Undo puts it back - devices, power lines, rooms, the yard,
+   colors, floors' place and turn, the panel and north - and Redo puts the change back again. Typing a name counts as one
+   change, not one per letter. Uploading, joining or removing a scan can't be undone; the list starts again after those. */
+S.hist = { undo: [], redo: [], busy: false, last: '', at: 0 };
+const UNDOABLE = /^\/api\/floorplan\/(pins|yard|style|settings|floors\/[\w-]+(\/plan)?)$/;
+const WHAT = (u) => (/pins/.test(u) ? 'devices' : /yard/.test(u) ? 'the yard' : /style/.test(u) ? 'colors' : /settings/.test(u) ? 'house settings' : 'the floor');
+async function undoBefore(url, method) {
+  const H = S.hist; if (H.busy || method === 'GET' || !url.startsWith('/api/floorplan')) return;
+  if ((method === 'POST' && /\/floors/.test(url)) || method === 'DELETE' || /\/model$/.test(url)) { H.undo = []; H.redo = []; return; }   // scans: not undoable
+  if (method !== 'PUT' || !UNDOABLE.test(url) || S.mode !== 'edit') return;
+  const now = Date.now(); if (url === H.last && now - H.at < 1500) { H.at = now; return; }   // the same thing, still being typed or dragged
+  H.last = url; H.at = now;
+  try { const before = await (await fetch('/api/floorplan')).json(); H.undo.push({ plan: before, what: WHAT(url) }); if (H.undo.length > 10) H.undo.shift(); H.redo = []; } catch { /* no snapshot: nothing to undo for this one */ }
+}
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+async function putPlan(to, from) {   // send only what differs
+  const put = (u, b) => api(u, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+  if (!same(to.pins, from.pins)) await put('/api/floorplan/pins', { pins: to.pins || [] });
+  if (!same(to.yard, from.yard)) await put('/api/floorplan/yard', to.yard || { areas: [], items: [], seen: from.yard?.seen || [] });
+  if (to.style && !same(to.style, from.style)) await put('/api/floorplan/style', to.style);
+  if (!same(to.settings, from.settings)) await put('/api/floorplan/settings', { panel: to.settings?.panel || null, northDeg: to.settings?.northDeg || 0, frontDeg: to.settings?.frontDeg || 0 });
+  for (const f of to.floors || []) {
+    const now = (from.floors || []).find((x) => x.id === f.id); if (!now) continue;
+    const keys = ['name', 'level', 'heightM', 'rotationY', 'scale', 'offset', 'look', 'rooms', 'hiddenParts', 'paint'];
+    if (keys.some((k) => !same(f[k], now[k]))) await put(`/api/floorplan/floors/${f.id}`, { name: f.name, level: f.level, heightM: f.heightM, rotationY: f.rotationY, scale: f.scale, offset: f.offset, look: f.look || 'auto', rooms: f.rooms ?? null, hiddenParts: f.hiddenParts || [], paint: f.paint || {} });
+    if (f.kind === 'drawn' && !same(f.plan, now.plan)) await put(`/api/floorplan/floors/${f.id}/plan`, { rooms: f.plan?.rooms || [], walls: f.plan?.walls || [], bgW: f.plan?.bgW, bgOpacity: f.plan?.bgOpacity });
+  }
+}
+async function undoRedo(dir) {
+  const H = S.hist, from = dir === 'undo' ? H.undo : H.redo, to = dir === 'undo' ? H.redo : H.undo;
+  if (H.busy || !from.length) return;
+  H.busy = true; H.last = '';
+  try {
+    const step = from.pop(), cur = await (await fetch('/api/floorplan')).json();
+    to.push({ plan: cur, what: step.what });
+    S.tool = null; await putPlan(step.plan, cur); await reload();
+    toast(`${dir === 'undo' ? 'Undone' : 'Redone'}: a change to ${step.what}.`);
+  } catch (e) { proErr(e); await reload().catch(() => {}); }
+  finally { H.busy = false; editor(); }
+}
+addEventListener('keydown', (e) => {   // Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl+Y - except while typing, where they undo the typing
+  if (S.mode !== 'edit' || !(e.ctrlKey || e.metaKey) || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) { e.preventDefault(); undoRedo('undo'); } else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); undoRedo('redo'); }
+});
+const undoBar = () => { const H = S.hist, mac = /Mac|iPhone|iPad/.test(navigator.platform), key = mac ? '⌘' : 'Ctrl+';
+  return el('div', { class: 'undobar' },
+    el('button', { type: 'button', class: 'mini', disabled: H.undo.length && !H.busy ? null : true, title: H.undo.length ? `Undo a change to ${H.undo[H.undo.length - 1].what} (${key}Z)` : 'Nothing to undo', onclick: () => undoRedo('undo') }, '↶ Undo'),
+    el('button', { type: 'button', class: 'mini', disabled: H.redo.length && !H.busy ? null : true, title: H.redo.length ? `Redo a change to ${H.redo[H.redo.length - 1].what} (${key}${mac ? '⇧Z' : 'Y'})` : 'Nothing to redo', onclick: () => undoRedo('redo') }, '↷ Redo'),
+    el('small', {}, H.undo.length ? `${H.undo.length} of the last 10 changes can be undone` : '')); };
 function editor() {
   const box = $('#left'), a = document.activeElement;
   const typing = a && box.contains(a) && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['range', 'checkbox', 'color', 'file', 'button'].includes(a.type)));
@@ -1408,7 +1459,7 @@ function editorDraw() {
       el('button', { type: 'button', class: 'mini', disabled: ya.pts.length ? null : true, onclick: () => { ya.pts.pop(); yardPreview(); editor(); } }, 'Undo last corner'),
       el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; yardPreview(); editor(); } }, 'Cancel'))));
   const hint = S.tool?.type === 'yard-place' ? `Click on the ground where the ${ITEM_KINDS[S.tool.kind].toLowerCase()} goes.` : S.tool?.type === 'yard-move' ? 'Click on the ground where it should go.' : S.tool?.type === 'aim' ? `Click the ground where "${S.tool.dev.name}" shines.` : S.tool?.type === 'panel' ? 'Click where the electrical panel is (a wall or the floor next to it).' : S.tool?.type === 'device' ? `Click on the house where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
-  fill(box, el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { const looked = editLook(); S.tab = k; if (looked !== editLook()) { skyAt = 0; applyLook(); } S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
+  fill(box, undoBar(), el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { const looked = editLook(); S.tab = k; if (looked !== editLook()) { skyAt = 0; applyLook(); } S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
     hint ? el('div', { class: 'hint' }, hint, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; editor(); drawPins(); } }, 'Cancel')) : null, body);
 }
 function floorPicker() {
