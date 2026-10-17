@@ -122,7 +122,10 @@ app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req,
   d.pins = (Array.isArray(req.body?.pins) ? req.body.pins : []).filter((p) => floors.has(p.floor) && Array.isArray(p.pos) && p.pos.length === 3 && p.pos.every(Number.isFinite))
     .slice(0, 500).map((p) => ({ deviceId: String(p.deviceId).slice(0, 200), floor: p.floor, pos: p.pos.map((n) => Math.round(n * 1000) / 1000), label: p.label ? String(p.label).slice(0, 40) : null, color: FP_HEX.test(p.color) ? p.color : null,
       // the power line's bends along the floor, if the owner drew one
-      route: Array.isArray(p.route) && p.route.length ? p.route.slice(0, 30).filter((q) => Array.isArray(q) && q.length === 2 && q.every((n) => fin(n, -1000, 1000))).map((q) => q.map((n) => Math.round(n * 100) / 100)) : null }));
+      route: Array.isArray(p.route) && p.route.length ? p.route.slice(0, 30).filter((q) => Array.isArray(q) && q.length === 2 && q.every((n) => fin(n, -1000, 1000))).map((q) => q.map((n) => Math.round(n * 100) / 100)) : null,
+      // an outdoor flood light: which way it shines (degrees), how wide (degrees) and how far (meters)
+      beam: p.beam && typeof p.beam === 'object' && [[p.beam.aim, -360, 360], [p.beam.spread, 10, 170], [p.beam.reach, 1, 40]].every(([v, lo, hi]) => Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi)
+        ? { aim: Math.round(Number(p.beam.aim)), spread: Math.round(Number(p.beam.spread)), reach: Math.round(Number(p.beam.reach) * 10) / 10 } : null }));
   fpWrite(d); res.json({ ok: true, pins: d.pins.length });
 });
 /* The 3D view's own choices (walls, which floors are hidden, labels, overlays...): kept with the plan so
