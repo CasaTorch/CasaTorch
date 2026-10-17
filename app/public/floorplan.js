@@ -400,8 +400,28 @@ function fitView() {
   /* From the front of the house, a little to one side and above - like looking into a dollhouse. */
   const c = box.getCenter(new V3()), len = Math.max(6, box.getSize(new V3()).length());
   const dir = new V3(0.32, 0, 1).applyAxisAngle(new V3(0, 1, 0), deg(S.plan?.settings?.frontDeg || 0)).normalize();
+  controls.maxDistance = Math.max(25, len * 3.5);   // zoom out until the whole house is small - never so far it's lost
   flyTo(c, c.clone().add(dir.multiplyScalar(len * 1.02)).add(new V3(0, len * 0.66, 0)));
 }
+/* Zooming is always the 3D view's - never the page's. A trackpad pinch or Ctrl+scroll over a device pin, a label or the bar
+   used to zoom the whole page instead, pushing the controls off the screen with no way back. Now: over the house, it zooms the
+   house; over a panel, it scrolls the panel; and it never enlarges the page. Safari's pinch gestures likewise. */
+addEventListener('wheel', (e) => {
+  if (e.target === renderer.domElement) { if (e.ctrlKey) e.preventDefault(); return; }   // the camera has it
+  const inUi = e.target.closest?.('.panel, #tiles, .morepop, #modal, .devcard, #chips, #tools, header, .tabs, #drawer');
+  if (inUi) { if (e.ctrlKey) e.preventDefault(); return; }
+  e.preventDefault();
+  renderer.domElement.dispatchEvent(new WheelEvent('wheel', { deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode, clientX: e.clientX, clientY: e.clientY, ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, bubbles: true, cancelable: true }));
+}, { passive: false, capture: true });
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+/* Lost? Double-click (or double-tap) empty space, press Home or R, or the ⟲ button: back to the whole house. */
+function resetView() { S.room = null; if (card) closeCard(); layout(true); }
+renderer.domElement.addEventListener('dblclick', (e) => { if (S.mode !== 'view' || S.tool) return; if (rayAt(e.clientX, e.clientY).intersectObjects(Object.values(S.F).filter((F) => F.G.visible).map((F) => F.G), true).some((h) => h.object.isMesh && h.object.visible)) return; resetView(); });   // on the house, a double-click is two taps on a room
+addEventListener('keydown', (e) => { if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || e.ctrlKey || e.metaKey || e.altKey) return; if (e.key === 'Home' || e.key === 'r' || e.key === 'R') { e.preventDefault(); resetView(); } });
+/* An open menu closes when you go back to the map (or anywhere else); a tap on the map closes a drawer too. */
+document.addEventListener('pointerdown', (e) => {
+  if (S.moreOpen && !e.target.closest?.('.morepop, #tools')) { S.moreOpen = false; drawTools(); }
+}, true);
 function pickFloor(id) { S.floorView = id; S.room = null; layout(true); }
 function focusRoom(fid, i) {
   const F = S.F[fid], r = F?.rooms[i]; if (!r) return;
@@ -723,7 +743,7 @@ function drawTools() {
     seg([['rooms', 'Rooms'], ['temp', 'Temp'], ...(S.live?.pins || []).some((p) => p.device.humidity != null) ? [['humidity', 'Humidity']] : [], ...(S.live?.pins || []).some((p) => p.device.co2 != null) ? [['air', 'Air']] : [], ['energy', 'Energy'], ['lights', 'Lights'], ['presence', 'Motion']], prefs.overlay, (v) => { prefs.overlay = v; savePrefs(); drawPins(); }),
     el('button', { type: 'button', class: `tog${S.tour ? ' on' : ''}`, onclick: () => (S.tour ? stopTour() : startTour()) }, S.tour ? `■ ${T('Stop')}` : `▶ ${T('Tour')}`),
     el('button', { type: 'button', class: `tog${S.moreOpen ? ' on' : ''}`, onclick: () => { S.moreOpen = !S.moreOpen; drawTools(); } }, `${T('View')} ▾`),
-    el('button', { type: 'button', class: 'tog', title: 'Reset view', onclick: () => { S.room = null; layout(true); } }, '⟲'),
+    el('button', { type: 'button', class: 'tog', title: 'Back to the whole house (double-click the map, or press Home)', onclick: resetView }, '⟲'),
     S.room ? el('button', { type: 'button', class: 'tog on', onclick: () => { S.room = null; layout(true); } }, ic('back'), T('Back')) : null);
   document.querySelector('body > .morepop')?.remove(); if (more && !t.hidden) document.body.append(more);   // on the page, so the scrolling bar can't clip it
 }
@@ -1102,6 +1122,7 @@ renderer.domElement.addEventListener('click', (e) => {
   ray.setFromCamera(mouse, camera);
   const cur = curF(), targets = Object.values(S.F).filter((F) => F.G.visible && (!cur || F === cur)).map((F) => F.G);
   const hit = ray.intersectObjects(targets, true).find((h) => h.object.isMesh && h.object.visible && h.object.material?.opacity !== 0 && !isClipped(h));
+  if (S.mode === 'view' && S.info) { closeInfo(); return; }
   if (S.mode === 'view' && yard.group.visible) {
     const yh = ray.intersectObject(yard.group, true).find((h) => h.object.isMesh); let o = yh?.object; while (o && !o.userData.yard && o.parent !== yard.group) o = o.parent;
     const it = o?.userData.yard && (S.plan?.yard?.items || []).find((x) => x.id === o.userData.yard.item);
