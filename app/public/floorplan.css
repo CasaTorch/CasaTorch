@@ -188,3 +188,10 @@ input[type=color] { width: 34px; height: 30px; padding: 2px; flex: none; } input
 .edrow.pick .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .edrow.pick { cursor: grab; }
 .edrow.sub { margin: 4px 0 0 18px; width: calc(100% - 18px); }
 .hint.col { flex-direction: column; align-items: stretch; } .hint.col .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 0; } .hint.col .note { margin: 4px 0 0; }
+/* calm pins: an icon (glowing when on), words only when they matter, on hover, or with Words › Everything */
+.pin .val { display: none; } .pin.say .val, .pin:hover .val, .pin:focus-visible .val { display: inline; }
+.pin .val b { font-weight: 700; color: inherit; } .pin:hover, .pin:focus-visible { z-index: 99999 !important; }
+.pin.clustered { display: none !important; }
+.pin[data-n]::after { content: attr(data-n); position: absolute; top: -8px; right: -8px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--hl); color: #fff; font: 700 11px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
+.pin[data-n] { cursor: zoom-in; }   /* (it is already placed absolutely; the count sits on its corner) */
+.findbox { display: grid; gap: 4px; margin: 10px 0 4px; } .findbox input { width: 100%; }
