@@ -230,3 +230,9 @@ html, body { touch-action: pan-x pan-y; } .stage, .labels { touch-action: none; 
 body.editing #themeSeg { visibility: hidden; }
 /* undo and redo */
 .undobar { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; } .undobar small { color: var(--muted); font-size: 11px; margin-left: auto; } .undobar .mini[disabled] { opacity: .4; cursor: default; }
+/* the numbers at the top open their drawers; Power is colored against your usual */
+#totals button.stat { cursor: pointer; font-family: inherit; color: inherit; text-align: left; } #totals button.stat:hover { border-color: var(--hl); }
+#totals .stat.power.good b, #totals .stat.power.good { --tone: #34d399; } #totals .stat.power.warn { --tone: var(--warm); } #totals .stat.power.bad { --tone: var(--bad); }
+#totals .stat.power.good, #totals .stat.power.warn, #totals .stat.power.bad { box-shadow: inset 0 0 0 1px var(--tone); color: var(--tone); }
+.note.vs.good { color: #34d399; } .note.vs.warn { color: var(--warm); } .note.vs.bad { color: var(--bad); font-weight: 600; }
+.kpis b.bad { color: var(--bad); }

@@ -366,6 +366,7 @@ function welcome() {
       step('3', 'Your dashboard', 'Then a one-minute tour of where everything is. Change anything later in Settings.')),
     el('p', { class: 'note' }, T('About 10 to 20 minutes. Every step can be skipped and added later.')),
     el('p', { class: 'note' }, `${T('Stuck at any point? E-mail')} `, el('a', { href: 'mailto:support@casatorch.com' }, 'support@casatorch.com'), T(' - a real person answers.')),   // scrub-ok: public support address
+    phoneCard(),
     el('div', { class: 'card' }, el('h3', {}, T('Just looking?')), el('p', { class: 'note' }, T('See CasaTorch with a sample house, including the 3D floor plan. No setup needed.')),
       el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/?tour'; } }, T('Try the demo'))),
     restoreBox()];
@@ -533,7 +534,44 @@ $('#next').onclick = async () => {
   if (p) { $('#navmsg').textContent = p; return; }
   W.i = W.focus && W.steps[W.i - 1]?.id === W.focus.step ? W.steps.length + 1 : W.i + 1; go(); scrollTo(0, 0);
 };
+/* The setup code: only the owner sets up a new CasaTorch. On the computer CasaTorch runs on (and from Home Assistant)
+   it isn't asked; from a phone or another computer it is, once. A link from the QR code fills it in. */
+const WHERE = {
+  computer: ['On the computer CasaTorch is installed on: the setup page opened there by itself (or open http://localhost:8090 on it). The code is on that page, with a QR code - scan it with this phone and setup opens with the code filled in.'],
+  docker: ['In the container\'s log: run  docker logs casatorch  on the computer running it (or open the log in Portainer or your NAS\'s container app).', 'Or open http://localhost:8090 on the computer running Docker - no code is needed there.'],
+  addon: ['Open CasaTorch from Home Assistant instead (Settings › Add-ons › CasaTorch › Open Web UI) - no code is needed there.', 'Or find it in the add-on\'s Log tab.'],
+  pi: ['A CasaTorch Box: on the sticker that came with it.', 'A Raspberry Pi you set up yourself: put its memory card in any computer - the code is in the file casatorch-setup-code. Or run  journalctl -u casatorch  on the Pi.'],
+};
+async function setupCodeGate() {
+  const qp = new URLSearchParams(location.search), given = qp.get('code');
+  if (given) { qp.delete('code'); history.replaceState(null, '', location.pathname + (qp.toString() ? `?${qp}` : '')); await api('/api/setup/code', { body: { code: given } }).catch(() => {}); }
+  const c = await api('/api/setup/code').catch(() => ({ needed: false }));
+  if (c.code) W.phone = c;   // on the computer itself: shown on the welcome page for setting up from a phone
+  if (!c.needed) return;
+  const foot = document.querySelector('footer'); foot.style.display = 'none';   // no Back/Next until the code is in
+  await new Promise((done) => {
+    const input = el('input', { type: 'text', id: 'setupcode', autocomplete: 'one-time-code', autocapitalize: 'characters', spellcheck: 'false', maxlength: '12', placeholder: 'ABCD-2345', 'aria-describedby': 'codehelp', class: 'codein' });
+    const msg = el('p', { class: 'err', role: 'alert' });
+    const go2 = async (e) => { e?.preventDefault(); msg.textContent = ''; try { await api('/api/setup/code', { body: { code: input.value } }); done(); } catch (err) { msg.textContent = err.message; input.select(); } };
+    $('#page').replaceChildren(el('h1', {}, T('Enter your setup code')),
+      el('p', { class: 'intro', id: 'codehelp' }, T('So only you can set up this CasaTorch - not anyone else on your network - setup asks for a code, once.')),
+      el('form', { class: 'codeform', onsubmit: go2 }, input, el('button', { type: 'submit', class: 'primary' }, T('Continue'))), msg,
+      el('div', { class: 'card' }, el('h3', {}, T('Where is it?')), ...(WHERE[c.how] || WHERE.computer).map((t) => el('p', { class: 'note' }, T(t)))),
+      el('p', { class: 'note' }, `${T('Still stuck? E-mail')} `, el('a', { href: 'mailto:support@casatorch.com' }, 'support@casatorch.com'), '.'));   // scrub-ok: public support address
+    input.focus();
+  });
+  foot.style.display = '';
+}
+/* On the computer CasaTorch runs on: set up from a phone instead by scanning this. */
+function phoneCard() {
+  if (!W.phone?.code) return null;
+  const q = el('div', { class: 'qr', role: 'img', 'aria-label': 'QR code that opens setup on your phone' }); if (W.phone.qr) q.innerHTML = W.phone.qr;   // made by this CasaTorch
+  return el('div', { class: 'card phonecard' }, W.phone.qr ? q : null, el('div', {}, el('h3', {}, T('Rather set up on your phone?')),
+    el('p', { class: 'note' }, T('Scan this with your phone\'s camera (on your home Wi-Fi). Setup opens there with your setup code filled in.')),
+    el('p', { class: 'note' }, `${T('Setup code')}: `, el('b', { class: 'code' }, W.phone.code))));
+}
 (async () => {
+  await setupCodeGate();
   const st = await api('/api/setup/state');
   if (!st.open) { $('#page').replaceChildren(el('h1', {}, 'CasaTorch is already set up'), el('p', {}, el('a', { href: '/' }, 'Open the dashboard'))); document.querySelector('footer').hidden = true; return; }
   W.cat = await api('/api/setup/catalog');

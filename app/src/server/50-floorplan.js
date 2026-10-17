@@ -213,6 +213,35 @@ function fpGroup(list) {
   }
   return { list: out, alias };
 }
+/* ---- your usual power use: right now, compared with the same hour on the same day of the week ----
+   Every minute the house's power is noted; at the end of each hour that hour's average is folded into two running
+   averages - this weekday at this hour (the last ~6 weeks), and any day at this hour (the last ~2 weeks, used until
+   there's enough of the first). Kept in DATA_DIR/power-baseline.json, only numbers, nothing else. "Normal" allows
+   15% (at least 150 W) above usual; "above" up to 60% (at least 400 W) more; beyond that, "high". */
+const PB_FILE = path.join(DATA_DIR, 'power-baseline.json');
+const PB = (() => { try { const j = JSON.parse(fs.readFileSync(PB_FILE, 'utf8')); return { b: j.b || {}, cur: j.cur || null }; } catch { return { b: {}, cur: null }; } })();
+let pbSavedAt = 0;
+const pbKey = (t = new Date()) => ({ wk: `${t.getDay()}-${t.getHours()}`, hr: `*-${t.getHours()}`, hour: Math.floor(t.getTime() / 3_600_000) });
+function pbSave(force) { if (!force && Date.now() - pbSavedAt < 600_000) return; pbSavedAt = Date.now(); try { fs.writeFileSync(`${PB_FILE}.tmp`, JSON.stringify(PB)); fs.renameSync(`${PB_FILE}.tmp`, PB_FILE); } catch { /* next time */ } }
+function pbRecord(w) {
+  if (!Number.isFinite(w) || w < 0 || w > 200_000) return;
+  const k = pbKey(), c = PB.cur;
+  if (c && c.hour !== k.hour) {
+    if (c.count >= 10) for (const key of [c.wk, c.hr]) { const b = (PB.b[key] ||= { avg: 0, n: 0 }); b.n = Math.min(b.n + 1, key.startsWith('*') ? 14 : 6); b.avg = Math.round(b.avg + (c.sum / c.count - b.avg) / b.n); }
+    PB.cur = null; pbSave(true);
+  }
+  if (!PB.cur) PB.cur = { ...k, sum: 0, count: 0 };
+  PB.cur.sum += w; PB.cur.count += 1; pbSave(false);
+}
+function pbLevel(w) {
+  const k = pbKey(), wk = PB.b[k.wk], hr = PB.b[k.hr];
+  const base = wk?.n >= 2 ? wk : hr?.n >= 2 ? hr : wk?.n ? wk : hr?.n ? hr : null;
+  if (!base || !Number.isFinite(w)) return { level: 'learning' };
+  const usual = base.avg, diff = w - usual;
+  const level = diff <= Math.max(150, usual * 0.15) ? (usual - w > Math.max(150, usual * 0.2) ? 'low' : 'normal') : diff <= Math.max(400, usual * 0.6) ? 'above' : 'high';
+  return { level, usual, sameDay: base === wk };
+}
+if (!isDemo()) setInterval(async () => { try { if (isConfigured()) { const { devices } = await houseDevices(); pbRecord(housePower(devices).watts); } } catch { /* next minute */ } }, 60_000).unref?.();
 /* Live: every placed device's state + the house totals shown on top of the plan. */
 app.get('/api/floorplan/live', async (_req, res) => {
   const d = fpData();
@@ -220,7 +249,7 @@ app.get('/api/floorplan/live', async (_req, res) => {
   const byId = new Map(devices.map((x) => [x.id, x]));
   for (const x of devices) { const r = riskOf(x); if (r) x.guarded = r.only; }   // which controls the safety rule allows
   const G = fpGroup(devices), gById = new Map(G.list.map((x) => [x.id, x])), main = (id) => G.alias.get(id) || id, seenPin = new Set();
-  const powerW = housePower(devices).watts;
+  const hp = housePower(devices), powerW = hp.watts;
   res.json({
     pins: d.pins.map((p) => ({ ...p, deviceId: main(p.deviceId) })).filter((p) => !seenPin.has(p.deviceId) && seenPin.add(p.deviceId))   // one pin per device, even if two of its parts were placed
       .map((p) => ({ ...p, device: gById.get(p.deviceId) || byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })), weather,
@@ -231,6 +260,6 @@ app.get('/api/floorplan/live', async (_req, res) => {
       return [it.id, { home: h ? (h.home ?? h.on ?? null) : null, plugged: p ? !!(p.on ?? p.plugged) : null, powerW: w ? w.powerW ?? null : null, battery: bt ? n(bt.battery ?? bt.value) : null }];
     })),
     energy: energyFlows(devices, Math.round(powerW)),
-    totals: { powerW: Math.round(powerW), lightsOn: devices.filter((x) => x.kind === 'light' && x.on).length, playing: devices.filter((x) => x.playing).map((x) => ({ name: x.name, title: x.title })), openDoors: devices.filter((x) => x.open).length, leaks: devices.filter((x) => x.water).length },
+    totals: { powerW: Math.round(powerW), from: hp.from || null, parts: (hp.parts || []).slice(0, 30), vs: isDemo() ? { level: 'above', usual: 6400, sameDay: true } : pbLevel(powerW), lightsOn: devices.filter((x) => x.kind === 'light' && x.on).length, playing: devices.filter((x) => x.playing).map((x) => ({ name: x.name, title: x.title })), openDoors: devices.filter((x) => x.open).length, leaks: devices.filter((x) => x.water).length },
   });
 });

@@ -13,6 +13,7 @@ cp -R "$BUNDLE/app" "$BUNDLE/demo" "$BUNDLE/VERSION" "$PKG/opt/casatorch/"
 if [ -n "${NODE_BIN:-}" ]; then mkdir -p "$PKG/opt/casatorch/node"; cp "$NODE_BIN" "$PKG/opt/casatorch/node/node"; else "$ROOT/deploy/packaging/fetch-node.sh" "$NODEPLAT" "$PKG/opt/casatorch/node"; fi
 cp "$HERE/casatorch.service" "$HERE/casatorch-update.service" "$HERE/casatorch-update.timer" "$PKG/lib/systemd/system/"
 cp "$HERE/casatorch-update" "$PKG/opt/casatorch/casatorch-update"
+cp "$HERE/../release-key.pub.pem" "$PKG/opt/casatorch/release-key.pem"   # the updater checks every release against this
 for s in postinst prerm postrm; do cp "$HERE/$s" "$PKG/DEBIAN/"; chmod 755 "$PKG/DEBIAN/$s"; done
 MAINT="CasaTorch <support@casatorch.com>"   # scrub-ok: public support address
 SIZE=$(du -sk "$PKG/opt" | cut -f1)

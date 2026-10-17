@@ -46,6 +46,20 @@ install -m 0644 "$HERE/wifi-setup/casatorch-wifi-setup.service" "$MNT/etc/system
 # Every name points at the Box on the setup Wi-Fi, so phones open the setup page by themselves (NetworkManager uses this only for hotspots).
 printf '# CasaTorch setup Wi-Fi only\naddress=/#/10.42.0.1\n' > "$MNT/etc/NetworkManager/dnsmasq-shared.d/casatorch-captive.conf"   # scrub-ok: NetworkManager's standard hotspot address
 chroot "$MNT" systemctl enable casatorch-wifi-setup.service
+# The setup code (app/src/server/04-setup-code.js): made on the first start and written to the card's boot partition,
+# so the owner can read it on any computer. A Box gets its code from tools/pi-setup-label.mjs instead (also on its sticker).
+cat > "$MNT/etc/systemd/system/casatorch-setup-code.service" <<'UNIT'
+[Unit]
+Description=CasaTorch setup code on the memory card (first start only)
+Before=casatorch.service
+ConditionPathExists=!/boot/firmware/casatorch-setup-code
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'tr -dc ABCDEFGHJKMNPQRSTUVWXYZ23456789 </dev/urandom | head -c 8 > /boot/firmware/casatorch-setup-code'
+[Install]
+WantedBy=multi-user.target
+UNIT
+chroot "$MNT" systemctl enable casatorch-setup-code.service
 # The name it answers to on the network: http://casatorch.local:8090 (Raspberry Pi Imager can change it).
 echo casatorch > "$MNT/etc/hostname"
 sed -i 's/\braspberrypi\b/casatorch/g' "$MNT/etc/hosts"
@@ -61,6 +75,8 @@ Put this card in a Raspberry Pi 4 or 5 and power it on. Then either:
         SETUP_PASSWORD=<a password you choose, 8+ characters>
     With no network it then opens that setup Wi-Fi: join it on your phone and pick your home Wi-Fi.
 After 3-5 minutes open  http://casatorch.local:8090  on any phone or computer on the same network.
+Setup asks for a setup code: it's in the file casatorch-setup-code on this card (it appears after the
+first start - open it on any computer). A CasaTorch Box has it on its sticker too.
 Can't reach it? Look for "casatorch" in your router's list of devices and open  http://<that address>:8090
 Help: https://casatorch.com/download
 NOTE

@@ -27,3 +27,18 @@ app.get('/api/connections', async (_req, res) => {
   const counts = {}; for (const d of devs.devices) counts[d.provider] = (counts[d.provider] || 0) + 1;
   res.json({ ha: { connected: !!c.homeAssistant?.url, online: domains.length > 0 }, domains, direct, counts });
 });
+
+/* Remove a brand that was set up in setup: its settings, addresses and keys are deleted from this CasaTorch. (Brands that
+   come through Home Assistant are removed in Home Assistant; network sources and App tests have their own Remove.) */
+const REMOVABLE = {
+  'hue-local': (c) => { delete c.hue; }, 'shelly-local': (c) => { delete c.shelly; }, 'yolink-cloud': (c) => { delete c.yolink; }, 'ring-labs': (c) => { delete c.ring; },
+  frigate: (c) => { c.cameras = (c.cameras || []).filter((x) => x.type !== 'frigate'); }, 'reolink-local': (c) => { c.cameras = (c.cameras || []).filter((x) => x.type !== 'reolink'); },
+  snapshot: (c) => { c.cameras = (c.cameras || []).filter((x) => x.type !== 'snapshot'); },
+};
+app.delete('/api/connections/:id', requireRole('admin'), (req, res) => {
+  const fn = REMOVABLE[req.params.id]; if (!fn) return res.status(404).json({ error: 'That one is removed somewhere else (Home Assistant, or its own Remove button).' });
+  if (isDemo()) return res.json({ ok: true, demo: true });
+  const next = JSON.parse(JSON.stringify(config)); fn(next); saveConfig(next);
+  if (typeof audit === 'function') audit(req, 'connection-removed', { id: req.params.id });
+  res.json({ ok: true });
+});

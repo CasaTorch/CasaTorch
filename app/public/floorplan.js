@@ -486,7 +486,8 @@ const areaText = (m2) => (units === 'C' ? `${Math.round(m2)} m²` : `${Math.roun
 function tiles() {
   const H = houseNow(), out = [];
   const t = (kind, icon, label, value, sub, tone) => out.push({ kind, icon, label, value, sub, tone });
-  if (H.powered.length || H.watts) t('energy', 'bolt', 'Power now', fmtW(H.watts), H.powered[0] ? `Most: ${pinName(H.powered[0])}` : '', H.watts > 5000 ? 'warn' : '');
+  { const tt = S.live?.totals || {}, lv = tt.vs?.level, top = (tt.parts || [])[0];
+    if (H.powered.length || H.watts) t('energy', 'bolt', 'Power now', fmtW(H.watts), lv && lv !== 'learning' ? { low: 'Below usual', normal: 'About usual', above: 'Above usual', high: 'Well above usual' }[lv] : top ? `Most: ${top.name}` : '', { low: 'good', normal: 'good', above: 'warn', high: 'bad' }[lv] || ''); }
   if (H.temps.length) { const v = H.temps.map((p) => p.device.tempC); t('climate', 'thermo', 'Inside', temp(avg(v)), `${temp(Math.min(...v))} to ${temp(Math.max(...v))}${H.hums.length ? ` · ${Math.round(avg(H.hums.map((p) => p.device.humidity)))}% humidity` : ''}`); }
   if (H.doors.length || H.locks.length || H.alarms.length) {
     const bad = H.alarms.length, warn = H.openDoors.length + H.unlocked.length + H.openCovers.length;
@@ -524,8 +525,15 @@ function drawInfo() {
   let title = '', sub = '', body = [];
   if (k === 'energy') {
     title = 'Power'; sub = `${fmtW(H.watts)} right now`;
+    const tt = S.live?.totals || {}, parts = tt.parts || [], vs = tt.vs || {};
     const byRoom = new Map(); for (const p of H.powered) byRoom.set(roomOf(p), (byRoom.get(roomOf(p)) || 0) + p.device.powerW);
-    body = [S.live?.energy ? energyCard(S.live.energy) : null,
+    const placedIds = new Set((S.live?.pins || []).map((p) => p.deviceId));
+    body = [el('p', { class: `note vs ${{ low: 'good', normal: 'good', above: 'warn', high: 'bad' }[vs.level] || ''}` }, powerSay(tt)),
+      S.live?.energy ? energyCard(S.live.energy) : null,
+      sec(tt.from ? 'Where the number comes from' : `What adds up to ${fmtW(H.watts)}`),
+      tt.from ? el('p', { class: 'note' }, `Your whole-home meter, ${tt.from}. It measures everything at once.`) : null,
+      parts.length ? bars(parts.slice(0, 20).map((x) => [`${x.name}${placedIds.has(x.id) ? '' : ' *'}`, x.w, fmtW(x.w)])) : el('p', { class: 'note' }, 'Nothing is measuring power right now.'),
+      !tt.from && parts.length ? el('p', { class: 'note' }, `Only things that measure their own power are counted: smart plugs and switches with a power reading${parts.some((x) => /charging/.test(x.name)) ? ', and your car charging' : ''}. Lights and appliances without one aren't in the number. * = not placed on the map yet.`) : null,
       byRoom.size > 1 ? sec('By room') : null, byRoom.size > 1 ? bars([...byRoom].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, w]) => [n, w, fmtW(w)])) : null,
       sec(`Using power · ${H.powered.length}`), ...H.powered.slice(0, 15).map((p) => infoRow(p, swOff(p))),
       ...H.cars.filter((c) => c.s.powerW > 50).map((c) => el('div', { class: 'drow act' }, el('div', { class: 'dtop' }, ic('car'), el('span', { class: 'dn' }, c.it.name || 'Car'), el('small', {}, `Charging ${fmtW(c.s.powerW)}`))))];
@@ -683,16 +691,55 @@ const snapUrl = (d) => d.snapshot || (d.provider === 'ha' ? `/api/ha/camera/${en
    still every second, swapped in only once it has loaded so it never flickers. */
 let camStop = null;
 function cameraModal(d, name = d.name) {
-  const img = el('img', { alt: name, class: 'feed' }), badge = el('span', { class: 'livebadge' }, d.stream ? 'LIVE' : 'Connecting\u2026');
-  if (d.stream) { img.src = `${d.stream}${d.stream.includes('?') ? '&' : '?'}t=${Date.now()}`; img.onerror = () => { badge.textContent = 'Stills'; still(); }; }
-  let timer = null;
-  function still() {
-    const tick = () => { const n = new Image(); n.onload = () => { img.src = n.src; badge.textContent = 'Live (stills)'; timer = setTimeout(tick, 1000); }; n.onerror = () => { badge.textContent = 'No picture'; timer = setTimeout(tick, 4000); }; n.src = `${snapUrl(d)}${snapUrl(d).includes('?') ? '&' : '?'}t=${Date.now()}`; };
-    tick();
+  /* As live as the camera allows, best first:
+     1. WebRTC through the server's camera relay (go2rtc) - a few hundred milliseconds behind, with sound off.
+     2. The camera's own MJPEG stream, for cameras CasaTorch reaches directly (Frigate) - about a second.
+     3. A fresh picture every 0.7 seconds, each shown only once it has fully loaded.
+     Home Assistant's own MJPEG relay is skipped: for Ring and many cloud cameras it runs a minute or more behind. */
+  const box = el('div', { class: 'feedbox' }), badge = el('span', { class: 'livebadge' }, 'Connecting…');
+  let stop = () => {}, closed = false, lastPic = 0;
+  const say = (t) => { badge.textContent = t; };
+  const base = /\/stream(\?|$)/.test(d.stream || '') ? d.stream.replace(/\/stream(\?.*)?$/, '') : null;
+  function stills() {
+    const img = el('img', { alt: name, class: 'feed' }); box.replaceChildren(img); let t = null, gone = false;
+    const tick = () => { if (gone) return; const n = new Image(), u = snapUrl(d); n.onload = () => { if (gone) return; img.src = n.src; lastPic = Date.now(); say('Live (pictures)'); t = setTimeout(tick, 700); }; n.onerror = () => { say('No picture right now - trying again'); t = setTimeout(tick, 3000); }; n.src = `${u}${u.includes('?') ? '&' : '?'}t=${Date.now()}`; };
+    tick(); stop = () => { gone = true; clearTimeout(t); img.removeAttribute('src'); };
   }
-  if (!d.stream) still();
-  camStop = () => { clearTimeout(timer); img.onerror = null; img.removeAttribute('src'); camStop = null; };
-  modal(el('div', { class: 'box cam' }, el('div', { class: 'rhead' }, ic('camera'), el('div', {}, el('h2', {}, name), el('small', {}, badge)), el('button', { type: 'button', class: 'iconbtn', title: 'Close', onclick: closeModal }, ic('close'))), img));
+  function mjpeg() {
+    const img = el('img', { alt: name, class: 'feed' }); box.replaceChildren(img); let ok = false;
+    const dog = setTimeout(() => { if (!ok && !closed) { stop(); stills(); } }, 6000);
+    img.onload = () => { ok = true; say('LIVE'); }; img.onerror = () => { clearTimeout(dog); if (!closed) { stop(); stills(); } };
+    img.src = `${d.stream}${d.stream.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    stop = () => { clearTimeout(dog); img.onerror = null; img.removeAttribute('src'); };
+  }
+  async function rtc() {
+    if (typeof RTCPeerConnection !== 'function') return false;
+    const video = el('video', { class: 'feed', muted: true, autoplay: true, playsinline: true }); video.muted = true;
+    const pc = new RTCPeerConnection({ iceServers: [] }), ms = new MediaStream(); let playing = false;
+    stop = () => { try { pc.close(); } catch { /* closed */ } video.srcObject = null; };
+    pc.addTransceiver('video', { direction: 'recvonly' }); pc.addTransceiver('audio', { direction: 'recvonly' });
+    pc.ontrack = (ev) => { try { ev.receiver.playoutDelayHint = 0.25; } catch { /* older browser */ } ms.addTrack(ev.track); if (video.srcObject !== ms) video.srcObject = ms; video.play().catch(() => {}); };
+    video.addEventListener('playing', () => { playing = true; say('LIVE'); });
+    try {
+      await pc.setLocalDescription(await pc.createOffer());
+      await new Promise((ok) => { if (pc.iceGatheringState === 'complete') return ok(); const t = setTimeout(ok, 1500); pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); ok(); } }); });
+      const r = await fetch(`${base}/webrtc`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'offer', sdp: pc.localDescription.sdp }), cache: 'no-store' });
+      if (!r.ok || closed) { stop(); return false; }
+      const a = await r.json(); await pc.setRemoteDescription({ type: 'answer', sdp: a.sdp });
+      box.replaceChildren(video);
+      await new Promise((ok) => setTimeout(ok, 8000)); if (closed) return true;
+      if (!playing) { stop(); return false; }
+      return true;
+    } catch { stop(); return false; }
+  }
+  (async () => {
+    if (base && await rtc()) return;
+    if (closed) return;
+    if (d.stream && (d.live || d.provider !== 'ha')) mjpeg(); else stills();
+  })();
+  const ago = setInterval(() => { if (lastPic && Date.now() - lastPic > 4000) say(`Picture from ${Math.round((Date.now() - lastPic) / 1000)} s ago`); }, 1000);
+  camStop = () => { closed = true; clearInterval(ago); stop(); camStop = null; };
+  modal(el('div', { class: 'box cam' }, el('div', { class: 'rhead' }, ic('camera'), el('div', {}, el('h2', {}, name), el('small', {}, badge)), el('button', { type: 'button', class: 'iconbtn', title: 'Close', onclick: closeModal }, ic('close'))), box));
 }
 function modal(content) { const m = $('#modal'); m.replaceChildren(content); m.hidden = false; m.onclick = (e) => { if (e.target === m) closeModal(); }; }
 function closeModal() { camStop?.(); $('#modal').hidden = true; $('#modal').replaceChildren(); }
@@ -863,7 +910,7 @@ function homeBlock() {
   const eye = (on, fn, label) => el('button', { type: 'button', class: `eye${on ? ' on' : ''}`, title: on ? `Hide ${label}` : `Show ${label}`, onclick: fn }, on ? '◉' : '○');
   return el('div', {},
     el('div', { class: 'eyebrow' }, cur ? cur.f.name : all.length > 1 ? T('Whole home') : T('Home|house')),
-    el('div', { class: 'kpis' }, el('div', {}, el('small', {}, T('Using now')), el('b', { class: 'good' }, fmtW(watts))), el('div', {}, el('small', {}, T('Lights on')), el('b', { class: 'warm' }, `${on}/${lights.length}`))),
+    el('div', { class: 'kpis' }, el('div', {}, el('small', {}, T('Using now')), el('b', { class: cur ? 'good' : ({ above: 'warm', high: 'bad' }[S.live?.totals?.vs?.level] || 'good'), title: cur ? null : powerSay(S.live?.totals || {}) }, fmtW(watts))), el('div', {}, el('small', {}, T('Lights on')), el('b', { class: 'warm' }, `${on}/${lights.length}`))),
     cur ? null : energyCard(S.live?.energy),
     findBlock(),
     onNowBlock(pins),
@@ -1649,11 +1696,20 @@ function guidePanel() {
 }
 
 /* ---------- live data ---------- */
+/* How now compares with your usual at this hour (the server learns it - 'learning' for the first days). */
+function powerSay(t) {
+  const v = t.vs || {}, day = new Date().toLocaleDateString(undefined, { weekday: 'long' }), hr = new Date().toLocaleTimeString(undefined, { hour: 'numeric' });
+  if (!v.level || v.level === 'learning') return 'Learning what is usual for your home at this time - a few days.';
+  const when = v.sameDay ? `on a ${day} around ${hr}` : `around ${hr}`, u = fmtW(v.usual);
+  return { low: `Lower than usual (${u} ${when}).`, normal: `About usual (${u} ${when}).`, above: `Higher than usual (${u} ${when}).`, high: `Much higher than usual (${u} ${when}).` }[v.level];
+}
 function drawTotals() {
   const t = S.live?.totals || {};
-  fill($('#totals'), el('span', { class: 'stat' }, el('small', {}, 'Power'), `${t.powerW ?? 0} W`), el('span', { class: 'stat warm' }, el('small', {}, 'Lights'), `${t.lightsOn ?? 0} on`),
+  const v = t.vs || {}, tone = { low: 'good', normal: 'good', above: 'warn', high: 'bad' }[v.level] || '';
+  const chip = (cls, label, value, kind, title) => el('button', { type: 'button', class: `stat ${cls}`, title, onclick: () => (S.mode === 'view' ? openInfo(kind) : null) }, el('small', {}, label), value);
+  fill($('#totals'), chip(`power ${tone}`, 'Power', fmtW(t.powerW ?? 0), 'energy', powerSay(t)), chip('warm', 'Lights', `${t.lightsOn ?? 0} on`, 'lights', 'Every light, with a switch'),
     ...(t.playing || []).slice(0, 1).map((p) => el('span', { class: 'stat music' }, el('small', {}, 'Playing'), p.title || p.name)),
-    ...(t.openDoors ? [el('span', { class: 'stat bad' }, el('small', {}, 'Open'), `${t.openDoors}`)] : []), ...(t.leaks ? [el('span', { class: 'stat bad' }, el('small', {}, 'Leak'), '!')] : []));
+    ...(t.openDoors ? [chip('bad', 'Open', `${t.openDoors}`, 'security', 'What is open')] : []), ...(t.leaks ? [chip('bad', 'Leak', '!', 'security', 'Water or smoke')] : []));
 }
 async function refresh() {
   try { S.live = await api('/api/floorplan/live'); if (!S.autoCarsTried) setTimeout(autoCars, 0); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color, route, beam }) => ({ deviceId, floor, pos, label, color, route, beam })); const sig = JSON.stringify([S.live.pins, S.live.devices, S.live.totals, S.live.cars, S.live.weather]); if (sig === S.liveSig) return; S.liveSig = sig;   // nothing changed: leave the scene alone
@@ -1682,6 +1738,20 @@ for (const b of document.querySelectorAll('#modeSeg button')) b.onclick = () => 
 $('#guideBtn').onclick = guidePanel;
 start(); setInterval(() => { if (!document.hidden) refresh(); }, 5000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+/* Real time: the server says the moment something in the house changes, and the plan refreshes within about a second
+   (both apps send "tick" on /api/live/events). The 5-second check above stays as the safety net. */
+let liveAt = 0, liveT = null;
+(function liveStart() {
+  if (typeof EventSource !== 'function') return;
+  const es = new EventSource('/api/live/events');
+  es.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type !== 'tick' && m.type !== 'timeline') return;
+    if (document.hidden || (S.mode === 'edit' && $('#left').contains(document.activeElement))) return;
+    clearTimeout(liveT); liveT = setTimeout(() => { liveAt = Date.now(); refresh(); }, Math.max(150, 800 - (Date.now() - liveAt)));
+  };
+  es.onerror = () => { if (es.readyState === 2) setTimeout(liveStart, 30_000); };
+})();
 /* Esc: close the device card, then leave the room, then stop a tool. */
 addEventListener('keydown', (e) => {
   if (e.key !== 'Escape' || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
