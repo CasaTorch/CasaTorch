@@ -119,11 +119,26 @@ async function haAreas() {
     });
   } catch { return {}; }   // older Home Assistant or no areas: entities just have no room
 }
+/* Which Home Assistant device each entity belongs to, so one car or one plug with five sensors is one
+   row (not five with the same name) where devices are listed for placing. Kept for five minutes too. */
+const HA_DEV_TEMPLATE = `{% for s in states %}{% set d = device_id(s.entity_id) %}{% if d %}{{ s.entity_id }}={{ d }};{% endif %}{% endfor %}`;
+async function haDevIds() {
+  const h = config.homeAssistant; if (!h?.url) return {};
+  try {
+    return await cached('ha:devids', 300_000, async () => {
+      const r = await fetch(`${h.url}/api/template`, { method: 'POST', headers: { Authorization: `Bearer ${h.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ template: HA_DEV_TEMPLATE }), signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const map = {};
+      for (const pair of (await r.text()).split(';')) { const [e, d] = pair.split('='); if (/^[a-z_]+\.[\w-]+$/.test(e || '') && /^[\w-]{6,64}$/.test(d || '')) map[e] = d; }
+      return map;
+    });
+  } catch { return {}; }
+}
 PROVIDERS.ha = {
   async list() {
-    const [states, areas] = await Promise.all([haStates(), haAreas()]);
+    const [states, areas, devs] = await Promise.all([haStates(), haAreas(), haDevIds()]);
     const list = haPairPlugs(states.map(haDevice).filter(Boolean));
-    for (const d of list) { const a = areas[d.id.slice(3)]; if (a) d.area = a; }
+    for (const d of list) { const a = areas[d.id.slice(3)]; if (a) d.area = a; const g = devs[d.id.slice(3)]; if (g) d.dev = g; }
     return list;
   },
   async act(d, action, value) {

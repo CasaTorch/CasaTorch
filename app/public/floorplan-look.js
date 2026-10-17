@@ -36,7 +36,8 @@ export function guessCats(meshes, root) {
 }
 /* The thing a person means when they click: "Sofa2", not its 40 sub-meshes. */
 export function itemOf(mesh) {
-  for (let o = mesh; o && o.parent; o = o.parent) if (/_grp$/i.test(o.parent.name || '') && !/_grp$/i.test(o.name || '')) return o;
+/* (A model joined from several room scans has the same group several times; the loader numbers the extra ones: Section_grp_1.) */
+  for (let o = mesh; o && o.parent; o = o.parent) if (/_grp(_\d+)?$/i.test(o.parent.name || '') && !/_grp(_\d+)?$/i.test(o.name || '')) return o;
   return mesh;
 }
 export const prettyItem = (n) => String(n || 'Object').replace(/[_.]/g, ' ').replace(/([a-z])([A-Z0-9])/g, '$1 $2').replace(/\s+/g, ' ').trim();
@@ -46,7 +47,7 @@ const ROOM_NAMES = { livingroom: 'Living room', bedroom: 'Bedroom', bathroom: 'B
 export function sectionRooms(root, toLocal) {
   const found = [];
   root.traverse((o) => {
-    if (!/^section_grp$/i.test(o.parent?.name || '')) return;
+    if (!/^section_grp(_\d+)?$/i.test(o.parent?.name || '')) return;
     const type = (o.name || '').replace(/\d+$/, ''), p = toLocal(o.getWorldPosition(new THREE.Vector3()));
     found.push({ type, pos: [+p.x.toFixed(2), +p.z.toFixed(2)] });
   });
