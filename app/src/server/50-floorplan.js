@@ -55,6 +55,7 @@ app.put('/api/floorplan/floors/:id', requirePro, express.json(), (req, res) => {
   Object.assign(f, { name: b.name ? String(b.name).slice(0, 40) : f.name, level: num(b.level, 0, 9, f.level), heightM: num(b.heightM, 1.5, 10, f.heightM), rotationY: num(b.rotationY, -360, 360, f.rotationY), scale: num(b.scale, 0.01, 100, f.scale),
     offset: Array.isArray(b.offset) ? [num(b.offset[0], -1000, 1000, 0), num(b.offset[1], -1000, 1000, 0)] : f.offset });
   if (['auto', 'styled', 'original'].includes(b.look)) f.look = b.look;
+  if (b.rooms === null) delete f.rooms;   // back to the rooms found in the scan (Undo)
   if (Array.isArray(b.rooms)) f.rooms = b.rooms.filter((r) => Array.isArray(r?.pos) && r.pos.length === 2 && r.pos.every((v) => fin(v, -1000, 1000))).slice(0, 60)
     .map((r) => ({ name: String(r.name || 'Room').slice(0, 30), color: FP_HEX.test(r.color) ? r.color : '#38bdf8', pos: r.pos.map((v) => +(+v).toFixed(2)) }));
   if (Array.isArray(b.hiddenParts)) f.hiddenParts = [...new Set(b.hiddenParts.filter((k) => typeof k === 'string' && k.length && k.length <= 120))].slice(0, 2000);

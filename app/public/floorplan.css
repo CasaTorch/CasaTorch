@@ -228,3 +228,5 @@ body.panelmode #tiles { width: 230px; } body.panelmode .tile b { font-size: 26px
 html, body { touch-action: pan-x pan-y; } .stage, .labels { touch-action: none; }
 /* the editor uses its own bright look, so the look buttons rest until you leave it */
 body.editing #themeSeg { visibility: hidden; }
+/* undo and redo */
+.undobar { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; } .undobar small { color: var(--muted); font-size: 11px; margin-left: auto; } .undobar .mini[disabled] { opacity: .4; cursor: default; }
