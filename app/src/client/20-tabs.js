@@ -150,8 +150,8 @@ function networkCard(nw, redraw) {
 }
 tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
   const draw = async () => {
-    const [n, mo, nw] = await Promise.all([api('/api/internet'), api('/api/monitors').catch(() => ({ pro: false, monitors: [], max: 30 })), api('/api/network').catch(() => ({ pro: false, sources: [], kinds: {} }))]);
-    mo.demo = nw.demo = !!S.status?.demo;
+    const [n, mo, nw, at] = await Promise.all([api('/api/internet'), api('/api/monitors').catch(() => ({ pro: false, monitors: [], max: 30 })), api('/api/network').catch(() => ({ pro: false, sources: [], kinds: {} })), api('/api/apptests').catch(() => null)]);
+    mo.demo = nw.demo = !!S.status?.demo; if (at) at.demo = !!S.status?.demo;
     const btn = el('button', { class: 'btn primary' }, icon('bolt'), 'Run a speed test');
     btn.onclick = async () => { btn.disabled = true; btn.lastChild.textContent = 'Testing (about 20 s)...'; try { await post('/api/internet/speedtest'); toast('Speed test done'); await draw(); } catch (err) { toast(err.message); btn.disabled = false; } };
     const net = el('div', { class: 'card' }, el('h2', {}, 'Internet'), el('div', { class: 'row' }, el('span', { class: `dot ${n.online ? 'good' : 'bad'}` }), el('b', {}, n.online ? 'Online' : 'Down')),
@@ -161,7 +161,7 @@ tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
       el('p', { class: 'small muted' }, n.speed ? `Tested ${fmtWhen(n.speed.at)}. CasaTorch tests every 4 hours.` : 'CasaTorch tests every 4 hours.'), btn);
     const lan = el('div', { class: 'card' }, el('h2', {}, 'Home network'), el('dl', { class: 'kv' }, el('dt', {}, 'Router'), el('dd', {}, n.gateway || '-'), el('dt', {}, 'Devices seen'), el('dd', {}, n.lanDevices ?? '-'), el('dt', {}, 'This box'), el('dd', {}, n.host || '-')),
       el('p', { class: 'small muted' }, 'Using UniFi, Cisco Meraki, Pi-hole or AdGuard Home? Connect it below (Pro).'));
-    main.replaceChildren(el('div', { class: 'cards' }, net, sp, lan), networkCard(nw, draw), serversCard(mo, draw));
+    main.replaceChildren(el('div', { class: 'cards' }, net, sp, lan), at ? appTestsCard(at, draw) : null, networkCard(nw, draw), serversCard(mo, draw));
   };
   await draw(); return draw;
 } });

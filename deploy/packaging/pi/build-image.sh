@@ -36,7 +36,7 @@ rm -f "$MNT/tmp/casatorch.deb"
 mkdir -p "$MNT/etc/systemd/system/casatorch.service.d"
 printf '[Service]\nEnvironment=CASATORCH_INSTALL=pi-image\n' > "$MNT/etc/systemd/system/casatorch.service.d/install.conf"
 cp -L /etc/resolv.conf "$MNT/etc/resolv.conf.casatorch" && mount --bind "$MNT/etc/resolv.conf.casatorch" "$MNT/etc/resolv.conf" 2>/dev/null || true
-chroot "$MNT" /usr/bin/env DEBIAN_FRONTEND=noninteractive sh -c 'apt-get update -qq && apt-get install -y -qq unattended-upgrades dnsmasq-base && printf "APT::Periodic::Update-Package-Lists \"1\";\nAPT::Periodic::Unattended-Upgrade \"1\";\n" > /etc/apt/apt.conf.d/20auto-upgrades && apt-get clean'
+chroot "$MNT" /usr/bin/env DEBIAN_FRONTEND=noninteractive sh -c 'apt-get update -qq && apt-get install -y -qq unattended-upgrades dnsmasq-base traceroute && printf "APT::Periodic::Update-Package-Lists \"1\";\nAPT::Periodic::Unattended-Upgrade \"1\";\n" > /etc/apt/apt.conf.d/20auto-upgrades && apt-get clean'
 umount "$MNT/etc/resolv.conf" 2>/dev/null || true; rm -f "$MNT/etc/resolv.conf.casatorch"
 # Wi-Fi setup without a cable: when the Box has no network it opens its own setup Wi-Fi (see wifi-setup/).
 # The setup Wi-Fi's name and password go on the boot partition per Box (tools/pi-setup-label.mjs).

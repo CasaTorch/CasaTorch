@@ -307,5 +307,18 @@ t('Security Center: reads the neighbor table on Linux, Mac and Windows, and expl
   assert.ok(H.securityChecklist().some((i) => i.id === 'https'));
 });
 
+t('App tests: reads traceroute, tracepath and tracert, and sorts hops into home, provider and internet', () => {
+  const lin = 'traceroute to example.com (203.0.113.10), 24 hops max, 60 byte packets\n 1  192.168.1.1  0.512 ms\n 2  100.92.0.1  8.1 ms\n 3  *\n 4  198.51.100.1  10.4 ms\n';   // scrub-ok: documentation addresses
+  assert.deepEqual(H.atParseTrace(lin, 'traceroute'), [{ n: 1, ip: '192.168.1.1', ms: 0.512 }, { n: 2, ip: '100.92.0.1', ms: 8.1 }, { n: 3, ip: null, ms: null }, { n: 4, ip: '198.51.100.1', ms: 10.4 }]);   // scrub-ok
+  const win = '\nTracing route to example.com [203.0.113.10]\n\n  1    <1 ms    <1 ms    <1 ms  192.168.1.1\n  2     9 ms     8 ms    10 ms  198.51.100.1\n  3     *        *        *     Request timed out.\n';   // scrub-ok
+  assert.deepEqual(H.atParseTrace(win, 'tracert'), [{ n: 1, ip: '192.168.1.1', ms: 0.5 }, { n: 2, ip: '198.51.100.1', ms: 8 }, { n: 3, ip: null, ms: null }]);   // scrub-ok
+  const tp = ' 1?: [LOCALHOST]                      pmtu 1500\n 1:  192.168.1.1                                           0.611ms\n 2:  no reply\n 3:  198.51.100.1                                          11.204ms\n';   // scrub-ok
+  assert.deepEqual(H.atParseTrace(tp, 'tracepath'), [{ n: 1, ip: '192.168.1.1', ms: 0.611 }, { n: 2, ip: null, ms: null }, { n: 3, ip: '198.51.100.1', ms: 11.204 }]);   // scrub-ok
+  const hops = H.atZones([{ ip: '192.168.1.1' }, { ip: '100.92.0.1' }, { ip: '198.51.100.1', name: 'a.isp-one.net' }, { ip: null }, { ip: '198.51.100.9', name: 'b.isp-one.net' }, { ip: '203.0.113.5', name: 'x.transit.example' }, { ip: '203.0.113.7' }]);   // scrub-ok
+  assert.deepEqual(hops.map((h) => h.zone), ['home', 'provider', 'provider', 'provider', 'provider', 'internet', 'internet']);
+  assert.equal(H.atParseUrl('zoom.us').url, 'https://zoom.us/');
+  for (const bad of ['-oProxy=x', 'ftp://a.b', 'https://u:p@a.b/', 'https://a..b/']) assert.equal(H.atParseUrl(bad), null, bad);
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);

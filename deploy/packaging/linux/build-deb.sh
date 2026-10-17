@@ -23,6 +23,7 @@ Architecture: $ARCH
 Maintainer: $MAINT
 Installed-Size: $SIZE
 Depends: adduser
+Recommends: traceroute
 Section: web
 Priority: optional
 Homepage: https://casatorch.com

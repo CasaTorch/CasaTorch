@@ -5,6 +5,7 @@ ARG BUILD_FROM=node:22-bookworm-slim
 FROM ${BUILD_FROM}
 ARG CASATORCH_REF=main
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends traceroute && rm -rf /var/lib/apt/lists/*
 ADD https://github.com/casatorch/casatorch/archive/refs/heads/${CASATORCH_REF}.tar.gz /tmp/casatorch.tgz
 RUN tar xzf /tmp/casatorch.tgz -C /tmp \
  && cp -r /tmp/casatorch-*/app/. /app/ && cp -r /tmp/casatorch-*/demo /demo \
