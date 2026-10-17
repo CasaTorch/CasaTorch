@@ -24,7 +24,7 @@ case "${ID:-}${ID_LIKE:-}" in *debian*|*ubuntu*|*raspbian*) ;; *) die "this inst
 
 say "Checking packages"
 apt-get update -qq
-apt-get install -y -qq ca-certificates curl git >/dev/null
+apt-get install -y -qq ca-certificates curl git traceroute >/dev/null
 
 need_node=1
 if command -v node >/dev/null; then major=$(node -p 'process.versions.node.split(".")[0]'); [ "$major" -ge 20 ] && need_node=0; fi

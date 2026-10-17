@@ -381,3 +381,56 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .portrow { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin: 8px 0 0 20px; padding: 8px 10px; border-radius: 10px; background: rgba(251, 191, 36, .08); }
 .portrow.warning { background: rgba(251, 113, 133, .1); } .portrow.ok { background: var(--surface-3); opacity: .75; }
 .cards.sec > .card.wide { grid-column: 1 / -1; }
+
+/* ---- Network > App tests ---- */
+:root { --ph-dns: #3987e5; --ph-connect: #d95926; --ph-tls: #199e70; --ph-wait: #c98500; --ph-download: #9085e9; }
+:root[data-theme="light"] { --ph-dns: #2a78d6; --ph-connect: #eb6834; --ph-tls: #1baf7a; --ph-wait: #eda100; --ph-download: #6250d6; }
+.pill.bad { background: rgba(251, 113, 133, .15); color: var(--bad); }
+.atgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.attile { text-align: left; font: inherit; color: inherit; cursor: pointer; padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface-2); display: flex; flex-direction: column; gap: 6px; min-width: 0; transition: border-color .15s, transform .15s; }
+.attile:hover { border-color: rgba(94, 184, 255, .4); } .attile:active { transform: translateY(1px); } .attile.down { border-color: rgba(251, 113, 133, .45); }
+.atbadge { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; font-weight: 700; font-size: 14px; color: var(--text); background: var(--surface-3); border: 1px solid var(--line-2); }
+.atbadge.sm { width: 22px; height: 22px; border-radius: 7px; font-size: 11px; } .atbadge.lg { width: 44px; height: 44px; border-radius: 13px; font-size: 19px; }
+.atbig { font-size: 24px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.atbar { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; margin: 4px 0 2px; background: var(--surface-3); }
+.atbar.big { height: 14px; border-radius: 6px; margin: 8px 0 10px; } .atbar.empty { background: repeating-linear-gradient(135deg, var(--surface-3) 0 6px, transparent 6px 10px); }
+.atbar i { display: block; min-width: 3px; }
+.ph-dns { background: var(--ph-dns); } .ph-connect { background: var(--ph-connect); } .ph-tls { background: var(--ph-tls); } .ph-wait { background: var(--ph-wait); } .ph-download { background: var(--ph-download); }
+.atnet { font-variant-numeric: tabular-nums; }
+.atspark { width: 120px; height: 28px; flex: none; } .atspark .line { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; } .atspark .fail { fill: var(--bad); }
+.atempty { padding: 6px 0 2px; }
+.atpick { margin-bottom: 14px; } .atpick h3 { font-size: 13px; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+.atpick .btn[disabled] { opacity: .55; }
+.atdetail h3 { font-size: 14px; margin: 18px 0 8px; }
+.atcols { display: grid; grid-template-columns: 1.1fr 1fr; gap: 22px; } @media (max-width: 760px) { .atcols { grid-template-columns: 1fr; } }
+.atsteps { display: grid; gap: 4px; } .atstep { display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 3px 0; } .atstep b { font-variant-numeric: tabular-nums; }
+.atstep .sw { width: 12px; height: 12px; border-radius: 4px; flex: none; } .atstep.total { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 8px; }
+.atstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; } .atstat { display: grid; gap: 2px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.atstat b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.atchart { position: relative; width: 100%; min-height: 170px; } .atchart svg { display: block; touch-action: pan-y; }
+.atchart .grid { stroke: var(--line); } .atchart .axis { fill: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.atchart .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; } .atchart .fail { fill: var(--bad); }
+.atchart .cross { stroke: var(--line-2); stroke-dasharray: 3 3; } .atchart .mark { fill: var(--accent); stroke: var(--solid); stroke-width: 2; }
+.attip { position: absolute; top: 4px; width: 230px; padding: 8px 10px; border-radius: 12px; background: var(--solid); border: 1px solid var(--line-2); box-shadow: 0 10px 30px rgba(0, 0, 0, .35); font-size: 13px; pointer-events: none; display: grid; gap: 2px; }
+.atpathwrap { overflow-x: auto; padding-bottom: 6px; }
+.atpath { display: flex; gap: 10px; align-items: stretch; min-width: min-content; }
+.atzone { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); }
+.atzone.z-home { border-color: rgba(52, 211, 153, .3); } .atzone.z-provider { border-color: rgba(94, 184, 255, .3); } .atzone.z-internet { border-color: rgba(139, 123, 255, .3); } .atzone.z-app { border-color: rgba(251, 191, 36, .35); }
+.atzlabel { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.atznodes { display: flex; gap: 0; }
+.athop { position: relative; display: grid; justify-items: center; gap: 3px; width: 112px; padding: 0 4px; text-align: center; }
+.athop + .athop::before { content: ""; position: absolute; left: -50%; right: 50%; top: 14px; height: 2px; background: var(--line-2); z-index: 0; }
+.athopdot { position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 12px; box-shadow: 0 0 0 3px var(--surface-2); }
+.athopdot svg { width: 15px; height: 15px; }
+.athop.quiet .athopdot { background: transparent; border: 2px dashed var(--line-2); width: 20px; height: 20px; margin: 4px 0; }
+.athop.jump .athopdot { background: var(--warn); } .athop.app .athopdot { background: linear-gradient(135deg, var(--accent), var(--accent-2)); width: 32px; height: 32px; margin-top: -2px; }
+.athop.you .athopdot { background: var(--surface-3); color: var(--text); border: 1px solid var(--line-2); }
+.athoplab { font-size: 12px; font-family: ui-monospace, Menlo, monospace; max-width: 104px; } .athop.app .athoplab, .athop.you .athoplab { font-family: inherit; font-weight: 600; }
+.athopname { max-width: 104px; } .athopms { font-variant-numeric: tabular-nums; color: var(--muted); } .athop.jump .athopms { color: var(--warn); font-weight: 700; }
+@media (max-width: 620px) {
+  .atpath { flex-direction: column; min-width: 0; } .atznodes { flex-direction: column; gap: 6px; }
+  .athop { grid-template-columns: 28px minmax(0, 1fr) auto; justify-items: start; text-align: left; width: auto; column-gap: 10px; align-items: center; }
+  .athop .athopdot { grid-row: span 2; } .athop .athopms { grid-column: 3; grid-row: 1; } .athop + .athop::before { display: none; } .athoplab, .athopname { max-width: none; }
+}
+.atbar { flex: none; max-height: 8px; } .atbar.big { max-height: 14px; }
+.atbig.fail { font-size: 18px; color: var(--bad); } .atdetail select { width: auto; }
