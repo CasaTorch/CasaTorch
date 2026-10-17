@@ -12,6 +12,7 @@ import { USDLoader } from 'three/addons/loaders/USDLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { unzipSync } from 'three/addons/libs/fflate.module.js';
+import { itemOf } from './floorplan-look.js';
 
 const base = (n) => n.split('/').pop();
 // Scans should be in meters; some apps write centimeters - scale down anything absurdly large (no house is 200 m across)
@@ -62,4 +63,24 @@ export async function toGlb(fileList) {
   } catch (e) {
     throw new Error(`Could not read that model (${e.message || e}). If the scan came as several files, select the .gltf, .bin and image files together - or upload the .zip.`);
   } finally { for (const u of urls.values()) URL.revokeObjectURL(u); }
+}
+
+/* Rooms scanned one at a time, joined into one floor: each part's model with the turn, size and place it
+   was fitted to, in one .glb. A joined room's names get a short tag so its walls and furniture stay
+   separate from the floor's own (hiding or painting one doesn't touch the other); RoomPlan's group and
+   room markers keep their names, so walls, doors and rooms are still recognized. Parts hidden on the
+   room are left out. */
+export async function mergeGlb(parts) {
+  const loader = new GLTFLoader(), root = new THREE.Group(); root.name = 'house';
+  for (const p of parts) {
+    const g = (await loader.loadAsync(p.url)).scene;
+    if (p.hidden?.length) {
+      const gone = new Set(p.hidden), meshes = []; g.traverse((o) => { if (o.isMesh) meshes.push(o); });
+      meshes.forEach((m, i) => { if (gone.has(itemOf(m).name || m.name || `mesh${i}`)) m.parent?.remove(m); });
+    }
+    if (p.tag) g.traverse((o) => { if (o.name && !/_grp(_\d+)?$/i.test(o.name) && !/^section_grp(_\d+)?$/i.test(o.parent?.name || '')) o.name = `${o.name}_${p.tag}`; });
+    const w = new THREE.Group(); w.position.set(p.pos[0], 0, p.pos[1]); w.rotation.y = p.rotY || 0; w.scale.setScalar(p.scale || 1); w.add(g); root.add(w);
+  }
+  const out = await new GLTFExporter().parseAsync(root, { binary: true });
+  return new Blob([out], { type: 'model/gltf-binary' });
 }

@@ -10,6 +10,7 @@ import { openDrawer } from './floorplan-draw.js';
 import './device-controls.js';   // window.CasaControls: every device's controls, shared with the dashboard
 /* The scan importers (USDZ, OBJ, GLTF exporter...) load only when someone uploads a scan. */
 const toGlb = async (...a) => (await import('./floorplan-import.js')).toGlb(...a);
+const mergeGlb = async (...a) => (await import('./floorplan-import.js')).mergeGlb(...a);
 import { Yard, AREA_KINDS, ITEM_KINDS } from './floorplan-yard.js';
 import { buildRoof, PowerNet, weatherIcon, sunPosition, nightness, kelvinToHex, WeatherFx } from './floorplan-house.js';
 import { THEMES, COLOR_KEYS, ROOM_COLORS, lookOf, classify, guessCats, itemOf, prettyItem, sectionRooms, makeFx, fxMaterial, MAX_GLOW, MAX_ROOMS } from './floorplan-look.js';
@@ -49,21 +50,36 @@ const iconOf = (d) => d.water != null || d.kind === 'leak' ? 'drop' : d.kind ===
 /* ---------- scene ---------- */
 const view = $('#view');
 const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.localClippingEnabled = true;
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.setPixelRatio(Math.min(2, devicePixelRatio)); view.append(renderer.domElement);
+/* Speed: shadows are drawn again only when something that casts them changes (not every frame), and the picture is
+   drawn only when it changes - full speed while you turn the view, gentle when only power lines or rain are moving. */
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; renderer.shadowMap.autoUpdate = false;
+/* Slower screens (a wall tablet, an old laptop) step down by themselves: if turning the view runs under ~22 frames a second
+   the picture gets a little softer, then shadows switch off. The step is remembered on this screen. */
+const Q = { ratios: [Math.min(1.5, devicePixelRatio), Math.min(1, devicePixelRatio), 0.75], i: 0, noShadow: false, frames: [], busy: false };
+try { const v = JSON.parse(localStorage.getItem('casatorch-3d-quality') || 'null'); if (v) { Q.i = Math.min(2, v.i | 0); Q.noShadow = !!v.noShadow; } } catch { /* fine */ }
+renderer.setPixelRatio(Q.ratios[Q.i]); view.append(renderer.domElement);
 const labels = new CSS2DRenderer(); labels.domElement.className = 'labels'; view.append(labels.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 600); camera.position.set(14, 16, 22);
 const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.47; controls.minDistance = 2; controls.maxDistance = 150;
 const hemi = new THREE.HemisphereLight('#fff', '#000', 1); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#ffffff', 0.6); sun.position.set(12, 30, 18); scene.add(sun); scene.add(sun.target);
-sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.autoUpdate = true; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
 let grid = new THREE.Group(); scene.add(grid);
 /* On a wide screen the house is framed in the space right of the control panel, not behind it. */
 const resize = () => { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); labels.setSize(w, h); camera.aspect = w / h; if (w > 900) camera.setViewOffset(w, h, -150, 0, w, h); else camera.clearViewOffset(); camera.updateProjectionMatrix(); };
 addEventListener('resize', resize); resize();
-let tween = null, wallsDirty = true, wallsAt = 0, lastT = 0, skyAt = 0, flash = 0, flashWas = 0;
-controls.addEventListener('change', () => { wallsDirty = true; });
+let tween = null, wallsDirty = true, wallsAt = 0, lastT = 0, skyAt = 0, flash = 0, flashWas = 0, dirty = true, drawnAt = 0;
+const kick = () => { dirty = true; };
+controls.addEventListener('start', () => { Q.busy = true; Q.frames = []; }); controls.addEventListener('end', () => { Q.busy = false; });
+function lowerQuality() {
+  if (Q.i < Q.ratios.length - 1 && Q.ratios[Q.i + 1] < Q.ratios[Q.i]) { Q.i++; renderer.setPixelRatio(Q.ratios[Q.i]); resize(); }
+  else if (!Q.noShadow) { Q.noShadow = true; skyAt = 0; } else return;
+  try { localStorage.setItem('casatorch-3d-quality', JSON.stringify({ i: Q.i, noShadow: Q.noShadow })); } catch { /* fine */ }
+}
+const reshadow = () => { renderer.shadowMap.needsUpdate = true; dirty = true; };
+controls.addEventListener('change', () => { wallsDirty = true; dirty = true; });
+addEventListener('resize', kick);
 const power = new PowerNet(scene), weather = new WeatherFx(scene), yard = new Yard(scene);
 const flyTo = (target, pos, ms = 750) => { tween = { t0: performance.now(), ms, ft: controls.target.clone(), fp: camera.position.clone(), tt: target, tp: pos }; };
 (function loop(now) {
@@ -72,12 +88,16 @@ const flyTo = (target, pos, ms = 750) => { tween = { t0: performance.now(), ms, 
   if (tween) { const k = Math.min(1, (now - tween.t0) / tween.ms), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; controls.target.lerpVectors(tween.ft, tween.tt, e); camera.position.lerpVectors(tween.fp, tween.tp, e); if (k >= 1) tween = null; }
   controls.update();
   if (wallsDirty && now - wallsAt > 120) { wallsDirty = false; wallsAt = now; for (const F of Object.values(S.F)) applyWalls(F); }
+  const moving = (prefs.power && power.flows.length && power.group.visible) || !!weather.points?.visible || (yard.group.visible && wxOn() && yard.group.children.length);
+  if (!dirty && !tween && !flash && !flashWas && now - drawnAt < (moving ? 40 : 250)) return;   // nothing new to draw yet
   power.tick(now / 1000);
   const dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
   flash = weather.tick(dt, now / 1000);
   if (S.plan && yard.group.visible && wxOn()) yard.wind(now / 1000, S.live?.weather?.windMs, windToward());
   if (now - skyAt > 2000 || flash || flashWas) { skyAt = now; updateSky(); } flashWas = flash;
-  renderer.render(scene, camera); labels.render(scene, camera);
+  if (yard.group.visible && wxOn() && yard.group.children.length && now - (S.treeShadowAt || 0) > 500) { S.treeShadowAt = now; renderer.shadowMap.needsUpdate = true; }   // swaying trees
+  renderer.render(scene, camera); labels.render(scene, camera); dirty = false; drawnAt = now;
+  if (Q.busy) { Q.frames.push(now); if (Q.frames.length >= 24) { const ms = (Q.frames[Q.frames.length - 1] - Q.frames[0]) / (Q.frames.length - 1); Q.frames = []; if (ms > 45) lowerQuality(); } }
   if (card) card.o.element.style.zIndex = '100000';   // the open card stays above every pin
 })(0);
 
@@ -123,12 +143,13 @@ function updateSky() {
   if (sunOn() && w?.lat != null && w?.lon != null) { const sp = sunPosition(S.timeAt || new Date(), w.lat, w.lon); el = sp.el; az = sp.az; k = nightness(el); }
   const north = deg(S.plan?.settings?.northDeg || 0), dir = new V3(Math.sin(az) * Math.cos(Math.max(el, 0.05)), Math.sin(Math.max(el, 0.05)), -Math.cos(az) * Math.cos(Math.max(el, 0.05))).applyAxisAngle(new V3(0, 1, 0), -north);
   const B = S.sceneBox || S.houseBox, c = B ? B.getCenter(new V3()) : new V3(), R = B ? B.getSize(new V3()).length() * 0.6 + 4 : 20;
-  sun.position.copy(c).add(dir.multiplyScalar(R * 2)); sun.target.position.copy(c); sun.target.updateMatrixWorld();
+  const sunWas = sun.position.clone(); sun.position.copy(c).add(dir.multiplyScalar(R * 2)); sun.target.position.copy(c); sun.target.updateMatrixWorld();
+  if (sunWas.distanceToSquared(sun.position) > 1e-4) reshadow(); else kick();
   const cam = sun.shadow.camera; if (cam.right !== R) { cam.left = -R; cam.right = R; cam.top = R; cam.bottom = -R; cam.near = 0.5; cam.far = R * 4; cam.updateProjectionMatrix(); }
   const lowSun = Math.min(1, Math.max(0, el / 0.45)), day = 1 - k;
   sun.color.set('#ffb36b').lerp(new THREE.Color('#ffffff'), lowSun);
   sun.intensity = sunOn() ? L.sun * 1.7 * Math.min(1, Math.max(0, Math.sin(el) * 2.4)) : L.sun;
-  sun.castShadow = sunOn() && sun.intensity > 0.05;
+  const cast = !Q.noShadow && sunOn() && sun.intensity > 0.05; if (sun.castShadow !== cast) { sun.castShadow = cast; reshadow(); }
   hemi.intensity = L.hemi[2] * (0.32 + 0.68 * day) + flash * 2.5;
   const nightMix = { day: 0.92, night: 0.55, blueprint: 0.35, real: 0.95 }[theme] ?? 0.5;
   if (L.real) { const horizon = skyPaint(k, lowSun); scene.background = skyTex; scene.fog.color.copy(horizon); if (grid.isMesh) grid.material.color.set(L.ground).multiplyScalar(0.25 + 0.75 * day); }
@@ -151,7 +172,7 @@ function applyLook() {
   for (const F of Object.values(S.F)) styleFloor(F);
   buildRoofs(); buildYard();
   document.documentElement.dataset.theme = curTheme();
-  drawPins();
+  reshadow(); drawPins();
 }
 /* The yard sits on the ground around the lowest floor. */
 const groundY = () => { const F = Object.values(S.F).sort((a, b) => (a.f.level || 0) - (b.f.level || 0))[0]; return F ? (F.f.level || 0) * (F.f.heightM || 3) + F.minY : 0; };
@@ -192,7 +213,7 @@ function applyWalls(F) {
     if (mode === 'auto') { const w = m.userData.wc; low = (w.x - F.center.x) * dir.x + (w.z - F.center.z) * dir.z > F.r * 0.2; }
     const want = low ? lowOf(F, m, full) : full;
     if (m.material !== want) m.material = want;
-    if (m.userData.cat === 'wall') m.castShadow = !low;
+    if (m.userData.cat === 'wall' && m.castShadow === low) { m.castShadow = !low; renderer.shadowMap.needsUpdate = true; }
     const e = m.userData.edge, door = m.userData.cat === 'door';
     if (e) e.material = low ? (door ? F.doorEdgeLow : F.edgeLow) : (door ? F.doorEdge : F.edgeMat);
   }
@@ -212,7 +233,10 @@ function floorMats(fx, clip) {
     window: c(fxMaterial({ transparent: true, opacity: 0.25, depthWrite: false }, fx)), opening: fxMaterial({ transparent: true, opacity: 0, depthWrite: false }, fx) };
 }
 async function loadFloors() {
-  for (const F of Object.values(S.F)) scene.remove(F.G);
+  S.liveSig = null;   // the pins go with the old floors: draw them again
+  /* Labels on the old floors are page elements: take them off the page too, or they stay behind, stacked in the middle. */
+  for (const F of Object.values(S.F)) { F.G.traverse((o) => { if (o.isCSS2DObject) o.element.remove(); }); scene.remove(F.G); }
+  S.pinObjs = []; closeCard();
   S.F = {};
   for (const f of S.plan.floors) {
     const inner = f.kind === 'drawn' ? await drawnFloor(f) : await new Promise((ok, bad) => loader.load(`/api/floorplan/floors/${f.id}/model`, (g) => ok(g.scene), undefined, bad)).catch(() => null);
@@ -250,6 +274,7 @@ async function loadFloors() {
     F.rooms = Array.isArray(f.rooms) ? f.rooms : F.detected;
     F.label = new CSS2DObject(el('button', { class: 'floorlab', type: 'button', onclick: () => pickFloor(f.id) }));
     F.label.position.set((box.min.x + box.max.x) / 2 - G.position.x, box.max.y + 0.6, box.max.z - G.position.z); G.add(F.label);
+    F.loadOff = [G.position.x, G.position.z];
     S.F[f.id] = F;
   }
   if (S.plan.floors.length === 1 && S.F[S.plan.floors[0].id]) S.floorView = S.plan.floors[0].id;
@@ -292,16 +317,16 @@ function layout(fit) {
   const cur = curF(), curLevel = cur?.f.level ?? Infinity, multi = Object.keys(S.F).length > 1;
   let minY = Infinity;
   for (const F of Object.values(S.F)) {
-    const f = F.f, lvl = f.level || 0, isCur = !cur || F === cur;
+    const f = F.f, lvl = f.level || 0, isCur = !cur || F === cur || f.id === fitId();
     F.G.position.y = lvl * (f.heightM || 3) + (prefs.stack === 'apart' && !cur ? lvl * 3 : 0);
     F.G.visible = (isCur || (prefs.stack !== 'alone' && lvl < curLevel)) && !prefs.hidden?.[f.id];
     F.fx.uDim.value = isCur ? 1 : 0.28; F.edgeMat.opacity = isCur ? 0.9 : 0.12; F.furnEdgeMat.opacity = isCur ? 0.35 : 0.05; F.doorEdge.opacity = F.edgeMat.opacity;
     F.G.updateMatrixWorld(true);
     F.clipLow.constant = F.G.position.y + F.minY + 1.1;
-    if (F.roof) F.roof.visible = prefs.roof && (!cur || !multi) && !S.room && F.G.visible;
+    if (F.roof) F.roof.visible = prefs.roof && S.mode !== 'edit' && (!cur || !multi) && !S.room && F.G.visible;   // the roof lifts off while you edit
     if (F.G.visible) minY = Math.min(minY, F.G.position.y + F.minY);
     roomUniforms(F);
-    F.label.visible = multi && !cur && F.G.visible && labelMode() !== 'none';
+    F.label.visible = multi && !cur && F.G.visible && labelMode() !== 'none' && S.mode !== 'edit';
     for (const l of F.roomLabs) l.visible = prefs.names && F.G.visible && (cur ? F === cur : !multi);
   }
   grid.position.y = (Number.isFinite(minY) ? minY : 0) - 0.05;
@@ -311,7 +336,7 @@ function layout(fit) {
   wallsDirty = true;
   if (S.houseBox) { weather.set(wxOn() ? S.live?.weather?.kind : null, S.houseBox); weather.visible = wxOn() && !S.room; }
   controls.autoRotate = !!prefs.spin && !S.tour; controls.autoRotateSpeed = 0.45;
-  drawChips(); drawTools(); drawLeft(); drawPower();
+  drawChips(); drawTools(); drawLeft(); drawPower(); reshadow();
   if (fit) fitView();
 }
 /* Overlays color each room by what is happening in it, instead of its own color. */
@@ -345,7 +370,7 @@ function roomUniforms(F) {
 }
 function fitView() {
   const cur = curF(), box = new THREE.Box3();
-  for (const F of Object.values(S.F)) if (F.G.visible && (!cur || F === cur)) box.union(F.box.clone().translate(new V3(0, F.G.position.y, 0)));
+  for (const F of Object.values(S.F)) if (F.G.visible && (!cur || F === cur || F.f.id === fitId())) box.union(F.box.clone().translate(new V3(0, F.G.position.y, 0)));
   if (box.isEmpty()) return;
   if (!cur && yard.group.visible) for (const c of yard.cars) box.expandByObject(c.o);   // keep the car in the picture
   /* From the front of the house, a little to one side and above - like looking into a dollhouse. */
@@ -396,13 +421,17 @@ function drawPins() {
   for (const o of S.pinObjs) { o.parent?.remove(o); o.element.remove(); }
   S.pinObjs = [];
   const L = look(), glows = {};
+  /* Devices saved on (nearly) the same spot fan out in a little ring, so each one can be seen and grabbed. */
+  const spots = new Map(), shown = new Map();
+  for (const p of S.live?.pins || []) { const k = `${p.floor}:${p.pos.map((v) => Math.round(v / 0.25)).join(':')}`; spots.set(k, [...(spots.get(k) || []), p]); }
+  for (const list of spots.values()) if (list.length > 1) list.forEach((p, j) => { const a = (j / list.length) * Math.PI * 2, r = 0.25 + list.length * 0.05; shown.set(p, [p.pos[0] + Math.cos(a) * r, p.pos[1], p.pos[2] + Math.sin(a) * r]); });
   for (const p of S.live?.pins || []) {
     const F = S.F[p.floor]; if (!F) continue;
     const d = p.device, st = devState(d), sel = S.mode === 'edit' && S.tool?.type === 'device' && S.tool.dev.id === p.deviceId;
     let o = null;
     const div = el('button', { type: 'button', class: `pin${st.act ? ' act' : ''}${st.alarm ? ' alarm' : ''}${d.online === false ? ' offline' : ''}${sel ? ' sel' : ''}${S.mode === 'edit' ? ' movable' : ''}`, title: `${pinName(p)}${st.val ? ` - ${st.val}` : ''}${S.mode === 'edit' ? ' (drag to move)' : ''}`, onclick: () => { if (!S.dragged) pinClick(p); }, onpointerdown: (e) => pinDrag(e, p, o) },
       ic(iconOf(d)), (st.act || prefs.values) && st.val ? el('span', { class: 'val' }, prefs.values && !st.act ? `${pinName(p)} · ${st.val}` : st.val) : null);
-    o = new CSS2DObject(div); o.position.set(...p.pos); o.userData = { floor: p.floor, kind: d.kind }; F.G.add(o); S.pinObjs.push(o);
+    o = new CSS2DObject(div); o.position.set(...(shown.get(p) || p.pos)); o.userData = { floor: p.floor, kind: d.kind }; F.G.add(o); S.pinObjs.push(o);
     const glow = d.kind === 'light' && d.on ? [p.color || d.rgb || (d.kelvin ? kelvinToHex(d.kelvin) : '#ffc477'), (0.35 + 0.65 * ((d.brightness ?? 100) / 100)) * L.glow] : d.kind === 'media' && d.playing ? ['#c084fc', 0.45 * L.glow] : st.alarm ? ['#ef4444', 0.9 * L.glow] : d.open ? ['#f59e0b', 0.35 * L.glow] : ['plug', 'switch'].includes(d.kind) && d.on && d.powerW > 5 ? ['#34d399', Math.min(0.5, 0.15 + d.powerW / 2000) * L.glow] : null;
     if (glow) (glows[p.floor] ||= []).push({ p, color: glow[0], k: glow[1] });
   }
@@ -414,7 +443,7 @@ function drawPins() {
     F.roomLabs.forEach((l, i) => { const on = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length, t = by[i].find((p) => p.device.tempC != null); l.element.querySelector('small').textContent = prefs.overlay !== 'rooms' ? overlayText(roomStats(F)[i]) || '' : [t ? temp(t.device.tempC) : '', on ? `${on} on` : ''].filter(Boolean).join(' · '); });
     const lightsOn = (S.live?.pins || []).filter((p) => p.floor === F.f.id && p.device.kind === 'light' && p.device.on).length;
     const openN = (S.live?.pins || []).filter((p) => p.floor === F.f.id && p.device.open && p.device.kind !== 'cover').length;
-    fill(F.label.element, el('b', {}, F.f.name), el('small', {}, [`${F.rooms.length} rooms`, `${lightsOn} lights on`, openN ? `${openN} open` : ''].filter(Boolean).join(' · ')));
+    fill(F.label.element, el('b', {}, F.f.name), el('small', {}, [F.rooms.length ? `${F.rooms.length} room${F.rooms.length === 1 ? '' : 's'}` : '', lightsOn ? `${lightsOn} light${lightsOn === 1 ? '' : 's'} on` : '', openN ? `${openN} open` : ''].filter(Boolean).join(' · ')));
   }
   if (card) { const p = (S.live?.pins || []).find((x) => x.deviceId === card.id); if (p) fillCard(p); else closeCard(); }
   drawTrail();
@@ -682,7 +711,7 @@ function dragging(e, { onmove, onend }) {
   if (e.button !== 0) return;
   e.stopPropagation();
   const x0 = e.clientX, y0 = e.clientY; let moved = false;
-  const move = (ev) => { if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return; if (!moved) { moved = true; controls.enabled = false; document.body.classList.add('dragging'); } onmove(ev); };
+  const move = (ev) => { if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 5) return; if (!moved) { moved = true; controls.enabled = false; document.body.classList.add('dragging'); } onmove(ev); reshadow(); };
   const up = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); controls.enabled = true; document.body.classList.remove('dragging');
     if (moved) { S.dragged = true; setTimeout(() => { S.dragged = false; }, 0); onend(); } };
   addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
@@ -736,6 +765,98 @@ function drawRouteHandles() {
 const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
 let down = null;
 renderer.domElement.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+const rayAt = (cx, cy) => { const r = renderer.domElement.getBoundingClientRect(); mouse.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1); ray.setFromCamera(mouse, camera); return ray; };
+/* Fitting a room scan into its floor: press on the room and drag it; the camera holds still. Anywhere else still turns the view. */
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  const t = S.tool; if (S.mode !== 'edit' || t?.type !== 'fit' || e.button !== 0) return;
+  const P = S.F[t.floor]; if (!P) return;
+  const hit = rayAt(e.clientX, e.clientY).intersectObject(P.G, true).find((h) => h.object.isMesh && h.object.visible); if (!hit) return;
+  e.stopImmediatePropagation();
+  const plane = new THREE.Plane(new V3(0, 1, 0), -hit.point.y), start = hit.point.clone(), g0 = P.G.position.clone();
+  dragging(e, {
+    onmove: (ev) => { const w = rayAt(ev.clientX, ev.clientY).ray.intersectPlane(plane, new V3()); if (!w) return; P.G.position.x = g0.x + w.x - start.x; P.G.position.z = g0.z + w.z - start.z; P.G.updateMatrixWorld(true); },
+    onend: () => fitSave(P),
+  });
+}, true);
+/* A device dragged from the list and let go over the house: it goes where it was dropped. */
+function placeAt(d, cx, cy) {
+  const r = renderer.domElement.getBoundingClientRect(), under = document.elementFromPoint(cx, cy);
+  if (cx < r.left || cx > r.right || cy < r.top || cy > r.bottom || (under && under.closest('#left, #side, .panel'))) return false;
+  const cur = curF(), hit = rayAt(cx, cy).intersectObjects(Object.values(S.F).filter((F) => F.G.visible && (!cur || F === cur)).map((F) => F.G), true).find((h) => h.object.isMesh && h.object.visible && h.object.material?.opacity !== 0 && !isClipped(h));
+  const F = hit && S.F[hit.object.userData.floor]; if (!F) return false;
+  const l = F.G.worldToLocal(hit.point.clone().add(hit.face.normal.clone().transformDirection(hit.object.matrixWorld).multiplyScalar(0.15)));
+  const old = S.pins.find((p) => p.deviceId === d.id);
+  S.pins = S.pins.filter((p) => p.deviceId !== d.id).concat({ ...(old || {}), deviceId: d.id, floor: F.f.id, pos: [l.x, l.y, l.z] });
+  S.tool = null; savePins(); toast(`${d.name} placed. Drag it on the house to fine-tune.`);
+  return true;
+}
+function listDrag(e, d) {
+  if (e.pointerType !== 'mouse' || e.button !== 0) return;   // touch: tap it, then tap the spot (a drag would fight the list's scrolling)
+  e.preventDefault();   // no text selection while dragging
+  let last = null; const ghost = el('div', { class: 'pin ghost' }, ic(iconOf(d)), el('span', { class: 'val' }, d.name));
+  dragging(e, {
+    onmove: (ev) => { if (!ghost.isConnected) document.body.append(ghost); ghost.style.left = `${ev.clientX}px`; ghost.style.top = `${ev.clientY}px`; last = ev; },
+    onend: () => { ghost.remove(); if (last && !placeAt(d, last.clientX, last.clientY)) toast('Let go over the house to place it.'); },
+  });
+}
+
+/* ---------- rooms scanned one at a time: fit each into its floor, then join them into one ---------- */
+const fitId = () => (S.tool?.type === 'fit' ? S.tool.floor : null);
+const scans = () => Object.values(S.F).filter((F) => F.f.kind !== 'drawn');
+/* Where a scan sits right now (it moves while it's being fitted). */
+const boxNow = (F) => F.box.clone().translate(new V3(F.G.position.x - F.loadOff[0], 0, F.G.position.z - F.loadOff[1]));
+function overlapping(A, B) {
+  const a = boxNow(A), b = boxNow(B), w = Math.min(a.max.x, b.max.x) - Math.max(a.min.x, b.min.x), d = Math.min(a.max.z, b.max.z) - Math.max(a.min.z, b.min.z);
+  const small = Math.min((a.max.x - a.min.x) * (a.max.z - a.min.z), (b.max.x - b.min.x) * (b.max.z - b.min.z)) || 1;
+  return w > 0 && d > 0 && (w * d) / small > 0.3;
+}
+function fitSave(P) {
+  P.f.offset = [+P.G.position.x.toFixed(3), +P.G.position.z.toFixed(3)];
+  return send(`/api/floorplan/floors/${P.f.id}`, 'PUT', { offset: P.f.offset, rotationY: P.f.rotationY || 0, level: P.f.level || 0, heightM: P.f.heightM || 3 }).catch(proErr);
+}
+function startFit(partId, baseId) {
+  const P = S.F[partId], B = S.F[baseId]; if (!P || !B || P === B) return;
+  const moveLevel = (P.f.level || 0) !== (B.f.level || 0);
+  P.f.level = B.f.level || 0; P.f.heightM = B.f.heightM || 3;
+  if (moveLevel || Object.values(S.F).some((F) => F !== P && (F.f.level || 0) === P.f.level && overlapping(F, P))) {   // set it down beside that floor, never on top of it
+    const taken = new THREE.Box3(); for (const F of Object.values(S.F)) if (F !== P && (F.f.level || 0) === P.f.level) taken.union(boxNow(F));
+    const b = boxNow(P); P.G.position.x += taken.max.x + 0.8 - b.min.x; P.G.position.z += (taken.min.z + taken.max.z) / 2 - (b.min.z + b.max.z) / 2; P.G.updateMatrixWorld(true);
+  }
+  S.tool = { type: 'fit', floor: partId, into: baseId }; S.floorView = baseId; S.room = null;
+  fitSave(P); layout(true); editor();
+}
+function fitTurn(P, by) {   // turns around the room's own middle, so it doesn't swing away
+  const mid = () => new THREE.Box3().setFromObject(P.inner).getCenter(new V3());
+  const before = mid(); P.f.rotationY = ((((P.f.rotationY || 0) + by) % 360) + 540) % 360 - 180; P.inner.rotation.y = deg(P.f.rotationY); P.inner.updateMatrixWorld(true);
+  const after = mid(); P.G.position.x += before.x - after.x; P.G.position.z += before.z - after.z; P.G.updateMatrixWorld(true); fitSave(P);
+}
+function fitNudge(P, ahead, right) {   // "away from you" and "to your right", as the view is turned now
+  const f = camera.getWorldDirection(new V3()); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
+  const r = new V3().crossVectors(f, new V3(0, 1, 0));
+  P.G.position.addScaledVector(f, ahead).addScaledVector(r, right); P.G.updateMatrixWorld(true); fitSave(P);
+}
+async function joinFit() {
+  const t = S.tool, P = S.F[t?.floor], B = S.F[t?.into]; if (!P || !B) return;
+  const dx = P.G.position.x - B.G.position.x, dz = P.G.position.z - B.G.position.z, tag = `r${Date.now().toString(36).slice(-4)}`;
+  S.tool = null; editor(); toast(`Joining ${P.f.name} to ${B.f.name}…`);
+  try {
+    const blob = await mergeGlb([
+      { url: `/api/floorplan/floors/${B.f.id}/model`, pos: [0, 0], rotY: B.inner.rotation.y, scale: B.inner.scale.x },
+      { url: `/api/floorplan/floors/${P.f.id}/model`, pos: [dx, dz], rotY: P.inner.rotation.y, scale: P.inner.scale.x, hidden: P.f.hiddenParts || [], tag }]);
+    await api(`/api/floorplan/floors/${B.f.id}/model`, { method: 'PUT', headers: { 'Content-Type': 'model/gltf-binary' }, body: blob });
+    const body = { rotationY: 0, scale: 1 };
+    if (Array.isArray(B.f.rooms)) body.rooms = [...B.f.rooms, ...P.rooms.map((r) => ({ ...r, pos: [r.pos[0] + dx, r.pos[1] + dz] }))];
+    if (P.f.paint) body.paint = { ...(B.f.paint || {}), ...Object.fromEntries(Object.entries(P.f.paint).map(([k, v]) => [`${k}_${tag}`, v])) };
+    await send(`/api/floorplan/floors/${B.f.id}`, 'PUT', body);
+    S.pins = S.pins.map((p) => (p.floor !== P.f.id ? p : { ...p, floor: B.f.id, pos: [p.pos[0] + dx, p.pos[1], p.pos[2] + dz], route: p.route ? p.route.map((q) => [q[0] + dx, q[1] + dz]) : null }));
+    await send('/api/floorplan/pins', 'PUT', { pins: S.pins });
+    const pan = S.plan.settings?.panel; if (pan?.floor === P.f.id) await send('/api/floorplan/settings', 'PUT', { panel: { floor: B.f.id, pos: [pan.pos[0] + dx, pan.pos[1], pan.pos[2] + dz] } });
+    await api(`/api/floorplan/floors/${P.f.id}`, { method: 'DELETE' });
+    S.floorView = B.f.id; await reload(); toast(`${P.f.name} is now part of ${B.f.name}.`);
+    const next = scans().find((F) => F.f.id !== B.f.id && (F.f.level || 0) === (B.f.level || 0) && F.rooms.length <= 1);
+    if (next) startFit(next.f.id, B.f.id);   // more rooms waiting beside it: straight on to the next one
+  } catch (e) { proErr(e); await reload(); }
+}
 renderer.domElement.addEventListener('click', (e) => {
   if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;   // that was a drag
   const r = renderer.domElement.getBoundingClientRect(); mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -749,7 +870,7 @@ renderer.domElement.addEventListener('click', (e) => {
     if (i >= 0) focusRoom(F.f.id, i); else if (!cur) pickFloor(F.f.id);
     return;
   }
-  if (!S.tool) return;
+  if (!S.tool || S.tool.type === 'fit' || S.dragged) return;
   if (S.tool.type?.startsWith('yard-')) { const g = ray.ray.intersectPlane(new THREE.Plane(new V3(0, 1, 0), -groundY()), new V3()); if (g) yardClick(g); return; }
   if (!hit) { toast('Click on the model.'); return; }
   const F = S.F[hit.object.userData.floor];
@@ -915,6 +1036,16 @@ function editor() {
   if (er) { const F = S.F[er.floor]; return fill(box, el('div', { class: 'hint' }, `Hiding parts of ${F?.f.name}. Click anything that shouldn't be there - a stray chair, scan noise, a wall from next door. ${er.done.length} hidden so far. Nothing is deleted from your scan; you can bring it all back.`,
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.tool = null; reload(); } }, 'Done'),
       el('button', { type: 'button', class: 'mini', disabled: er.done.length ? null : true, onclick: () => { const k = er.done.pop(); saveHidden(F, (F.f.hiddenParts || []).filter((x) => x !== k)); F.inner.traverse((o) => { if (o.isMesh && o.userData.key === k) o.visible = true; }); editor(); } }, 'Undo last')))); }
+  const ft = S.tool?.type === 'fit' ? S.tool : null;
+  if (ft) {
+    const P = S.F[ft.floor], B = S.F[ft.into], b = (label, fn, cls = 'mini') => el('button', { type: 'button', class: cls, onclick: fn }, label);
+    if (P && B) return fill(box, el('div', { class: 'hint col' },
+      el('div', {}, el('b', {}, `Fitting ${P.f.name} into ${B.f.name}`), el('p', { class: 'note' }, 'Press on the room and drag it until its walls meet the rest of the floor. Turn it if it faces the wrong way. Then press Join.')),
+      el('div', { class: 'row' }, el('small', {}, 'Turn'), b('⟲ 90°', () => fitTurn(P, 90)), b('⟳ 90°', () => fitTurn(P, -90)), b('⟲ 5°', () => fitTurn(P, 5)), b('⟳ 5°', () => fitTurn(P, -5))),
+      el('div', { class: 'row' }, el('small', {}, 'Nudge'), b('◀', () => fitNudge(P, 0, -0.1)), b('▶', () => fitNudge(P, 0, 0.1)), b('▲', () => fitNudge(P, 0.1, 0)), b('▼', () => fitNudge(P, -0.1, 0))),
+      el('div', { class: 'row' }, b(`Join to ${B.f.name}`, joinFit, 'mini primary'), b('Keep it separate', () => { S.tool = null; layout(true); editor(); }))));
+    S.tool = null;
+  }
   const re = S.tool?.type === 'route-edit' ? S.tool : null;
   if (re) return fill(box, el('div', { class: 'hint' }, `Editing the power line to "${re.dev.name}". Drag a dot to move a bend, drag a + to add one, double-click a dot to remove it. Changes are saved as you go.`,
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.tool = null; clearRouteHandles(); drawPower(); editor(); } }, 'Done'),
@@ -929,7 +1060,7 @@ function editor() {
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', disabled: ya.pts.length >= 3 ? null : true, onclick: () => { const y = yardData(); y.areas.push({ id: newId(), kind: ya.kind, pts: ya.pts }); S.tool = null; yardPreview(); saveYard(y); } }, 'Finish'),
       el('button', { type: 'button', class: 'mini', disabled: ya.pts.length ? null : true, onclick: () => { ya.pts.pop(); yardPreview(); editor(); } }, 'Undo last corner'),
       el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; yardPreview(); editor(); } }, 'Cancel'))));
-  const hint = S.tool?.type === 'yard-place' ? `Click on the ground where the ${ITEM_KINDS[S.tool.kind].toLowerCase()} goes.` : S.tool?.type === 'yard-move' ? 'Click on the ground where it should go.' : S.tool?.type === 'panel' ? 'Click where the electrical panel is (a wall or the floor next to it).' : S.tool?.type === 'device' ? `Click on the model where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
+  const hint = S.tool?.type === 'yard-place' ? `Click on the ground where the ${ITEM_KINDS[S.tool.kind].toLowerCase()} goes.` : S.tool?.type === 'yard-move' ? 'Click on the ground where it should go.' : S.tool?.type === 'panel' ? 'Click where the electrical panel is (a wall or the floor next to it).' : S.tool?.type === 'device' ? `Click on the house where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
   fill(box, el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { S.tab = k; S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
     hint ? el('div', { class: 'hint' }, hint, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; editor(); drawPins(); } }, 'Cancel')) : null, body);
 }
@@ -952,7 +1083,7 @@ function edDevices() {
       el('button', { type: 'button', class: 'mini', onclick: () => { S.pins = S.pins.filter((x) => x.deviceId !== d.id); savePins(); } }, 'Remove'), el('small', {}, S.F[p.floor]?.f.name || ''))); };
   const free = devs.filter((d) => !placed.has(d.id)), on = devs.filter((d) => placed.has(d.id));
   const sugg = autoPlaces(free);
-  return el('div', {}, el('p', { class: 'note' }, 'Pick a device, then click where it really is. Lights glow on the plan when they are on; power lines run to everything that uses electricity.'), search,
+  return el('div', {}, el('p', { class: 'note' }, 'Drag a device from the list onto the house (or tap it, then tap the spot). To move one later, just drag it on the house.'), search,
     el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, ic('plug'), el('b', {}, 'Electrical panel'), el('small', {}, S.plan.settings?.panel ? 'placed' : 'front corner')),
       el('p', { class: 'note' }, 'Where the power comes into the house. The power lines start here.'),
       el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'panel', dev: { id: '_panel', name: 'the electrical panel' } }; editor(); } }, S.plan.settings?.panel ? 'Move' : 'Place it'),
@@ -960,12 +1091,24 @@ function edDevices() {
     sugg.length ? el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, ic('dot'), el('b', {}, `${sugg.length} can go straight into their rooms`)),
       el('p', { class: 'note' }, 'Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.'),
       el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.pins = S.pins.concat(sugg.map((x) => x.pin)); savePins(); toast(`Placed ${sugg.length} devices. Drag any of them to move it.`); } }, `Place ${sugg.length}`))) : null,
-    el('h3', {}, `On the plan (${on.length})`), ...on.map(placedRow),
-    el('h3', {}, `Not placed (${free.length})`), ...free.map((d) => el('button', { type: 'button', class: `edrow pick${S.tool?.dev?.id === d.id ? ' sel' : ''}`, onclick: () => pick(d) }, ic(iconOf(d)), d.name, el('small', {}, d.provider))));
+    el('h3', {}, `Not placed (${groupFree(free).length})`), ...groupFree(free).map((g) => {
+      const open = !!q || S.open?.has(g.k), row = (d, sub) => el('button', { type: 'button', class: `edrow pick${sub ? ' sub' : ''}${S.tool?.dev?.id === d.id ? ' sel' : ''}`, title: 'Drag it onto the house - or click it, then click the spot', onclick: () => { if (!S.dragged) pick(d); }, onpointerdown: (e) => listDrag(e, d) }, ic(iconOf(d)), el('span', { class: 'nm' }, d.name), el('small', {}, KIND_WORD[d.kind] || d.kind));
+      return el('div', { class: 'edgroup' }, row(g.main), g.more.length && !q ? el('button', { type: 'button', class: 'mini wide', 'aria-expanded': String(open), onclick: () => { S.open ||= new Set(); if (open) S.open.delete(g.k); else S.open.add(g.k); editor(); } }, open ? 'Hide its other parts' : `+ ${g.more.length} more from this device`) : null, ...(open ? g.more.map((d) => row(d, true)) : []));
+    }),
+    el('h3', {}, `On the plan (${on.length})`), ...on.map(placedRow));
 }
 /* Devices Home Assistant has in an area whose name matches one of your rooms: placed in a little ring
    around the room's centre, at about light-switch height, ready to drag into place. */
 const norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+/* One row per real device: a car or a plug with several sensors is one row, its other parts tucked under it. */
+const KIND_WORD = { value: 'Reading', light: 'Light', plug: 'Plug', switch: 'Switch', fan: 'Fan', media: 'Speaker', camera: 'Camera', climate: 'Thermostat', lock: 'Lock', cover: 'Door or blind', vacuum: 'Vacuum', sensor: 'Sensor', presence: 'Person', leak: 'Leak sensor' };
+const KIND_RANK = ['light', 'plug', 'switch', 'fan', 'media', 'camera', 'climate', 'lock', 'cover', 'vacuum', 'leak', 'sensor', 'presence'];
+const kindRank = (d) => { const i = KIND_RANK.indexOf(d.kind); return i < 0 ? KIND_RANK.length : i; };
+function groupFree(free) {
+  const by = new Map();
+  for (const d of free) { const k = d.dev ? `dev:${d.dev}` : `name:${norm(d.name)}`; by.set(k, [...(by.get(k) || []), d]); }
+  return [...by.entries()].map(([k, list]) => { list.sort((a, b) => kindRank(a) - kindRank(b) || a.name.length - b.name.length); return { k, main: list[0], more: list.slice(1) }; }).sort((a, b) => a.main.name.localeCompare(b.main.name));
+}
 function autoPlaces(free) {
   const rooms = Object.values(S.F).flatMap((F) => F.rooms.map((r, i) => ({ F, r, i, n: norm(r.name) }))), by = new Map(), out = [];
   for (const d of free) {
@@ -1015,18 +1158,35 @@ function edColors() {
 }
 function edFloors() {
   const file = el('input', { type: 'file', multiple: true, accept: '.usdz,.usd,.usdc,.usda,.glb,.gltf,.obj,.mtl,.zip,.bin,.png,.jpg,.jpeg,.webp,model/gltf-binary,model/gltf+json,application/zip', onchange: () => upload() }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
+  const into = el('select', {}, el('option', { value: '' }, 'A whole floor'), ...scans().map((F) => el('option', { value: F.f.id }, `A room of ${F.f.name}`)));
   async function upload() {
     if (!file.files.length) { toast('Choose the file from your scan first.'); return; }
-    toast('Preparing the model…');
-    try { const m = await toGlb(file.files); toast(`Uploading (${Math.max(1, Math.round(m.blob.size / 1e6))} MB)…`); await api(`/api/floorplan/floors?name=${encodeURIComponent(name.value || m.name)}`, { method: 'POST', headers: { 'Content-Type': 'model/gltf-binary' }, body: m.blob }); await reload(); toast('Floor added.'); }
-    catch (e) { proErr(e); }
+    /* Several scan files at once (RoomPlan apps export one per room): each is its own model. Otherwise the files belong together (an .obj with its .mtl, a .gltf with its .bin). */
+    const list = [...file.files], models = list.filter((x) => /\.(usdz|usdc|usda|usd|glb)$/i.test(x.name)), groups = models.length > 1 && models.length === list.length ? models.map((x) => [x]) : [list];
+    let base = into.value; const made = [];
+    try {
+      for (const [i, g] of groups.entries()) {
+        toast(groups.length > 1 ? `Preparing ${i + 1} of ${groups.length}…` : 'Preparing the model…');
+        const m = await toGlb(g); toast(`Uploading (${Math.max(1, Math.round(m.blob.size / 1e6))} MB)…`);
+        const lvl = base ? S.plan.floors.find((x) => x.id === base)?.level || 0 : null;
+        const r = await api(`/api/floorplan/floors?name=${encodeURIComponent(groups.length > 1 ? m.name : name.value || m.name)}${lvl != null ? `&level=${lvl}` : ''}`, { method: 'POST', headers: { 'Content-Type': 'model/gltf-binary' }, body: m.blob });
+        if (groups.length > 1 && !base) base = r.id; else made.push(r.id);   // several rooms and no floor picked: the first one is the floor, the rest are its rooms
+      }
+      await reload();
+      if (base && made.length) { for (const id of made) startFit(id, base); toast(made.length > 1 ? `Drag each room into place, then Join. ${made.length - 1} more wait beside the floor.` : 'Drag the room into place, then press Join.'); }
+      else toast('Floor added.');
+    } catch (e) { proErr(e); await reload().catch(() => {}); }
   }
   const put = (f, body) => send(`/api/floorplan/floors/${f.id}`, 'PUT', body).then(reload).catch(proErr);
+  const lone = scans().filter((F) => F.rooms.length <= 1);
   return el('div', {},
+    scans().length > 1 && lone.length ? el('div', { class: 'hint col' }, el('b', {}, 'Scanned one room at a time?'), el('span', {}, `Each room scan shows up as a floor of its own. On each room below, pick "Join to: A room of …" to fit it into its floor.`)) : null,
     ...S.plan.floors.map((f) => { const F = S.F[f.id];
       const n = (k, label, step) => el('div', { class: 'row' }, el('label', {}, label), el('input', { type: 'number', step, value: k === 'offsetX' ? f.offset[0] : k === 'offsetZ' ? f.offset[1] : f[k], onchange: (e) => { const v = Number(e.target.value); put(f, k === 'offsetX' ? { offset: [v, f.offset[1]] } : k === 'offsetZ' ? { offset: [f.offset[0], v] } : { [k]: v }); } }));
       return el('div', { class: 'card' }, el('div', { class: 'row' }, el('label', {}, 'Name'), el('input', { type: 'text', value: f.name, maxlength: 40, onchange: (e) => put(f, { name: e.target.value }) })),
-        n('level', 'Level', 1), n('heightM', 'Height (m)', 0.1), n('rotationY', 'Turn (°)', 5), n('scale', 'Scale', 0.01), n('offsetX', 'Shift X (m)', 0.1), n('offsetZ', 'Shift Z (m)', 0.1),
+        n('level', 'Level (0 = ground)', 1), n('heightM', 'Height (m)', 0.1), n('rotationY', 'Turn (°)', 5), n('scale', 'Scale', 0.01), n('offsetX', 'Shift X (m)', 0.1), n('offsetZ', 'Shift Z (m)', 0.1),
+        F && f.kind !== 'drawn' && scans().length > 1 ? el('div', { class: 'row' }, el('label', {}, 'Join to'), el('select', { title: 'This scan is one room of another floor: fit it in place, then join them', onchange: (e) => { if (e.target.value) startFit(f.id, e.target.value); } },
+          el('option', { value: '' }, 'It is its own floor'), ...scans().filter((x) => x.f.id !== f.id).map((x) => el('option', { value: x.f.id }, `A room of ${x.f.name}`)))) : null,
         f.kind !== 'drawn' ? el('div', { class: 'row' }, el('label', {}, 'Colors'), el('select', { onchange: (e) => put(f, { look: e.target.value }) }, ...[['auto', 'Automatic'], ['styled', 'Styled (theme)'], ['original', 'Scan\'s own colors']].map(([v, t]) => el('option', { value: v, selected: (f.look || 'auto') === v ? true : null }, t)))) : null,
         f.kind !== 'drawn' ? el('div', { class: 'row' }, el('label', {}, 'Clean up'), el('button', { type: 'button', class: 'mini', onclick: () => { pickFloor(f.id); S.tool = { type: 'erase', floor: f.id, done: [] }; editor(); } }, 'Hide parts…'),
           f.hiddenParts?.length ? el('button', { type: 'button', class: 'mini', onclick: () => put(f, { hiddenParts: [] }) }, `Show all ${f.hiddenParts.length} again`) : null) : null,
@@ -1041,8 +1201,9 @@ function edFloors() {
     seg([[0, 'Front'], [90, 'Right'], [180, 'Back'], [270, 'Left']], S.plan.settings?.frontDeg || 0, (v) => saveSettings({ frontDeg: v }).then(() => fitView())),
     el('h3', {}, 'Add a floor'),
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => newDrawnFloor(false) }, 'Draw a floor'), el('button', { type: 'button', onclick: () => newDrawnFloor(true) }, 'Trace a picture')),
-    el('h3', {}, 'Or upload a LiDAR scan'), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,
+    el('h3', {}, 'Or upload a LiDAR scan'), el('div', { class: 'row' }, el('label', {}, 'This is'), into), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,
     el('p', { class: 'note' }, 'USDZ, GLB, GLTF, OBJ or a .zip of any of them. Scans from Apple RoomPlan apps (LiDarPlan, KIRI Engine Room Scan, Lagarsoft) come with walls, doors, furniture and rooms already named.'),
+    el('p', { class: 'note' }, 'Scanned room by room? Pick all the room files together, or upload each one as "A room of" its floor. You drag each room into place and join them into one floor.'),
     el('p', { class: 'note' }, 'Floors stack by Level × Height. If a floor sits crooked or off to the side, adjust Turn and Shift until the walls line up.'));
 }
 const drawOpts = () => ({ el, api, toast, onSave: reload });
@@ -1078,7 +1239,8 @@ function drawTotals() {
     ...(t.openDoors ? [el('span', { class: 'stat bad' }, el('small', {}, 'Open'), `${t.openDoors}`)] : []), ...(t.leaks ? [el('span', { class: 'stat bad' }, el('small', {}, 'Leak'), '!')] : []));
 }
 async function refresh() {
-  try { S.live = await api('/api/floorplan/live'); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color, route }) => ({ deviceId, floor, pos, label, color, route })); drawPins(); drawTotals(); if (S.mode === 'edit' && S.tab === 'devices' && !$('#left').contains(document.activeElement)) editor(); }
+  try { S.live = await api('/api/floorplan/live'); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color, route }) => ({ deviceId, floor, pos, label, color, route })); const sig = JSON.stringify([S.live.pins, S.live.devices, S.live.totals, S.live.cars, S.live.weather]); if (sig === S.liveSig) return; S.liveSig = sig;   // nothing changed: leave the scene alone
+    drawPins(); drawTotals(); if (S.mode === 'edit' && S.tab === 'devices' && !$('#left').contains(document.activeElement)) editor(); }
   catch { /* next time */ }
 }
 function drawThemeSeg() { $('#themeSeg').replaceChildren(seg(Object.entries(THEMES).map(([k, t]) => [k, t.label]), curTheme(), (v) => { prefs.theme = v; savePrefs(); applyLook(); drawThemeSeg(); drawTools(); if (S.mode === 'edit') editor(); })); }

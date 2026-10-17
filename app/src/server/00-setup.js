@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 for (const [k, v] of Object.entries(process.env)) if (k.startsWith('HOUSEOS_') && process.env[`CASATORCH_${k.slice(8)}`] === undefined) process.env[`CASATORCH_${k.slice(8)}`] = v;
 
 const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.CASATORCH_DATA_DIR || path.join(APP_DIR, '..', 'data');
+const DATA_DIR = path.resolve(process.env.CASATORCH_DATA_DIR || path.join(APP_DIR, '..', 'data'));   // absolute, so files are always sent from the right place
 /* One version for everything (package.json), and how this copy was installed - so update notices say the right thing. */
 const VERSION = JSON.parse(fs.readFileSync(path.join(APP_DIR, 'package.json'), 'utf8')).version;
 const INSTALL = process.env.CASATORCH_INSTALL || (process.env.SUPERVISOR_TOKEN ? 'ha-addon' : fs.existsSync('/.dockerenv') ? 'docker' : 'manual');

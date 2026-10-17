@@ -44,7 +44,7 @@ app.post('/api/floorplan/floors', requirePro, express.raw({ type: '*/*', limit: 
   if (!Buffer.isBuffer(buf) || buf.length < 20 || buf.subarray(0, 4).toString() !== 'glTF') return res.status(400).json({ error: 'That is not a .glb file. In your scanning app, export as GLB (binary glTF).' });
   const d = fpData(), id = `f${Date.now().toString(36)}`;
   writeFileSafe(path.join(FP_DIR, `${id}.glb`), buf, 0o600);
-  const level = d.floors.length;
+  const level = fin(req.query.level, 0, 9) ? Math.round(Number(req.query.level)) : Math.min(9, d.floors.reduce((m, f) => Math.max(m, (f.level || 0) + 1), 0));   // a room of an existing floor says which; otherwise the next one up
   d.floors.push({ id, name: String(req.query.name || `Floor ${level + 1}`).slice(0, 40), file: `${id}.glb`, level, heightM: 3, rotationY: 0, scale: 1, offset: [0, 0] });
   fpWrite(d); res.json({ ok: true, id });
 });
@@ -65,8 +65,19 @@ app.delete('/api/floorplan/floors/:id', requirePro, (req, res) => {
   const d = fpData(); d.floors = d.floors.filter((x) => x.id !== req.params.id); d.pins = d.pins.filter((p) => p.floor !== req.params.id);
   fpWrite(d); res.json({ ok: true });   // the .glb stays on disk until a cleanup; nothing is lost by a mis-tap
 });
+/* Replace a floor's model: rooms scanned one at a time and joined in the editor come back as one .glb.
+   The parts' turns and sizes are baked into it, so the floor's own turn and size start again from zero. */
+app.put('/api/floorplan/floors/:id/model', requirePro, express.raw({ type: '*/*', limit: '300mb' }), (req, res) => {
+  const buf = req.body, d = fpData(), f = d.floors.find((x) => x.id === req.params.id);
+  if (!f || f.kind === 'drawn') return res.status(404).json({ error: 'no such scanned floor' });
+  if (!Buffer.isBuffer(buf) || buf.length < 20 || buf.subarray(0, 4).toString() !== 'glTF') return res.status(400).json({ error: 'That is not a .glb file.' });
+  const file = `${f.id}-${Date.now().toString(36)}.glb`;
+  writeFileSafe(path.join(FP_DIR, file), buf, 0o600);
+  const old = f.file; Object.assign(f, { file, rotationY: 0, scale: 1 }); fpWrite(d);
+  if (/^[\w-]+\.glb$/.test(old || '') && old !== file) fs.rm(path.join(FP_DIR, old), { force: true }, () => {});
+  res.json({ ok: true, floor: f });
+});
 /* ---- drawn floors: rooms + walls (meters), optionally over a floor-plan picture ---- */
-(v, lo, hi) => Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi;
 app.post('/api/floorplan/floors/drawn', requirePro, express.json(), (req, res) => {
   const d = fpData(), id = `d${Date.now().toString(36)}`, level = d.floors.length;
   const f = { id, kind: 'drawn', name: String(req.body?.name || `Floor ${level + 1}`).slice(0, 40), level, heightM: 2.7, rotationY: 0, scale: 1, offset: [0, 0], plan: { rooms: [], walls: [], bg: null, bgW: 15, bgOpacity: 0.6 } };
@@ -173,7 +184,7 @@ app.get('/api/floorplan/live', async (_req, res) => {
   const powerW = housePower(devices).watts;
   res.json({
     pins: d.pins.map((p) => ({ ...p, device: byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })), weather,
-    devices: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.area ? { area: x.area } : {}), ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),
+    devices: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.area ? { area: x.area } : {}), ...(x.dev ? { dev: x.dev } : {}), ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),
     cars: Object.fromEntries((d.yard?.items || []).filter((it) => it.kind === 'car').map((it) => {
       const g = (k) => byId.get(it.bind?.[k]), h = g('home'), p = g('plugged'), w = g('power'), bt = g('battery'), n = (v) => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
       return [it.id, { home: h ? (h.home ?? h.on ?? null) : null, plugged: p ? !!(p.on ?? p.plugged) : null, powerW: w ? w.powerW ?? null : null, battery: bt ? n(bt.battery ?? bt.value) : null }];
