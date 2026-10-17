@@ -25,7 +25,8 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json'), SESS_FILE = path.join(DATA
 const AUDIT_FILE = path.join(DATA_DIR, 'audit.log');
 const TERMS_VERSION = '2026-10-15';
 const ROLES = ['viewer', 'member', 'admin', 'owner'], rank = (r) => ROLES.indexOf(r);
-const IDLE_DAYS = 30, PANEL_DAYS = 365;
+const IDLE_DAYS = 30, PANEL_DAYS = 365, APP_DAYS = 120;   // the CasaTorch app: signed in for 120 days of not being used (Face ID guards it on the phone)
+const idleDays = (kind) => (kind === 'panel' ? PANEL_DAYS : kind === 'app' ? APP_DAYS : IDLE_DAYS);
 const writeSecretJson = (file, obj) => writeFileSafe(file, JSON.stringify(obj, null, 2), 0o600);
 const readJsonFile = (file, dflt) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return dflt; } };
 const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
@@ -95,21 +96,28 @@ setInterval(() => { if (sessDirty) saveSessions(); }, 60_000).unref?.();
 process.on('exit', () => { if (sessDirty) saveSessions(); });   // a restart keeps the last minute of "last seen" too
 const cookieOf = (req) => (String(req.headers.cookie || '').match(/(?:^|;\s*)casatorch_session=([A-Za-z0-9_-]{20,})/) || [])[1];
 const cookieFlags = (req) => `Path=/; HttpOnly; SameSite=Lax${req.secure ? '; Secure' : ''}`;
+/* The phone app may also send its token as "Authorization: Bearer" (only app sessions are accepted that way). */
+const bearerOf = (req) => (String(req.headers.authorization || '').match(/^Bearer ([A-Za-z0-9_-]{20,200})$/) || [])[1];
 function sessionOf(req) {
-  const tok = cookieOf(req); if (!tok) return null;
+  const bt = bearerOf(req), tok = cookieOf(req) || bt; if (!tok) return null;
   const key = sha256(tok), s = sessions[key];
-  if (!s) return null;
-  const idle = (s.kind === 'panel' ? PANEL_DAYS : IDLE_DAYS) * 86400_000;
+  if (!s || (!cookieOf(req) && s.kind !== 'app')) return null;
+  const idle = idleDays(s.kind) * 86400_000;
   if (Date.now() - Date.parse(s.seen) > idle || Date.parse(s.expires) < Date.now()) { delete sessions[key]; sessDirty = true; return null; }
   if (Date.now() - Date.parse(s.seen) > 5 * 60_000) { s.seen = nowIso(); s.ip = clientIp(req); sessDirty = true; }
   return { key, ...s };
 }
-function startSession(req, res, u, { remember = false, kind = 'browser', mfa = false } = {}) {
-  const tok = crypto.randomBytes(32).toString('base64url'), days = kind === 'panel' ? PANEL_DAYS : remember ? 365 : IDLE_DAYS;
-  for (const [k, v] of Object.entries(sessions)) if (Date.parse(v.expires) < Date.now() || Date.now() - Date.parse(v.seen) > (v.kind === 'panel' ? PANEL_DAYS : IDLE_DAYS) * 86400_000) delete sessions[k];   // expired or unused too long
-  sessions[sha256(tok)] = { id: newId(), userId: u.id, kind, mfa, created: nowIso(), seen: nowIso(), expires: new Date(Date.now() + days * 86400_000).toISOString(), ip: clientIp(req), agent: String(req.headers['user-agent'] || '').slice(0, 160) };
+/** A new session; returns its token (only its hash is kept). */
+function issueSession(req, u, { remember = false, kind = 'browser', mfa = false, device = null } = {}) {
+  const tok = crypto.randomBytes(32).toString('base64url'), days = kind === 'panel' ? PANEL_DAYS : kind === 'app' ? 400 : remember ? 365 : IDLE_DAYS;
+  for (const [k, v] of Object.entries(sessions)) if (Date.parse(v.expires) < Date.now() || Date.now() - Date.parse(v.seen) > idleDays(v.kind) * 86400_000) delete sessions[k];   // expired or unused too long
+  sessions[sha256(tok)] = { id: newId(), userId: u.id, kind, mfa, created: nowIso(), seen: nowIso(), expires: new Date(Date.now() + days * 86400_000).toISOString(), ip: clientIp(req), agent: String(device?.name ? `${device.name} (CasaTorch app, ${device.platform || 'phone'})` : req.headers['user-agent'] || '').slice(0, 160), ...(device ? { device } : {}) };
   saveSessions();
   if (!u.panel) { u.lastLogin = nowIso(); saveUsers(); }
+  return { tok, days };
+}
+function startSession(req, res, u, opts = {}) {
+  const { tok, days } = issueSession(req, u, opts);
   res.setHeader('Set-Cookie', `casatorch_session=${tok}; ${cookieFlags(req)}; Max-Age=${days * 86400}`);
 }
 const endSessionsOf = (userId, exceptKey) => { for (const [k, v] of Object.entries(sessions)) if (v.userId === userId && k !== exceptKey) delete sessions[k]; saveSessions(); };
@@ -168,8 +176,8 @@ const newTicket = (u, extra = {}) => { const t = { id: crypto.randomBytes(24).to
 const ticketOf = (id) => { const t = tickets.get(String(id || '')); if (!t || t.exp < Date.now()) { tickets.delete(String(id || '')); return null; } return t; };
 setInterval(() => { for (const [k, t] of tickets) if (t.exp < Date.now()) tickets.delete(k); }, 60_000).unref?.();
 function nextStep(t, u) {
-  if (u.totp?.on && !t.passed.has('mfa')) return 'mfa';
-  if (!u.totp?.on && users.policy?.require2fa) return 'enroll';
+  if (u.totp?.on && !t.passed.has('mfa') && !t.passed.has('enroll')) return 'mfa';   // a code just used to set it up counts
+  if (!u.totp?.on && (users.policy?.require2fa || t.app)) return 'enroll';   // the phone app always needs two-step sign-in
   if (needsTerms(u) && !t.passed.has('terms')) return 'terms';
   return null;
 }
@@ -184,11 +192,12 @@ function proceed(req, res, t, { redirect = false } = {}) {
 }
 
 /* ---- gate: who may load what ---- */
-const OPEN = [/^\/login\.(html|css|js)$/, /^\/(manifest\.webmanifest|sw\.js|apple-touch-icon\.png)$/, /^\/(terms|privacy)\.html$/, /^\/legal\.css$/, /^\/api\/auth\/(login|mfa|enroll|terms|state|invite|panel|google\/start|google\/callback)$/, /^\/api\/health$/, /^\/api\/lang$/, /^\/go-secure\.(html|js)$/, /^\/i18n(\.js|\/[a-z]{2}\.json)$/, /^\/icons\//, /^\/favicon/, /^\/setup\.css$/];
+const OPEN = [/^\/api\/app\/(login|mfa|enroll|terms|claim|hello)$/, /^\/login\.(html|css|js)$/, /^\/(manifest\.webmanifest|sw\.js|apple-touch-icon\.png)$/, /^\/(terms|privacy)\.html$/, /^\/legal\.css$/, /^\/api\/auth\/(login|mfa|enroll|terms|state|invite|panel|google\/start|google\/callback)$/, /^\/api\/health$/, /^\/api\/lang$/, /^\/go-secure\.(html|js)$/, /^\/i18n(\.js|\/[a-z]{2}\.json)$/, /^\/icons\//, /^\/favicon/, /^\/setup\.css$/];
 const SETUP_PATHS = [/^\/setup\.(html|js)$/, /^\/setup-ha-done\.(html|js)$/, /^\/api\/setup\//];
 /* Changes must come from this site: a page elsewhere can't make your browser switch your lights. */
 app.use('/api', (req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (fromApp(req)) return next();   // the phone app (01-security.js)
   const origin = req.headers.origin, site = req.headers['sec-fetch-site'];
   if (site && !['same-origin', 'none'].includes(site)) return res.status(403).json({ error: 'refused: that request did not come from CasaTorch' });
   if (origin) { try { if (new URL(origin).host !== req.headers.host) return res.status(403).json({ error: 'refused: that request did not come from CasaTorch' }); } catch { return res.status(403).json({ error: 'refused' }); } }
@@ -216,7 +225,7 @@ app.use((req, res, next) => {
 /* Roles: viewers look, members switch things, admins change settings. */
 const ADMIN_WRITES = [/^\/api\/settings/, /^\/api\/license/, /^\/api\/ui$/, /^\/api\/floorplan\/(?!live)/, /^\/api\/users/, /^\/api\/ai/, /^\/api\/setup\//, /^\/api\/auth\/admin\//, /^\/api\/layout/];
 app.use((req, res, next) => {
-  if (!req.user || ['GET', 'HEAD', 'OPTIONS'].includes(req.method) || /^\/api\/auth\/(?!admin\/)/.test(req.path.toLowerCase())) return next();
+  if (!req.user || ['GET', 'HEAD', 'OPTIONS'].includes(req.method) || /^\/api\/auth\/(?!admin\/)/.test(req.path.toLowerCase()) || /^\/api\/app\/(push|signout)\b/.test(req.path.toLowerCase())) return next();   // your own phone's alerts and sign-out, whatever your role
   const p = req.path.toLowerCase().replace(/\/+$/, '') || '/';   // Express matches /API/x and /api/x/ too - so must we
   const needs = ADMIN_WRITES.some((re) => re.test(p)) ? 'admin' : 'member';
   if (rank(req.user.role) < rank(needs)) return res.status(403).json({ error: needs === 'admin' ? 'Only an admin can change that.' : 'Your account can look, but not switch things.' });

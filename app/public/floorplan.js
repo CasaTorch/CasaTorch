@@ -1729,10 +1729,10 @@ function edColors() {
 function edFloors() {
   const file = el('input', { type: 'file', multiple: true, accept: '.usdz,.usd,.usdc,.usda,.glb,.gltf,.obj,.mtl,.zip,.bin,.png,.jpg,.jpeg,.webp,model/gltf-binary,model/gltf+json,application/zip', onchange: () => upload() }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
   const into = el('select', {}, el('option', { value: '' }, 'A whole floor'), ...scans().map((F) => el('option', { value: F.f.id }, `A room of ${F.f.name}`)));
-  async function upload() {
-    if (!file.files.length) { toast('Choose the file from your scan first.'); return; }
+  async function upload(given) {
+    if (!given && !file.files.length) { toast('Choose the file from your scan first.'); return; }
     /* Several scan files at once (RoomPlan apps export one per room): each is its own model. Otherwise the files belong together (an .obj with its .mtl, a .gltf with its .bin). */
-    const list = [...file.files], models = list.filter((x) => /\.(usdz|usdc|usda|usd|glb)$/i.test(x.name)), groups = models.length > 1 && models.length === list.length ? models.map((x) => [x]) : [list];
+    const list = given || [...file.files], models = list.filter((x) => /\.(usdz|usdc|usda|usd|glb)$/i.test(x.name)), groups = models.length > 1 && models.length === list.length ? models.map((x) => [x]) : [list];
     let base = into.value; const made = [];
     try {
       for (const [i, g] of groups.entries()) {
@@ -1746,6 +1746,17 @@ function edFloors() {
       if (base && made.length) { for (const id of made) startFit(id, base); toast(made.length > 1 ? `Drag each room into place, then Join. ${made.length - 1} more wait beside the floor.` : 'Drag the room into place, then press Join.'); }
       else toast('Floor added.');
     } catch (e) { proErr(e); await reload().catch(() => {}); }
+  }
+  /* In the CasaTorch app on an iPhone or iPad with LiDAR: scan a room right here; the scan comes straight in, as if you had uploaded it. */
+  const N = window.CasaNative, canScan = !!N?.lidar;
+  async function scanHere() {
+    try {
+      const avail = await N.lidar(); if (!avail?.available) { toast(avail?.why || 'This phone has no LiDAR scanner.'); return; }
+      const r = await N.scanRoom(); if (!r) return;   // cancelled
+      const f = new File([r.bytes], `${(r.name || name.value || 'Room scan').replace(/[^\w .-]/g, '')}.usdz`, { type: 'model/vnd.usdz+zip' });
+      if (!name.value) name.value = r.name || '';
+      await upload([f]);
+    } catch (e) { toast(e.message || 'The scan didn\'t finish.'); }
   }
   const put = (f, body) => send(`/api/floorplan/floors/${f.id}`, 'PUT', body).then(reload).catch(proErr);
   const lone = scans().filter((F) => F.rooms.length <= 1);
@@ -1771,7 +1782,9 @@ function edFloors() {
     seg([[0, 'Front'], [90, 'Right'], [180, 'Back'], [270, 'Left']], S.plan.settings?.frontDeg || 0, (v) => saveSettings({ frontDeg: v }).then(() => fitView())),
     el('h3', {}, 'Add a floor'),
     el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => newDrawnFloor(false) }, 'Draw a floor'), el('button', { type: 'button', onclick: () => newDrawnFloor(true) }, 'Trace a picture')),
-    el('h3', {}, 'Or upload a LiDAR scan'), el('div', { class: 'row' }, el('label', {}, 'This is'), into), el('div', { class: 'row' }, el('label', {}, 'Name'), name), file,
+    el('h3', {}, canScan ? 'Or scan a room with this phone' : 'Or upload a LiDAR scan'), el('div', { class: 'row' }, el('label', {}, 'This is'), into), el('div', { class: 'row' }, el('label', {}, 'Name'), name),
+    canScan ? el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: scanHere }, 'Scan a room'), el('small', { class: 'note' }, 'Walk the room slowly with the camera on the walls; the scan comes straight in.')) : null,
+    canScan ? el('p', { class: 'note' }, 'Or upload a scan file:') : null, file,
     el('p', { class: 'note' }, 'USDZ, GLB, GLTF, OBJ or a .zip of any of them. Scans from Apple RoomPlan apps (LiDarPlan, KIRI Engine Room Scan, Lagarsoft) come with walls, doors, furniture and rooms already named.'),
     el('p', { class: 'note' }, 'Scanned room by room? Pick all the room files together, or upload each one as "A room of" its floor. You drag each room into place and join them into one floor.'),
     el('p', { class: 'note' }, 'Floors stack by Level × Height. If a floor sits crooked or off to the side, adjust Turn and Shift until the walls line up.'));

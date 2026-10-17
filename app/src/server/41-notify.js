@@ -54,7 +54,7 @@ async function notify(a) {
   const hr = Math.floor(Date.now() / 3_600_000); if (sentThisHour.hour !== hr) sentThisHour = { hour: hr, n: 0 };
   if (++sentThisHour.n > 30 && sev !== 'critical') return;   // a flapping sensor must not buzz a phone all night
   const msg = { title: a.title || 'CasaTorch', body: a.body || (sev === 'critical' ? 'Open CasaTorch to see what is happening.' : ''), tag: String(a.id || a.title || '').slice(0, 64), url: a.url || '/#alerts', sev };
-  await Promise.allSettled([webPushAll(msg), haPhone(msg)]);
+  await Promise.allSettled([webPushAll(msg), haPhone(msg), appPushAll(msg)]);   // the browser web app, Home Assistant's app, the CasaTorch app
 }
 async function webPushAll(msg) {
   if (!push.subs.length) return;

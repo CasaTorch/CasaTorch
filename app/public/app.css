@@ -587,3 +587,15 @@ body.nav-icons .nav a { padding: 11px 4px; }
 .logline.warn .lvl { color: var(--warn); } .logline.error .lvl, .logline.error { color: var(--bad); }
 .set-nav { grid-template-columns: minmax(0, 1fr); } .set-pane { min-width: 0; }
 @media (max-width: 760px) { .settings { grid-template-columns: minmax(0, 1fr); } }
+/* ---- the CasaTorch app (iPhone, iPad, Android): fits the phone ---- */
+.pair { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: start; margin-top: 14px; padding: 14px; border-radius: 16px; background: var(--surface-2); }
+.pair-qr svg { width: 200px; height: 200px; display: block; border-radius: 12px; background: #fff; padding: 6px; }
+.pair-code { font: 700 24px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; margin: 4px 0; }
+@media (max-width: 560px) { .pair { grid-template-columns: 1fr; } .pair-qr svg { margin: 0 auto; } }
+html.in-app { -webkit-tap-highlight-color: transparent; }
+html.in-app body { -webkit-user-select: none; user-select: none; overscroll-behavior-y: none; }
+html.in-app input, html.in-app textarea, html.in-app .logbox, html.in-app .note-txt { -webkit-user-select: text; user-select: text; }
+html.in-app .main { padding-top: max(16px, env(safe-area-inset-top)); padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
+html.in-app .hide-in-app, html.in-app .top .btn[title^="Wall-screen"] { display: none !important; }
+@media (max-width: 760px) { html.in-app .rail { padding-bottom: max(8px, env(safe-area-inset-bottom)); } html.in-app .main { padding-bottom: calc(88px + env(safe-area-inset-bottom)); } }
+html.in-app #modal .box { max-height: calc(100vh - env(safe-area-inset-top) - 24px); }
