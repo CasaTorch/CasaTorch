@@ -3,7 +3,7 @@
  * where the menu sits, the status bar, and the household's own names for
  * menu items and devices. config.ui (the demo keeps its own in memory).
  * ====================================================================== */
-const UI_DEFAULTS = { theme: 'dark', accent: '#5eb8ff', accent2: '#8b7bff', nav: 'left', statusBar: 'panel', panelAsk: true, tabs: {}, deviceNames: {} };
+const UI_DEFAULTS = { theme: 'dark', accent: '#5eb8ff', accent2: '#8b7bff', nav: 'left', navSize: 'm', navLabels: true, statusBar: 'panel', panelAsk: true, tabs: {}, deviceNames: {} };
 let demoUi = null;
 const uiPrefs = () => ({ ...UI_DEFAULTS, ...((isDemo() ? demoUi : config.ui) || {}) });
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -15,9 +15,11 @@ app.put('/api/ui', express.json({ limit: '128kb' }), (req, res) => {
   if (HEX.test(b.accent || '')) next.accent = b.accent;
   if (HEX.test(b.accent2 || '')) next.accent2 = b.accent2;
   if (['left', 'right', 'top', 'bottom'].includes(b.nav)) next.nav = b.nav;
+  if (['s', 'm', 'l'].includes(b.navSize)) next.navSize = b.navSize;
+  if (typeof b.navLabels === 'boolean') next.navLabels = b.navLabels;
   if (['panel', 'always', 'off'].includes(b.statusBar)) next.statusBar = b.statusBar;
   if (typeof b.panelAsk === 'boolean') next.panelAsk = b.panelAsk;
-  if (b.tabs && typeof b.tabs === 'object') next.tabs = Object.fromEntries(Object.entries(b.tabs).filter(([k]) => /^[a-z0-9]{1,20}$/.test(k)).slice(0, 30).map(([k, v]) => [k, { label: String(v?.label || '').trim().slice(0, 24) || null, hidden: k !== 'settings' && !!v?.hidden }]));
+  if (b.tabs && typeof b.tabs === 'object') next.tabs = Object.fromEntries(Object.entries(b.tabs).filter(([k]) => /^[a-z0-9]{1,20}$/.test(k)).slice(0, 30).map(([k, v]) => [k, { label: String(v?.label || '').trim().slice(0, 24) || null, hidden: k !== 'settings' && !!v?.hidden, ...(Number.isInteger(v?.order) && v.order >= 0 && v.order < 100 ? { order: v.order } : {}) }]));
   if (b.deviceNames && typeof b.deviceNames === 'object') next.deviceNames = Object.fromEntries(Object.entries(b.deviceNames).filter(([k, v]) => /^[\w.:-]{1,120}$/.test(k) && String(v || '').trim()).slice(0, 1000).map(([k, v]) => [k, String(v).trim().slice(0, 60)]));
   if (isDemo()) demoUi = next; else saveConfig({ ...config, ui: next });
   res.json(next);

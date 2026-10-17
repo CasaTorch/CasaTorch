@@ -891,7 +891,7 @@ function dockCards() {
   card({ id: 'cams', title: T('Cameras'), icon: 'camera', extra: true, blurb: 'Live pictures from your cameras, taking turns', render: (size) => camsCard(H, size) });
   card({ id: 'needs', title: T('What needs you'), icon: 'bell', extra: true, blurb: 'Water, smoke, open doors, unlocked locks, low batteries', render: () => needsCard(H) });
   card({ id: 'media', title: T('Now playing'), icon: 'media', extra: true, blurb: 'What\'s playing, with play and pause', render: () => mediaCard(H) });
-  card({ id: 'agenda', title: T('Coming up'), icon: 'calendar', extra: true, blurb: 'The next things on your calendars', render: (size) => agendaCard(size) });
+  if (!agenda.off) card({ id: 'agenda', title: T('Coming up'), icon: 'calendar', extra: true, blurb: 'The next things on your calendars', render: (size) => agendaCard(size) });
   card({ id: 'note', title: T('Note'), icon: 'note', extra: true, blurb: 'A note for everyone who looks at this screen', render: () => noteCard() });
   return out;
 }
@@ -929,7 +929,7 @@ function mediaCard(H) {
 }
 let agenda = { at: 0, list: null };
 function agendaCard(size) {
-  if (Date.now() - agenda.at > 5 * 60_000) { agenda.at = Date.now(); api('/api/home').then((h) => { agenda.list = (h?.calendar?.events || []).filter((e) => Date.parse(e.end || e.start) > Date.now()); dock.draw(); }).catch(() => { agenda.list = agenda.list || []; }); }
+  if (Date.now() - agenda.at > 5 * 60_000) { agenda.at = Date.now(); api('/api/home').then((h) => { agenda.list = (h?.calendar?.events || []).filter((e) => Date.parse(e.end || e.start) > Date.now()); dock.draw(); }).catch((e) => { agenda.list = agenda.list || []; if (e.status === 404 || e.status === 501) agenda.off = true; }); }
   const ev = (agenda.list || []).slice(0, size === 's' ? 2 : size === 'l' ? 6 : 4);
   const when = (e) => { try { return new Date(e.start).toLocaleString([], e.allDay ? { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' } : { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: tz() }); } catch { return ''; } };
   return el('div', {}, el('div', { class: 'eyebrow' }, T('Coming up')), ev.length ? el('div', { class: 'agenda' }, ...ev.map((e) => el('div', { class: 'arow' }, el('i', { class: 'swatch', style: `--rc:${/^#[0-9a-f]{3,8}$/i.test(e.color || '') ? e.color : 'var(--hl)'}` }), el('span', { class: 'dn' }, e.title), el('small', {}, when(e))))) : el('p', { class: 'note' }, agenda.list ? T('Nothing coming up.') : '…'));

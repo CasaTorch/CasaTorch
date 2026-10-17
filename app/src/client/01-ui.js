@@ -3,7 +3,7 @@
  * (this screen only): theme, colors, which side the menu is on, the
  * status bar across the top, and the household's own names for things.
  * ====================================================================== */
-S.ui = { theme: 'dark', accent: '#5eb8ff', accent2: '#8b7bff', nav: 'left', statusBar: 'panel', panelAsk: true, tabs: {}, deviceNames: {} };
+S.ui = { theme: 'dark', accent: '#5eb8ff', accent2: '#8b7bff', nav: 'left', navSize: 'm', navLabels: true, statusBar: 'panel', panelAsk: true, tabs: {}, deviceNames: {} };
 const PALETTES = [['Ocean', '#5eb8ff', '#8b7bff'], ['Sunset', '#fb923c', '#f43f5e'], ['Forest', '#34d399', '#22d3ee'], ['Grape', '#a78bfa', '#ec4899'], ['Gold', '#fbbf24', '#f97316'], ['Rose', '#fb7185', '#c084fc'], ['Mint', '#2dd4bf', '#a3e635'], ['Slate', '#94a3b8', '#64748b']];
 const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const luminance = (h) => { const [r, g, b] = hexRgb(h).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
@@ -19,7 +19,8 @@ function applyUi() {
   const [r, g, b] = hexRgb(u.accent), [r2, g2, b2] = hexRgb(u.accent2), a = darkNow() ? 0.10 : 0.16;
   root.style.setProperty('--glow-a', `rgba(${r},${g},${b},${a})`); root.style.setProperty('--glow-b', `rgba(${r2},${g2},${b2},${a})`);
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', darkNow() ? '#070a12' : '#eef2f8');
-  document.body.classList.remove('nav-left', 'nav-right', 'nav-top', 'nav-bottom'); document.body.classList.add(`nav-${u.nav || 'left'}`);
+  document.body.classList.remove('nav-left', 'nav-right', 'nav-top', 'nav-bottom', 'nav-s', 'nav-m', 'nav-l'); document.body.classList.add(`nav-${u.nav || 'left'}`, `nav-${u.navSize || 'm'}`);
+  document.body.classList.toggle('nav-icons', u.navLabels === false);
   document.body.classList.toggle('panel', isPanel());
   statusBar.draw();
 }
