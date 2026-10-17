@@ -28,7 +28,7 @@ const ICONS = {
   trophy: 'M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3', news: 'M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2M8 9h5M8 13h5M8 16h3', list: 'M9 6h11M9 12h11M9 18h11M4 6h0M4 12h0M4 18h0',
   bulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z', plug: 'M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4', music: 'M9 18V5l11-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM20 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
   thermo: 'M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z', lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4', door: 'M6 3h12v18H6zM14 12h.01', drop: 'M12 3s7 7.6 7 12a7 7 0 0 1-14 0c0-4.4 7-12 7-12z', fire: 'M12 22a7 7 0 0 0 7-7c0-4-3-6-4-9-1 2-2 3-4 3 0-2-1-4-2-6-1 4-4 7-4 12a7 7 0 0 0 7 7z', dotc: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
-  pause: 'M8 5v14M16 5v14', grip: 'M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01', x: 'M6 6l12 12M18 6 6 18', plus: 'M12 5v14M5 12h14', edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4', check: 'M20 6 9 17l-5-5', checkc: 'M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4 12 14l-3-3',
+  pause: 'M8 5v14M16 5v14', grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z', log: 'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5', phone: 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2', palette: 'M12 21a9 9 0 1 1 9-9c0 2-1.5 3-3 3h-2a2 2 0 0 0-1 3.7A2 2 0 0 1 12 21zM7.5 11.5h.01M10 7.5h.01M15 7.5h.01M17.5 11.5h.01', link: 'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1', download: 'M12 3v12M7 10l5 5 5-5M5 21h14', info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7h.01', help: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01', grip: 'M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01', x: 'M6 6l12 12M18 6 6 18', plus: 'M12 5v14M5 12h14', edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4', check: 'M20 6 9 17l-5-5', checkc: 'M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4 12 14l-3-3',
   send: 'M22 2 11 13M22 2l-7 20-4-9-9-4z', fan: 'M12 12a2 2 0 1 0 0-.01M12 10c0-4 1-7 4-7s2 5-2 7M14 12c4 0 7 1 7 4s-5 2-7-2M12 14c0 4-1 7-4 7s-2-5 2-7M10 12c-4 0-7-1-7-4s5-2 7 2', blinds: 'M4 3h16M5 3v14M19 3v14M5 7h14M5 11h14M5 15h14M12 17v3M10 21h4', play: 'M7 4l13 8-13 8z', vacuum: 'M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM5 13h3M16 13h3', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0', gauge: 'M12 21a9 9 0 1 1 9-9M12 12l5-5M4.6 16h14.8', search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5', chevl: 'M15 18l-6-6 6-6', chevr: 'M9 18l6-6-6-6', expand: 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7', reset: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5',
 };
 const icon = (name, size) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); if (size) { s.setAttribute('width', size); s.setAttribute('height', size); } s.innerHTML = `<path d="${ICONS[name] || ICONS.dotc}"/>`; return s; };
@@ -72,20 +72,35 @@ const tab = (t) => TABS.push(t);
 let refresher = null, current = null;
 function setTop(title, sub = '', actions = []) { $('#title').textContent = title; $('#subtitle').textContent = sub; $('#actions').replaceChildren(...actions); }
 async function show(id) {
-  const t = TABS.find((x) => x.id === id) || TABS[0];
+  const [base, sub] = String(id || '').split('/');   // #settings/people opens Settings at People
+  const t = TABS.find((x) => x.id === base) || TABS[0];
   current = t.id; document.body.classList.remove('editing-on');
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.tab === t.id));
+  if (window.innerWidth <= 760 && S.ui) drawNav();   // the phone bar's More lights up for a page inside it
   // live video left on the old page would keep downloading in the background: stop it
   for (const img of document.querySelectorAll('#view .cam.live img')) { img.onerror = null; img.removeAttribute('src'); }
   const main = el('div'); $('#view').replaceChildren(main); refresher = null;   // a fresh box per visit: a slow, older render can't write into the new page
   setTop(tabLabel(t));
-  try { const r = (await t.render(main)) || null; if (main.isConnected) refresher = r; }
+  try { const r = (await t.render(main, sub || null)) || null; if (main.isConnected) refresher = r; }
   catch (err) { main.append(el('div', { class: 'card empty' }, `Could not load this: ${err.message}`)); }
 }
-function drawNav() {
-  $('.nav').replaceChildren(...TABS.filter((t) => !S.ui.tabs?.[t.id]?.hidden).map((t) => el('a', { href: `#${t.id}`, 'data-tab': t.id, class: t.id === current ? 'on' : null, title: tabLabel(t) }, icon(t.icon), S.ui.tabs?.[t.id]?.label || T(t.short || t.label),
-    t.pro && !isPro() ? el('span', { class: 'pro' }, 'PRO') : null, t.id === 'alerts' && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : null)));
+/* The main bar: the household's order and names, only the buttons they want; on a phone the first four and "More". */
+const navTabs = () => TABS.filter((t) => !S.ui.tabs?.[t.id]?.hidden).map((t, i) => [t, S.ui.tabs?.[t.id]?.order ?? 50 + i]).sort((a, b) => a[1] - b[1]).map(([t]) => t);
+function navLink(t) {
+  return el('a', { href: `#${t.id}`, 'data-tab': t.id, class: t.id === current ? 'on' : null, title: tabLabel(t) }, icon(t.icon), el('span', { class: 'nl' }, S.ui.tabs?.[t.id]?.label || T(t.short || t.label)),
+    t.pro && !isPro() ? el('span', { class: 'pro' }, 'PRO') : null, t.id === 'alerts' && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : null);
 }
+function drawNav() {
+  const list = navTabs(), phone = window.innerWidth <= 760 && ['left', 'right'].includes(S.ui.nav || 'left');
+  if (!phone || list.length <= 5) { $('.nav').replaceChildren(...list.map(navLink)); return; }
+  const first = list.slice(0, 4), rest = list.slice(4), inMore = rest.some((t) => t.id === current);
+  $('.nav').replaceChildren(...first.map(navLink), el('a', { href: '#', class: inMore ? 'on' : null, title: T('More'), onclick: (e) => { e.preventDefault(); moreSheet(rest); } }, icon('grid'), el('span', { class: 'nl' }, T('More')), rest.some((t) => t.id === 'alerts') && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : null));
+}
+function moreSheet(rest) {
+  const m = modal(el('div', { class: 'more-grid' }, rest.map((t) => el('a', { href: `#${t.id}`, class: `more-item${t.id === current ? ' on' : ''}`, onclick: () => m.remove() }, icon(t.icon, 24), el('span', {}, tabLabel(t))))), { title: T('More') });
+  m.classList.add('sheet');
+}
+let navT = null; addEventListener('resize', () => { clearTimeout(navT); navT = setTimeout(drawNav, 150); });
 function drawBanner() {
   const b = $('#banner'), s = S.status; if (!s) return;
   const p = s.pro || {}; b.className = ''; b.replaceChildren();
