@@ -1,5 +1,7 @@
 # CasaTorch
 
+*Your home, lit up.*
+
 **One screen for your whole house - with or without Home Assistant.**
 
 CasaTorch is a self-hosted home dashboard built for a wall-mounted tablet (and your phone). Weather,
@@ -128,8 +130,8 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 | Pro, available now | Pro, coming (included when it ships) |
 | --- | --- |
 | **3D Home** - your home as a live 3D plan (LiDAR scan, or draw it in the app) | **Away from home** - secure remote access, no port forwarding |
-| **Ask the house** - answers about your home, tap-to-do actions (AI usage billed by your AI provider, or free with Ollama) | **Phone alerts** - push notifications with quiet hours |
-| **Ring** doorbells and cameras (Labs) | **iPhone, iPad and Android apps** |
+| **Ask the house** - answers about your home, tap-to-do actions (AI usage billed by your AI provider, or free with Ollama) | |
+| **Ring** doorbells and cameras (Labs) | |
 | **Weekly report** - every Monday: energy and cost, always-on load, alerts, internet and server downtime, with tips (written by your AI if connected) | |
 | **Server monitor** - your NAS, servers and self-hosted apps: up or down, response time, uptime, certificate expiry, alerts | |
 | **Energy history** - 2 years by day and by device (free keeps 7 days), and a bill forecast | |
@@ -137,6 +139,10 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 | **Cisco Meraki** MV cameras and MT sensors | |
 | **Network monitoring** - UniFi and Cisco Meraki (every device online/offline, clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), with alerts | |
 | | Self-healing, multi-home |
+
+**Phone apps** for iPhone, iPad and Android - Face ID or fingerprint lock, end-to-end encrypted alerts,
+LiDAR room scans into the 3D Home - are built and coming to the App Store and Google Play, free in every
+edition. No CasaTorch account: you sign in to your own box. See [mobile/README.md](mobile/README.md).
 
 Full comparison: [docs/EDITIONS.md](docs/EDITIONS.md). Where phones, tablets and the cloud fit in:
 [docs/ROADMAP.md](docs/ROADMAP.md).
