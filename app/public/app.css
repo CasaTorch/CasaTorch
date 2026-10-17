@@ -364,3 +364,20 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .dev-more { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); display: grid; place-items: center; cursor: pointer; }
 .dev-more:hover { color: var(--text); background: var(--surface-3); }
 .dsheet { min-width: min(360px, 80vw); }
+/* Security Center */
+.wall { display: grid; gap: 8px; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); background: #000; border-radius: 16px; padding: 0; }
+.wall:fullscreen { padding: 8px; align-content: center; height: 100vh; box-sizing: border-box; }
+.wall .cam { border-radius: 12px; } .wall .cam img { aspect-ratio: 16/9; }
+.wall .livebadge { color: #f87171; font-weight: 700; letter-spacing: .06em; }
+@media (max-width: 760px) { .wall { grid-template-columns: repeat(min(var(--cols, 2), 2), minmax(0, 1fr)); } }
+.secrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); } .secrow .ic { width: 24px; color: var(--muted); display: grid; place-items: center; }
+.secrow.bad .ic { color: var(--warn); }
+.secalarm { padding: 10px 12px; border-radius: 14px; background: var(--surface-2); margin-bottom: 10px; }
+.checkrow { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); } .checkrow .ck { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; flex: none; background: rgba(251, 191, 36, .15); color: var(--warn); }
+.checkrow.ok .ck { background: rgba(52, 211, 153, .15); color: var(--good); } .checkrow.ok { color: var(--muted); }
+.meterbar { height: 6px; border-radius: 6px; background: var(--surface-3); overflow: hidden; margin: 2px 0 8px; } .meterbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.evrow { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.lanlist { display: grid; gap: 8px; } .landev { padding: 10px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); } .landev.new { border-color: rgba(251, 191, 36, .45); }
+.portrow { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin: 8px 0 0 20px; padding: 8px 10px; border-radius: 10px; background: rgba(251, 191, 36, .08); }
+.portrow.warning { background: rgba(251, 113, 133, .1); } .portrow.ok { background: var(--surface-3); opacity: .75; }
+.cards.sec > .card.wide { grid-column: 1 / -1; }
