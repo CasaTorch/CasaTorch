@@ -180,6 +180,13 @@ app.use('/api', (req, res, next) => {
   if (origin) { try { if (new URL(origin).host !== req.headers.host) return res.status(403).json({ error: 'refused: that request did not come from CasaTorch' }); } catch { return res.status(403).json({ error: 'refused' }); } }
   next();
 });
+/* Before setup, only setup itself may change anything. Without this, a settings change from any device on the
+   network could make CasaTorch look set up - skipping the setup wizard and leaving it with no sign-in. */
+app.use('/api', (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method) || isConfigured() || isDemo()) return next();
+  if (/^\/(setup|license\/claim|auth)\//.test(req.path)) return next();
+  res.status(409).json({ error: 'Finish setup first.' });
+});
 app.use((req, res, next) => {
   if (!signInOn()) return next();
   const s = sessionOf(req), u = s && userById(s.userId);

@@ -99,7 +99,11 @@ function writeFileSafe(file, data, mode = 0o600) {
 }
 /* Installs from before secrets were sealed: seal them now. */
 if (plaintextOnDisk && fs.existsSync(CONFIG_FILE)) { try { saveConfig(config); } catch { /* read-only data folder */ } }
-const isConfigured = () => fs.existsSync(CONFIG_FILE) && Object.keys(config).length > 0;
+/* Set up = setup has saved its answers. Bookkeeping that can land in config.json before setup (an install id
+   from 0.4.1 and earlier, the old secure-address state, a Pro key, the language) doesn't count - otherwise a
+   fresh install would skip the setup wizard and run with no sign-in. */
+const BOOKKEEPING = new Set(['installId', 'localTls', 'find', 'license', 'lang']);
+const isConfigured = () => fs.existsSync(CONFIG_FILE) && Object.keys(config).some((k) => !BOOKKEEPING.has(k));
 /** The house's time zone (the demo house is on the US west coast). */
 const houseTz = () => config.house?.timezone || (isDemo() ? 'America/Los_Angeles' : 'UTC');
 const isDemo = () => process.env.CASATORCH_DEMO === '1' || config.demo === true;
