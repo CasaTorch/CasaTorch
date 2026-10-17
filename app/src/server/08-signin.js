@@ -316,8 +316,13 @@ app.post('/api/auth/password', express.json({ limit: '4kb' }), (req, res) => {
   u.password = hashSecret(req.body.next); saveUsers(); endSessionsOf(u.id, req.session.key); audit(req, 'password-changed');
   res.json({ ok: true });
 });
-app.post('/api/auth/2fa/start', async (req, res) => {
+app.post('/api/auth/2fa/start', express.json({ limit: '4kb' }), async (req, res) => {
   const u = me(req, res); if (!u) return;
+  /* Your password again first: someone using a browser you left signed in can't put two-step sign-in on their own phone and lock you out. */
+  if (u.password) {
+    if (limited(`pw:${u.id}`, 5)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes.' });
+    if (!verifySecret(u.password, req.body?.password || '')) { failed(`pw:${u.id}`); return res.status(403).json({ error: 'Your password is not right.' }); }
+  }
   const e = await totpEnrolment(u); req.session && (pendingTotp.set(u.id, { secret: e.secret, exp: Date.now() + 10 * 60_000 }));
   res.json({ uri: e.uri, qr: e.qr, secret: e.secret });
 });

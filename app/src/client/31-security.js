@@ -27,9 +27,10 @@ function accountCard(me) {
     const tsa = el('div', { class: 'tsa' });
     const tsaOff = () => tsa.replaceChildren(
       el('p', { class: 'small muted' }, 'Two-step sign-in asks for a 6-digit code from an app on your phone after your password - so a stolen password alone is not enough.'),
+      el('label', { class: 'field' }, el('span', {}, 'Your password'), el('input', { type: 'password', autocomplete: 'current-password', class: 'tsapw' })),
       el('button', { class: 'btn primary', onclick: async () => {
         try {
-          const e = await post('/api/auth/2fa/start', {});
+          const e = await post('/api/auth/2fa/start', { password: tsa.querySelector('.tsapw')?.value || '' });
           const qr = el('div', { class: 'qr' }); qr.innerHTML = e.qr;   // SVG made by this CasaTorch
           const code = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, placeholder: '123456', class: 'code' });
           tsa.replaceChildren(el('p', { class: 'small' }, '1. Scan this with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy…).'), qr,

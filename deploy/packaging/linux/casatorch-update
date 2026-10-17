@@ -28,5 +28,16 @@ echo "downloading CasaTorch $ver"
 curl -fsSL --max-time 900 -H "X-CasaTorch-Updater: 1" -o "$tmp/$file" "https://casatorch.com/dl/$file"
 got=$(sha256sum "$tmp/$file" | cut -d' ' -f1)
 [ "$got" = "$sha" ] || { echo "checksum does not match the release - not installing" >&2; exit 1; }
+# The release's list of checksums must be signed with CasaTorch's offline release key (built into this package):
+# a download that only matches casatorch.com's own word is not enough.
+KEY=/opt/casatorch/release-key.pem
+if [ -f "$KEY" ]; then
+  curl -fsSL --max-time 60 -o "$tmp/SHA256SUMS" "https://casatorch.com/dl/SHA256SUMS" && curl -fsSL --max-time 60 -o "$tmp/SHA256SUMS.sig" "https://casatorch.com/dl/SHA256SUMS.sig" \
+    || { echo "the release isn't signed (or the signature couldn't be downloaded) - not installing" >&2; exit 1; }
+  "$NODE" -e "const c=require('crypto'),f=require('fs');process.exit(c.verify(null,f.readFileSync(process.argv[1]),f.readFileSync(process.argv[3],'utf8'),f.readFileSync(process.argv[2]))?0:1)" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.sig" "$KEY" \
+    || { echo "the release's signature is not CasaTorch's - not installing" >&2; exit 1; }
+  signed=$(awk -v f="$file" '$2==f || $2=="*"f {print $1}' "$tmp/SHA256SUMS")
+  [ "$signed" = "$got" ] || { echo "the download doesn't match the signed checksum - not installing" >&2; exit 1; }
+fi
 DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$tmp/$file"
 echo "updated CasaTorch $cur -> $ver"

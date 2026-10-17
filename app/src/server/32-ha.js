@@ -8,6 +8,7 @@
  * ====================================================================== */
 async function haStates() {
   const h = config.homeAssistant; if (!h?.url) return [];
+  const live = haLiveStates(); if (live) return live;   // the websocket keeps them current (34-live.js)
   return (await cached('ha:states', 8_000, async () => ({ list: await getJSON(`${h.url}/api/states`, { headers: { Authorization: `Bearer ${h.token}` } }) }))).list || [];
 }
 /* Home Assistant reports temperatures in its own unit system; CasaTorch keeps Celsius inside. */

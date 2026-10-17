@@ -181,6 +181,19 @@ jobs:
             mv "tmp-$a"/* out/ && rmdir "tmp-$a"
           done
       - run: cp deploy/downloads/casatorch-compose.yml out/ && cp deploy/unraid/casatorch.xml out/casatorch-unraid.xml && ls -la out
+      # Signed with an offline key: the Linux and Pi updater installs a release only when SHA256SUMS carries this
+      # signature (checked against deploy/packaging/release-key.pub.pem, built into every package) - so even someone
+      # who took over casatorch.com or the download path couldn't push an update. No key, no release.
+      - name: Sign the release
+        env: { KEY: "${{ secrets.CASATORCH_RELEASE_KEY }}" }
+        run: |
+          [ -n "$KEY" ] || { echo "CASATORCH_RELEASE_KEY is not set - not publishing an unsigned release" >&2; exit 1; }
+          umask 077; printf '%s\n' "$KEY" > "$RUNNER_TEMP/release.key"
+          (cd out && sha256sum -- * > SHA256SUMS)
+          openssl pkeyutl -sign -inkey "$RUNNER_TEMP/release.key" -rawin -in out/SHA256SUMS -out out/SHA256SUMS.sig
+          rm -f "$RUNNER_TEMP/release.key"
+          openssl pkeyutl -verify -pubin -inkey deploy/packaging/release-key.pub.pem -rawin -in out/SHA256SUMS -sigfile out/SHA256SUMS.sig
+          cat out/SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true

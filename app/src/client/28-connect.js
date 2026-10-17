@@ -164,13 +164,25 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
   let group = 'all', filter = 'any';
   const q = el('input', { type: 'search', placeholder: 'Search brands - Ring, Hue, Meraki, ecobee…', 'aria-label': 'Search integrations' });
   const chips = el('div', { class: 'chips' }), grid = el('div', { class: 'connect-grid' });
+  /* Remove a brand set up in setup - asked right on the card (no pop-up), then gone from CasaTorch. */
+  const REMOVE_IDS = ['hue-local', 'shelly-local', 'yolink-cloud', 'ring-labs', 'frigate', 'reolink-local', 'snapshot'];
+  const removeBtn = (it, conn, redraw) => {
+    const id = it.ids.find((x) => REMOVE_IDS.includes(x) && conn.direct.includes(x)); if (!id) return null;
+    const wrap = el('span', { class: 'rm' });
+    const ask = () => wrap.replaceChildren(el('span', { class: 'small' }, `Remove ${it.label}? Its settings and keys are deleted from CasaTorch.`),
+      el('button', { class: 'btn small danger', onclick: async () => { try { await api(`/api/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }); conn.direct = conn.direct.filter((x) => x !== id); toast(`${it.label} removed`); redraw(); } catch (e) { toast(e.message, 4000); } } }, 'Remove'),
+      el('button', { class: 'btn small ghost', onclick: () => wrap.replaceChildren(btn) }, 'Keep'));
+    const btn = el('button', { class: 'btn small ghost', onclick: ask }, 'Remove');
+    wrap.append(btn); return wrap;
+  };
   const card = (it) => {
     const on = isOn(it);
     const tag = it.how === 'soon' ? el('span', { class: 'pill' }, 'Coming soon') : it.how === 'pro' ? el('span', { class: 'pill pro' }, 'Pro') : it.how === 'ha' ? el('span', { class: 'pill ha' }, ha ? 'via Home Assistant' : 'needs Home Assistant') : it.alsoHa ? el('span', { class: 'pill' }, 'Direct or via HA') : el('span', { class: 'pill' }, 'Direct');
     return el('div', { class: `connect-card${on ? ' on' : ''}` },
       el('div', { class: 'row', style: 'gap:12px;align-items:center' }, monogram(it.label), el('div', { style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, it.label), el('div', { class: 'row', style: 'gap:6px;margin-top:3px' }, on ? el('span', { class: 'pill good' }, '✓ Connected') : null, tag))),
       el('p', { class: 'small muted' }, it.desc || ''),
-      it.how === 'soon' ? el('button', { class: 'btn small', disabled: true }, 'Coming soon') : it.href ? el('a', { class: `btn small${on ? '' : ' primary'}`, href: it.href }, on ? 'Open' : 'Connect') : el('button', { class: `btn small${on ? '' : ' primary'}`, onclick: () => startConnect(it, conn) }, on ? 'Change' : it.how === 'ha' && !ha ? 'Set up' : 'Connect'));
+      it.how === 'soon' ? el('button', { class: 'btn small', disabled: true }, 'Coming soon') : it.href ? el('a', { class: `btn small${on ? '' : ' primary'}`, href: it.href }, on ? 'Open' : 'Connect') : el('button', { class: `btn small${on ? '' : ' primary'}`, onclick: () => startConnect(it, conn) }, on ? 'Change' : it.how === 'ha' && !ha ? 'Set up' : 'Connect'),
+      on ? removeBtn(it, conn, draw) : null);
   };
   const draw = () => {
     const t = q.value.trim().toLowerCase();

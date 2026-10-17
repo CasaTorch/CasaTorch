@@ -82,16 +82,16 @@ const WHOLE_HOUSE = /\b(house|home|whole|total|grid|mains?|main_?panel|consumpti
 function housePower(devices) {
   const withW = devices.filter((d) => Number.isFinite(d.powerW));
   const pick = config.energy?.meter && withW.find((d) => d.id === config.energy.meter);
-  if (pick) return { watts: Math.round(pick.powerW), from: pick.name };
+  if (pick) return { watts: Math.round(pick.powerW), from: pick.name, parts: [{ id: pick.id, name: pick.name, w: Math.round(pick.powerW), meter: true }] };
   const meters = withW.filter((d) => d.kind === 'sensor' && !d.pairedTo && WHOLE_HOUSE.test(`${d.id} ${d.name}`) && !/charg|car|ev_|solar|battery|pv/i.test(`${d.id} ${d.name}`));
-  if (meters.length) { const m = meters.sort((a, b) => b.powerW - a.powerW)[0]; return { watts: Math.round(m.powerW), from: m.name }; }
-  let sum = 0; const seen = [];
+  if (meters.length) { const m = meters.sort((a, b) => b.powerW - a.powerW)[0]; return { watts: Math.round(m.powerW), from: m.name, parts: [{ id: m.id, name: m.name, w: Math.round(m.powerW), meter: true }] }; }
+  let sum = 0; const seen = [], parts = [];
   for (const d of withW) {
     if (d.pairedTo || d.powerW <= 0 || d.powerW > 100_000 || /solar|pv_|production|generation/i.test(`${d.id} ${d.name}`)) continue;
-    if (d.powerW >= 50 && seen.some((w) => Math.abs(w - d.powerW) <= Math.max(5, d.powerW * 0.02))) continue;
-    seen.push(d.powerW); sum += d.powerW;
+    if (d.powerW >= 50 && seen.some((w) => Math.abs(w - d.powerW) <= Math.max(5, d.powerW * 0.02))) continue;   // the same reading twice (a plug and its own power sensor)
+    seen.push(d.powerW); sum += d.powerW; parts.push({ id: d.id, name: d.name, w: Math.round(d.powerW) });
   }
-  return { watts: Math.round(sum), from: null };
+  return { watts: Math.round(sum), from: null, parts: parts.sort((a, b) => b.w - a.w) };   // parts: exactly what adds up to the number shown
 }
 /* Where the power comes from, for the 3D Home's energy card: solar, a home battery and the grid, from
    whatever sensors the house has (Home Assistant's own names: solar/pv/inverter, battery/powerwall, grid).

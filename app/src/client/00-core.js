@@ -105,5 +105,20 @@ async function boot() {
   show(location.hash.slice(1) || 'home');
   setTimeout(tourOffer, 700);   // first visit in this browser: offer the tour (34-tour.js)
   setInterval(() => { if (document.hidden || document.body.classList.contains('editing-on')) return; loadStatus(); if (refresher) refresher(); }, 30_000);
+  liveStart();
+}
+/* Real time: the server says when something in the house changed (34-live.js), and the screen on show refreshes
+   - at most about once a second, never while you're editing, and not in a hidden tab. */
+let liveLast = 0, liveTimer = null;
+function liveStart() {
+  if (typeof EventSource !== 'function') return;
+  const es = new EventSource('/api/live/events');
+  es.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.type !== 'tick' || document.hidden || document.body.classList.contains('editing-on') || !refresher) return;
+    if (document.activeElement?.closest?.('#view') && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;   // someone is typing: the next change (or the 30-second refresh) catches up
+    clearTimeout(liveTimer); liveTimer = setTimeout(() => { liveLast = Date.now(); try { refresher(); } catch { /* next tick */ } }, Math.max(0, 1000 - (Date.now() - liveLast)));
+  };
+  es.onerror = () => { if (es.readyState === 2) setTimeout(liveStart, 30_000); };
 }
 document.addEventListener('DOMContentLoaded', () => boot());
