@@ -20,7 +20,7 @@ $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-20' -LogonType ServiceAcc
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $Name -Description 'CasaTorch - one screen for your whole house (http://localhost:8090)' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 if (-not (Get-NetFirewallRule -DisplayName $Name -ErrorAction SilentlyContinue)) {
-  New-NetFirewallRule -DisplayName $Name -Direction Inbound -Protocol TCP -LocalPort 8090 -Action Allow -Profile Private,Domain | Out-Null
+  New-NetFirewallRule -DisplayName $Name -Direction Inbound -Protocol TCP -LocalPort 8090,8443 -Action Allow -Profile Private,Domain | Out-Null
 }
 Start-ScheduledTask -TaskName $Name
 for ($i = 0; $i -lt 40; $i++) { try { if ((Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 'http://127.0.0.1:8090/api/health').StatusCode -eq 200) { break } } catch { Start-Sleep -Milliseconds 500 } }

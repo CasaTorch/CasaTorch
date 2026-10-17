@@ -1,6 +1,6 @@
 {
   "name": "casatorch",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "private": true,
   "type": "module",
   "description": "CasaTorch: a self-hosted wall-panel dashboard for your house and your homelab",
@@ -16,6 +16,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "acme-client": "5.4.0",
     "express": "^4.21.2",
     "qrcode": "1.5.4",
     "ring-client-api": "^14.3.0",
