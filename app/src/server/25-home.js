@@ -8,6 +8,7 @@ function remindersToday() {
   const now = new Date();
   const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now));
   if (typeof nudgesToday === 'function' && !isDemo()) return nudgesToday().map((n) => ({ title: n.title, at: n.time, icon: n.icon || null, id: n.id }));   // nudges (78-nudges.js)
+  if (typeof nudgesToday === 'function') return nudgesToday().filter((n) => n.on !== false).map((n) => ({ id: n.id, title: n.title, at: n.time || null, icon: n.icon || null }));   // Reminders (78-nudges.js)
   return (config.reminders || []).filter((r) => r.enabled !== false && (!Array.isArray(r.days) || r.days.includes(dow))).map((r) => ({ title: r.title, at: r.time || null, icon: r.icon || null }));
 }
 const settle = async (p) => { try { return await p; } catch (err) { return { error: String(err.message || err) }; } };

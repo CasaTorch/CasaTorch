@@ -148,6 +148,15 @@ object HomeStore {
         if (working != null) h.here = Home.originOf(working)
         currentId = id; save()
     }
+    /** The home told us its addresses (only when it's the same home): keep them current. */
+    fun learn(id: String, hello: org.json.JSONObject) {
+        val h = home(id) ?: return
+        if (hello.optJSONObject("home")?.optString("id") != id) return
+        fun ok(k: String) = hello.optString(k).takeIf { Uri.parse(it).let { u -> u.scheme == "https" && !u.host.isNullOrEmpty() } }
+        val r = ok("remote"); val l = ok("secure")
+        val next = h.copy(remote = r ?: h.remote, lan = l ?: h.lan)
+        if (next != h) { list[list.indexOf(h)] = next; save() }
+    }
     fun remove(id: String) {
         list.removeAll { it.id == id }
         prefs.edit().remove("token.$id").remove("alertkey.$id").remove("pushtoken.$id").apply()

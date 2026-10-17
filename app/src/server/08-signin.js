@@ -77,6 +77,15 @@ const safeUser = (u) => u && ({ id: u.id, username: u.username, name: u.name, em
 const needsTerms = (u) => !u.panel && u.terms?.version !== TERMS_VERSION;
 const signInOn = () => isConfigured() && !isDemo() && config.signIn?.enabled !== false && users.list.some((u) => u.password);
 /** Called by setup: create or update the owner account. */
+/* A second login made in setup (for the owner's phone): an admin, not the owner. */
+function authAddUser({ username, passwordHash, name, role = 'admin', acceptedTerms }) {
+  ensureUsers();
+  const u = String(username).trim().toLowerCase();
+  if (users.list.some((x) => x.username === u)) { const x = users.list.find((y) => y.username === u); if (x.role !== 'owner') { x.password = passwordHash; saveUsers(); } return x; }
+  const rec = { id: newId(), role: ['admin', 'member'].includes(role) ? role : 'admin', username: u, name: name || username, password: passwordHash, createdAt: nowIso(), email: null, terms: acceptedTerms ? { version: TERMS_VERSION, at: nowIso() } : null };
+  users.list.push(rec); saveUsers(); audit(null, 'user-added', { user: u, via: 'setup' });
+  return rec;
+}
 function authSetOwner({ username, passwordHash, acceptedTerms }) {
   ensureUsers();
   const u = String(username).trim().toLowerCase();
@@ -177,7 +186,8 @@ const ticketOf = (id) => { const t = tickets.get(String(id || '')); if (!t || t.
 setInterval(() => { for (const [k, t] of tickets) if (t.exp < Date.now()) tickets.delete(k); }, 60_000).unref?.();
 function nextStep(t, u) {
   if (u.totp?.on && !t.passed.has('mfa') && !t.passed.has('enroll')) return 'mfa';   // a code just used to set it up counts
-  if (!u.totp?.on && (users.policy?.require2fa || t.app)) return 'enroll';   // the phone app always needs two-step sign-in
+  // the phone app offers two-step sign-in (strongly encouraged); only a household that requires it makes it a must
+  if (!u.totp?.on && (users.policy?.require2fa || (t.app && !t.passed.has('skip2fa')))) return 'enroll';
   if (needsTerms(u) && !t.passed.has('terms')) return 'terms';
   return null;
 }

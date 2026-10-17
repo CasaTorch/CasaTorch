@@ -8,7 +8,7 @@ tab({ id: 'alerts', label: 'Alerts', icon: 'bell', async render(main) {
       x.repeating ? el('button', { class: 'btn small', onclick: async (e) => { e.target.disabled = true; try { await post(`/api/alerts/${encodeURIComponent(x.id)}/ack`); toast('Got it - no more reminders for this one'); draw(); } catch (err) { toast(err.message); e.target.disabled = false; } } }, icon('check'), 'Got it') : null));
     const past = el('div', { class: 'card' }, el('h2', {}, 'Recent'));
     past.append(a.recent?.length ? el('ul', { class: 'list' }, a.recent.slice(0, 50).map((x) => el('li', {}, el('span', { class: `dot ${x.severity === 'ok' ? 'good' : x.severity === 'critical' ? 'bad' : 'warn'}` }), el('div', { class: 'grow' }, x.title), el('span', { class: 'small muted' }, fmtWhen(x.at))))) : el('p', { class: 'muted' }, 'Nothing yet.'));
-    main.replaceChildren(el('div', { class: 'cards' }, typeof nudgesCard === 'function' ? nudgesCard(draw) : null, now, past));
+    main.replaceChildren(el('div', { class: 'cards' }, now, past));
   };
   await draw(); return draw;
 } });
@@ -48,15 +48,63 @@ tab({ id: 'controls', label: 'Controls', icon: 'sliders', async render(main) {
 /* ---- Cameras ---- */
 tab({ id: 'cameras', label: 'Cameras', icon: 'camera', async render(main) {
   // Each camera tile keeps itself fresh (camView); the 30-second refresh only adds or removes cameras.
-  let ids = '';
+  let ids = '', det = null;
   const draw = async () => {
-    const { devices = [] } = await api('/api/devices');
-    const cams = devices.filter((d) => d.kind === 'camera'), now = cams.map((d) => d.id).join('|');
+    const { devices = [], hiddenCameras = [] } = await api('/api/devices');
+    const cams = devices.filter((d) => d.kind === 'camera'), now = `${cams.map((d) => d.id).join('|')}#${hiddenCameras.map((d) => d.id).join('|')}`;
     if (now === ids && main.firstChild) return; ids = now;
-    main.replaceChildren(cams.length ? el('div', { class: 'cams' }, cams.map(camView)) : el('div', { class: 'card empty' }, 'No cameras yet. Add Frigate, Reolink, any camera with a snapshot address, Ring (Pro) or cameras in Home Assistant from Connect.'));
+    const admin = (S.me ||= await api('/api/auth/me').catch(() => ({})))?.user?.role;
+    const canEdit = !S.status?.demo && (!admin || ['owner', 'admin'].includes(admin));
+    const vis = async (id, visible) => { try { await api(`/api/cameras/${encodeURIComponent(id)}/visible`, { method: 'PUT', body: JSON.stringify({ visible }) }); ids = ''; await draw(); toast(visible ? T('Camera added back') : T('Camera removed - find it under Detected cameras')); } catch (e) { toast(e.message); } };
+    const tiles = cams.map((d) => { const t = camView(d); if (canEdit && !t.querySelector('.cam-x')) t.append(el('button', { class: 'cam-x', title: T('Remove this camera'), 'aria-label': T('Remove {name}', { name: d.name }), onclick: (e) => { e.stopPropagation(); vis(d.id, false); } }, icon('x', 14))); return t; });
+    const extra = hiddenCameras.length ? el('details', { class: 'card camhidden' }, el('summary', {}, T('Detected cameras not shown ({n})', { n: hiddenCameras.length })),
+      el('p', { class: 'small muted' }, T('Removed ones, and the same camera reached a second way (through Home Assistant) - CasaTorch shows the faster direct one. Add any back if you want both.')),
+      el('div', { class: 'list' }, hiddenCameras.map((h) => el('div', { class: 'row between', style: 'padding:6px 0' }, el('div', {}, el('b', {}, h.name), el('div', { class: 'tiny muted' }, `${h.source} · ${h.why === 'duplicate' ? T('same camera as "{name}"', { name: h.of }) : T('removed')}`)),
+        canEdit ? el('button', { class: 'btn small', onclick: () => vis(h.id, true) }, icon('plus', 14), T('Add back')) : null)))) : null;
+    det ||= detectionsCard();
+    main.replaceChildren(cams.length ? el('div', {}, el('div', { class: 'cams' }, tiles), det, extra) : extra ? el('div', {}, el('div', { class: 'card empty' }, T('All your cameras are hidden.')), extra) : el('div', { class: 'card empty' }, T('No cameras yet. Add Frigate, Reolink, any camera with a snapshot address, Ring (Pro) or cameras in Home Assistant from Connect.')));
   };
   await draw(); return draw;
 } });
+
+/* Detections (Frigate): what your cameras saw - counts by kind and camera, by hour, and the latest events with
+   thumbnails. Every number is one of Frigate's own events, with Frigate's confidence score. Updates every minute. */
+const DET_ICON = { person: '🧍', car: '🚗', dog: '🐕', cat: '🐈', bird: '🐦', package: '📦', bicycle: '🚲', motorcycle: '🏍', truck: '🚚', bus: '🚌', license_plate: '🔢', face: '🙂', bear: '🐻', deer: '🦌', horse: '🐎' };
+const detName = (l) => String(l || '').replace(/_/g, ' ').replace(/^\w/, (x) => x.toUpperCase());
+function detectionsCard() {
+  const card = el('div', { class: 'card det', style: 'margin-top:14px' });
+  const st = { hours: 24, label: null, camera: null };
+  const draw = async () => {
+    if (!card.isConnected && card.dataset.drawn) return;
+    let d; try { d = await api(`/api/frigate/events?hours=${st.hours}${st.label ? `&label=${st.label}` : ''}${st.camera ? `&camera=${st.camera}` : ''}`); } catch (e) { d = { frigate: true, error: e.message }; }
+    card.dataset.drawn = '1';
+    if (!d.frigate) { card.remove(); return; }
+    const range = el('div', { class: 'seg' }, [[24, 'Last 24 h'], [72, '3 days'], [168, '7 days']].map(([h, t]) => el('button', { class: st.hours === h ? 'on' : '', onclick: () => { st.hours = h; draw(); } }, T(t))));
+    const head = el('div', { class: 'row between wrap', style: 'gap:10px;margin-bottom:12px' }, el('div', {}, el('h2', { style: 'margin:0' }, T('Detections')), el('div', { class: 'small muted' }, `${d.total === 1 ? T('From Frigate · 1 event') : T('From Frigate · {n} events', { n: d.total ?? 0 })}${st.label ? ` · ${detName(st.label)}` : ''}${st.camera ? ` · ${detName(st.camera)}` : ''}`)), range);
+    if (d.error) return card.replaceChildren(head, el('p', { class: 'small bad' }, d.error));
+    const chip = (key, val, n, label) => el('button', { class: `chip${st[key] === val ? ' on' : ''}`, onclick: () => { st[key] = st[key] === val ? null : val; draw(); } }, label, el('b', {}, String(n)));
+    const labels = Object.entries(d.byLabel || {}).sort((a, b) => b[1] - a[1]), camsN = Object.entries(d.byCamera || {}).sort((a, b) => b[1] - a[1]);
+    const max = Math.max(1, ...(d.byHour || [])), nowH = new Date().getHours();
+    const hours = el('div', { class: 'dethours', role: 'img', 'aria-label': T('Detections by hour of day') }, (d.byHour || []).map((n, h) => el('div', { class: `dh${h === nowH ? ' now' : ''}`, title: `${hm(`${h}:00`)}: ${n}` }, el('i', { style: `height:${Math.round(n / max * 100)}%` }), h % 6 === 0 ? el('small', {}, hm(`${h}:00`).replace(':00', '')) : null)));
+    const list = (d.recent || []).map((e) => {
+      const [sid, id] = e.id.split(':'), dur = e.end ? Math.max(1, Math.round((Date.parse(e.end) - Date.parse(e.start)) / 1000)) : null;
+      return el('button', { class: 'detrow', onclick: () => modal(el('div', {}, el('img', { class: 'cam-full', alt: T('{what} at {camera}', { what: detName(e.label), camera: detName(e.camera) }), src: `/api/frigate/events/${sid}/${encodeURIComponent(id)}/snapshot` }),
+        el('div', { class: 'small muted', style: 'margin-top:8px' }, `${detName(e.label)}${e.subLabel ? ` (${e.subLabel})` : ''} · ${detName(e.camera)} · ${fmtWhen(e.start)}${dur ? ` · ${dur < 60 ? `${dur} s` : `${Math.round(dur / 60)} min`}` : ` · ${T('still going')}`}${e.score ? ` · ${T('{n}% sure', { n: e.score })}` : ''}${e.zones.length ? ` · ${e.zones.map(detName).join(', ')}` : ''}`)), { wide: true, title: detName(e.label) }) },
+        el('img', { loading: 'lazy', alt: '', src: `/api/frigate/events/${sid}/${encodeURIComponent(id)}/thumbnail` }),
+        el('div', { class: 'grow', style: 'min-width:0' }, el('b', {}, `${DET_ICON[e.label] || '•'} ${detName(e.label)}${e.subLabel ? ` · ${e.subLabel}` : ''}`), el('div', { class: 'tiny muted ellipsis' }, `${detName(e.camera)} · ${fmtWhen(e.start)}${e.zones.length ? ` · ${e.zones.map(detName).join(', ')}` : ''}`)),
+        e.score ? el('span', { class: `pill ${e.score >= 80 ? 'good' : ''}`, title: T('How sure Frigate was') }, `${e.score}%`) : null);
+    });
+    card.replaceChildren(...[head,
+      labels.length ? el('div', { class: 'chips' }, labels.map(([l, n]) => chip('label', l, n, `${DET_ICON[l] || ''} ${detName(l)} `))) : null,
+      camsN.length > 1 ? el('div', { class: 'chips' }, camsN.map(([c, n]) => chip('camera', c, n, `${detName(c)} `))) : null,
+      d.total ? el('div', {}, el('div', { class: 'tiny muted', style: 'margin:10px 0 4px' }, T('By hour of day')), hours) : null,
+      list.length ? el('div', { class: 'detlist' }, list) : el('p', { class: 'muted' }, T('Nothing detected in this time.')),
+      d.errors?.length ? el('p', { class: 'tiny bad' }, T('Some of Frigate didn\'t answer: {error}', { error: d.errors[0] })) : null].filter(Boolean));
+  };
+  draw();
+  const t = setInterval(() => { if (!card.isConnected && card.dataset.drawn) { clearInterval(t); return; } if (!document.hidden) draw(); }, 60_000);
+  return card;
+}
 
 /* ---- Network ---- */
 /* Server monitor (Pro): a row per server or app, with the last hour as a strip of ticks. */
@@ -227,11 +275,11 @@ function reportCard(rep, money, redraw) {
   show();
   card.append(el('div', { class: 'row between wrap', style: 'margin-bottom:12px' }, head, el('div', { class: 'row wrap', style: 'gap:8px' }, pick, makeNow)), body,
     el('label', { class: 'row small muted', style: 'margin-top:14px;gap:8px' }, weekly, 'Send it every Monday morning (as a phone alert)'),
-    rep.ai ? null : el('p', { class: 'tiny muted', style: 'margin-top:6px' }, 'Connect an AI in Settings > Ask the house and the report is written by it, with tips in plain words.'));
+    rep.ai ? null : el('p', { class: 'tiny muted', style: 'margin-top:6px' }, 'Connect an AI in Settings > Home AI Agent and the report is written by it, with tips in plain words.'));
   return card;
 }
 tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {
-  let span = 30, hist = null;   // the history changes every few minutes: a live refresh reuses it for a minute
+  let span = 30, hist = null, haCard = null;   // the history changes every few minutes: a live refresh reuses it for a minute
   const history = async () => { const days = Math.max(span, 15); if (hist && hist.days === days && Date.now() - hist.at < 60_000) return hist.h; const h = await api(`/api/history?days=${days}`).catch(() => null); hist = h ? { days, at: Date.now(), h } : null; return h; };
   const draw = async () => {
     const [{ devices = [], power }, st, h, rep] = await Promise.all([api('/api/devices'), api('/api/settings').catch(() => ({})), history(), api('/api/reports').catch(() => ({ pro: false, reports: [] }))]);
@@ -256,7 +304,8 @@ tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {
         historyChart(days, money),
         h.pro ? null : el('p', { class: 'tiny muted', style: 'margin-top:8px' }, 'Basic keeps 7 days. Pro keeps 2 years.'))
         : el('p', { class: 'muted' }, 'CasaTorch notes what the house uses every 5 minutes. The first day of history shows here tomorrow.'));
-    main.replaceChildren(el('div', { class: 'cards' },
+    haCard ||= haEnergyCard();
+    main.replaceChildren(haCard, el('div', { class: 'cards' },
       el('div', { class: 'card' }, el('h2', {}, 'Using now'), el('div', { class: 'big' }, `${Math.round(total)} W`), el('div', { class: 'muted small', style: 'margin-top:6px' }, `on ${ds.length} metered device${ds.length === 1 ? '' : 's'}`)),
       el('div', { class: 'card' }, el('h2', {}, 'If it stays like this'), rate ? el('div', {}, el('div', { class: 'big' }, money(total / 1000 * 24 * rate)), el('div', { class: 'muted small', style: 'margin-top:6px' }, `a day · ${money(total / 1000 * 24 * 30 * rate)} a month at ${money(rate)}/kWh`)) : el('p', { class: 'muted' }, 'Add your electricity rate in Settings to see the cost.'))),
     histCard,
@@ -266,7 +315,63 @@ tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {
   await draw(); return draw;
 } });
 
+/* Energy from Home Assistant's Energy dashboard (35-energy-ha.js): used, from the grid, solar, back to the grid, battery,
+   gas, water, costs and each device - today by hour, or 7 / 30 days by day. Shown only when Home Assistant has it. */
+function haEnergyCard() {
+  const card = el('div', { class: 'card hae', style: 'margin-bottom:14px' }); let days = 1;
+  const kwh = (v) => (v == null ? '-' : v >= 100 ? `${Math.round(v)} kWh` : `${v.toFixed(v < 10 ? 2 : 1)} kWh`);
+  const draw = async () => {
+    const d = await api(`/api/energy/ha?days=${days}`).catch(() => null);
+    if (!d?.ha || d.configured === false) { if (!card.dataset.shown) card.remove(); return; }
+    card.dataset.shown = '1';
+    const money = (v) => (v == null ? null : new Intl.NumberFormat(undefined, { style: 'currency', currency: d.currency || 'USD', maximumFractionDigits: 2 }).format(v));
+    const seg = el('div', { class: 'seg' }, [[1, 'Today'], [7, '7 days'], [30, '30 days']].map(([v, l]) => el('button', { class: v === days ? 'on' : '', onclick: () => { days = v; draw(); } }, T(l))));
+    const head = el('div', { class: 'row between wrap', style: 'gap:10px;margin-bottom:10px' }, el('div', {}, el('h2', { style: 'margin:0' }, T('Your home\'s energy')), el('div', { class: 'small muted' }, T('From Home Assistant\'s Energy dashboard'))), seg);
+    if (d.error) return card.replaceChildren(head, el('p', { class: 'small bad' }, d.error));
+    const t = d.totals, kpi = (label, value, sub, cls = '') => el('div', { class: `hk ${cls}` }, el('small', {}, T(label)), el('b', {}, value), sub ? el('span', { class: 'tiny muted' }, sub) : null);
+    const kpis = el('div', { class: 'hkpis' }, kpi('Used', kwh(t.used), t.cost != null ? `${money(t.cost)}${t.costFromHa ? '' : ` ${T('at your rate')}`}` : null, 'main'), kpi('From the grid', kwh(t.import)),
+      d.has.solar ? kpi('Solar', kwh(t.solar), null, 'sun') : null, d.has.export ? kpi('Sent back', kwh(t.export), null, 'good') : null,
+      d.has.battery ? kpi('From the battery', kwh(t.battOut), T('{kwh} charged in', { kwh: kwh(t.battIn) })) : null, d.selfPowered != null ? kpi('Self-powered', `${d.selfPowered}%`, T('of what you used'), 'good') : null,
+      d.has.gas ? kpi('Gas', `${t.gas} ${d.units.gas || ''}`, money(t.gasCost)) : null, d.has.water ? kpi('Water', `${t.water} ${d.units.water || ''}`, money(t.waterCost)) : null);
+    // the chart: what was used each hour (or day), split into grid / solar / battery; what went back out, below the line
+    const S = d.series, n = d.slots, W = 720, H = 190, base = 140, top = Math.max(0.001, ...Array.from({ length: n }, (_, i) => (S.import[i] || 0) + (S.solar[i] || 0) + (S.battOut[i] || 0), S.used)), low = Math.max(0, ...(S.export || []));
+    const yUp = (v) => (v / top) * (base - 10), yDn = (v) => (low ? (v / Math.max(low, top * 0.25)) * (H - base - 14) : 0), bw = (W / n) * 0.72, x = (i) => (W / n) * i + (W / n) * 0.14;
+    const bars = [], ns = 'http://www.w3.org/2000/svg', sv = (tag, a) => { const e = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); return e; };
+    for (let i = 0; i < n; i++) {
+      let y = base; for (const [k, c] of [['import', 'var(--accent)'], ['solar', 'var(--warn)'], ['battOut', 'var(--good)']]) { const v = S[k]?.[i] || 0, h = yUp(v); if (h > 0.3) { y -= h; bars.push(sv('rect', { x: x(i), y, width: bw, height: h, rx: 2, fill: c })); } }
+      const e = S.export?.[i] || 0; if (e > 0) bars.push(sv('rect', { x: x(i), y: base + 1, width: bw, height: Math.max(0.6, yDn(e)), rx: 2, fill: 'color-mix(in srgb, var(--good) 55%, transparent)' }));
+      const lbl = d.period === 'hour' ? (i % 6 === 0 ? hm(`${i}:00`).replace(':00', '') : '') : (n <= 7 || i % 5 === 0 ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(Date.parse(d.start) + i * 86400_000)) : '');
+      const total = (S.import[i] || 0) + (S.solar[i] || 0) + (S.battOut[i] || 0);
+      const hit = sv('rect', { x: (W / n) * i, y: 0, width: W / n, height: H, fill: 'transparent' }); const tt = sv('title', {}); tt.textContent = `${d.period === 'hour' ? hm(`${i}:00`) : new Date(Date.parse(d.start) + i * 86400_000).toDateString()}: ${T('{kwh} kWh in', { kwh: total.toFixed(2) })}${e ? `, ${T('{kwh} kWh sent back', { kwh: e.toFixed(2) })}` : ''}`; hit.append(tt); bars.push(hit);
+      if (lbl) { const tx = sv('text', { x: x(i), y: H - 2, 'font-size': 11, fill: 'var(--muted)' }); tx.textContent = lbl; bars.push(tx); }
+    }
+    const chart = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'hachart', role: 'img', 'aria-label': d.period === 'hour' ? T('Energy by hour') : T('Energy by day') }); chart.append(sv('line', { x1: 0, x2: W, y1: base, y2: base, stroke: 'var(--line)' }), ...bars);
+    const legend = el('div', { class: 'row wrap tiny muted', style: 'gap:14px;margin-top:4px' }, [['From the grid', 'var(--accent)'], d.has.solar && ['Solar', 'var(--warn)'], d.has.battery && ['Battery', 'var(--good)'], d.has.export && ['Sent back (below the line)', 'color-mix(in srgb, var(--good) 55%, transparent)']].filter(Boolean).map(([l, c]) => el('span', { class: 'row', style: 'gap:6px' }, el('i', { style: `width:10px;height:10px;border-radius:3px;background:${c};display:inline-block` }), T(l))));
+    const dmax = Math.max(1e-6, ...(d.devices || []).map((x) => x.kwh)), devs = (d.devices || []).slice(0, 12);
+    card.replaceChildren(...[head, kpis, el('div', { class: 'hachart-wrap' }, chart), legend,
+      devs.length ? el('div', { style: 'margin-top:16px' }, el('div', { class: 'tiny muted', style: 'margin-bottom:6px' }, t.used ? T('By device (share of what the house used)') : T('By device')),
+        el('div', { class: 'bars' }, devs.map((x) => el('div', { class: 'bar-row' }, el('span', { class: 'ellipsis' }, x.name), el('div', { class: 'track' }, el('div', { class: 'fill', style: `width:${(x.kwh / dmax) * 100}%` })), el('span', { class: 'num' }, `${kwh(x.kwh)}${t.used ? ` · ${Math.round(x.kwh / t.used * 100)}%` : ''}`))))) : null].filter(Boolean));
+  };
+  draw();
+  const tm = setInterval(() => { if (!card.isConnected && card.dataset.shown) { clearInterval(tm); return; } if (!document.hidden) draw(); }, 120_000);
+  return card;
+}
+
 /* ---- 3D Home (Pro) ---- */
+/* Full screen for the 3D home, in place: the frame fills the screen (the browser's full screen where it's allowed,
+   otherwise the whole window - phones and the app), the 3D page drops its own bars, and Exit or Esc come back here.
+   The page never navigates away, so there's always a way out. */
+function planFull(frame, on) {
+  if (!frame?.isConnected || document.body.classList.contains('plan-full') === on) return;
+  document.body.classList.toggle('plan-full', on); frame.classList.toggle('full', on);
+  try { frame.contentWindow?.postMessage({ casa: 'immersive', on }, location.origin); } catch { /* still loading */ }
+  try { window.CasaNative?.fullscreen?.(on); } catch { /* not in the app */ }
+  if (on && frame.requestFullscreen && !/iphone|ipad/i.test(navigator.userAgent)) frame.requestFullscreen().catch(() => {});
+  else if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+addEventListener('message', (e) => { if (e.origin === location.origin && e.data?.casa === 'immersive') planFull(document.querySelector('iframe.plan'), !!e.data.on); });
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('plan-full')) planFull(document.querySelector('iframe.plan'), false); });
+addEventListener('hashchange', () => { if (document.body.classList.contains('plan-full')) { document.body.classList.remove('plan-full'); try { window.CasaNative?.fullscreen?.(false); } catch { /* fine */ } } });
 tab({ id: 'house3d', label: '3D Home', short: '3D', icon: 'cube', pro: true, async render(main) {
   if (!isPro()) {
     main.replaceChildren(el('div', { class: 'card hero3d' }, el('h2', { style: 'justify-content:center' }, 'CasaTorch Pro'), el('div', { style: 'font-size:28px;font-weight:700;margin-bottom:10px' }, 'Your house, in 3D'),
@@ -274,8 +379,9 @@ tab({ id: 'house3d', label: '3D Home', short: '3D', icon: 'cube', pro: true, asy
       el('div', { class: 'row', style: 'justify-content:center' }, el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'), el('a', { class: 'btn', href: '/floorplan.html' }, 'Preview'))));
     return null;
   }
-  setTop(T('3D Home'), 'Your LiDAR scan, live', [el('a', { class: 'btn', href: '/floorplan.html#guide' }, 'Add floors'), el('a', { class: 'btn primary', href: '/floorplan.html' }, icon('expand'), 'Full screen')]);
-  main.replaceChildren(el('iframe', { class: 'plan', src: '/floorplan.html?embed=1', title: '3D floor plan' }));
+  const frame = el('iframe', { class: 'plan', src: '/floorplan.html?embed=1', title: '3D floor plan', allow: 'fullscreen; screen-wake-lock' });
+  setTop(T('3D Home'), 'Your LiDAR scan, live', [el('a', { class: 'btn', href: '/floorplan.html#guide' }, 'Add floors'), el('button', { class: 'btn primary', onclick: () => planFull(frame, true) }, icon('expand'), 'Full screen')]);
+  main.replaceChildren(frame);
   return null;
 } });
 

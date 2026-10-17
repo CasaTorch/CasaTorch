@@ -101,7 +101,7 @@ async function readNetSource(s) {
   const st = (netState[s.id] ||= { fails: 0 });
   try {
     if (!Object.hasOwn(NET, s.kind)) throw new Error('unknown kind of source');
-    const r = await NET[s.kind](s, s.secret ? unseal(s.secret) : '');
+    const r = await NET[s.kind](s, secretOf(s.secret));
     Object.assign(st, { ok: true, error: null, fails: 0, at: nowIso(), summary: r.summary, devices: r.devices });
   } catch (e) {
     Object.assign(st, { ok: false, error: String(e.message || e).slice(0, 140), fails: st.fails + 1, at: nowIso() });

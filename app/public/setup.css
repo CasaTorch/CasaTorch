@@ -69,3 +69,20 @@ textarea { font: inherit; padding: 11px 12px; border-radius: 12px; border: 1px s
 .phonedetails summary { cursor: pointer; font-weight: 600; } .phonedetails .phonecard { margin-top: 12px; }
 .asknum { font: 700 34px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .1em; margin: 6px 0 10px; } .asknum.small { font-size: 18px; }
 .askbar:empty { display: none; } .askbar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 50; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; max-width: calc(100% - 32px); padding: 14px 16px; border-radius: 16px; background: var(--card, #fff); border: 2px solid var(--warn, #f59e0b); box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
+.trust { display: grid; gap: 6px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line, rgba(255,255,255,.12)); border-radius: 12px; }
+.trust .fp { font-size: 12px; overflow-wrap: anywhere; color: var(--fg, inherit); }
+.trust button { justify-self: start; }
+/* the steps at the top: reached ones open with a click, the ones ahead come with Next */
+.steps li > button { all: unset; cursor: pointer; }
+.steps li.can { cursor: pointer; transition: border-color .15s, background .15s; }
+.steps li.can:hover, .steps li.can:focus-within { border-color: var(--accent); color: var(--text); }
+.steps li > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 999px; }
+.steps li.ahead { opacity: .55; }
+.opts.big .opt { padding: 10px 16px; font-weight: 600; }
+.card.safe summary { cursor: pointer; font-weight: 600; }
+.card.safe ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; color: var(--muted); }
+.card.safe b { color: var(--text); }
+.pairbox { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
+.pairbox .qr { width: 220px; max-width: 100%; background: #fff; padding: 10px; border-radius: 16px; }
+.pairbox .qr svg { width: 100%; height: auto; display: block; }
+.paircode { font: 600 28px/1.2 ui-monospace, Menlo, monospace; letter-spacing: .08em; margin: 6px 0; }

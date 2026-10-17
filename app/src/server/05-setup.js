@@ -86,13 +86,14 @@ const TESTS = {
     const domains = [...new Set((entries || []).map((e) => e.domain))];
     return { ok: true, message: `Connected to Home Assistant ${cfg?.version || ''} at "${cfg?.location_name || 'Home'}"`, version: cfg?.version, timeZone: cfg?.time_zone, units: cfg?.unit_system?.temperature, domains };
   },
-  async frigate({ url }) {
-    url = clean(url); if (badUrl(url)) throw new Error('the address should start with http:// or https://');
-    const r = await fetch(`${url}/api/version`, { signal: AbortSignal.timeout(8000) });
-    if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
-    const stats = await getJson(`${url}/api/stats`).catch(() => null);
-    const cams = stats?.cameras ? Object.keys(stats.cameras) : [];
-    const ver = (await r.text()).trim().slice(0, 40); return { ok: true, cameras: cams, message: `Frigate ${/^[\w.+-]+$/.test(ver) ? ver : ''}${cams.length ? ` with ${cams.length} camera${cams.length === 1 ? '' : 's'}: ${cams.join(', ')}` : ''}` };
+  frigate: (b) => frigateTest(b),   // 29f-frigate.js
+  /* The Home AI Agent: the key (or address) works, and which model to use. */
+  async ai({ provider, apiKey, url }) {
+    const p = aiOf(provider); if (!p) throw new Error('pick an AI');
+    const models = await p.models({ provider, apiKey: String(apiKey || '').trim() || null, url: url ? String(url).trim() : null });
+    const model = p.pick(models) || models?.[0];
+    if (!model) throw new Error('it answered, but has no models to use');
+    return { ok: true, model, message: `Connected - your Home AI Agent will use ${model}` };
   },
   /* Meraki: the key, then which network - the answer feeds a follow-up question. */
   async meraki({ apiKey }) {
@@ -250,8 +251,8 @@ app.get('/api/setup/current', async (_req, res) => {
     account: { username: users.list.find((x) => x.role === 'owner')?.username || c.signIn?.username || 'admin' },
     calendars: { mine: c.myCalendar === false ? 'no' : 'yes', list: (c.calendars || []).map(({ name, url, color }) => ({ name, url, color })) },
     sports: { teams: c.sports?.teams || [] },
-    news: { picks: NEWS_DEFAULTS.filter((f) => (c.news?.feeds || []).some((x) => x.url === f.url)).map((f) => f.id), custom: (c.news?.feeds || []).filter((x) => !NEWS_IDS.has(x.url)) },
-    reminders: { list: c.reminders || [] },
+    news: { picks: [...(c.news?.feeds || []).map((x) => x.gid).filter(Boolean), ...NEWS_DEFAULTS.filter((f) => (c.news?.feeds || []).some((x) => x.url === f.url)).map((f) => f.id)], custom: (c.news?.feeds || []).filter((x) => !x.gid && !NEWS_IDS.has(x.url)) },
+    reminders: { list: [], have: typeof ng === 'object' ? ng.list.length : 0 },   // existing ones are changed on the Reminders page; new ones here are added
     // gear: Home Assistant picks come back ticked; direct gear is kept as is unless set up again here
     cameras: c.cameraPrefs || (c.cameras || []).length ? { has: 'yes', kinds: haKinds(c.cameraPrefs?.kinds), detect: c.cameraPrefs?.detection === false ? 'no' : 'yes' } : { has: 'no' },
     controls: c.controls || c.hue || (c.shelly || []).length ? { has: 'yes', kinds: haKinds(c.controls?.kinds) } : { has: 'no' },
@@ -261,7 +262,7 @@ app.get('/api/setup/current', async (_req, res) => {
     alerts: { quiet: c.alerts?.quietHours || '22-7' },
   }, keeps: { homeAssistant: !!c.homeAssistant, hue: !!c.hue, shelly: (c.shelly || []).length, yolink: !!c.yolink, cameras: (c.cameras || []).length, ring: !!c.ring, license: !!c.license } });
 });
-app.post('/api/setup/finish', (req, res) => {
+app.post('/api/setup/finish', async (req, res) => {
   const raw = req.body?.answers || {};
   const a = strip(raw);
   const prev = isDemo() ? {} : config;   // run again: anything not answered now is kept
@@ -273,6 +274,13 @@ app.post('/api/setup/finish', (req, res) => {
   const keepPw = !acct.password && !!owner?.password;
   if (!acct.username || !/^[a-zA-Z0-9._@-]{3,40}$/.test(String(acct.username))) return res.status(400).json({ error: 'pick a username: 3-40 letters, numbers, dots or dashes' });
   if (!keepPw) { const pwErr = passwordProblem(acct.password, acct.username); if (pwErr) return res.status(400).json({ error: pwErr }); }
+  // The phone's own login (setup's "Your phone" step): checked now, made after the owner.
+  const ph = a.phone?.how === 'new' ? a.phone : null;
+  if (ph) {
+    if (!/^[a-zA-Z0-9._@-]{3,40}$/.test(String(ph.username || ''))) return res.status(400).json({ error: 'your phone login: pick a username - 3-40 letters, numbers, dots or dashes' });
+    if (String(ph.username).trim().toLowerCase() === String(acct.username).trim().toLowerCase()) return res.status(400).json({ error: 'your phone login needs a different username from the owner login' });
+    const e = passwordProblem(ph.password, ph.username); if (e) return res.status(400).json({ error: `your phone login: ${e}` });
+  }
   if (acct.terms !== true && owner?.terms?.version !== TERMS_VERSION) return res.status(400).json({ error: 'please read and accept the Terms of Use and Privacy Notice' });
   if (acct.license && !checkLicenseKey(acct.license).valid) return res.status(400).json({ error: `license key: ${checkLicenseKey(acct.license).why}` });
   const picked = (step) => (a[step]?.has === 'yes' || a[step]?.track === 'yes' ? (Array.isArray(a[step].kinds) ? a[step].kinds : []) : []);
@@ -280,26 +288,31 @@ app.post('/api/setup/finish', (req, res) => {
   // devices that work without Home Assistant
   const cams = [];
   const fr = opt('cameras', 'frigate');
-  if (fr?.url) for (const cam of (Array.isArray(raw.cameras?.frigate?._test?.cameras) ? raw.cameras.frigate._test.cameras : [])) cams.push({ id: `frigate-${cam}`, name: cam.replace(/[_-]+/g, ' ').replace(/^\w/, (x) => x.toUpperCase()), type: 'frigate', url: String(fr.url).replace(/\/+$/, ''), camera: cam });
+  const frT = raw.cameras?.frigate?._test || {};
+  // Frigate's own certificate is kept only when the test trusted it - its public part (to pin it) and its fingerprint.
+  const frPin = frT.ok && /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(String(frT.fingerprint || '')) && /^-----BEGIN CERTIFICATE-----[\sA-Za-z0-9+/=]+-----END CERTIFICATE-----\s*$/.test(String(frT.ca || '')) ? { fingerprint: frT.fingerprint, ca: frT.ca } : {};
+  if (fr?.url) for (const cam of (Array.isArray(frT.cameras) ? frT.cameras : []).filter((x) => /^[\w.-]{1,64}$/.test(String(x)))) cams.push({ id: `frigate-${cam}`, name: cam.replace(/[_-]+/g, ' ').replace(/^\w/, (x) => x.toUpperCase()), type: 'frigate', url: String(fr.url).trim().replace(/\/+$/, ''), camera: cam, ...(fr.user ? { user: String(fr.user).trim(), password: String(fr.password || '') } : {}), ...frPin });
   const rl = opt('cameras', 'reolink-local');
   if (rl?.host) cams.push({ id: 'reolink-1', name: rl.name || 'Reolink camera', type: 'reolink', host: String(rl.host).trim(), username: rl.username || 'admin', password: rl.password || '', channel: Number(rl.channel) || 0 });
   const sn = opt('cameras', 'snapshot');
   if (sn?.snapshotUrl) cams.push({ id: 'camera-1', name: sn.name || 'Camera', type: 'snapshot', snapshotUrl: sn.snapshotUrl, username: sn.username || null, password: sn.password || null });
   const shellyHosts = [...new Set(['controls', 'sensors', 'energy'].flatMap((st) => String(opt(st, 'shelly-local')?.hosts || '').split(/[\s,]+/)).filter(Boolean))];
   const yl = opt('controls', 'yolink-cloud')?.uaid ? opt('controls', 'yolink-cloud') : opt('sensors', 'yolink-cloud');
-  const feeds = [...NEWS_DEFAULTS.filter((f) => (a.news?.picks || []).includes(f.id)).map(({ name, url }) => ({ name, url })), ...(a.news?.custom || []).filter((f) => f?.url).map((f) => ({ name: f.name || f.url, url: f.url }))];
+  const gnCtx = { town: homeTown(a.house?.location), cc: homeCountry(a.house?.location) || 'US', lang: a.house?.lang || 'en' };
+  const feeds = [...(a.news?.picks || []).filter((id) => /^gn-/.test(id)).map((id) => { const f = gnFeed(id, gnCtx); return f ? { ...f, gid: id } : null; }).filter(Boolean),
+    ...NEWS_DEFAULTS.filter((f) => (a.news?.picks || []).includes(f.id)).map(({ name, url }) => ({ name, url })), ...(a.news?.custom || []).filter((f) => f?.url).map((f) => ({ name: f.name || f.url, url: f.url }))];
   const usesHa = a.homeassistant?.uses === 'yes';
   const next = {
     ...prev, version: 2, demo: undefined, setupAt: prev.setupAt || nowIso(), port: PORT,
-    house: { name: a.house?.name || 'My House', timezone: a.house?.timezone || 'UTC', units: a.house?.units || 'F', currency: a.house?.currency || 'USD', lang: ['en', 'es', 'de', 'fr', 'pt', 'it', 'nl'].includes(a.house?.lang) ? a.house.lang : 'en' },
-    location: a.house?.location?.lat != null ? { name: a.house.location.name || null, lat: Number(a.house.location.lat), lon: Number(a.house.location.lon) } : prev.location || null,
+    house: { name: a.house?.name || 'My House', timezone: a.house?.timezone || 'UTC', units: a.house?.units || 'F', currency: a.house?.currency || 'USD', lang: ['en', 'es', 'de', 'fr', 'pt', 'it', 'nl', 'ja', 'zh', 'ko', 'hi', 'pl', 'sv', 'tr'].includes(a.house?.lang) ? a.house.lang : 'en' },
+    location: a.house?.location?.lat != null ? { name: a.house.location.name || null, ...(/^[A-Z]{2}$/.test(String(a.house.location.cc || '')) ? { cc: a.house.location.cc } : {}), lat: Number(a.house.location.lat), lon: Number(a.house.location.lon) } : prev.location || null,
     signIn: { enabled: true },
     license: acct.license || prev.license || undefined,
     myCalendar: a.calendars?.mine !== 'no',
     calendars: (a.calendars?.list || []).filter((c) => c?.url).map((c) => ({ name: c.name || 'Calendar', url: String(c.url).trim(), color: c.color || '#60a5fa' })),
     sports: { teams: (a.sports?.teams || []).slice(0, 30) },
     news: { feeds },
-    reminders: (a.reminders?.list || []).filter((r) => r?.title).map((r) => ({ title: r.title, days: Array.isArray(r.days) ? r.days.map(Number) : null, time: r.time || null })),
+    reminders: undefined,   // one list now: Reminders (78-nudges.js)
     homeAssistant: draft.ha && usesHa ? { url: draft.ha.url, token: draft.ha.token } : usesHa ? prev.homeAssistant || null : null,
     // Cameras set up again in this run replace that kind (Frigate, Reolink, snapshot); the other kinds stay as they were.
     cameras: [...(prev.cameras || []).filter((c) => !cams.some((n) => n.type === c.type)), ...cams],
@@ -313,17 +326,33 @@ app.post('/api/setup/finish', (req, res) => {
     network: { provider: a.network?.kind || 'other', meraki: a.network?.meraki || a.cameras?.['meraki-mv'] || a.sensors?.['meraki-mt'] || null, unifi: a.network?.unifi || null,
       dns: a.network?.dns && a.network.dns !== 'none' ? { kind: a.network.dns, url: a.network.dnsUrl || null, key: a.network.dnsKey || null } : null, speedtest: a.network?.speedtest !== 'no' },
     energy: a.energy?.track === 'yes' ? { utility: a.energy.utility && a.energy.utility !== 'other' ? a.energy.utility : null, ratePerKwh: Number(a.energy.rate) || null, budget: Number(a.energy.budget) || null, kinds: picked('energy') } : null,
+    ai: aiOf(a.ai?.provider) && raw.ai?._test?.ok && raw.ai._test.model ? { provider: a.ai.provider, model: String(raw.ai._test.model).slice(0, 120), url: a.ai.url ? String(a.ai.url).trim() : null, apiKey: a.ai.apiKey ? String(a.ai.apiKey).trim() : null } : prev.ai || undefined,
     alerts: { phone: a.alerts?.phone === 'ha' && usesHa ? 'homeassistant' : null, quietHours: a.alerts?.quiet || '22-7' },
     addedToHomeAssistant: [...(prev.addedToHomeAssistant || []), ...(Array.isArray(raw._added) ? raw._added.slice(0, 50).map((x) => ({ domain: String(x.domain), title: String(x.title) })) : [])],
   };
+  // Network monitoring keys entered in setup become Network sources (the same as adding them in the Network tab).
+  const mer = [a.network?.kind === 'meraki' && a.network?.meraki, opt('cameras', 'meraki-mv'), opt('sensors', 'meraki-mt')].find((x) => x?.apiKey);
+  const uni = a.network?.kind === 'unifi' && a.network?.unifi?.apiKey && a.network.unifi.url ? a.network.unifi : null;
+  const srcs = (prev.network?.sources || []).filter((x) => !(mer && x.kind === 'meraki') && !(uni && x.kind === 'unifi'));
+  if (mer) srcs.push({ id: crypto.randomBytes(5).toString('hex'), kind: 'meraki', name: 'Cisco Meraki', region: 'us', ...(/^[\w-]+\//.test(String(mer.network || '')) ? { org: String(mer.network).split('/')[0] } : {}), secret: String(mer.apiKey).trim() });
+  if (uni) { try { const u = new URL(String(uni.url).trim()); srcs.push({ id: crypto.randomBytes(5).toString('hex'), kind: 'unifi', name: 'UniFi', url: `${u.protocol}//${u.host}`, ...(uni.site ? { site: String(uni.site) } : {}), secret: String(uni.apiKey).trim() }); } catch { /* not an address */ } }
+  next.network.sources = srcs.slice(0, 10);
+  if (mer) next.network.meraki = null;   // the key lives in its source now (sealed there)
   for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
   try { saveConfig(next); } catch (err) { return res.status(500).json({ error: `could not save the settings: ${err.message}` }); }
-  if (typeof nudgesFromSetup === 'function') nudgesFromSetup(next.reminders);
+  if (typeof nudgesFromSetup === 'function') nudgesFromSetup((a.reminders?.list || []).filter((r) => r?.title).map((r) => ({ title: r.title, days: Array.isArray(r.days) ? r.days.map(Number) : null, time: r.time || null, icon: r.icon, sound: r.sound })));
   if (!isDemo()) authSetOwner({ username: acct.username, passwordHash: keepPw ? null : hashSecret(acct.password), acceptedTerms: acct.terms === true });
+  let pair = null;
+  if (!isDemo() && ['new', 'owner'].includes(a.phone?.how)) {
+    const who = ph ? authAddUser({ username: ph.username, passwordHash: hashSecret(ph.password), name: ph.name || `${String(ph.username)}`, role: 'admin', acceptedTerms: acct.terms === true }) : users.list.find((x) => x.role === 'owner');
+    try { if (who && typeof makePairCode === 'function') pair = await makePairCode(req, who, 30); } catch { /* pair later in Settings › Phones & alerts */ }
+  }
+  // "Use the app away from home": secure access, switched on in the background (it can take a minute)
+  if (!isDemo() && ['new', 'owner'].includes(a.phone?.how) && a.phone?.away !== 'no' && !config.remote?.on && typeof remoteOn === 'function') remoteOn().catch((e) => { if (typeof remote === 'object') { remote.state = 'error'; remote.why = String(e.message); } });
   setupReopened = 0; draft.ring = null; draft.hue = null;
   if (next.ring && typeof ringConnect === 'function' && proStatus().pro) ringConnect();
   console.log(`  setup: done for "${next.house.name}"`);
-  res.json({ ok: true });
+  res.json({ ok: true, ...(pair ? { pair } : {}) });
 });
 app.post('/api/setup/demo', (_req, res) => {
   if (isConfigured() && !isDemo()) return res.status(403).json({ error: 'already set up' });

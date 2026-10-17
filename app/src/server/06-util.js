@@ -4,8 +4,15 @@
  * and a tolerant XML reader for RSS/Atom.
  * ====================================================================== */
 const UA = `CasaTorch/${VERSION} (+https://casatorch.com)`;
+/* Some public feeds (ESPN's scoreboard, a few news sites) turn away anything that names itself as an app.
+   If one answers "forbidden", CasaTorch asks once more the way a browser would. */
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
+const PICKY_HOSTS = /(^|\.)(espn\.com|espncdn\.com)$/i;
 async function getText(url, { headers = {}, timeout = 12000, method = 'GET', body } = {}) {
-  const r = await fetch(url, { method, body, headers: { 'User-Agent': UA, ...headers }, signal: AbortSignal.timeout(timeout) });
+  let host = ''; try { host = new URL(url).hostname; } catch { /* fetch reports it */ }
+  const ua = headers['User-Agent'] || (PICKY_HOSTS.test(host) ? BROWSER_UA : UA);
+  let r = await fetch(url, { method, body, headers: { ...headers, 'User-Agent': ua }, signal: AbortSignal.timeout(timeout) });
+  if (r.status === 403 && ua !== BROWSER_UA && method === 'GET') { r.body?.cancel?.(); r = await fetch(url, { method, headers: { ...headers, 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(timeout) }); }
   // Never read an endless or huge answer into memory (a calendar or feed link pointing at something else).
   const max = 32 * 1024 * 1024, len = Number(r.headers.get('content-length') || 0);
   if (len > max) { r.body?.cancel?.(); throw Object.assign(new Error('that answer is too big'), { status: 413 }); }

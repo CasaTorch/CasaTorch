@@ -7,7 +7,7 @@ There are two ways a brand gets into CasaTorch:
    (`app/src/server/32-ha.js`, `haDevice`), and unknown kinds still appear as readable values.
    Home Assistant cameras get pictures and live video (MJPEG through `camera_proxy_stream`).
 2. **Directly** - one file in `app/src/server/`, registered with `integration()`. That's all it takes
-   for it to appear on the Connect page, in Home, Controls, Cameras, the 3D home, alerts and Ask the house.
+   for it to appear on the Connect page, in Home, Controls, Cameras, the 3D home, alerts and Home AI Agent.
 
 The build (`node app/build.mjs`) joins `app/src/server/*.js` in file-name order into one module, so
 a new file just needs a number after `30-devices.js` (where `integration()` lives), e.g.

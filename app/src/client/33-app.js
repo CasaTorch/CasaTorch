@@ -64,7 +64,7 @@ async function thisPhoneCard() {
       el('dl', { class: 'kv' }, el('dt', {}, 'Phone'), el('dd', {}, me?.device?.name || 'This phone'), el('dt', {}, 'Signed in as'), el('dd', {}, me?.user?.name || me?.user?.username || '-'), el('dt', {}, 'Home'), el('dd', {}, me?.home?.name || '-')),
       el('label', { class: 'field check' }, lock, el('span', {}, el('b', {}, `Unlock with ${bioName}`), el('span', { class: 'small muted', style: 'display:block' }, bio.available ? 'Asked when the app opens, and after a few minutes away.' : 'Set it up in your phone\'s settings first.'))),
       el('h3', { class: 'sub' }, 'Alerts on this phone'),
-      p.on ? el('p', { class: 'small good' }, '✓ Alerts are on. They\'re encrypted on your CasaTorch - only this phone can read them.') : el('p', { class: 'small muted' }, 'Water, smoke, the doorbell, a device going offline, your nudges - on this phone, even when the app is closed.'),
+      p.on ? el('p', { class: 'small good' }, '✓ Alerts are on. They\'re encrypted on your CasaTorch - only this phone can read them.') : el('p', { class: 'small muted' }, 'Water, smoke, the doorbell, a device going offline, your reminders - on this phone, even when the app is closed.'),
       el('label', { class: 'field' }, el('span', {}, 'Send'), level),
       el('div', { class: 'row wrap', style: 'gap:8px' },
         p.on ? el('button', { class: 'btn small', onclick: () => post('/api/app/push/test', {}).then(() => toast('Sent - it should arrive in a few seconds.')).catch((e) => toast(e.message, 5000)) }, 'Send a test')

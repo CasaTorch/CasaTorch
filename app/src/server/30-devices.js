@@ -71,8 +71,36 @@ async function houseDevices() {
   if (isDemo() && process.env.CASATORCH_DEMO_NOHA === '1') r.devices = r.devices.filter((d) => d.provider !== 'ha');
   const names = uiPrefs().deviceNames || {};
   for (const d of r.devices) { d.originalName = d.name; if (names[d.id]) d.name = names[d.id]; }
+  // Cameras you removed, and the same camera reached twice (through Home Assistant and directly): only one shows.
+  const { show, hidden } = cameraSort(r.devices);
+  r.devices = r.devices.filter((d) => d.kind !== 'camera' || show.has(d.id));
+  r.hiddenCameras = hidden;
   return r;
 }
+/* Which cameras show. A camera reached both directly (Frigate, Reolink, Ring, Meraki...) and through Home Assistant
+   shows once - the direct one, which is faster and can stream live. You can remove any camera, and add any back. */
+const camKey = (d) => String(d.originalName || d.name || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/\b(camera|cam|doorbell cam|ipcam)\b/g, '').replace(/[^a-z0-9]+/g, '');
+function cameraSort(devices) {
+  const prefs = config.cameraHide || {}, removed = new Set(prefs.hidden || []), kept = new Set(prefs.shown || []);
+  const cams = devices.filter((d) => d.kind === 'camera'), direct = new Map();
+  for (const d of cams) if (d.provider !== 'ha' && camKey(d)) direct.set(camKey(d), d);
+  const show = new Set(), hidden = [];
+  for (const d of cams) {
+    const twin = d.provider === 'ha' ? direct.get(camKey(d)) : null;
+    if (removed.has(d.id)) hidden.push({ id: d.id, name: d.name, source: d.source || d.provider, why: 'removed' });
+    else if (twin && !kept.has(d.id)) hidden.push({ id: d.id, name: d.name, source: d.source || d.provider, why: 'duplicate', of: twin.name });
+    else show.add(d.id);
+  }
+  return { show, hidden };
+}
+app.put('/api/cameras/:id/visible', requireRole('admin'), express.json({ limit: '1kb' }), (req, res) => {
+  if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
+  const id = String(req.params.id).slice(0, 200), on = req.body?.visible === true, p = config.cameraHide || {};
+  const hidden = new Set(p.hidden || []), shown = new Set(p.shown || []);
+  if (on) { hidden.delete(id); shown.add(id); } else { hidden.add(id); shown.delete(id); }
+  saveConfig({ ...config, cameraHide: { hidden: [...hidden].slice(-300), shown: [...shown].slice(-300) } });
+  res.json({ ok: true });
+});
 /* ---- What the whole house is using right now, without counting anything twice. ----
    1. A meter you picked (Settings > Energy), or one that is clearly the whole house ("house power",
       "grid consumption", "mains"...): that is the answer.
@@ -239,7 +267,7 @@ async function fetchImage(url, user, pass) {
   return { type: r.headers.get('content-type') || 'image/jpeg', buf: Buffer.concat(chunks) };
 }
 const CAMERA_SNAPSHOT = {
-  frigate: (c) => fetchImage(`${String(c.url).replace(/\/+$/, '')}/api/${encodeURIComponent(c.camera)}/latest.jpg?h=720`),
+  frigate: (c) => frigateSnapshot(c),
   reolink: (c) => fetchImage(`http://${c.host}/cgi-bin/api.cgi?cmd=Snap&channel=${c.channel || 0}&rs=casatorch${Date.now()}&user=${encodeURIComponent(c.username)}&password=${encodeURIComponent(c.password)}`),
   snapshot: (c) => fetchImage(c.snapshotUrl, c.username, c.password),
 };
@@ -252,7 +280,9 @@ setTimeout(() => { if (!isDemo()) for (const c of config.cameras || []) if (CAME
 app.get('/api/cameras/:id/live', async (req, res) => {
   const c = (config.cameras || []).find((x) => x.id === req.params.id);
   if (!c || c.type !== 'frigate') return res.status(404).end();
-  return mjpegPass(req, res, `camera:${c.id}`, `${String(c.url).replace(/\/+$/, '')}/api/${encodeURIComponent(c.camera)}?h=720&fps=10&bbox=0&timestamp=0&zones=0&mask=0&motion=0&regions=0`);
+  // the grid asks for a small, gentle stream; the full-screen view for the full one
+  const h = Math.min(1080, Math.max(180, Number(req.query.h) || 720)), fps = Math.min(15, Math.max(1, Number(req.query.fps) || 10));
+  return mjpegPass(req, res, `camera:${c.id}:${h}`, (signal) => frigateStream(c, signal, { h, fps }));
 });
 app.get('/api/cameras/:id/snapshot', async (req, res) => {
   if (isDemo()) {   // a drawn stand-in so the demo has pictures

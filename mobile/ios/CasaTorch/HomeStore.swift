@@ -57,6 +57,15 @@ final class HomeStore {
         if let a = workingAddress { homes[i].addresses.here = "\(a.scheme ?? "https")://\(a.host ?? "")\(a.port.map { ":\($0)" } ?? "")" }
         currentId = id; save()
     }
+    /// The home told us its addresses (only trusted when it's the same home): keep them current.
+    func learn(_ id: String, hello: [String: Any]) {
+        guard let i = homes.firstIndex(where: { $0.id == id }), (hello["home"] as? [String: Any])?["id"] as? String == id else { return }
+        let ok: (Any?) -> String? = { v in guard let s = v as? String, let u = URL(string: s), u.scheme == "https", u.host != nil else { return nil }; return s }
+        var changed = false
+        if let r = ok(hello["remote"]), homes[i].addresses.remote != r { homes[i].addresses.remote = r; changed = true }
+        if let l = ok(hello["secure"]), homes[i].addresses.lan != l { homes[i].addresses.lan = l; changed = true }
+        if changed { save() }
+    }
     func remove(_ id: String) {
         homes.removeAll { $0.id == id }; save()
         Keychain.delete(service: Keychain.tokenService, account: id)

@@ -9,7 +9,9 @@
  * Translations: public/i18n/<lang>.json, built from tools/i18n-strings.tsv.
  * ====================================================================== */
 (() => {
-  const LANGS = { en: 'English', es: 'Español', de: 'Deutsch', fr: 'Français', pt: 'Português', it: 'Italiano', nl: 'Nederlands' };
+  const LANGS = { en: 'English', es: 'Español', de: 'Deutsch', fr: 'Français', pt: 'Português', it: 'Italiano', nl: 'Nederlands', pl: 'Polski', sv: 'Svenska', tr: 'Türkçe', hi: 'हिन्दी', ja: '日本語', zh: '简体中文', ko: '한국어' };
+  /* First visit: the browser's own language, when CasaTorch speaks it. */
+  const guess = () => { for (const l of navigator.languages || [navigator.language || 'en']) { const k = String(l).toLowerCase().split('-')[0]; if (LANGS[k]) return k; } return 'en'; };
   const KEY = 'casatorch-lang';
   let lang = 'en', dict = {};
   try { const c = JSON.parse(localStorage.getItem(KEY) || 'null'); if (c && LANGS[c.lang] && c.dict) { lang = c.lang; dict = c.dict; } } catch { /* first visit or private window */ }
@@ -29,6 +31,6 @@
     try { localStorage.setItem(KEY, JSON.stringify({ lang, dict })); } catch { /* private window */ }
     return true;
   }
-  window.CasaI18n = { LANGS, T, use, get lang() { return lang; } };
+  window.CasaI18n = { LANGS, T, use, guess, get lang() { return lang; } };
   window.T = T;
 })();

@@ -65,6 +65,8 @@ function mapSecrets(obj, fn, trail = '') {
   }
   return out;
 }
+/** A secret from config: sealed on disk, open in memory after loading - either way, the plain value. */
+const secretOf = (v) => (SEALED.test(String(v || '')) ? unseal(v) || '' : String(v || ''));
 const sealConfig = (c) => mapSecrets(c, (v) => (SEALED.test(v) ? v : seal(v)));
 const openConfig = (c) => mapSecrets(c, (v) => (SEALED.test(v) ? (unseal(v) ?? '') : v));
 let plaintextOnDisk = false;

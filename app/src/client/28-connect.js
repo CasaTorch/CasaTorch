@@ -13,7 +13,7 @@ function connectItems(cat) {
   add({ key: 'calendars', step: 'calendars', label: 'Calendars', desc: 'Google, iCloud, Outlook - any calendar link, plus CasaTorch\'s own family calendar', how: 'direct', ids: ['calendars'] }, 'day');
   add({ key: 'sports', step: 'sports', label: 'Your teams', desc: 'Live scores and next games for NFL, NBA, MLB, NHL, MLS, college and more', how: 'direct', ids: ['sports'] }, 'day');
   add({ key: 'news', step: 'news', label: 'Headlines', desc: 'Pick news sources or add any RSS feed', how: 'direct', ids: ['news'] }, 'day');
-  add({ key: 'reminders', label: 'Nudges', desc: 'Your home\'s reminders: trash night, the dog\'s dinner, bills due', how: 'direct', href: '#alerts', ids: ['reminders'] }, 'day');
+  add({ key: 'reminders', label: 'Reminders', desc: 'Your home\'s reminders: trash night, the dog\'s dinner, bills due', how: 'direct', href: '#reminders', ids: ['reminders'] }, 'day');
   for (const g of ['cameras', 'controls', 'sensors', 'energy']) {
     const opts = step(g)?.branches?.yes?.pick?.options || [];
     for (const o of opts) {

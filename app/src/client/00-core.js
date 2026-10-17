@@ -68,9 +68,10 @@ const tempOf = (c) => (c == null ? '-' : S.units === 'C' ? `${c.toFixed(1)}°` :
 const devIconName = (d) => (d.kind === 'sensor' && d.tempC != null ? 'thermo' : d.kind === 'sensor' && d.humidity != null && d.water == null ? 'drop' : d.water != null ? 'drop' : d.smoke != null ? 'fire' : d.kind === 'cover' ? (d.risky ? 'door' : 'blinds') : d.open != null ? 'door' : d.meter ? 'bolt' : { light: 'bulb', switch: 'plug', plug: 'plug', media: 'music', climate: 'thermo', lock: 'lock', camera: 'camera', fan: 'fan', action: 'play', vacuum: 'vacuum', alarm: 'shield', presence: 'user', value: 'gauge' }[d.kind] || 'dotc');
 
 const TABS = [];   // filled by the tab files
-const tab = (t) => TABS.push(t);
+const tab = (t) => { const k = t.after ? TABS.findIndex((x) => x.id === t.after) : -1; if (k >= 0) TABS.splice(k + 1, 0, t); else TABS.push(t); };   // after: its place on the main bar
 let refresher = null, current = null;
 function setTop(title, sub = '', actions = []) { $('#title').textContent = title; $('#subtitle').textContent = sub; $('#actions').replaceChildren(...actions); }
+let showSeq = 0;
 async function show(id) {
   const [base, sub] = String(id || '').split('/');   // #settings/people opens Settings at People
   const t = TABS.find((x) => x.id === base) || TABS[0];
@@ -79,10 +80,16 @@ async function show(id) {
   if (window.innerWidth <= 760 && S.ui) drawNav();   // the phone bar's More lights up for a page inside it
   // live video left on the old page would keep downloading in the background: stop it
   for (const img of document.querySelectorAll('#view .cam.live img')) { img.onerror = null; img.removeAttribute('src'); }
-  const main = el('div', { class: 'view-in' }); $('#view').replaceChildren(main); refresher = null;   // a fresh box per visit: a slow, older render can't write into the new page
+  // A fresh box per visit (a slow, older render can't write into the new page). The page you're on stays until the
+  // new one has drawn - or a quarter second has passed - so switching never flashes blank or jumps.
+  const view = $('#view'), main = el('div', { class: 'view-next' }); refresher = null; showSeq = (showSeq || 0) + 1; const seq = showSeq;
+  view.append(main);
+  const reveal = () => { if (seq !== showSeq || !main.isConnected || !main.classList.contains('view-next')) return; for (const n of [...view.children]) if (n !== main) n.remove(); main.classList.remove('view-next'); main.classList.add('view-in'); };
+  const early = setTimeout(reveal, 250);
   setTop(tabLabel(t));
   try { const r = (await t.render(main, sub || null)) || null; if (main.isConnected) refresher = r; }
   catch (err) { main.append(el('div', { class: 'card empty' }, `Could not load this: ${err.message}`)); }
+  clearTimeout(early); reveal();
 }
 /* Once the dashboard is up and the browser is idle, the 3D Home's files are fetched ahead (Pro only, only if its
    button is on the bar), so opening it is instant. Skipped on metered or "save data" connections. */
@@ -115,7 +122,7 @@ function drawBanner() {
   const p = s.pro || {}; b.className = ''; b.replaceChildren();
   if (s.demo) b.append(T('Demo mode - sample data, no real house connected.'), el('a', { href: '/setup.html' }, T('Set up my house')));
   else if (S.updates?.available) b.append(icon('spark', 16), `CasaTorch ${S.updates.latest} is available${S.updates.auto ? ' - it installs itself overnight.' : '.'}`, el('a', { href: '#settings' }, S.updates.auto ? 'Details' : 'How to update'));
-  else if (p.plan === 'trial') b.append(icon('spark', 16), `Pro trial: ${p.trialDaysLeft} day${p.trialDaysLeft === 1 ? '' : 's'} left - 3D Home, Ask the house and Ring are unlocked.`, el('a', { href: '#settings' }, 'Enter a license key'));
+  else if (p.plan === 'trial') b.append(icon('spark', 16), p.trialDaysLeft === 1 ? T('Pro trial: 1 day left - 3D Home, your Home AI Agent and Ring are unlocked.') : T('Pro trial: {n} days left - 3D Home, your Home AI Agent and Ring are unlocked.', { n: p.trialDaysLeft }), el('a', { href: '#settings' }, T('Enter a license key')));
   else if (p.grace) b.append('Your Pro subscription has ended - Pro keeps working for a few more days.', el('a', { href: '#settings' }, 'Renew'));
   else if (!p.pro) { b.className = 'free'; b.append(T('CasaTorch Free.'), el('a', { href: '#settings' }, T('See what Pro adds'))); }
   b.hidden = !b.textContent;
@@ -154,8 +161,9 @@ async function runRefresh() {
   refreshing = true;
   const view = $('#view'), keys = () => { const n = {}; return [...view.querySelectorAll('details')].map((d) => { const k = `${d.className}|${(n[d.className] = (n[d.className] || 0) + 1)}`; return [k, d]; }); };
   const open = new Set(keys().filter(([, d]) => d.open).map(([k]) => k));
+  const box = view.firstElementChild, h = box?.offsetHeight || 0; if (box && h) box.style.minHeight = `${h}px`;   // a redraw never shrinks the page under you
   try { await r(); } catch { /* the next tick tries again */ }
-  finally { refreshing = false; }
+  finally { refreshing = false; if (box) requestAnimationFrame(() => { box.style.minHeight = ''; }); }
   if (r === refresher && open.size) for (const [k, d] of keys()) if (open.has(k)) d.open = true;
   if (refreshAgain) { refreshAgain = false; if (r === refresher) runRefresh(); }
 }

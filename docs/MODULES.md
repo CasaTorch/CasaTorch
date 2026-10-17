@@ -48,7 +48,7 @@ fails the privacy scan (`tools/scrub-check.mjs`).
 | 12z-agent-catch-all.js | core | |
 | 13-sign-in.js | core | |
 | 14-vpn-apps.js | drop | |
-| 15-ask-helpers.js | pro | Ask the house |
+| 15-ask-helpers.js | pro | Home AI Agent |
 | 16-speed-test.js | core | |
 | 17-notifications-chats.js | split | Alerts engine core; media alerts dropped |
 | 18-movies-shows.js | drop | |

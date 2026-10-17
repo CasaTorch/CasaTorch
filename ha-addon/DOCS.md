@@ -30,7 +30,7 @@ http:// CasaTorch inside it. Open Home Assistant on your home network, or put Ca
 ## Wall panel
 
 On the tablet or screen on the wall, open `http://homeassistant.local:8090/?panel=1`. Panel mode
-keeps the screen awake and shows the status bar and the "Ask the house" bar.
+keeps the screen awake and shows the status bar and the "Home AI Agent" bar.
 
 ## Your data
 
