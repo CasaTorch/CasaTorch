@@ -348,13 +348,21 @@ app.delete('/api/auth/sessions/:id', (req, res) => {
 app.post('/api/auth/sessions/others', (req, res) => { const u = me(req, res); if (!u) return; endSessionsOf(u.id, req.session.key); audit(req, 'other-sessions-ended'); res.json({ ok: true }); });
 
 /* ---- admin: people, policy, Google, wall panels, audit ---- */
+/* The address to put in links for other devices (invites, wall panels). At home with the secure address ready:
+   that one - it opens on any device in the house, encrypted, and it's where the browser would be moved anyway
+   (a link to the plain address would sign a wall panel in there, then lose the sign-in when it moves to https).
+   Made on this computer (localhost)? The address other devices can open instead. */
+function linkBase(req) {
+  let host = String(req.headers.host || '');
+  const atHome = /^(localhost|127\.|\[::1\]|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|[\w-]+\.local(:|$))/i.test(host);
+  if (atHome && LOCAL_TLS.url) return LOCAL_TLS.url;
+  if (/^(localhost|127\.|\[::1\])/i.test(host) && typeof lanAddress === 'function' && lanAddress()) host = `${lanAddress()}:${host.split(':').pop().replace(/\D/g, '') || PORT}`;
+  return `${req.protocol}://${host}`;
+}
 const inviteLink = (req, u, reset = false) => {
   const tok = crypto.randomBytes(24).toString('base64url');
   u.invite = { hash: sha256(tok), exp: new Date(Date.now() + 7 * 86400_000).toISOString(), reset };
-  // Made on this computer (localhost)? Give the address other devices on the network can open instead.
-  let host = String(req.headers.host || '');
-  if (/^(localhost|127\.|\[::1\])/i.test(host) && typeof lanAddress === 'function' && lanAddress()) host = `${lanAddress()}:${host.split(':').pop().replace(/\D/g, '') || PORT}`;
-  return `${req.protocol}://${host}/login.html?invite=${tok}`;
+  return `${linkBase(req)}/login.html?invite=${tok}`;
 };
 app.get('/api/users', requireRole('admin'), (_req, res) => res.json({ users: users.list.map(safeUser), panels: (users.panels || []).map(({ id, name, role, createdAt, lastUsed }) => ({ id, name, role, createdAt, lastUsed })), policy: users.policy, google: users.google ? { clientId: users.google.clientId, hasSecret: !!users.google.secret } : null, roles: ROLES }));
 app.post('/api/users', requireRole('admin'), express.json({ limit: '4kb' }), (req, res) => {
@@ -414,7 +422,7 @@ app.post('/api/auth/admin/panels', express.json({ limit: '4kb' }), requireRole('
   const role = req.body?.role === 'member' ? 'member' : 'viewer', name = String(req.body?.name || 'Wall panel').trim().slice(0, 40);
   const tok = crypto.randomBytes(32).toString('base64url'), p = { id: newId(), name, role, hash: sha256(tok), createdAt: nowIso() };
   (users.panels ||= []).push(p); saveUsers(); audit(req, 'panel-link-made', { panel: name, role });
-  res.json({ ok: true, link: `${req.protocol}://${req.headers.host}/api/auth/panel?token=${tok}` });
+  res.json({ ok: true, link: `${linkBase(req)}/api/auth/panel?token=${tok}` });
 });
 app.delete('/api/auth/admin/panels/:id', requireRole('admin'), (req, res) => {
   const p = (users.panels || []).find((x) => x.id === req.params.id); if (!p) return res.status(404).json({ error: 'no such panel' });

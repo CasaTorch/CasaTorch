@@ -255,12 +255,6 @@
                     "type": "url",
                     "placeholder": "http://192.168.1.10:5000",
                     "required": true
-                  },
-                  {
-                    "id": "go2rtc",
-                    "label": "go2rtc address (for live view, optional)",
-                    "type": "url",
-                    "placeholder": "http://192.168.1.10:1984"
                   }
                 ],
                 "test": "frigate",
@@ -347,7 +341,7 @@
               {
                 "id": "snapshot",
                 "label": "Any camera with a snapshot address",
-                "desc": "Amcrest, Dahua, Hikvision, Axis, Wyze bridge... (picture refreshes every 30 s)",
+                "desc": "Amcrest, Dahua, Hikvision, Axis, Wyze bridge... (a fresh picture every few seconds while you watch)",
                 "method": "direct",
                 "fields": [
                   {
@@ -398,25 +392,7 @@
               }
             ]
           },
-          "fields": [
-            {
-              "id": "detect",
-              "label": "Do you want alerts for people and cars (not just motion)?",
-              "type": "choice",
-              "options": [
-                [
-                  "yes",
-                  "Yes"
-                ],
-                [
-                  "no",
-                  "No"
-                ]
-              ],
-              "default": "yes",
-              "help": "Needs Frigate. If you don't have it, CasaTorch shows how to add it."
-            }
-          ]
+          "fields": []
         }
       }
     },
@@ -709,10 +685,6 @@
                   "Smoke / CO"
                 ],
                 [
-                  "door",
-                  "Doors opened at night"
-                ],
-                [
                   "battery",
                   "Low batteries"
                 ],
@@ -839,7 +811,7 @@
           "provider": {
             "id": "utility",
             "label": "Your power company's bill and usage (needs Home Assistant)",
-            "help": "With Home Assistant, sign in with your power company's website login and CasaTorch gets your real bill and usage (your password goes to Home Assistant only). Without it, enter your price per kWh.",
+            "help": "With Home Assistant, sign in with your power company's website login (your password goes to Home Assistant only); its usage readings then show in CasaTorch. CasaTorch works out costs from your price per kWh - enter it in Settings › Energy. Without Home Assistant, just enter your price per kWh.",
             "method": "ha",
             "domain": "opower",
             "otherLabel": "Mine isn't listed"
@@ -940,7 +912,7 @@
                 "label": "A UPS (battery backup) plugged into a server by USB",
                 "method": "ha",
                 "domain": "nut",
-                "hint": "CasaTorch also reads it through its server agent - this just adds it to Home Assistant too."
+                "hint": "This adds it to Home Assistant; its battery level and status then show in CasaTorch."
               }
             ]
           }
