@@ -44,8 +44,8 @@ CasaTorch never phones home to check it.
 | **Ask the house** - plain-English questions about your home; suggests actions you tap to do; in the panel-mode status bar too. Bring your own AI (Claude, OpenAI - **billed to you by them**) or run it free and privately with Ollama | | ✓ | Now |
 | **Ring** doorbells and cameras without Home Assistant (Labs - unofficial API) | | ✓ | Now |
 | **Away from home** - secure remote access from your phone, no port forwarding | | ✓ | Coming |
-| **Phone alerts** - push notifications for leaks, doorbell, alarms, with quiet hours | | ✓ | Coming |
-| **CasaTorch apps** for iPhone, iPad and Android (App Store / Play Store) | | ✓ | Coming |
+| **Phone alerts** - push notifications for leaks, doorbell, alarms, with quiet hours (web app on your home screen) | ✓ | ✓ | Now |
+| **CasaTorch apps** for iPhone, iPad and Android (App Store / Play Store): Face ID / fingerprint lock, end-to-end encrypted alerts, LiDAR room scans | ✓ | ✓ | Coming (built, in testing) |
 | **Smart alerts** - doorbell and motion only when nobody's home; critical alerts repeat every 10 minutes until acknowledged | | ✓ | Now |
 | Fewer false alarms: an alert must still be there a minute later (water and smoke go out at once) | ✓ | ✓ | Now |
 | **Weekly report** - every Monday: energy and cost vs the week before, always-on load, top devices, alerts, internet and server downtime, tips (written by your AI if connected, otherwise by rules); phone alert | | ✓ | Now |

@@ -28,8 +28,9 @@ watch your home around the clock. The box does that; your devices are screens fo
    the CasaTorch relay; your phone connects through it. No port forwarding, no VPN to set up. Your
    data stays on your box - the relay only passes it through. Push notifications for leaks,
    doorbell and alarms.
-3. **App Store and Play Store apps** *(Pro)* - the same app, with native push notifications and a
-   box finder for first setup.
+3. **App Store and Play Store apps** *(built, in testing; free in every edition)* - the same app, with
+   Face ID / fingerprint lock, end-to-end encrypted alerts, a box finder and LiDAR room scans. See
+   [mobile/README.md](../mobile/README.md).
 4. **CasaTorch Lite** *(exploring)* - a cloud-only version with no box, for weather, calendars,
    scores, Ring, YoLink and Ask the house - an easy way to try CasaTorch before adding a Raspberry Pi.
 
