@@ -203,6 +203,6 @@ async function updatesCard() {
     u.available ? el('p', { class: 'small' }, u.how, ' ', el('a', { href: u.download, target: '_blank', rel: 'noopener' }, 'Downloads')) : null,
     sw('Check for updates once a day', u.check, (e) => save({ check: e.target.checked }), 'Sends only the version number to casatorch.com.'),
     u.canAuto ? sw('Install updates automatically overnight', u.auto, (e) => save({ auto: e.target.checked })) : null,
-    f ? sw('Help me find this CasaTorch at casatorch.com/find', f.announce, async (e) => { try { await post('/api/find', { announce: e.target.checked }); toast('Saved'); } catch (err) { toast(err.message); } }, `Shares only its home-network address${f.address ? ` (${f.address})` : ''}, and only with browsers on your own internet connection.`) : null,
+    f ? sw('Open this CasaTorch from casatorch.com/home', f.announce, async (e) => { try { await post('/api/find', { announce: e.target.checked }); toast('Saved'); } catch (err) { toast(err.message); } }, `Shares only its home-network address${f.address ? ` (${f.address})` : ''}, and only with browsers on your own internet connection.`) : null,
     el('div', { class: 'row wrap' }, checkBtn));
 }
