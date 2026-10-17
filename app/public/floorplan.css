@@ -236,3 +236,59 @@ body.editing #themeSeg { visibility: hidden; }
 #totals .stat.power.good, #totals .stat.power.warn, #totals .stat.power.bad { box-shadow: inset 0 0 0 1px var(--tone); color: var(--tone); }
 .note.vs.good { color: #34d399; } .note.vs.warn { color: var(--warm); } .note.vs.bad { color: var(--bad); font-weight: 600; }
 .kpis b.bad { color: var(--bad); }
+/* ---- the screen, your way: cards you arrange (floorplan-dock.js) ---- */
+body:not(.editing) #left.dock { background: none; border: 0; padding: 0; box-shadow: none; backdrop-filter: none; width: var(--dock-l, 300px); display: flex; flex-direction: column; gap: 10px; overflow-y: auto; scrollbar-width: none; }
+.dcard { position: relative; min-width: 0; }
+body:not(.editing) #left.dock > .dcard, #tiles.dock > .dcard.k-panel, #floats > .dcard { background: var(--panel); backdrop-filter: var(--blur); border: 1px solid var(--line); border-radius: 20px; padding: 14px 16px; box-shadow: 0 18px 50px rgba(0, 0, 0, .32); flex: none; }
+#left.dock > .dcard > .clock { margin-bottom: 0; } #left.dock > .dcard > .sunrow { margin: 0; }
+#tiles.dock { width: var(--dock-r, 200px); }
+#tiles .dcard.k-tile > .tile { width: 100%; }
+#left.dock > .dcard.k-tile { background: none; border: 0; padding: 0; box-shadow: none; backdrop-filter: none; } #left .dcard.k-tile > .tile { width: 100%; }
+#floats { position: fixed; inset: 0; pointer-events: none; z-index: 4; } #floats > .dcard { position: absolute; pointer-events: auto; max-width: calc(100vw - 28px); }
+#floats > .dcard.k-tile { padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; } #floats .dcard.k-tile > .tile { width: 100%; }
+/* sizes */
+.dcard.sz-s .clock b { font-size: 24px; } .dcard.sz-l .clock b { font-size: 48px; }
+.dcard.sz-s .wdays, .dcard.sz-s .wnow small { display: none; } .dcard.sz-l .wnow b { font-size: 40px; }
+.dcard.sz-s .tile b { font-size: 17px; } .dcard.sz-s .tile small { display: none; } .dcard.sz-s .tile { padding: 8px 10px; }
+.dcard.sz-l .tile b { font-size: 30px; } .dcard.sz-l .tile { padding: 14px 16px; } .dcard.sz-l .tile small { white-space: normal; }
+/* extra cards */
+.dcams { display: grid; gap: 8px; } .dcam { all: unset; position: relative; display: block; border-radius: 14px; overflow: hidden; background: #000; aspect-ratio: 16 / 9; cursor: pointer; }
+.dcam img { width: 100%; height: 100%; object-fit: cover; display: block; } .dcap { position: absolute; left: 8px; bottom: 6px; font-size: 12px; font-weight: 600; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .8); }
+.dcard.sz-s .dcam { aspect-ratio: 4 / 3; }
+.needs, .agenda { display: grid; gap: 4px; } .nrow { all: unset; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; cursor: pointer; background: color-mix(in srgb, var(--text) 4%, transparent); }
+.nrow .dn, .arow .dn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .nrow small, .arow small { color: var(--muted); font-size: 12px; } .nrow.warn small { color: var(--warm); } .nrow.bad small { color: var(--bad); font-weight: 700; }
+.arow { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 14px; } .note.good { color: var(--good, #34d399); }
+.dnote { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.4; font-weight: 500; } .dcard.sz-l .dnote { font-size: 22px; } .dcard.sz-s .dnote { font-size: 14px; }
+.dnote-edit { width: 100%; resize: vertical; font: inherit; color: var(--text); background: color-mix(in srgb, var(--text) 6%, transparent); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+/* arranging */
+body.arranging .dcard { outline: 2px dashed color-mix(in srgb, var(--hl) 55%, transparent); outline-offset: 2px; padding-top: 40px !important; animation: dwiggle .34s ease-in-out infinite alternate; }
+body.arranging .dcard:nth-child(2n) { animation-delay: -.17s; }
+@keyframes dwiggle { from { transform: rotate(-.3deg); } to { transform: rotate(.3deg); } } @media (prefers-reduced-motion: reduce) { body.arranging .dcard { animation: none; } }
+body.arranging .dcard > :not(.dbar):not(.dnote-edit) { pointer-events: none; }
+.dbar { position: absolute; top: 6px; left: 6px; right: 6px; display: flex; align-items: center; gap: 4px; z-index: 2; }
+.dbar .dname { flex: 1; min-width: 0; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dcard .dbar button { all: unset; box-sizing: border-box; cursor: pointer; height: 26px; min-width: 26px; display: grid; place-items: center; border-radius: 8px; font-size: 11px; font-weight: 700; color: var(--muted); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.dcard .dbar button:hover { color: var(--text); } .dcard .dbar .dsz { display: flex; gap: 2px; } .dcard .dbar .dsz button.on { background: var(--hl); color: var(--hl-ink, #04111c); }
+.dcard .dbar .dgrip { cursor: grab; touch-action: none; } .dcard .dbar .dx { color: var(--bad); } .dbar .ic svg { width: 14px; height: 14px; }
+.dcard.dragsrc { opacity: .35; } .dghost { overflow: hidden; border-radius: 20px; background: var(--panel-solid); box-shadow: 0 30px 70px rgba(0, 0, 0, .5); animation: none !important; }
+.dmark { height: 4px; border-radius: 2px; background: var(--hl); flex: none; margin: 2px 0; }
+.ddrop { border: 2px dashed var(--line-2); border-radius: 14px; padding: 14px 10px; text-align: center; color: var(--muted); font-size: 12px; flex: none; }
+#arrangebar { position: fixed; top: 58px; left: 50%; transform: translateX(-50%); z-index: 7; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 12px; background: var(--panel); backdrop-filter: var(--blur); border: 1px solid var(--line-2); border-radius: 16px; max-width: calc(100% - 28px); box-shadow: 0 18px 50px rgba(0, 0, 0, .35); }
+#arrangebar .note { margin: 0; font-size: 12px; } .abgrp { display: inline-flex; align-items: center; gap: 6px; } .abgrp small { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+#arrangebar .seg button { padding: 4px 8px; font-size: 12px; } .mini.primary { background: var(--hl); color: var(--hl-ink, #04111c); border-color: transparent; font-weight: 650; }
+body.arranging #chips { visibility: hidden; } body.arranging #left.dock, body.arranging #tiles.dock { top: 120px; }
+.addsheet { position: fixed; z-index: 61; right: 14px; top: 120px; width: min(380px, calc(100vw - 28px)); max-height: calc(100vh - 160px); overflow-y: auto; background: var(--panel-solid); border: 1px solid var(--line-2); border-radius: 20px; padding: 16px; box-shadow: 0 30px 80px rgba(0, 0, 0, .5); }
+.addrow { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); } .addrow .grow { flex: 1; min-width: 0; } .addrow small { display: block; color: var(--muted); font-size: 12px; }
+#arrangeBtn .ic svg, #fsBtn .ic svg { width: 15px; height: 15px; } #arrangeBtn, #fsBtn { display: inline-flex; align-items: center; gap: 6px; }
+/* full screen: just the house */
+body.immersive .bar, body.immersive #chips, body.immersive #tools, body.immersive .morepop, body.immersive #arrangebar, body.immersive .addsheet { display: none !important; }
+body.immersive #left.dock { top: 14px; bottom: 14px; } body.immersive #tiles.dock { top: 64px; }
+body.immersive.fs-tiles #left, body.immersive.fs-tiles #floats, body.immersive.fs-none #left, body.immersive.fs-none #tiles, body.immersive.fs-none #floats { display: none !important; }
+#fsctl { position: fixed; top: max(12px, env(safe-area-inset-top)); right: max(14px, env(safe-area-inset-right)); z-index: 8; display: flex; gap: 6px; transition: opacity .45s; }
+#fsctl .mini { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; font-size: 13px; background: var(--panel); backdrop-filter: var(--blur); } #fsctl .ic svg { width: 14px; height: 14px; }
+body.fsidle #fsctl { opacity: 0; pointer-events: none; } body.immersive.fsidle { cursor: none; }
+@media (max-width: 760px) { .btxt { display: none; } #arrangebar { top: 54px; } #arrangebar .note { display: none; } body.immersive #tiles.dock { top: auto; bottom: 14px; } }
+body:not(.editing) #left.dock > .dcard.k-tile { background: none; border: 0; padding: 0; box-shadow: none; backdrop-filter: none; }
+body.arranging #left.dock > .dcard.k-tile, body.arranging #tiles.dock > .dcard.k-tile { padding: 40px 0 0 !important; }
+body #left.dock .dcard .dbar button { all: unset; box-sizing: border-box; cursor: pointer; height: 26px; min-width: 26px; display: grid; place-items: center; border-radius: 8px; font-size: 11px; font-weight: 700; color: var(--muted); background: color-mix(in srgb, var(--text) 8%, transparent); }
+body #left.dock .dcard .dbar .dsz button.on { background: var(--hl); color: var(--hl-ink, #04111c); } body #left.dock .dcard .dbar .dx { color: var(--bad); }
