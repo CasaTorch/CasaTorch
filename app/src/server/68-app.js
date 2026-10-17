@@ -35,16 +35,16 @@ function appAddresses(req) {
 const appHome = (req) => ({ id: installId(), name: config.house?.name || 'Home', version: VERSION, addresses: appAddresses(req), pro: !!proStatus().pro });
 const cleanDevice = (d) => ({ name: String(d?.name || 'Phone').replace(/[^\p{L}\p{N} '’._-]/gu, '').trim().slice(0, 40) || 'Phone', platform: ['ios', 'ipados', 'android'].includes(d?.platform) ? d.platform : 'phone', model: String(d?.model || '').slice(0, 40), app: String(d?.app || '').slice(0, 16) });
 /* Who's asking, before any sign-in: so the app can show the home's name and check it's a CasaTorch. */
-app.get('/api/app/hello', (req, res) => res.json({ casatorch: true, home: { name: config.house?.name || 'Home', version: VERSION }, signIn: signInOn(), configured: isConfigured(), demo: isDemo(), secure: LOCAL_TLS?.url || null, remote: config.remote?.hostname ? `https://${config.remote.hostname}` : null }));   // where to sign in encrypted
+app.get('/api/app/hello', (req, res) => res.json({ casatorch: true, home: { id: installId(), name: config.house?.name || 'Home', version: VERSION }, signIn: signInOn(), configured: isConfigured(), demo: isDemo(), secure: LOCAL_TLS?.url || null, remote: config.remote?.hostname ? `https://${config.remote.hostname}` : null }));   // where to sign in encrypted
 app.post('/api/app/hello', (req, res) => res.json({ casatorch: true }));
 
 /* ---- signing in on the phone ---- */
 function appProceed(req, res, t) {
   const u = userById(t.userId); if (!u) return res.status(401).json({ error: 'Sign in again.' });
   const step = nextStep(t, u);
-  if (step) return res.json({ step, ticket: t.id, name: u.name, terms: TERMS_VERSION, ...(t.recovery && step !== 'enroll' ? { recovery: t.recovery } : {}) });
+  if (step) return res.json({ step, ticket: t.id, name: u.name, terms: TERMS_VERSION, ...(step === 'enroll' ? { optional: !users.policy?.require2fa } : {}), ...(t.recovery && step !== 'enroll' ? { recovery: t.recovery } : {}) });
   tickets.delete(t.id);
-  const { tok } = issueSession(req, u, { kind: 'app', mfa: true, device: t.device });
+  const { tok } = issueSession(req, u, { kind: 'app', mfa: t.passed.has('mfa') || t.passed.has('enroll'), device: t.device });
   audit(req, 'signed-in', { user: u.username, via: 'app', device: t.device?.name });
   res.json({ ok: true, token: tok, user: safeUser(u), home: appHome(req), ...(t.recovery ? { recovery: t.recovery } : {}) });
 }
@@ -69,6 +69,8 @@ app.post('/api/app/mfa', express.json({ limit: '4kb' }), (req, res) => {
 app.post('/api/app/enroll', express.json({ limit: '4kb' }), async (req, res) => {
   const t = ticketOf(req.body?.ticket); if (!t?.app) return res.status(401).json({ error: 'That took too long - sign in again.' });
   const u = userById(t.userId); if (!u || nextStep(t, u) !== 'enroll') return res.status(400).json({ error: 'Sign in again.' });
+  // "Not now": allowed unless the household requires two-step sign-in (Settings › People)
+  if (req.body?.skip === true) { if (users.policy?.require2fa) return res.status(400).json({ error: 'This home requires two-step sign-in.' }); t.passed.add('skip2fa'); audit(req, '2fa-skipped', { user: u.username, via: 'app' }); return appProceed(req, res, t); }
   if (!req.body?.code) { const e = await totpEnrolment(u); t.pending = e.secret; return res.json({ uri: e.uri, qr: e.qr, secret: e.secret }); }
   if (!t.pending || !totpOk(t.pending, req.body.code)) return res.status(400).json({ error: 'That code isn\'t right - check the time on your phone and try again.' });
   const codes = recoveryCodes();
@@ -86,17 +88,20 @@ app.post('/api/app/terms', express.json({ limit: '2kb' }), (req, res) => {
 /* ---- pairing with a QR code from a screen that's already signed in ---- */
 const pairCodes = new Map();
 setInterval(() => { for (const [k, v] of pairCodes) if (v.exp < Date.now()) pairCodes.delete(k); }, 60_000).unref?.();
+/** A one-use pairing code (10 minutes) for this person, as a QR code the CasaTorch app scans. */
+async function makePairCode(req, u, minutes = 10) {
+  const raw = Array.from({ length: 10 }, () => CODE_ABC[crypto.randomInt(CODE_ABC.length)]).join('');
+  pairCodes.set(raw, { userId: u.id, exp: Date.now() + minutes * 60_000 });
+  const a = appAddresses(req), q = new URLSearchParams({ v: '1', n: config.house?.name || 'Home', c: raw, ...(a.lan ? { l: a.lan } : {}), ...(a.remote ? { r: a.remote } : {}), ...(a.plain ? { p: a.plain } : {}), h: a.here });
+  const link = `casatorch://pair?${q}`;
+  return { code: `${raw.slice(0, 5)}-${raw.slice(5)}`, link, user: u.username, expires: new Date(Date.now() + minutes * 60_000).toISOString(), qr: await QRCode.toString(link, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) };
+}
 app.post('/api/app/pair', async (req, res) => {
   if (isDemo()) return res.status(409).json({ error: 'The demo has no accounts - pair your phone with a real CasaTorch.' });
   const u = req.user; if (!u || u.panel) return res.status(403).json({ error: 'Sign in as a person first.' });
-  if (!u.totp?.on) return res.status(409).json({ error: 'Turn on two-step sign-in for your account first (Settings › People & sign-in) - the app needs it.', need2fa: true });
-  if (!req.session?.mfa) return res.status(409).json({ error: 'Sign out and in again with your two-step code, then add the phone.', needMfa: true });
+  if (u.totp?.on && !req.session?.mfa) return res.status(409).json({ error: 'Sign out and in again with your two-step code, then add the phone.', needMfa: true });
   if ([...pairCodes.values()].filter((p) => p.userId === u.id).length >= 3) return res.status(429).json({ error: 'Too many open pairing codes - use one or wait 10 minutes.' });
-  const raw = Array.from({ length: 10 }, () => CODE_ABC[crypto.randomInt(CODE_ABC.length)]).join('');
-  pairCodes.set(raw, { userId: u.id, exp: Date.now() + 10 * 60_000 });
-  const a = appAddresses(req), q = new URLSearchParams({ v: '1', n: config.house?.name || 'Home', c: raw, ...(a.lan ? { l: a.lan } : {}), ...(a.remote ? { r: a.remote } : {}), ...(a.plain ? { p: a.plain } : {}), h: a.here });
-  const link = `casatorch://pair?${q}`;
-  res.json({ code: `${raw.slice(0, 5)}-${raw.slice(5)}`, link, expires: new Date(Date.now() + 10 * 60_000).toISOString(), qr: await QRCode.toString(link, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) });
+  res.json(await makePairCode(req, u));
 });
 app.post('/api/app/claim', express.json({ limit: '4kb' }), (req, res) => {
   const ip = clientIp(req), code = cleanCode(req.body?.code);

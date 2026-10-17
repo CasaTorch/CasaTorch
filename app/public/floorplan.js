@@ -439,13 +439,18 @@ function roomUniforms(F) {
   for (let i = 0; i < n; i++) { const r = F.rooms[i], w = F.G.localToWorld(new V3(r.pos[0], 0, r.pos[1])), c = (stats && overlayColor(stats[i])) || new THREE.Color(r.color || ROOM_COLORS[i % ROOM_COLORS.length]); F.fx.uRoomPos.value[i].set(w.x, w.z); F.fx.uRoomCol.value[i].set(c.r, c.g, c.b); }
   F.fx.uRoomN.value = n; F.fx.uRoomSel.value = S.room?.floor === F.f.id ? S.room.i : -1;
 }
+const EMBEDDED = new URLSearchParams(location.search).has('embed') && window.parent !== window;
+/* The dashboard's Full screen button (and its Exit) for the 3D page inside it. */
+addEventListener('message', (e) => { if (e.origin === location.origin && e.data?.casa === 'immersive') immersive.set(!!e.data.on); });
 function fitView() {
   const cur = curF(), box = new THREE.Box3();
   for (const F of Object.values(S.F)) if (F.G.visible && (!cur || F === cur || F.f.id === fitId())) box.union(F.box.clone().translate(new V3(0, F.G.position.y, 0)));
   if (box.isEmpty()) return;
   if (!cur && yard.group.visible) for (const c of yard.cars) box.expandByObject(c.o);   // keep the car in the picture
   /* From the front of the house, a little to one side and above - like looking into a dollhouse. */
-  const c = box.getCenter(new V3()), len = Math.max(6, box.getSize(new V3()).length());
+  // a tall, narrow screen (a phone held upright) sees less side to side: step back so the whole house fits
+  const asp = camera.aspect || 1, narrow = asp < 1 ? Math.min(2.6, 1.1 / asp) : 1;
+  const c = box.getCenter(new V3()), len = Math.max(6, box.getSize(new V3()).length()) * narrow;
   const dir = new V3(0.32, 0, 1).applyAxisAngle(new V3(0, 1, 0), deg(S.plan?.settings?.frontDeg || 0)).normalize();
   controls.maxDistance = Math.max(25, len * 3.5);   // zoom out until the whole house is small - never so far it's lost
   flyTo(c, c.clone().add(dir.multiplyScalar(len * 1.02)).add(new V3(0, len * 0.66, 0)));
@@ -943,10 +948,15 @@ const dock = createDock({ el, ic, prefs, savePrefs, T, cards: dockCards, isView:
   onArrange: (on) => { if (on) { closeCard(); closeInfo(); } const b = $('#arrangeBtn'); if (b) b.classList.toggle('on', on); } });
 const FS_CARDS = [['all', 'All cards'], ['tiles', 'Numbers only'], ['none', 'Just the house']];
 const immersive = createImmersive({ el, ic, T,
-  cycleCards: () => { const i = FS_CARDS.findIndex(([k]) => k === (prefs.fsCards || 'all')); prefs.fsCards = FS_CARDS[(i + 1) % FS_CARDS.length][0]; savePrefs(); fsCardsApply(); },
+  cycleCards: () => { const i = FS_CARDS.findIndex(([k]) => k === (prefs.fsCards || (PHONE.matches ? 'none' : 'all'))); prefs.fsCards = FS_CARDS[(i + 1) % FS_CARDS.length][0]; savePrefs(); fsCardsApply(); },
   spin: () => { prefs.spin = !prefs.spin; savePrefs(); layout(false); },
-  onChange: (on) => { fsCardsApply(); if (on && dock.arranging()) dock.setArrange(false); if (on && isReal() && !calm) { const t = controls.target.clone(), back = camera.position.clone().sub(t), dist = back.length(), flat = new V3(back.x, 0, back.z).normalize(); flyTo(t, t.clone().add(flat.multiplyScalar(dist * Math.cos(0.26))).add(new V3(0, dist * Math.sin(0.26), 0)), 1400); } setTimeout(() => { resize(); kick(); }, 60); const b = $('#fsBtn'); if (b) b.classList.toggle('on', on); } });
-function fsCardsApply() { const k = prefs.fsCards || 'all'; document.body.classList.toggle('fs-tiles', k === 'tiles'); document.body.classList.toggle('fs-none', k === 'none'); immersive.label(T(FS_CARDS.find(([x]) => x === k)[1])); }
+  onChange: (on) => { if (EMBEDDED) try { parent.postMessage({ casa: 'immersive', on }, location.origin); } catch { /* fine */ } fsCardsApply(); if (on && dock.arranging()) dock.setArrange(false); if (on && isReal() && !calm) { const t = controls.target.clone(), back = camera.position.clone().sub(t), dist = back.length(), flat = new V3(back.x, 0, back.z).normalize(); flyTo(t, t.clone().add(flat.multiplyScalar(dist * Math.cos(0.26))).add(new V3(0, dist * Math.sin(0.26), 0)), 1400); } setTimeout(() => { resize(); kick(); }, 60); const b = $('#fsBtn'); if (b) b.classList.toggle('on', on); } });
+/* On a phone the house comes first: the cards wait in a pull-up sheet (the Cards button), never on top of the model. */
+const PHONE = matchMedia('(max-width: 760px)');
+const cardsBtn = el('button', { type: 'button', id: 'cardsBtn', 'aria-expanded': 'false', onclick: () => { const on = !document.body.classList.contains('cards-open'); document.body.classList.toggle('cards-open', on); cardsBtn.setAttribute('aria-expanded', String(on)); } }, ic('grid'), el('span', {}, T('Cards')));
+document.body.append(cardsBtn);
+renderer.domElement.addEventListener('pointerdown', () => { if (PHONE.matches && document.body.classList.contains('cards-open')) { document.body.classList.remove('cards-open'); cardsBtn.setAttribute('aria-expanded', 'false'); } }, { passive: true });
+function fsCardsApply() { const k = prefs.fsCards || (PHONE.matches ? 'none' : 'all'); document.body.classList.toggle('fs-tiles', k === 'tiles'); document.body.classList.toggle('fs-none', k === 'none'); immersive.label(T(FS_CARDS.find(([x]) => x === k)[1])); }
 /* Where the power is coming from, when the house has the sensors for it (solar, a home battery, the grid). */
 function energyCard(E) {
   if (!E || (E.solarW == null && !E.battery && E.gridW == null)) return null;

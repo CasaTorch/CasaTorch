@@ -15,7 +15,7 @@
  * nobody is watching, so the first look is never empty.
  * ====================================================================== */
 const SNAP = new Map();   // key -> { buf, type, at, etag, err, inflight, fetcher, every, wanted }
-const SNAP_EVERY = { local: 2000, ring: 4000, ha: 3000 };
+const SNAP_EVERY = { local: 1000, ring: 4000, ha: 2000 };   // a camera on your network answers in tens of milliseconds
 const SNAP_IDLE = 60_000, SNAP_WATCH = 60_000;
 /* `kind` is a known cadence ('local', 'ring', 'ha') or { every, idle } in ms - an integration's own beat
    (a battery doorbell is woken far less often than a wired camera, so it lasts). */
@@ -50,7 +50,10 @@ async function sendSnap(req, res, key, fetcher, kind) {
   const e = snapEntry(key, fetcher, kind);
   e.wanted = Date.now();
   if (!e.buf || Date.now() - e.at > 5 * 60_000) await snapRefresh(e);
-  else if (Date.now() - (e.started || 0) > e.every) snapRefresh(e);   // fresh enough to send now; a newer one is on its way
+  else if (Date.now() - e.at > e.every) {
+    // older than its beat: a fast (local) camera gets a moment to send the new one, so you see now, not two seconds ago
+    const p = snapRefresh(e); if (e.every <= 2000) await Promise.race([p, new Promise((ok) => setTimeout(ok, 450))]);
+  }
   if (!e.buf) return res.status(502).json({ error: e.err || 'the camera did not send a picture' });
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('ETag', e.etag);
@@ -86,7 +89,7 @@ async function mjpegPass(req, res, key, url, headers = {}) {
   let left = false; const done = () => { if (left) return; left = true; ac.abort(); LIVE_VIEWERS.set(key, Math.max(0, (LIVE_VIEWERS.get(key) || 1) - 1)); };
   res.on('close', done);   // the viewer left (req 'close' fires as soon as a GET's empty body is read)
   try {
-    const up = await fetch(url, { headers, signal: ac.signal });
+    const up = typeof url === 'function' ? await url(ac.signal) : await fetch(url, { headers, signal: ac.signal });   // a function: the source opens its own stream (Frigate's pinned https)
     const type = up.headers.get('content-type') || '';
     if (!up.ok || !up.body || !/^multipart\/x-mixed-replace/i.test(type)) { res.status(502).end(); return; }
     res.setHeader('Content-Type', /^multipart\/x-mixed-replace(;\s*boundary=[\w'()+,./:=?-]{1,70})?$/i.test(type) ? type : 'multipart/x-mixed-replace');

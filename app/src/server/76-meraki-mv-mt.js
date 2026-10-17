@@ -9,7 +9,7 @@
  * ====================================================================== */
 const merakiSrc = () => netSources().find((s) => s.kind === 'meraki');
 const merakiBase = (s) => process.env.CASATORCH_MERAKI_BASE || MERAKI_BASES[s.region] || MERAKI_BASES.us;
-const merakiH = (s) => ({ Authorization: `Bearer ${unseal(s.secret) || ''}` });
+const merakiH = (s) => ({ Authorization: `Bearer ${secretOf(s.secret)}` });
 const merakiDevs = (type) => { const s = merakiSrc(); return (s && netState[s.id]?.devices || []).filter((d) => d.type === type && d.serial); };
 async function merakiReadings(s) {
   const org = netState[s.id]?.summary?.orgId; if (!org) return [];

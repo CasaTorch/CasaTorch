@@ -9,12 +9,16 @@ app.get('/api/setup/geocode', async (req, res) => {
   if (q.length < 2) return res.json({ places: [] });
   try {
     const j = await getJSON(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&q=${encodeURIComponent(q)}`);
-    res.json({ places: (j || []).map((p) => { const a = p.address || {}; const town = a.city || a.town || a.village || a.hamlet || a.county || p.name; return { name: [town, a.state || a.region, a.country_code?.toUpperCase()].filter(Boolean).join(', '), lat: Math.round(Number(p.lat) * 1e4) / 1e4, lon: Math.round(Number(p.lon) * 1e4) / 1e4 }; }) });
+    res.json({ places: (j || []).map((p) => { const a = p.address || {}; const town = a.city || a.town || a.village || a.hamlet || a.county || p.name; return { name: [town, a.state || a.region, a.country_code?.toUpperCase()].filter(Boolean).join(', '), cc: a.country_code ? String(a.country_code).toUpperCase().slice(0, 2) : null, lat: Math.round(Number(p.lat) * 1e4) / 1e4, lon: Math.round(Number(p.lon) * 1e4) / 1e4 }; }) });
   } catch (err) { res.status(502).json({ error: `town search is not answering (${err.message}) - you can type the latitude and longitude instead` }); }
 });
 app.get('/api/setup/sports/leagues', (_req, res) => res.json({ leagues: Object.entries(LEAGUES).map(([id, l]) => ({ id, name: l.name })) }));
 app.get('/api/setup/sports/teams', async (req, res) => { try { res.json(await sportsTeams(String(req.query.league || ''))); } catch (err) { res.status(502).json({ error: String(err.message) }); } });
-app.get('/api/setup/news/defaults', (_req, res) => res.json({ feeds: NEWS_DEFAULTS }));
+app.get('/api/setup/news/defaults', (req, res) => {
+  const loc = { name: String(req.query.town || '').slice(0, 80), cc: String(req.query.cc || '').toUpperCase().slice(0, 2) }, lang = String(req.query.lang || 'en').slice(0, 5);
+  const ctx = { town: homeTown(loc), cc: homeCountry(loc) || 'US', lang };
+  res.json({ feeds: NEWS_DEFAULTS, smart: GN_KINDS.map(([id, label]) => { const f = gnFeed(id, ctx); return f ? { id, label, name: f.name } : null; }).filter(Boolean) });
+});
 
 const hostOk = (h) => /^[\w.-]{1,253}(:\d{1,5})?$/.test(String(h || '').trim());
 Object.assign(TESTS, {

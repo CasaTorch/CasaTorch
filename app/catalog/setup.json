@@ -21,7 +21,7 @@
         },
         {
           "id": "location",
-          "label": "Your town (for the weather)",
+          "label": "Your town (for the weather) - already set on the first page if you chose it there",
           "type": "location",
           "help": "Only the town's map position is saved - rounded, never your street address."
         },
@@ -51,20 +51,92 @@
               "$ US dollar"
             ],
             [
-              "CAD",
-              "$ Canadian dollar"
-            ],
-            [
               "EUR",
               "€ Euro"
             ],
             [
               "GBP",
-              "£ Pound"
+              "£ British pound"
+            ],
+            [
+              "CAD",
+              "$ Canadian dollar"
             ],
             [
               "AUD",
               "$ Australian dollar"
+            ],
+            [
+              "NZD",
+              "$ New Zealand dollar"
+            ],
+            [
+              "JPY",
+              "¥ Japanese yen"
+            ],
+            [
+              "CNY",
+              "¥ Chinese yuan"
+            ],
+            [
+              "KRW",
+              "₩ Korean won"
+            ],
+            [
+              "INR",
+              "₹ Indian rupee"
+            ],
+            [
+              "CHF",
+              "Swiss franc"
+            ],
+            [
+              "SEK",
+              "kr Swedish krona"
+            ],
+            [
+              "NOK",
+              "kr Norwegian krone"
+            ],
+            [
+              "DKK",
+              "kr Danish krone"
+            ],
+            [
+              "PLN",
+              "zł Polish złoty"
+            ],
+            [
+              "TRY",
+              "₺ Turkish lira"
+            ],
+            [
+              "MXN",
+              "$ Mexican peso"
+            ],
+            [
+              "BRL",
+              "R$ Brazilian real"
+            ],
+            [
+              "ZAR",
+              "R South African rand"
+            ],
+            [
+              "SGD",
+              "$ Singapore dollar"
+            ],
+            [
+              "HKD",
+              "$ Hong Kong dollar"
+            ],
+            [
+              "AED",
+              "UAE dirham"
+            ],
+            [
+              "ILS",
+              "₪ Israeli shekel"
             ]
           ],
           "default": "USD"
@@ -103,6 +175,98 @@
           "label": "I have read and agree to the Terms of Use and the Privacy Notice."
         }
       ]
+    },
+    {
+      "id": "phone",
+      "title": "Your phone",
+      "intro": "The login you just made is this CasaTorch's owner - the main admin that is always here, for this screen and Settings. Now make a login for your phone, so the CasaTorch app (iPhone, iPad, Android) signs in as you without using the owner login. At the end of setup, scan a QR code with the app and the phone is signed in - no typing.",
+      "question": {
+        "id": "how",
+        "label": "Sign in on your phone with...",
+        "options": [
+          [
+            "new",
+            "A login just for my phone (recommended)"
+          ],
+          [
+            "owner",
+            "My owner login"
+          ],
+          [
+            "later",
+            "Not now"
+          ]
+        ]
+      },
+      "branches": {
+        "new": {
+          "note": "This login can change things in the house but can't remove the owner. Two-step sign-in is offered on the phone - we recommend it. Everything is stored on this CasaTorch, encrypted - never in a CasaTorch cloud.",
+          "fields": [
+            {
+              "id": "name",
+              "label": "Your name",
+              "type": "text",
+              "placeholder": "Alex"
+            },
+            {
+              "id": "username",
+              "label": "Phone login username",
+              "type": "text",
+              "placeholder": "alex-phone",
+              "required": true
+            },
+            {
+              "id": "password",
+              "label": "Phone login password",
+              "type": "password",
+              "required": true,
+              "help": "At least 10 characters - a short sentence works well. Stored only as a salted scrypt hash on this CasaTorch."
+            },
+            {
+              "id": "away",
+              "label": "Use the app away from home too?",
+              "type": "choice",
+              "options": [
+                [
+                  "yes",
+                  "Yes - from anywhere (recommended)"
+                ],
+                [
+                  "no",
+                  "Only on my home Wi-Fi"
+                ]
+              ],
+              "default": "yes",
+              "help": "CasaTorch gets its own secure https address through an encrypted outbound tunnel - no router changes, no open ports. Every request still needs your sign-in. It's encrypted (https) between your phone and Cloudflare, which runs the tunnel, and between Cloudflare and your CasaTorch; CasaTorch's own servers aren't in the path and keep nothing. From anywhere is part of Pro (in your 14-day trial); on Basic it works on your home Wi-Fi."
+            }
+          ]
+        },
+        "owner": {
+          "note": "Your phone will use the owner login. Turning on two-step sign-in for it is strongly recommended.",
+          "fields": [
+            {
+              "id": "away",
+              "label": "Use the app away from home too?",
+              "type": "choice",
+              "options": [
+                [
+                  "yes",
+                  "Yes - from anywhere (recommended)"
+                ],
+                [
+                  "no",
+                  "Only on my home Wi-Fi"
+                ]
+              ],
+              "default": "yes",
+              "help": "CasaTorch gets its own secure https address through an encrypted outbound tunnel - no router changes, no open ports. Every request still needs your sign-in. It's encrypted (https) between your phone and Cloudflare, which runs the tunnel, and between Cloudflare and your CasaTorch; CasaTorch's own servers aren't in the path and keep nothing. From anywhere is part of Pro (in your 14-day trial); on Basic it works on your home Wi-Fi."
+            }
+          ]
+        },
+        "later": {
+          "note": "Add a phone any time: Settings › Phones & alerts › Add a phone."
+        }
+      }
     },
     {
       "id": "calendars",
@@ -148,7 +312,7 @@
     {
       "id": "news",
       "title": "Headlines",
-      "intro": "A few headlines on the Home screen. Pick sources, or add any website's RSS feed.",
+      "intro": "Headlines on your Home screen: local, national and world news for where you live, in your language - plus topics and any sources you like.",
       "fields": [
         {
           "id": "picks",
@@ -160,7 +324,7 @@
     {
       "id": "reminders",
       "title": "Reminders",
-      "intro": "Things that repeat - trash night, meds, feeding the fish. They show on the Home screen on the right days.",
+      "intro": "Your home's own reminders - trash night, meds, feeding the fish, a birthday. At the right time they light up every screen with an icon and a sound; later you can add a photo, and with Pro send them to everyone's phone.",
       "fields": [
         {
           "id": "list",
@@ -168,6 +332,79 @@
           "label": "Reminders"
         }
       ]
+    },
+    {
+      "id": "ai",
+      "title": "Your Home AI Agent",
+      "intro": "Your Home AI Agent knows your home: ask \"Is anything still on downstairs?\", \"What's using all the power?\" or \"Will it rain for trash night?\" and get a straight answer - with a button to do it. It never unlocks doors, opens the garage or disarms the alarm, and anything it switches, you confirm first. Part of Pro (included in your 14-day trial); the AI company bills its own usage, usually cents a month.",
+      "question": {
+        "id": "provider",
+        "label": "Which AI should power your Home AI Agent?",
+        "options": [
+          [
+            "anthropic",
+            "Claude (Anthropic)"
+          ],
+          [
+            "openai",
+            "OpenAI"
+          ],
+          [
+            "ollama",
+            "An AI on my own computer (Ollama)"
+          ],
+          [
+            "later",
+            "Not now"
+          ]
+        ]
+      },
+      "branches": {
+        "anthropic": {
+          "note": "Make an API key at console.anthropic.com › API keys. It's a pay-as-you-go account, separate from a Claude subscription.",
+          "fields": [
+            {
+              "id": "apiKey",
+              "label": "Anthropic API key",
+              "type": "password",
+              "placeholder": "sk-ant-...",
+              "required": true,
+              "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers. It goes only to the AI company you picked, when you ask something."
+            }
+          ],
+          "test": "ai"
+        },
+        "openai": {
+          "note": "Make an API key at platform.openai.com › API keys. It's a pay-as-you-go account, separate from ChatGPT Plus.",
+          "fields": [
+            {
+              "id": "apiKey",
+              "label": "OpenAI API key",
+              "type": "password",
+              "placeholder": "sk-...",
+              "required": true,
+              "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers. It goes only to the AI company you picked, when you ask something."
+            }
+          ],
+          "test": "ai"
+        },
+        "ollama": {
+          "note": "Fully private: the questions never leave your home. Needs a computer with a good graphics card running Ollama.",
+          "fields": [
+            {
+              "id": "url",
+              "label": "Ollama address",
+              "type": "url",
+              "placeholder": "http://192.168.1.30:11434",
+              "required": true
+            }
+          ],
+          "test": "ai"
+        },
+        "later": {
+          "note": "Add it any time in Settings › Home AI Agent."
+        }
+      }
     },
     {
       "id": "homeassistant",
@@ -253,12 +490,24 @@
                     "id": "url",
                     "label": "Frigate address",
                     "type": "url",
-                    "placeholder": "http://192.168.1.10:5000",
+                    "placeholder": "http://192.168.1.10:5000  or  https://192.168.1.10:8971",
                     "required": true
+                  },
+                  {
+                    "id": "user",
+                    "label": "Frigate username - secure port only",
+                    "type": "text",
+                    "placeholder": "admin"
+                  },
+                  {
+                    "id": "password",
+                    "label": "Frigate password - secure port only",
+                    "type": "password"
                   }
                 ],
                 "test": "frigate",
-                "badge": "direct"
+                "badge": "direct",
+                "hint": "Port 5000 is Frigate's open port (http, no sign-in). Port 8971 is its secure port: use https:// plus your Frigate username and password. CasaTorch will ask you to trust Frigate's own certificate once."
               },
               {
                 "id": "unifiprotect",
@@ -375,8 +624,20 @@
               {
                 "id": "meraki-mv",
                 "label": "Cisco Meraki MV (Pro)",
-                "method": "guide",
-                "guide": "meraki-soon"
+                "method": "direct",
+                "fields": [
+                  {
+                    "id": "apiKey",
+                    "label": "Meraki Dashboard API key",
+                    "type": "password",
+                    "placeholder": "From dashboard.meraki.com › your profile › API access",
+                    "required": true,
+                    "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers."
+                  }
+                ],
+                "test": "meraki",
+                "desc": "Paste your Meraki API key - cameras and sensors come in on their own (Pro; included in the 14-day trial)",
+                "badge": "direct"
               },
               {
                 "id": "wyze",
@@ -659,8 +920,20 @@
               {
                 "id": "meraki-mt",
                 "label": "Cisco Meraki MT (Pro)",
-                "method": "guide",
-                "guide": "meraki-soon"
+                "method": "direct",
+                "fields": [
+                  {
+                    "id": "apiKey",
+                    "label": "Meraki Dashboard API key",
+                    "type": "password",
+                    "placeholder": "From dashboard.meraki.com › your profile › API access",
+                    "required": true,
+                    "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers."
+                  }
+                ],
+                "test": "meraki",
+                "desc": "Paste your Meraki API key - cameras and sensors come in on their own (Pro; included in the 14-day trial)",
+                "badge": "direct"
               },
               {
                 "id": "other",
@@ -746,10 +1019,38 @@
       },
       "branches": {
         "unifi": {
-          "note": "With CasaTorch Pro, connect UniFi after setup in the Network tab: every UniFi device online or offline, and how many are connected. CasaTorch also shows your internet status and runs speed tests."
+          "note": "UniFi: make an API key in UniFi Network › Settings › Control Plane › Integrations, then paste it with your console's address. CasaTorch shows every UniFi device online or offline and how many are connected. Part of Pro - included in your 14-day trial.",
+          "fields": [
+            {
+              "id": "url",
+              "label": "UniFi console address",
+              "type": "url",
+              "placeholder": "https://192.168.1.1",
+              "required": true
+            },
+            {
+              "id": "apiKey",
+              "label": "UniFi API key",
+              "type": "password",
+              "required": true,
+              "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers."
+            }
+          ],
+          "test": "unifi"
         },
         "meraki": {
-          "note": "With CasaTorch Pro, connect Cisco Meraki after setup in the Network tab: every Meraki device's status, with alerts. CasaTorch also shows your internet status and runs speed tests."
+          "note": "Paste a Meraki Dashboard API key (read-only is enough) and pick your network. CasaTorch shows every Meraki device's status, with alerts, plus Meraki cameras and sensors. Part of Pro - included in your 14-day trial.",
+          "fields": [
+            {
+              "id": "apiKey",
+              "label": "Meraki Dashboard API key",
+              "type": "password",
+              "placeholder": "From dashboard.meraki.com › your profile › API access",
+              "required": true,
+              "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers."
+            }
+          ],
+          "test": "meraki"
         },
         "omada": {
           "note": "Omada support is planned. CasaTorch will still show your internet speed and devices from your DNS blocker."
@@ -974,6 +1275,6 @@
     "cloud-cams": "Arlo and Eufy are cloud cameras. Add them in Home Assistant with the community integrations (HACS); CasaTorch shows them once they're there.",
     "already-in-ha": "Anything already in Home Assistant shows up in CasaTorch automatically - nothing else to do.",
     "emporia": "Emporia Vue works through a community integration (HACS). Add it in Home Assistant; CasaTorch reads it from there.",
-    "meraki-soon": "Cisco Meraki cameras (MV) and sensors (MT) come in with CasaTorch Pro: after setup, open the Network tab and connect Cisco Meraki with a dashboard API key. Its cameras and sensors then appear on their own."
+    "meraki-soon": "Pick Cisco Meraki and paste your API key right here."
   }
 }

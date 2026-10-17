@@ -54,14 +54,20 @@ function proUpsell(text) { return el('a', { class: 'proup', href: '#settings', t
 /* Who's looking (members and up add and change nudges; viewers see them). */
 let nudgeMe = null;
 const nudgeRole = async () => { nudgeMe ||= await api('/api/auth/me').catch(() => ({})); return nudgeMe?.signIn === false || !nudgeMe?.user ? 'owner' : nudgeMe.user.role; };
+/* Reminders: their own page (they used to sit on Alerts, as "Nudges"). */
+tab({ id: 'reminders', label: 'Reminders', icon: 'bell', after: 'calendar', async render(main) {
+  setTop(T('Reminders'), T('Trash night, the dog\'s dinner, bills, medicine, birthdays - on every screen, at the right time'));
+  const draw = () => main.replaceChildren(el('div', { class: 'cards' }, nudgesCard(draw)));
+  draw(); return draw;
+} });
 function nudgesCard(redraw) {
   const card = el('div', { class: 'card nudges', style: 'grid-column:1/-1' });
   (async () => {
     const [d, role] = await Promise.all([api('/api/nudges').catch(() => null), nudgeRole()]);
     if (!d) { card.remove(); return; }
     const canEdit = !d.demo && role !== 'viewer';
-    const add = canEdit ? el('button', { class: 'btn small primary', onclick: () => nudgeEditor(null, d, redraw) }, icon('plus'), 'Add a nudge') : null;
-    const head = el('div', { class: 'row between wrap', style: 'gap:10px;margin-bottom:10px' }, el('div', {}, el('h2', { style: 'margin:0' }, 'Nudges'), el('p', { class: 'small muted', style: 'margin:4px 0 0' }, 'Your home\'s own reminders - trash night, the dog\'s dinner, bills due, medicine, birthdays. At the time, they light up every screen in the house.')), add);
+    const add = canEdit ? el('button', { class: 'btn small primary', onclick: () => nudgeEditor(null, d, redraw) }, icon('plus'), T('Add a reminder')) : null;
+    const head = el('div', { class: 'row between wrap', style: 'gap:10px;margin-bottom:10px' }, el('div', {}, el('h2', { style: 'margin:0' }, T('Reminders')), el('p', { class: 'small muted', style: 'margin:4px 0 0' }, T('Your home\'s own reminders - trash night, the dog\'s dinner, bills due, medicine, birthdays. At the time, they light up every screen in the house.'))), add);
     if (!d.list.length) {
       const ideas = [['Trash night', 'trash', 'weekly', [2], '19:30'], ['Feed the dog', 'paw', 'daily', [], '17:30'], ['Take medicine', 'pill', 'daily', [], '08:00'], ['Rent is due', 'bill', 'monthly', [], '09:00']];
       card.replaceChildren(head, el('div', { class: 'row wrap', style: 'gap:8px' }, el('span', { class: 'small muted' }, 'Ideas:'), ideas.map(([title, ic, repeat, days, time]) => el('button', { class: 'btn small', disabled: canEdit ? null : true, onclick: () => nudgeEditor({ title, icon: ic, repeat, days, time, date: new Date().toISOString().slice(0, 10), flash: true, push: d.pro }, d, redraw, true) }, icon(ic), title))));
@@ -72,7 +78,7 @@ function nudgesCard(redraw) {
         today.has(n.id) && n.on ? el('span', { class: 'pill good' }, 'Today') : null,
         n.push ? el('span', { class: 'tiny muted', title: 'Sent to phones' }, icon('send')) : null))));
     }
-    if (!d.pro) card.append(el('div', { style: 'margin-top:12px' }, proUpsell('Send nudges to everyone\'s phone, wherever they are')));
+    if (!d.pro) card.append(el('div', { style: 'margin-top:12px' }, proUpsell(T('Send reminders to everyone\'s phone, wherever they are'))));
   })();
   return card;
 }
@@ -108,7 +114,7 @@ function nudgeEditor(n, d, redraw, fresh = false) {
       el('label', { class: 'check' }, flash, el('span', {}, el('b', {}, 'Show it on every screen'), el('span', { class: 'small muted', style: 'display:block' }, 'A card lights up on every CasaTorch screen until someone taps Done.'))),
       el('label', { class: `check${d.pro ? '' : ' locked'}` }, push, el('span', {}, el('b', {}, 'Send it to phones '), d.pro ? null : el('span', { class: 'pill pro' }, 'Pro'),
         el('span', { class: 'small muted', style: 'display:block' }, d.pro ? (d.phones ? 'To every phone with CasaTorch alerts on, wherever it is - even in quiet hours.' : 'No phones have CasaTorch alerts on yet - turn them on in Settings › Phone app & alerts.') : 'Reach everyone\'s phone wherever they are, even in quiet hours.'))),
-      d.pro ? null : proUpsell('Get nudges on your phone with CasaTorch Pro'),
+      d.pro ? null : proUpsell(T('Get reminders on your phone with CasaTorch Pro')),
       isNew ? null : el('label', { class: 'check' }, on, el('span', {}, el('b', {}, 'On'))),
       msg].filter(Boolean));
   };
@@ -123,10 +129,10 @@ function nudgeEditor(n, d, redraw, fresh = false) {
       else if (dropPhoto && n?.photo) await api(`/api/nudges/${encodeURIComponent(id)}/photo`, { method: 'DELETE' }).catch(() => {});
       m.remove(); toast(isNew ? `"${r.nudge.title}" added` : 'Saved'); redraw?.();
     } catch (e) { msg.textContent = e.message; msg.style.color = 'var(--bad)'; save.disabled = false; }
-  } }, isNew ? 'Add nudge' : 'Save');
+  } }, isNew ? T('Add reminder') : T('Save'));
   const test = isNew ? null : el('button', { class: 'btn', onclick: async () => { try { await post(`/api/nudges/${encodeURIComponent(n.id)}/test`, {}); m.remove(); toast('Showing it now'); nudgeCheck(); } catch (e) { toast(e.message); } } }, icon('play'), 'Try it');
   const del = isNew ? null : el('button', { class: 'btn ghost danger', onclick: async () => { if (!confirm(`Delete "${n.title}"?`)) return; try { await api(`/api/nudges/${encodeURIComponent(n.id)}`, { method: 'DELETE' }); m.remove(); redraw?.(); } catch (e) { toast(e.message); } } }, icon('x'), 'Delete');
-  const m = modal(el('div', {}, body, el('div', { class: 'row between wrap', style: 'gap:8px;margin-top:14px' }, el('div', { class: 'row', style: 'gap:8px' }, del, test), save)), { title: isNew ? (fresh ? 'Add this nudge' : 'Add a nudge') : 'Change nudge' });
+  const m = modal(el('div', {}, body, el('div', { class: 'row between wrap', style: 'gap:8px;margin-top:14px' }, el('div', { class: 'row', style: 'gap:8px' }, del, test), save)), { title: isNew ? (fresh ? T('Add this reminder') : T('Add a reminder')) : T('Change reminder') });
   setTimeout(() => body.querySelector('input')?.focus(), 30);
 }
 
@@ -144,7 +150,7 @@ async function nudgeCheck() {
   const canAct = (await nudgeRole()) !== 'viewer';
   const done = async (how) => { try { await post(`/api/nudges/${encodeURIComponent(n.id)}/${how}`, {}); } catch (e) { toast(e.message); } document.getElementById('nudgeflash')?.remove(); setTimeout(nudgeCheck, 400); };
   const card = el('div', { id: 'nudgeflash', 'data-id': n.id, role: 'alertdialog', 'aria-live': 'assertive', 'aria-label': `Reminder: ${n.title}` },
-    el('div', { class: 'nudgecard' }, nudgePic(n, 'lg'), el('div', { class: 'small muted', style: 'letter-spacing:.06em;text-transform:uppercase;font-weight:700' }, `Nudge · ${hm(n.time)}`), el('h2', {}, n.title),
+    el('div', { class: 'nudgecard' }, nudgePic(n, 'lg'), el('div', { class: 'small muted', style: 'letter-spacing:.06em;text-transform:uppercase;font-weight:700' }, `${T('Reminder')} · ${hm(n.time)}`), el('h2', {}, n.title),
       list.length > 1 ? el('p', { class: 'small muted' }, `and ${list.length - 1} more`) : null,
       canAct ? el('div', { class: 'row', style: 'gap:10px;justify-content:center' }, el('button', { class: 'btn primary', onclick: () => done('done') }, icon('check'), 'Done'), el('button', { class: 'btn', onclick: () => done('snooze') }, icon('clock'), '10 more minutes'))
         : el('button', { class: 'btn', onclick: () => card.remove() }, 'Close')));

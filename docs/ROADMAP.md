@@ -32,7 +32,7 @@ watch your home around the clock. The box does that; your devices are screens fo
    Face ID / fingerprint lock, end-to-end encrypted alerts, a box finder and LiDAR room scans. See
    [mobile/README.md](../mobile/README.md).
 4. **CasaTorch Lite** *(exploring)* - a cloud-only version with no box, for weather, calendars,
-   scores, Ring, YoLink and Ask the house - an easy way to try CasaTorch before adding a Raspberry Pi.
+   scores, Ring, YoLink and Home AI Agent - an easy way to try CasaTorch before adding a Raspberry Pi.
 
 ## Also coming
 

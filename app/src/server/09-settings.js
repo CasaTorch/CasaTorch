@@ -14,7 +14,7 @@ app.delete('/api/license', (_req, res) => { if (!isDemo()) { const { license, ..
 
 /* The home's language (English unless the household picked another in setup or Settings). Public: the
    sign-in page uses it too. */
-const LANGS = ['en', 'es', 'de', 'fr', 'pt', 'it', 'nl'];
+const LANGS = ['en', 'es', 'de', 'fr', 'pt', 'it', 'nl', 'ja', 'zh', 'ko', 'hi', 'pl', 'sv', 'tr'];
 app.get('/api/lang', (_req, res) => res.json({ lang: isDemo() ? null : LANGS.includes(config.house?.lang) ? config.house.lang : 'en' }));   // the demo keeps whatever each browser picked
 /* What the Settings tab shows - names and counts only, never keys or passwords. */
 app.get('/api/settings', (_req, res) => {

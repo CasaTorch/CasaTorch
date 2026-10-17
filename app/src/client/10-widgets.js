@@ -140,7 +140,7 @@ widget({ id: 'internet', title: 'Internet', icon: 'wifi', cat: 'home', blurb: 'O
   b.replaceChildren(...parts);
 } });
 
-widget({ id: 'today', title: 'Today', icon: 'list', cat: 'personal', blurb: 'Today\'s nudges and the house note', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
+widget({ id: 'today', title: 'Today', icon: 'list', cat: 'personal', blurb: 'Today\'s reminders and the house note', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
   const d = ctx.data.home || {};
   const items = [d.note ? el('div', { style: 'margin-bottom:8px' }, d.note) : null, ...(d.reminders || []).slice(0, fits(h, 34)).map((r) => el('div', { class: 'row', style: 'padding:4px 0' }, el('span', { class: 'dot warn' }), el('span', { class: 'grow ellipsis' }, r.title), r.at ? el('span', { class: 'tiny muted' }, hm(r.at)) : null))].filter(Boolean);
   b.replaceChildren(...(items.length ? items : [empty('No reminders today.')]));
@@ -309,9 +309,19 @@ const snapUrl = (d) => (d.snapshot ? d.snapshot : d.provider === 'ha' ? `/api/ha
    sends If-None-Match so an unchanged picture costs nothing, decodes the new one off-screen and only then
    swaps it in. Cameras that are scrolled away, or in a tab nobody is looking at, pause. */
 const CAMS = new Map();
-const camEvery = (d) => Math.max(1000, d.every || (d.provider === 'ring' ? 4000 : d.provider === 'ha' ? 3000 : 2000));   // the integration's own pace
-const camSeen = 'IntersectionObserver' in window ? new IntersectionObserver((es) => { for (const e of es) { const c = e.target.__cam; if (c) c.visible = e.isIntersecting; } }) : null;
+const camEvery = (d) => Math.max(1000, d.provider === 'camera' ? 1000 : d.every || (d.provider === 'ring' ? 4000 : d.provider === 'ha' ? 2000 : 2000));   // the integration's own pace (cameras on your network: every second)
+/* Live in the grid: a camera with its own stream (Frigate) plays live while its tile is on screen, at a gentle size and frame rate. */
+const camLiveTile = (d) => !!d.stream && d.provider === 'camera' && !navigator.connection?.saveData;
+function camLive(c, on) {
+  if (!camLiveTile(c.d)) return;
+  if (on && !c.live && [...CAMS.values()].filter((x) => x.live).length >= 3) return;   // a browser keeps ~6 connections per address: at most 3 live tiles, the rest refresh every second
+  if (on && !c.live) { c.live = true; c.img.onerror = () => { c.live = false; c.liveFailed = Date.now(); c.img.onerror = null; camFetch(c, true); }; c.img.src = `${c.d.stream}${c.d.stream.includes('?') ? '&' : '?'}h=360&fps=5&t=${Date.now()}`; c.wrap.classList.remove('cam-wait', 'cam-err'); }
+  else if (!on && c.live) { c.live = false; c.img.onerror = null; c.img.removeAttribute('src'); if (c.url) c.img.src = c.url; }
+}
+const camSeen = 'IntersectionObserver' in window ? new IntersectionObserver((es) => { for (const e of es) { const c = e.target.__cam; if (c) { c.visible = e.isIntersecting; camLive(c, c.visible && !document.hidden && !(c.liveFailed && Date.now() - c.liveFailed < 60_000)); } } }) : null;
+document.addEventListener('visibilitychange', () => { for (const c of CAMS.values()) camLive(c, !document.hidden && c.visible && c.wrap.isConnected); });
 async function camFetch(c, force = false) {
+  if (c.live) return;   // playing live: no pictures needed
   if (c.busy || (!force && (!c.visible || document.hidden))) return;
   c.busy = true; c.last = Date.now();
   try {
@@ -331,6 +341,7 @@ setInterval(() => {
   const now = Date.now();
   for (const [id, c] of CAMS) {
     if (c.wrap.isConnected) { c.gone = 0; if (now - c.last >= camEvery(c.d)) camFetch(c); continue; }
+    if (c.live) camLive(c, false);   // its page closed: stop the stream now
     // a camera no page shows any more (another tab, or it was removed): after a minute, let its picture go
     if (!c.gone) c.gone = now; else if (now - c.gone > 60_000 && !c.busy) { camSeen?.unobserve(c.wrap); if (c.url) URL.revokeObjectURL(c.url); CAMS.delete(id); }
   }
@@ -340,7 +351,7 @@ function camView(d) {
   let c = CAMS.get(d.id);
   if (!c) {
     const img = el('img', { alt: d.name, decoding: 'async' }), age = el('span', { class: 'cam-age' }), name = el('span', {}, d.name);
-    const wrap = el('div', { class: 'cam cam-wait', onclick: () => camModal(c.d) }, img, el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, `${d.source || d.provider}${d.stream ? ' · live on tap' : ''}`)), age);
+    const wrap = el('div', { class: 'cam cam-wait', onclick: () => { camLive(c, false); camModal(c.d, () => camLive(c, c.visible && !document.hidden)); } }, img, el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, `${d.source || d.provider}${camLiveTile(d) ? ' · live' : d.stream ? ' · live on tap' : ''}`)), age);
     c = { d, img, age, name, wrap, visible: true, last: 0, etag: null, url: null, busy: false }; wrap.__cam = c; CAMS.set(d.id, c);
     camSeen?.observe(wrap); camFetch(c, true);
   }
@@ -348,7 +359,7 @@ function camView(d) {
   return c.wrap;
 }
 /* Full screen: live video where the camera has it (Frigate), otherwise a new picture every second. */
-function camModal(d) {
+function camModal(d, onClose) {
   const img = el('img', { alt: d.name, class: 'cam-full' }), note = el('div', { class: 'tiny muted', style: 'margin-top:8px' }, d.stream ? 'Live video' : 'A new picture every second');
   const m = modal(el('div', {}, img, note), { wide: true, title: d.name });
   let started = false;
@@ -356,7 +367,7 @@ function camModal(d) {
   if (d.stream) { img.src = `${d.stream}${d.stream.includes('?') ? '&' : '?'}t=${Date.now()}`; img.onerror = () => { if (!m.isConnected) return; note.textContent = 'Live video unavailable - showing pictures'; stills(); }; }
   else stills();
   // closing the window stops a live stream at once
-  new MutationObserver((_, o) => { if (!m.isConnected) { img.onerror = null; const u = img.src; img.removeAttribute('src'); if (u.startsWith('blob:')) URL.revokeObjectURL(u); o.disconnect(); } }).observe(document.body, { childList: true });
+  new MutationObserver((_, o) => { if (!m.isConnected) { img.onerror = null; const u = img.src; img.removeAttribute('src'); if (u.startsWith('blob:')) URL.revokeObjectURL(u); o.disconnect(); onClose?.(); } }).observe(document.body, { childList: true });
 }
 widget({ id: 'camera', title: 'Cameras', icon: 'camera', cat: 'safety', essential: true, multi: true, blurb: 'Your cameras, live - pick which, and let them take turns', keywords: 'ring frigate reolink doorbell video', min: [3, 2], size: [4, 3], noPreview: true,
   options: [
@@ -394,7 +405,7 @@ widget({ id: 'photos', title: 'Photo reel', icon: 'camera', bare: true, live: tr
     if (order.length > 1) b._reel = setInterval(() => { if (!b.isConnected) return clearInterval(b._reel); if (document.hidden) return; i = (i + 1) % order.length; const p = order[i]; back.onload = () => { back.style.opacity = 1; front.style.opacity = 0; [front, back] = [back, front]; label(p); }; back.src = p.url; }, (o.every || 9) * 1000);
   } });
 
-widget({ id: 'ask', title: 'Ask the house', icon: 'spark', pro: true, live: true, cat: 'home', blurb: 'Ask anything about your home', noPreview: true, min: [3, 2], size: [5, 3], render(b) {
+widget({ id: 'ask', title: 'Home AI Agent', icon: 'spark', pro: true, live: true, cat: 'home', blurb: 'Ask anything about your home', noPreview: true, min: [3, 2], size: [5, 3], render(b) {
   if (!isPro()) return b.replaceChildren(empty('Ask anything about your home - included with Pro.', '#settings', 'See Pro'));
   b.replaceChildren(askBox({ compact: true }));
 } });

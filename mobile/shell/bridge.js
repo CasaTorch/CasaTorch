@@ -40,6 +40,6 @@
     lidar: () => call('lidar'), scanRoom: () => call('scanRoom'),
     /* homes */
     homes: () => call('homes'), saveHome: (h) => call('saveHome', h), openHome: (id) => fire('openHome', { id }), removeHome: (id) => call('removeHome', { id }),
-    switchHome: () => fire('switchHome'), signOut: () => fire('signOut'), scanQR: () => call('scanQR'), deviceInfo: () => call('deviceInfo'),
+    switchHome: () => fire('switchHome'), signOut: () => fire('signOut'), scanQR: () => call('scanQR'), deviceInfo: () => call('deviceInfo'), copy: (text) => call('copy', { text: String(text || '').slice(0, 4096) }),
   });
 })();

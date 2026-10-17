@@ -1,5 +1,6 @@
 import LocalAuthentication
 import UIKit
+import UniformTypeIdentifiers
 import UserNotifications
 import WebKit
 
@@ -50,6 +51,9 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
             sheet.popoverPresentationController?.sourceView = vc.view; sheet.popoverPresentationController?.sourceRect = CGRect(x: vc.view.bounds.midX, y: vc.view.bounds.midY, width: 1, height: 1)
             vc.present(sheet, animated: true); return true
+        case "copy":
+            UIPasteboard.general.setItems([[UTType.plainText.identifier: (a["text"] as? String) ?? ""]], options: [.expirationDate: Date().addingTimeInterval(120), .localOnly: true])   // a setup key: local only, gone in 2 minutes
+            return true
         case "deviceInfo":
             return ["name": UIDevice.current.name, "platform": UIDevice.current.userInterfaceIdiom == .pad ? "ipados" : "ios", "model": Self.model(), "app": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""]
         case "biometrics":

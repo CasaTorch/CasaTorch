@@ -70,7 +70,7 @@ const statusBar = {
     document.documentElement.style.setProperty('--sb-h', `${bar.offsetHeight}px`);
   },
   askBar() {
-    const input = el('input', { type: 'text', placeholder: 'Ask the house…', 'aria-label': 'Ask the house', maxlength: 1000 });
+    const input = el('input', { type: 'text', placeholder: T('Ask your Home AI Agent…'), 'aria-label': T('Ask your Home AI Agent'), maxlength: 1000 });
     const wrap = el('div', { class: 'sb-ask' }, input, el('button', { class: 'btn primary', 'aria-label': 'Ask', onclick: () => go() }, icon('send')));
     if (this.answerEl) wrap.append(this.answerEl);
     const close = () => { this.answerEl?.remove(); this.answerEl = null; };
@@ -78,7 +78,7 @@ const statusBar = {
       const q = input.value.trim(); if (!q) return;
       close(); this.answerEl = el('div', { class: 'sb-answer' }, el('span', { class: 'typing' }, el('i'), el('i'), el('i'))); wrap.append(this.answerEl);
       askPush({ role: 'user', content: q });
-      let r; try { r = await post('/api/ask', { question: q, history: askHistory.slice(0, -1).slice(-8).map(({ role, content }) => ({ role, content })) }); } catch (err) { r = { answer: err.body?.setup ? 'Connect an AI first: Settings > Ask the house.' : err.message, actions: [] }; }
+      let r; try { r = await post('/api/ask', { question: q, history: askHistory.slice(0, -1).slice(-8).map(({ role, content }) => ({ role, content })) }); } catch (err) { r = { answer: err.body?.setup ? T('Connect an AI first: Settings > Home AI Agent.') : err.message, actions: [] }; }
       askPush({ role: 'assistant', content: r.answer, actions: r.actions });
       input.value = '';
       const box = el('div', { class: 'sb-answer' }, el('div', { class: 'row between', style: 'align-items:flex-start;gap:12px' }, el('div', {}, r.answer), el('button', { class: 'btn ghost small', 'aria-label': 'Close', onclick: close }, icon('x'))));

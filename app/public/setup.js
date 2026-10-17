@@ -33,19 +33,19 @@ function fieldEl(f, store, onChange) {
   if (store[f.id] === undefined && f.default !== undefined) store[f.id] = Array.isArray(f.default) ? [...f.default] : f.default;
   if (f.type === 'timezone' && !store[f.id]) store[f.id] = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const id = `f-${f.id}-${Math.random().toString(36).slice(2, 7)}`;
-  const set = (v) => { store[f.id] = v; onChange?.(); };
+  const set = (v) => { store[f.id] = v; if (f.id === 'units' || f.id === 'currency') store[`_${f.id}Set`] = true; onChange?.(); };
   let input;
   if (f.type === 'choice') {
-    input = el('select', { id, onchange: (e) => set(e.target.value) }, ...f.options.map(([v, l]) => el('option', { value: v, selected: store[f.id] === v }, l)));
+    input = el('select', { id, onchange: (e) => set(e.target.value) }, ...f.options.map(([v, l]) => el('option', { value: v, selected: store[f.id] === v }, T(l))));
   } else if (f.type === 'multi') {
     const cur = new Set(store[f.id] || []);
     return el('div', { class: 'field' }, el('label', {}, T(f.label)), el('div', { class: 'opts' }, ...f.options.map(([v, l]) => {
-      const b = el('button', { type: 'button', class: `opt${cur.has(v) ? ' on' : ''}`, onclick: () => { cur.has(v) ? cur.delete(v) : cur.add(v); store[f.id] = [...cur]; b.classList.toggle('on'); } }, l);
+      const b = el('button', { type: 'button', class: `opt${cur.has(v) ? ' on' : ''}`, onclick: () => { cur.has(v) ? cur.delete(v) : cur.add(v); store[f.id] = [...cur]; b.classList.toggle('on'); } }, T(l));
       return b;
     })));
   } else if (f.type === 'consent') {
     return el('div', { class: 'field' }, el('label', { class: 'check' }, el('input', { type: 'checkbox', checked: store[f.id] === true, onchange: (e) => set(e.target.checked) }),
-      el('span', {}, f.label, ' ', el('a', { href: '/terms.html', target: '_blank', rel: 'noopener' }, 'Terms'), ' · ', el('a', { href: '/privacy.html', target: '_blank', rel: 'noopener' }, 'Privacy'))));
+      el('span', {}, T(f.label), ' ', el('a', { href: '/terms.html', target: '_blank', rel: 'noopener' }, T('Terms')), ' · ', el('a', { href: '/privacy.html', target: '_blank', rel: 'noopener' }, T('Privacy')))));
   } else if (f.type === 'textarea') {
     input = el('textarea', { id, rows: 3, spellcheck: 'false', oninput: (e) => set(e.target.value.trim()) }, store[f.id] || '');
   } else if (f.type === 'timezone') {
@@ -55,7 +55,7 @@ function fieldEl(f, store, onChange) {
     const type = f.type === 'password' || f.type === 'pin' ? 'password' : f.type === 'number' ? 'number' : f.type === 'url' ? 'url' : 'text';
     input = el('input', { id, type, value: store[f.id] ?? '', placeholder: f.placeholder || null, step: f.step || null, inputmode: f.type === 'pin' ? 'numeric' : null, autocomplete: type === 'password' ? 'new-password' : 'off', oninput: (e) => set(e.target.value) });
   }
-  return el('div', { class: 'field' }, el('label', { for: id }, T(f.label), f.required || ['choice', 'multi', 'timezone'].includes(f.type) || /optional/i.test(f.label) ? '' : ` ${T('(optional)')}`), input, f.help ? el('div', { class: 'help' }, f.help) : null);
+  return el('div', { class: 'field' }, el('label', { for: id }, T(f.label), f.required || ['choice', 'multi', 'timezone'].includes(f.type) || /optional/i.test(f.label) ? '' : ` ${T('(optional)')}`), input, f.help ? el('div', { class: 'help' }, T(f.help)) : null);
 }
 /* A field that others depend on (showIf) redraws the page when it changes. */
 function fieldsEl(fields, store, rerender) {
@@ -67,25 +67,30 @@ function fieldsEl(fields, store, rerender) {
 /* ---------- the "your day" questions: town, calendars, teams, headlines, reminders ---------- */
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const COLORS = [['#60a5fa', 'Blue'], ['#34d399', 'Green'], ['#fbbf24', 'Yellow'], ['#f87171', 'Red'], ['#c084fc', 'Purple'], ['#f472b6', 'Pink']];
+const EURO = 'AT BE CY DE EE ES FI FR GR HR IE IT LT LU LV MT NL PT SI SK'.split(' ');
+const CURRENCY_OF = { US: 'USD', CA: 'CAD', GB: 'GBP', AU: 'AUD', NZ: 'NZD', JP: 'JPY', CN: 'CNY', KR: 'KRW', IN: 'INR', PL: 'PLN', SE: 'SEK', NO: 'NOK', DK: 'DKK', TR: 'TRY', CH: 'CHF', MX: 'MXN', BR: 'BRL', ZA: 'ZAR', SG: 'SGD', HK: 'HKD', AE: 'AED', IL: 'ILS', ...Object.fromEntries(EURO.map((c) => [c, 'EUR'])) };
+const REM_ICONS = [['bell', '🔔 Reminder'], ['trash', '🗑 Trash'], ['paw', '🐾 Pets'], ['pill', '💊 Medicine'], ['bill', '🧾 Bills'], ['plant', '🪴 Plants'], ['cake', '🎂 Birthday'], ['car', '🚗 Car'], ['school', '🎒 School'], ['laundry', '🧺 Laundry']];
+const REM_SOUNDS = [['chime', 'Chime'], ['bell', 'Bell'], ['dingdong', 'Ding-dong'], ['marimba', 'Marimba'], ['birds', 'Birds'], ['alarm', 'Gentle alarm'], ['none', 'No sound']];
 const CUSTOM = {
   location(f, store) {
-    const box = el('div', { class: 'field' }, el('label', {}, f.label));
+    const box = el('div', { class: 'field' }, el('label', {}, T(f.label)));
     const cur = store[f.id];
-    const q = el('input', { type: 'text', placeholder: 'Town, ZIP code, or latitude, longitude', value: '' });
+    const q = el('input', { type: 'text', placeholder: T('Town, ZIP code, or latitude, longitude'), value: '' });
     const results = el('div', { class: 'results' });
-    const pick = (p) => { store[f.id] = p; go(); };
+    // The country also sets sensible defaults for °F/°C and the currency (still yours to change).
+    const pick = (p) => { store[f.id] = p; if (p.cc) { if (!store._unitsSet) store.units = ['US', 'LR', 'MM', 'BS', 'KY', 'PW', 'FM', 'MH'].includes(p.cc) ? 'F' : 'C'; if (!store._currencySet && CURRENCY_OF[p.cc]) store.currency = CURRENCY_OF[p.cc]; } go(); };
     const find = async () => {
       const ll = q.value.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
       if (ll) { pick({ name: `${ll[1]}, ${ll[2]}`, lat: Number(ll[1]), lon: Number(ll[2]) }); return; }
-      results.replaceChildren(el('div', { class: 'note' }, 'Looking...'));
-      try { const r = await api(`/api/setup/geocode?q=${encodeURIComponent(q.value)}`); results.replaceChildren(...(r.places.length ? r.places.map((p) => el('button', { type: 'button', class: 'small', onclick: () => pick(p) }, p.name)) : [el('div', { class: 'note' }, 'No match - try the nearest bigger town.')])); }
+      results.replaceChildren(el('div', { class: 'note' }, T('Looking...')));
+      try { const r = await api(`/api/setup/geocode?q=${encodeURIComponent(q.value)}`); results.replaceChildren(...(r.places.length ? r.places.map((p) => el('button', { type: 'button', class: 'small', onclick: () => pick(p) }, p.name)) : [el('div', { class: 'note' }, T('No match - try the nearest bigger town.'))])); }
       catch (e) { results.replaceChildren(el('div', { class: 'err' }, e.message)); }
     };
     q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); find(); } });
     if (cur?.lat != null) box.append(el('div', { class: 'ok' }, `✓ ${cur.name || `${cur.lat}, ${cur.lon}`}`));
-    box.append(el('div', { class: 'row' }, el('div', { style: 'flex:1;min-width:180px' }, q), el('button', { type: 'button', class: 'small', onclick: find }, 'Find'),
-      navigator.geolocation ? el('button', { type: 'button', class: 'small', onclick: () => navigator.geolocation.getCurrentPosition((g) => pick({ name: 'This location', lat: Math.round(g.coords.latitude * 1e4) / 1e4, lon: Math.round(g.coords.longitude * 1e4) / 1e4 }), () => results.replaceChildren(el('div', { class: 'note' }, 'The browser did not share a location - search instead.'))) }, 'Use this device\'s location') : null), results);
-    if (f.help) box.append(el('div', { class: 'help' }, f.help));
+    box.append(el('div', { class: 'row' }, el('div', { style: 'flex:1;min-width:180px' }, q), el('button', { type: 'button', class: 'small', onclick: find }, T('Find')),
+      navigator.geolocation ? el('button', { type: 'button', class: 'small', onclick: () => navigator.geolocation.getCurrentPosition((g) => pick({ name: T('This location'), lat: Math.round(g.coords.latitude * 1e4) / 1e4, lon: Math.round(g.coords.longitude * 1e4) / 1e4 }), () => results.replaceChildren(el('div', { class: 'note' }, T('The browser did not share a location - search instead.')))) }, T('Use this device\'s location')) : null), results);
+    if (f.help) box.append(el('div', { class: 'help' }, T(f.help)));
     return box;
   },
   calendars(f, store) {
@@ -116,12 +121,23 @@ const CUSTOM = {
     return box;
   },
   feeds(f, store) {
+    // Which headlines: local, national and world first (from where you live, in your language), then topics and named sources.
     const picks = new Set(store[f.id] ||= []);
     const custom = store.custom ||= [];
-    const box = el('div', {}, el('div', { class: 'opts' }));
-    api('/api/setup/news/defaults').then((r) => box.firstChild.append(...r.feeds.map((d) => { const b = el('button', { type: 'button', class: `opt${picks.has(d.id) ? ' on' : ''}`, onclick: () => { picks.has(d.id) ? picks.delete(d.id) : picks.add(d.id); store[f.id] = [...picks]; b.classList.toggle('on'); } }, d.name); return b; }))).catch(() => {});
-    custom.forEach((c, k) => box.append(el('div', { class: 'item' }, el('div', { class: 'grid2' }, fieldEl({ id: 'name', label: 'Name', type: 'text', required: true }, c), fieldEl({ id: 'url', label: 'RSS or Atom feed address', type: 'url', required: true }, c)), el('div', { class: 'row' }, testEl('feed', c, 'Check it'), el('button', { type: 'button', class: 'small', onclick: () => { custom.splice(k, 1); go(); } }, 'Remove')))));
-    box.append(el('div', { class: 'row', style: 'margin-top:10px' }, el('button', { type: 'button', class: 'small', onclick: () => { custom.push({ name: '', url: '' }); go(); } }, 'Add a feed (local news, a blog...)')));
+    const toggle = (id, b) => { picks.has(id) ? picks.delete(id) : picks.add(id); store[f.id] = [...picks]; b.classList.toggle('on'); };
+    const chip = (id, label) => { const b = el('button', { type: 'button', class: `opt${picks.has(id) ? ' on' : ''}`, onclick: () => toggle(id, b) }, label); return b; };
+    const box = el('div', {}), top = el('div', { class: 'opts big' }), topics = el('div', { class: 'opts' }), groups = el('div', {});
+    const loc = W.a.house?.location, cc = loc?.cc || (/,\s*([A-Z]{2})$/.exec(loc?.name || '')?.[1] || '');
+    box.append(el('label', {}, T('Which headlines?')), top, el('label', { style: 'margin-top:14px' }, T('Topics')), topics, groups);
+    api(`/api/setup/news/defaults?town=${encodeURIComponent(loc?.name || '')}&cc=${cc}&lang=${encodeURIComponent(W.a.house?.lang || CasaI18n.lang || 'en')}`).then((r) => {
+      if (!store._seeded && !picks.size) { for (const id of ['gn-local', 'gn-national', 'gn-world']) if (r.smart.some((x) => x.id === id)) picks.add(id); store[f.id] = [...picks]; store._seeded = true; }
+      for (const s of r.smart) (['gn-local', 'gn-national', 'gn-world'].includes(s.id) ? top : topics).append(chip(s.id, s.id === 'gn-local' ? `${T('Local')} · ${s.name.replace(/^Local - /, '')}` : s.id === 'gn-national' ? `${T('National')} · ${s.name.replace(/^Top stories - /, '')}` : T(s.label)));
+      if (!loc?.name) top.append(el('div', { class: 'note' }, T('Local headlines need your town (first page).')));
+      const byGroup = {}; for (const d of r.feeds) (byGroup[d.group || 'More'] ||= []).push(d);
+      for (const [g, list] of Object.entries(byGroup)) groups.append(el('label', { style: 'margin-top:14px' }, T(g)), el('div', { class: 'opts' }, ...list.map((d) => chip(d.id, d.name))));
+    }).catch(() => {});
+    custom.forEach((c, k) => box.append(el('div', { class: 'item' }, el('div', { class: 'grid2' }, fieldEl({ id: 'name', label: 'Name', type: 'text', required: true }, c), fieldEl({ id: 'url', label: 'RSS or Atom feed address', type: 'url', required: true }, c)), el('div', { class: 'row' }, testEl('feed', c, T('Check it')), el('button', { type: 'button', class: 'small', onclick: () => { custom.splice(k, 1); go(); } }, T('Remove'))))));
+    box.append(el('div', { class: 'row', style: 'margin-top:10px' }, el('button', { type: 'button', class: 'small', onclick: () => { custom.push({ name: '', url: '' }); go(); } }, T('Add any feed (a local paper, a blog...)'))));
     return box;
   },
   reminders(f, store) {
@@ -129,12 +145,14 @@ const CUSTOM = {
     const box = el('div', {});
     list.forEach((r, k) => {
       const days = new Set(r.days ||= [0, 1, 2, 3, 4, 5, 6]);
-      box.append(el('div', { class: 'item' }, fieldEl({ id: 'title', label: 'Reminder', type: 'text', placeholder: 'Trash night - bins out', required: true }, r),
-        el('div', { class: 'row' }, el('div', { class: 'days' }, ...DAYS.map((d, n) => { const b = el('button', { type: 'button', class: days.has(n) ? 'on' : '', 'aria-label': ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][n], onclick: () => { days.has(n) ? days.delete(n) : days.add(n); r.days = [...days].sort(); b.classList.toggle('on'); } }, d); return b; })),
-          el('input', { type: 'time', value: r.time || '', style: 'width:auto', oninput: (e) => { r.time = e.target.value; } }), el('button', { type: 'button', class: 'small', onclick: () => { list.splice(k, 1); go(); } }, 'Remove'))));
+      box.append(el('div', { class: 'item' }, fieldEl({ id: 'title', label: 'Reminder', type: 'text', placeholder: T('Trash night - bins out'), required: true }, r),
+        el('div', { class: 'grid2' }, fieldEl({ id: 'icon', label: 'Icon', type: 'choice', default: 'bell', options: REM_ICONS }, r), fieldEl({ id: 'sound', label: 'Sound on the screens', type: 'choice', default: 'chime', options: REM_SOUNDS }, r)),
+        el('div', { class: 'row' }, el('div', { class: 'days' }, ...DAYS.map((d, n) => { const b = el('button', { type: 'button', class: days.has(n) ? 'on' : '', 'aria-label': T(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][n]), onclick: () => { days.has(n) ? days.delete(n) : days.add(n); r.days = [...days].sort(); b.classList.toggle('on'); } }, d); return b; })),
+          el('input', { type: 'time', value: r.time || '', style: 'width:auto', oninput: (e) => { r.time = e.target.value; } }), el('button', { type: 'button', class: 'small', onclick: () => { list.splice(k, 1); go(); } }, T('Remove')))));
     });
-    box.append(el('div', { class: 'row' }, el('button', { type: 'button', class: 'small', onclick: () => { list.push({ title: '', days: [0, 1, 2, 3, 4, 5, 6] }); go(); } }, 'Add a reminder'),
-      list.length ? null : el('button', { type: 'button', class: 'small', onclick: () => { list.push({ title: 'Trash night - bins out', days: [2], time: '20:00' }); go(); } }, 'Example: trash night')));
+    if (store.have) box.prepend(el('p', { class: 'note' }, store.have === 1 ? T('You have 1 reminder - change it on the Reminders page. Add more here.') : T('You have {n} reminders - change them on the Reminders page. Add more here.', { n: store.have })));
+    box.append(el('div', { class: 'row' }, el('button', { type: 'button', class: 'small', onclick: () => { list.push({ title: '', days: [0, 1, 2, 3, 4, 5, 6] }); go(); } }, T('Add a reminder')),
+      list.length ? null : el('button', { type: 'button', class: 'small', onclick: () => { list.push({ title: T('Trash night - bins out'), days: [2], time: '20:00' }); go(); } }, T('Example: trash night'))));
     return box;
   },
 };
@@ -176,17 +194,22 @@ addEventListener('message', async (e) => {
 });
 
 /* ---------- connection tests ---------- */
-function testEl(kind, store, label = 'Test connection') {
+function testEl(kind, store, label = T('Test connection')) {
   const out = el('div', { class: 'note' });
   const show = (r) => {
-    out.replaceChildren(r.ok ? el('span', { class: 'ok' }, `✓ ${r.message || 'Connected'}`) : el('span', { class: 'err' }, `✗ ${r.error}`));
+    out.replaceChildren(r.ok ? el('span', { class: 'ok' }, `✓ ${r.message || T('Connected')}`) : el('span', { class: 'err' }, `✗ ${r.error}`));
+    // a device with its own certificate (Frigate's secure port): show its fingerprint and trust exactly that one
+    if (!r.ok && r.needTrust && r.fingerprint) {
+      out.append(el('div', { class: 'trust' }, el('div', { class: 'small' }, T('Certificate fingerprint (SHA-256):')), el('code', { class: 'fp' }, r.fingerprint),
+        el('button', { type: 'button', class: 'small primary', onclick: () => { store.trust = r.fingerprint; btn.click(); } }, T('Trust this certificate'))));
+    }
     if (r.ok && r.choose) {
       if (store[r.choose.id] === undefined) store[r.choose.id] = r.choose.options[0][0];
-      out.append(fieldEl({ id: r.choose.id, label: r.choose.label, type: 'choice', options: r.choose.options }, store));
+      out.append(fieldEl({ id: r.choose.id, label: T(r.choose.label), type: 'choice', options: r.choose.options }, store));
     }
   };
   const btn = el('button', { type: 'button', class: 'small', onclick: async () => {
-    btn.disabled = true; out.replaceChildren('Checking…');
+    btn.disabled = true; out.replaceChildren(T('Checking…'));
     try {
       const body = Object.fromEntries(Object.entries(store).filter(([k]) => !k.startsWith('_')));
       const r = await api(`/api/setup/test/${kind}`, { body });
@@ -240,7 +263,7 @@ function flowEl(domain, hint, done, extra) {
     }
     const fields = (v.fields || []).map(schemaField).filter(Boolean);
     const input = state.input;
-    if (hint) box.append(el('p', { class: 'note' }, hint));
+    if (hint) box.append(el('p', { class: 'note' }, T(hint)));
     if (v.step && v.step !== 'user') box.append(el('p', { class: 'note' }, `Next: ${pretty(v.step)}`));
     for (const [k, e] of Object.entries(v.errors || {})) box.append(el('div', { class: 'err' }, `${k === 'base' ? '' : `${FIELD_LABELS[k] || pretty(k)}: `}${ERRORS[e] || pretty(e)}`));
     for (const f of fields) {
@@ -326,7 +349,10 @@ function ringEl(card) {
 /* One picked option of a "pick all that apply" list: how it gets set up. */
 function setupFor(stepId, opt) {
   const store = ans(stepId);
-  const card = el('div', { class: 'card' }, el('h3', {}, opt.label, badge(opt)));
+  const card = el('div', { class: 'card' }, el('h3', {}, T(opt.label), badge(opt)));
+  // Already in Home Assistant (Frigate's own integration, say): it comes in from there; connecting it here too is faster, and CasaTorch shows each camera once.
+  if (opt.method === 'direct' && W.haDomains?.includes(opt.id)) card.append(el('div', { class: 'ok' }, `✓ ${T('Already in your Home Assistant - its cameras come in from there.')}`),
+    el('p', { class: 'note' }, T('Connect it here as well for faster live video and detection stats. Each camera still shows once: CasaTorch keeps the direct one and lists the other under Cameras › Detected cameras.')));
   if (opt.method === 'hue') return hueEl(card);
   if (opt.method === 'ring') return ringEl(card);
   if (opt.method === 'ha' || opt.method === 'ha-ui') {
@@ -334,7 +360,7 @@ function setupFor(stepId, opt) {
     const added = W.added.find((x) => x.domain === opt.domain);
     if (W.haDomains.includes(opt.domain) || added) { card.append(el('div', { class: 'ok' }, added ? `✓ Added to Home Assistant: ${added.title}` : '✓ Already in Home Assistant')); return card; }
     if (opt.method === 'ha-ui') {
-      card.append(el('p', { class: 'note' }, opt.hint || 'This one signs in on a page only Home Assistant can show.'),
+      card.append(el('p', { class: 'note' }, T(opt.hint || 'This one signs in on a page only Home Assistant can show.')),
         el('button', { type: 'button', class: 'small', onclick: async () => { const r = await api(`/api/setup/ha/link?domain=${encodeURIComponent(opt.domain)}`); window.open(r.url, '_blank', 'noopener'); } }, 'Set it up in Home Assistant'));
       return card;
     }
@@ -354,11 +380,35 @@ function setupFor(stepId, opt) {
   return card;
 }
 
+/* ---------- how your data is kept (short; the same promise everywhere in setup) ---------- */
+function safeNote(compact = false) {
+  const lines = [
+    [T('Stays here'), T('Everything you enter is stored on this CasaTorch - not in any CasaTorch cloud. casatorch.com never sees your devices, keys or data.')],
+    [T('Sealed'), T('Passwords, API keys and tokens are encrypted with AES-256-GCM, using a key made on this device that never leaves it.')],
+    [T('Hashed'), T('Sign-in passwords are stored only as scrypt hashes (salted) - not even CasaTorch can read them back.')],
+    [T('Private on the wire'), T('Phones and screens connect over HTTPS (TLS) on your home network; phone alerts are end-to-end encrypted.')],
+  ];
+  return el('details', { class: 'card safe', open: compact ? null : true }, el('summary', {}, '🔒 ', T('Your data stays yours')),
+    el('ul', {}, lines.map(([b, t]) => el('li', {}, el('b', {}, b), ' - ', t))));
+}
+
+/* After setup: the phone login's one-use QR code, for the CasaTorch app to scan. */
+function pairDone(p) {
+  $('#progress').replaceChildren(); $('#back').hidden = true;
+  $('#next').textContent = T('Open my dashboard'); $('#next').onclick = () => { location.href = W.rerun ? '/' : '/?tour'; };
+  $('#page').replaceChildren(el('h1', {}, T('Now your phone')),
+    el('p', { class: 'intro' }, T('Open the CasaTorch app on your phone, tap "Scan a code", and point it at this. Your phone signs in as {user} - no typing.', { user: p.user })),
+    el('div', { class: 'pairbox' }, (() => { const q = el('div', { class: 'qr' }); if (/^\s*<svg[\s>]/.test(p.qr || '')) q.innerHTML = p.qr; return q; })(), el('div', {}, el('div', { class: 'note' }, T('Or type this code in the app:')), el('div', { class: 'paircode' }, p.code),
+      el('div', { class: 'note' }, T('Works once, for 30 minutes. Phone on your home Wi-Fi.')))),
+    el('p', { class: 'note' }, T('No app yet? Add a phone later in Settings › Phones & alerts.')), safeNote(true));
+  scrollTo(0, 0);
+}
+
 /* ---------- pages ---------- */
 function welcome() {
-  if (W.rerun) { const k = Object.entries(W.keeps).filter(([, v]) => v).map(([n]) => n); return [langRow(), el('h1', {}, 'Change your setup'), el('p', { class: 'intro' }, `Your current answers are filled in. Anything you don't change is kept${k.length ? `, including what's already connected (${k.join(', ')})` : ''}.`)]; }
+  if (W.rerun) { const k = Object.entries(W.keeps).filter(([, v]) => v).map(([n]) => n); return [langRow(), el('h1', {}, T('Change your setup')), el('p', { class: 'intro' }, k.length ? T('Your current answers are filled in. Anything you don\'t change is kept, including what\'s already connected ({list}).', { list: k.join(', ') }) : T('Your current answers are filled in. Anything you don\'t change is kept.'))]; }
   const step = (n, t, d) => el('div', { class: 'wstep' }, el('span', { class: 'wnum' }, n), el('div', {}, el('b', {}, T(t)), el('div', { class: 'note' }, T(d))));
-  return [langRow(), el('h1', {}, T('Welcome to CasaTorch')),
+  return [langRow(), el('h1', {}, T('Welcome to CasaTorch')), whereRow(),
     el('p', { class: 'intro' }, T('One screen for the smart home you already have: lights, cameras, sensors, calendars and more. CasaTorch runs here on your own hardware, and your settings stay here.')),
     el('div', { class: 'wsteps' },
       step('1', 'The everyday things', 'Your town for the weather, calendars, sports teams, headlines and reminders.'),
@@ -366,14 +416,22 @@ function welcome() {
       step('3', 'Your dashboard', 'Then a one-minute tour of where everything is. Change anything later in Settings.')),
     el('p', { class: 'note' }, T('About 10 to 20 minutes. Every step can be skipped and added later.')),
     el('p', { class: 'note' }, `${T('Stuck at any point? E-mail')} `, el('a', { href: 'mailto:support@casatorch.com' }, 'support@casatorch.com'), T(' - a real person answers.')),   // scrub-ok: public support address
+    safeNote(),
     phoneCard(),
     el('div', { class: 'card' }, el('h3', {}, T('Just looking?')), el('p', { class: 'note' }, T('See CasaTorch with a sample house, including the 3D floor plan. No setup needed.')),
       el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/?tour'; } }, T('Try the demo'))),
     restoreBox()];
 }
-/* The first question: which language CasaTorch speaks in this home (English unless you pick another). */
+/* First, with the language: where the home is - weather, time zone, °F/°C and currency follow from it. */
+function whereRow() {
+  W.a.house ||= {};
+  const box = CUSTOM.location({ id: 'location', label: T('Where is your home?'), help: T('Only the town\'s map position is saved - rounded, never your street address.') }, W.a.house);
+  box.classList.add('card'); return box;
+}
+/* The first question: which language CasaTorch speaks in this home (this browser's language when CasaTorch speaks it). */
 function langRow() {
-  const cur = W.a.house?.lang || CasaI18n.lang || 'en';
+  const cur = W.a.house?.lang || (CasaI18n.lang !== 'en' ? CasaI18n.lang : CasaI18n.guess());
+  if (cur !== CasaI18n.lang) CasaI18n.use(cur).then((changed) => { if (changed) go(); });
   if (!W.a.house?.lang) W.a.house = { ...(W.a.house || {}), lang: cur };
   const sel = el('select', { 'aria-label': T('Language'), onchange: async (e) => { W.a.house = { ...(W.a.house || {}), lang: e.target.value }; await CasaI18n.use(e.target.value); go(); } },
     ...Object.entries(CasaI18n.LANGS).map(([k, n]) => el('option', { value: k, selected: k === cur ? true : null }, n)));
@@ -402,14 +460,14 @@ const branchStore = (step, store) => (step.id === 'network' && step.branches?.[s
 function stepPage(step) {
   const store = ans(step.id);
   const out = [el('h1', {}, T(step.title))];
-  if (W.focus?.step === step.id) out.push(el('div', { class: 'focus-note' }, el('b', {}, W.focus.label ? `Adding ${W.focus.label}` : 'Picking up where you left off'), el('span', {}, ' - follow the card below. When you see a green check, press "Review & save". Everything else in your setup stays as it is.')));
+  if (W.focus?.step === step.id) out.push(el('div', { class: 'focus-note' }, el('b', {}, W.focus.label ? T('Adding {name}', { name: T(W.focus.label) }) : T('Picking up where you left off')), el('span', {}, ` - ${T('follow the card below. When you see a green check, press "Review & save". Everything else in your setup stays as it is.')}`)));
   if (step.intro) out.push(el('p', { class: 'intro' }, T(step.intro)));
   if (step.question) {
     const q = step.question;
-    out.push(el('div', { class: 'q' }, q.label), el('div', { class: 'opts' }, ...q.options.map(([v, l]) => el('button', { type: 'button', class: `opt${store[q.id] === v ? ' on' : ''}`, onclick: () => { store[q.id] = v; go(); } }, l))));
+    out.push(el('div', { class: 'q' }, T(q.label)), el('div', { class: 'opts' }, ...q.options.map(([v, l]) => el('button', { type: 'button', class: `opt${store[q.id] === v ? ' on' : ''}`, onclick: () => { if (store[q.id] !== v && step.id === 'ai') { delete store._test; delete store.apiKey; } store[q.id] = v; go(); } }, T(l)))));
     const br = step.branches?.[store[q.id]];
     if (br) {
-      if (br.note) out.push(el('p', { class: 'note' }, br.note));
+      if (br.note) out.push(el('p', { class: 'note' }, T(br.note)));
       if (br.guide) out.push(el('pre', {}, W.cat.guides[br.guide] || ''));
       const sub = branchStore(step, store);
       // Questions that follow a pick (alerts for people? a budget?) come after it.
@@ -421,15 +479,15 @@ function stepPage(step) {
       if (br.pick) {
         const p = br.pick, cur = new Set(store[p.id] || []);
         const shown = shownOptions(p.options);
-        out.push(el('div', { class: 'q' }, p.label), el('div', { class: 'opts' }, ...shown.map((o) => el('button', { type: 'button', class: `opt${cur.has(o.id) ? ' on' : ''}`, onclick: () => { cur.has(o.id) ? cur.delete(o.id) : cur.add(o.id); store[p.id] = [...cur]; go(); } }, o.label, badge(o), o.desc ? el('small', {}, o.desc) : null))));
+        out.push(el('div', { class: 'q' }, T(p.label)), el('div', { class: 'opts' }, ...shown.map((o) => el('button', { type: 'button', class: `opt${cur.has(o.id) ? ' on' : ''}`, onclick: () => { cur.has(o.id) ? cur.delete(o.id) : cur.add(o.id); store[p.id] = [...cur]; go(); } }, T(o.label), badge(o), o.desc ? el('small', {}, T(o.desc)) : null))));
         for (const o of shown) if (cur.has(o.id)) out.push(setupFor(step.id, o));
       }
       if (br.fields && late) out.push(...fieldsEl(br.fields, sub, go));
     }
   }
-  if (step.fields) out.push(...fieldsEl(step.id === 'account' && W.rerun ? step.fields.map((f) => (f.id === 'password' ? { ...f, required: false, label: 'New password (leave empty to keep the current one)' } : f)) : step.fields, store, go));
-  if (step.id === 'account') out.push(claimEl(store));
-  if (step.help) out.push(el('details', { class: 'card' }, el('summary', {}, 'Where do I find the link?'), el('p', { class: 'note' }, step.help)));
+  if (step.fields) out.push(...fieldsEl(step.id === 'account' && W.rerun ? step.fields.map((f) => (f.id === 'password' ? { ...f, required: false, label: T('New password (leave empty to keep the current one)') } : f)) : step.fields, store, go));
+  if (step.id === 'account') out.push(claimEl(store), safeNote(true));
+  if (step.help) out.push(el('details', { class: 'card' }, el('summary', {}, T('Where do I find the link?')), el('p', { class: 'note' }, T(step.help))));
   return out;
 }
 /* Bought Pro? The key comes by e-mail code instead of copy and paste. */
@@ -455,39 +513,41 @@ function claimEl(store) {
 }
 /* "Who is your power company?" - Home Assistant's own list (Opower), then its sign-in. */
 function utilityEl(p, store) {
-  const card = el('div', { class: 'card' }, el('h3', {}, p.label, el('span', { class: 'badge ha' }, W.ha ? 'via Home Assistant' : 'needs Home Assistant')), W.ha ? el('p', { class: 'note' }, p.help) : null);
+  const card = el('div', { class: 'card' }, el('h3', {}, T(p.label), el('span', { class: 'badge ha' }, W.ha ? 'via Home Assistant' : 'needs Home Assistant')), W.ha ? el('p', { class: 'note' }, T(p.help)) : null);
   if (store.utility === 'other') { card.append(el('div', { class: 'note' }, 'OK - enter your price per kWh below.'), W.ha ? el('button', { type: 'button', class: 'small', onclick: () => { store.utility = null; go(); } }, 'Look again') : null); return card; }
   if (store.utility) { card.append(el('div', { class: 'ok' }, `✓ ${store.utility} - connected through Home Assistant`)); return card; }
   if (!W.ha) { store.utility = 'other'; card.append(el('div', { class: 'warn', style: 'margin:6px 0' }, '\u26A0 Needs Home Assistant - you skipped it, so CasaTorch can\'t sign in to your power company.'), el('div', { class: 'note' }, 'You can still see costs: CasaTorch adds up your smart plugs and uses the price per kWh you enter below (it\'s on your bill). To get your real bill and usage later, connect Home Assistant from Settings > Run setup again.')); return card; }
   if (W.haDomains.includes(p.domain)) { store.utility = 'Your power company'; card.append(el('div', { class: 'ok' }, '✓ Your power company is already connected in Home Assistant')); return card; }
-  const f = flowEl(p.domain, null, (title) => { store.utility = title; go(); }, (cancel) => el('button', { type: 'button', class: 'small', onclick: () => { store.utility = 'other'; cancel(); } }, p.otherLabel));
+  const f = flowEl(p.domain, null, (title) => { store.utility = title; go(); }, (cancel) => el('button', { type: 'button', class: 'small', onclick: () => { store.utility = 'other'; cancel(); } }, T(p.otherLabel)));
   if (W.flows[p.domain]?.view) f.render();
-  else card.append(el('div', { class: 'row' }, el('button', { type: 'button', class: 'small', onclick: (e) => { e.target.parentElement.remove(); f.start(); } }, 'Find my power company'), el('button', { type: 'button', class: 'small', onclick: () => { store.utility = 'other'; go(); } }, p.otherLabel)));
+  else card.append(el('div', { class: 'row' }, el('button', { type: 'button', class: 'small', onclick: (e) => { e.target.parentElement.remove(); f.start(); } }, 'Find my power company'), el('button', { type: 'button', class: 'small', onclick: () => { store.utility = 'other'; go(); } }, T(p.otherLabel))));
   card.append(f.el);
   return card;
 }
-const labelsOf = (step, ids) => (ids || []).map((id) => W.steps.find((s) => s.id === step)?.branches?.yes?.pick?.options.find((o) => o.id === id)?.label || id).join(', ');
+const labelsOf = (step, ids) => (ids || []).map((id) => T(W.steps.find((s) => s.id === step)?.branches?.yes?.pick?.options.find((o) => o.id === id)?.label || id)).join(', ');
 function review() {
   const a = W.a, dl = el('dl', { class: 'review' });
-  const add = (k, v) => dl.append(el('dt', {}, k), el('dd', {}, v || '-'));
-  add('Home', `${a.house?.name} · ${a.house?.timezone} · °${a.house?.units} · ${a.house?.currency}`);
-  add('Weather for', a.house?.location?.name || 'not set');
-  add('Login', `${a.account?.username}${a.account?.license ? ' · Pro key entered' : ''}`);
-  add('Calendars', (a.calendars?.list || []).filter((c) => c.url).map((c) => c.name).join(', ') || 'none');
-  add('Teams', (a.sports?.teams || []).map((t) => t.name).join(', ') || 'none');
-  add('Headlines', `${(a.news?.picks || []).length + (a.news?.custom || []).filter((c) => c.url).length} source(s)`);
-  add('Reminders', (a.reminders?.list || []).filter((r) => r.title).map((r) => r.title).join(', ') || 'none');
-  add('Home Assistant', W.ha ? W.ha.message : a.homeassistant?.uses === 'yes' ? 'not connected' : 'not used');
+  const add = (k, v) => dl.append(el('dt', {}, T(k)), el('dd', {}, v || '-'));
+  add('Home|house', `${a.house?.name} · ${a.house?.timezone} · °${a.house?.units} · ${a.house?.currency}`);
+  add('Weather for', a.house?.location?.name || T('not set'));
+  add('Login', `${a.account?.username} (${T('owner')})${a.account?.license ? ` · ${T('Pro key entered')}` : ''}`);
+  add('Your phone', a.phone?.how === 'new' ? T('{user} - QR code at the end', { user: a.phone.username }) : a.phone?.how === 'owner' ? T('owner login - QR code at the end') : T('later'));
+  add('Calendars', (a.calendars?.list || []).filter((c) => c.url).map((c) => c.name).join(', ') || T('none'));
+  add('Teams', (a.sports?.teams || []).map((t) => t.name).join(', ') || T('none'));
+  add('Headlines', T('{n} source(s)', { n: (a.news?.picks || []).length + (a.news?.custom || []).filter((c) => c.url).length }));
+  add('Reminders', (a.reminders?.list || []).filter((r) => r.title).map((r) => r.title).join(', ') || T('none'));
+  add('Home Assistant', W.ha ? W.ha.message : a.homeassistant?.uses === 'yes' ? T('not connected') : T('not used'));
   if (W.added.length) add('Added to Home Assistant', W.added.map((x) => x.title).join(', '));
-  add('Cameras', a.cameras?.has === 'yes' ? labelsOf('cameras', a.cameras.kinds) : 'none');
-  add('Lights, locks, climate', a.controls?.has === 'yes' ? labelsOf('controls', a.controls.kinds) : 'none');
-  add('Sensors', a.sensors?.has === 'yes' ? labelsOf('sensors', a.sensors.kinds) : 'none');
-  add('Network', `${W.steps.find((s) => s.id === 'network')?.question.options.find(([v]) => v === a.network?.kind)?.[1] || '-'}${a.network?.dns && a.network.dns !== 'none' ? ` · ${a.network.dns}` : ''}`);
-  add('Energy', a.energy?.track === 'yes' ? `${a.energy.utility === 'other' || !a.energy.utility ? `${a.energy.rate || '?'} per kWh` : a.energy.utility}${a.energy.budget ? ` · budget ${a.energy.budget}/month` : ''}${a.energy.kinds?.length ? ` · ${labelsOf('energy', a.energy.kinds)}` : ''}` : 'off');
-  const sec = el('dd', {}, 'On by default - setting itself up');   // 43-local-https.js starts it before setup
-  dl.append(el('dt', {}, 'Secure address at home'), sec);
-  fetch('/api/local-https/target').then((r) => r.json()).then((j) => { sec.textContent = j.url ? `On · ${j.url} · the easy way in at home: casatorch.com/home` : j.off ? 'Off (turn it on in Settings)' : location.protocol === 'https:' ? 'On' : 'On by default - setting itself up (needs the internet once). Turn it off in Settings if you like.'; }).catch(() => {});
-  return [el('h1', {}, T('All set?')), el('p', { class: 'intro' }, T('Check this over. Finish saves it and opens your dashboard; you can change anything later in Settings.')), dl, el('div', { id: 'finishMsg' })];
+  add('Cameras', a.cameras?.has === 'yes' ? labelsOf('cameras', a.cameras.kinds) : T('none'));
+  add('Lights, locks, climate', a.controls?.has === 'yes' ? labelsOf('controls', a.controls.kinds) : T('none'));
+  add('Sensors', a.sensors?.has === 'yes' ? labelsOf('sensors', a.sensors.kinds) : T('none'));
+  add('Home AI Agent', a.ai?.provider && a.ai.provider !== 'later' ? (a.ai._test?.ok ? `${{ anthropic: 'Claude', openai: 'OpenAI', ollama: 'Ollama' }[a.ai.provider]} · ${a.ai._test.model}` : T('not connected yet')) : T('not now'));
+  add('Network', `${T(W.steps.find((s) => s.id === 'network')?.question.options.find(([v]) => v === a.network?.kind)?.[1] || '-')}${a.network?.dns && a.network.dns !== 'none' ? ` · ${a.network.dns}` : ''}`);
+  add('Energy', a.energy?.track === 'yes' ? `${a.energy.utility === 'other' || !a.energy.utility ? T('{rate} per kWh', { rate: a.energy.rate || '?' }) : a.energy.utility}${a.energy.budget ? ` · ${T('budget {budget}/month', { budget: a.energy.budget })}` : ''}${a.energy.kinds?.length ? ` · ${labelsOf('energy', a.energy.kinds)}` : ''}` : T('off'));
+  const sec = el('dd', {}, T('On by default - setting itself up'));   // 43-local-https.js starts it before setup
+  dl.append(el('dt', {}, T('Secure address at home')), sec);
+  fetch('/api/local-https/target').then((r) => r.json()).then((j) => { sec.textContent = j.url ? T('On · {url} · the easy way in at home: casatorch.com/home', { url: j.url }) : j.off ? T('Off (turn it on in Settings)') : location.protocol === 'https:' ? T('On') : T('On by default - setting itself up (needs the internet once). Turn it off in Settings if you like.'); }).catch(() => {});
+  return [el('h1', {}, T('All set?')), el('p', { class: 'intro' }, T('Check this over. Finish saves it and opens your dashboard; you can change anything later in Settings.')), dl, safeNote(true), el('div', { id: 'finishMsg' })];
 }
 
 /* ---------- navigation ---------- */
@@ -495,6 +555,7 @@ function problems(step) {
   if (!step) return null;
   const store = ans(step.id);
   if (step.question && !store[step.question.id]) return 'Pick an answer to continue.';
+  if (step.id === 'ai' && store.provider !== 'later' && !store._test?.ok) return T('Press "Test connection" so your Home AI Agent is ready - or pick "Not now".');
   const br = step.question ? step.branches?.[store[step.question.id]] : null;
   const sub = br ? branchStore(step, store) : store;
   for (const [list, src] of [[step.fields, store], [br?.fields, sub]]) for (const f of (list || []).filter((g) => visible(g, src) && g.required && !(step.id === 'homeassistant' && sub._signedIn) && !(W.rerun && step.id === 'account' && g.id === 'password') && !(W.rerun && W.ha && step.id === 'homeassistant' && g.id === 'token'))) {
@@ -516,7 +577,12 @@ function problems(step) {
 function go() {
   $('#navmsg').textContent = '';
   const pages = [T('Welcome'), ...W.steps.map((s) => T(s.title)), T('Review')];
-  $('#progress').replaceChildren(...pages.map((t, k) => el('li', { class: k === W.i ? 'on' : k < W.i ? 'done' : '' }, t)));
+  // Any step already reached can be opened from the top; the ones ahead open in order, with Next.
+  W.max = Math.max(W.max || 0, W.i);
+  $('#progress').replaceChildren(...pages.map((t, k) => {
+    const can = k <= W.max && k !== W.i;
+    return el('li', { class: `${k === W.i ? 'on' : k <= W.max ? 'done' : 'ahead'}${can ? ' can' : ''}` }, can ? el('button', { type: 'button', onclick: () => { W.i = k; go(); scrollTo(0, 0); } }, t) : el('span', { 'aria-current': k === W.i ? 'step' : null, title: k > W.max ? T('Use Next to get here') : null }, t));
+  }));
   $('#page').replaceChildren(...(W.i === 0 ? welcome() : W.i > W.steps.length ? review() : stepPage(W.steps[W.i - 1])));
   $('#back').disabled = W.i === 0;
   $('#next').textContent = T(W.i === 0 ? 'Set up my home' : W.i > W.steps.length ? (W.focus ? 'Save' : 'Finish') : W.focus && W.steps[W.i - 1]?.id === W.focus.step ? 'Review & save' : 'Next');
@@ -526,7 +592,7 @@ $('#back').onclick = () => { if (W.i > 0) { W.i--; go(); scrollTo(0, 0); } };
 $('#next').onclick = async () => {
   if (W.i > W.steps.length) {
     const msg = $('#finishMsg'); msg.replaceChildren('Saving…');
-    try { const r = await api('/api/setup/finish', { body: { answers: { ...W.a, _added: W.added } } }); if (r.ok) { location.href = W.focus ? '/#connect' : W.rerun ? '/' : '/?tour'; return; } msg.replaceChildren(el('div', { class: 'err' }, r.error)); }
+    try { const r = await api('/api/setup/finish', { body: { answers: { ...W.a, _added: W.added } } }); if (r.ok) { if (r.pair) return pairDone(r.pair); location.href = W.focus ? '/#connect' : W.rerun ? '/' : '/?tour'; return; } msg.replaceChildren(el('div', { class: 'err' }, r.error)); }
     catch (e) { msg.replaceChildren(el('div', { class: 'err' }, e.message)); }
     return;
   }
@@ -625,7 +691,7 @@ function focusFromLink() {
   const qp = new URLSearchParams(location.search), stepId = qp.get('step'), addId = qp.get('add') || '';
   const k = W.steps.findIndex((s) => s.id === stepId); if (k < 0) return;
   const step = W.steps[k], store = ans(step.id), q = step.question;
-  let label = step.title;
+  let label = step.title, full = null;
   if (q) {
     if (step.id === 'network') {
       if (addId.startsWith('dns:')) { store.dns = addId.slice(4); store.kind ||= 'other'; label = addId.slice(4) === 'pihole' ? 'Pi-hole' : 'AdGuard Home'; }
@@ -634,11 +700,11 @@ function focusFromLink() {
     else {
       const yes = q.options.find(([v]) => v === 'yes')?.[0]; if (yes) store[q.id] = yes;
       const pick = step.branches?.yes?.pick, opt = pick?.options.find((o) => o.id === addId);
-      if (opt) { const cur = new Set(store[pick.id] || []); cur.add(opt.id); store[pick.id] = [...cur]; label = opt.label.replace(/\s*\(through Home Assistant\)/, ''); }
+      if (opt) { const cur = new Set(store[pick.id] || []); cur.add(opt.id); store[pick.id] = [...cur]; full = opt.label; label = opt.label.replace(/\s*\(through Home Assistant\)/, ''); }
       if (addId === 'utility') label = 'your power company';
     }
   }
-  W.focus = { step: step.id, label };
+  W.focus = { step: step.id, label, full };
   W.i = k + 1;
-  setTimeout(() => { const card = [...document.querySelectorAll('#page .card h3')].find((h) => h.textContent.startsWith(label)); card?.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
+  setTimeout(() => { const card = [...document.querySelectorAll('#page .card h3')].find((h) => h.textContent.startsWith(label) || (full && h.textContent.startsWith(T(full)))); card?.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 300);
 }

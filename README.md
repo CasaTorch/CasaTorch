@@ -73,7 +73,7 @@ Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
   them all automatically, and anything new in Home Assistant appears there on its own (marked New).
 - **Panel mode** for wall tablets (`http://<box>:8090/?panel=1`): a status bar across the top with
   the time, weather, alerts and everything CasaTorch is connected to - green, yellow or red - plus
-  the Ask the house bar. Keeps the screen on.
+  the Home AI Agent bar. Keeps the screen on.
 - **Light or dark**, color schemes or your own colors, and the **menu on any side** of the screen.
 - **Rename anything** - menu items, tiles, devices, the house - and hide what you don't use.
 - **A family calendar built in** (no Google account needed) and a **photo reel** you upload to from
@@ -130,7 +130,7 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 | Pro, available now | Pro, coming (included when it ships) |
 | --- | --- |
 | **3D Home** - your home as a live 3D plan (LiDAR scan, or draw it in the app) | **Away from home** - secure remote access, no port forwarding |
-| **Ask the house** - answers about your home, tap-to-do actions (AI usage billed by your AI provider, or free with Ollama) | |
+| **Home AI Agent** - answers about your home, tap-to-do actions (AI usage billed by your AI provider, or free with Ollama) | |
 | **Ring** doorbells and cameras (Labs) | |
 | **Weekly report** - every Monday: energy and cost, always-on load, alerts, internet and server downtime, with tips (written by your AI if connected) | |
 | **Server monitor** - your NAS, servers and self-hosted apps: up or down, response time, uptime, certificate expiry, alerts | |
@@ -171,7 +171,7 @@ light's glow colour), **Rooms** (rename, recolour, move, add your own, or use th
 **Colours** (change any theme colour, or paint a single wall, floor or sofa) and **Floors** (upload,
 draw, stack and line them up).
 
-### Ask the house (Pro)
+### Home AI Agent (Pro)
 
 "Which lights are on?" "What's using the most power?" "Did the Niners win?" Answers come from what
 CasaTorch knows right now; when you ask it to switch something it shows a button you tap to confirm.

@@ -52,6 +52,8 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -225,7 +227,8 @@ class MainActivity : AppCompatActivity() {
             val token = tokenCache[id] ?: try { HomeStore.token(id) } catch (_: NeedsUnlock) { if (path != null) pendingAlert = path to id; showLock(); unlock(); return@launch }
             if (token == null) return@launch openShell("signedout=$id")
             tokenCache[id] = token
-            val base = firstAnswering(home.candidates) ?: return@launch openShell("unreachable=$id")
+            val (base, hello) = firstAnswering(home.candidates) ?: return@launch openShell("unreachable=$id")
+            HomeStore.learn(id, hello)   // secure access turned on since pairing: remember the away-from-home address
             if (!isActive) return@launch
             setSessionCookie(token, home)
             HomeStore.touch(id, base)
@@ -250,13 +253,20 @@ class MainActivity : AppCompatActivity() {
         web.evaluateJavascript("window.casatorchRefresh && window.casatorchRefresh(); 1", null)
     }
 
-    private suspend fun firstAnswering(list: List<Uri>): Uri? = withContext(Dispatchers.IO) {
-        list.firstOrNull { u ->
-            runCatching {
-                val c = (URL(u.buildUpon().path("/api/app/hello").build().toString()).openConnection() as HttpURLConnection).apply { connectTimeout = 3500; readTimeout = 3500; useCaches = false; instanceFollowRedirects = false }
-                try { c.responseCode == 200 && JSONObject(c.inputStream.bufferedReader().use { it.readText() }).optBoolean("casatorch") } finally { c.disconnect() }
-            }.getOrDefault(false)
+    /** The first address that answers - all tried at once (home Wi-Fi first, then away), with what the home says about itself. */
+    private suspend fun firstAnswering(list: List<Uri>): Pair<Uri, JSONObject>? = coroutineScope {
+        val tries = list.map { u ->
+            async(Dispatchers.IO) {
+                runCatching {
+                    val c = (URL(u.buildUpon().path("/api/app/hello").build().toString()).openConnection() as HttpURLConnection).apply { connectTimeout = 4000; readTimeout = 4000; useCaches = false; instanceFollowRedirects = false }
+                    try { if (c.responseCode == 200) JSONObject(c.inputStream.bufferedReader().use { it.readText() }).takeIf { it.optBoolean("casatorch") }?.let { u to it } else null } finally { c.disconnect() }
+                }.getOrNull()
+            }
         }
+        var best: Pair<Uri, JSONObject>? = null
+        for (t in tries) { val r = t.await(); if (r != null) { best = r; break } }   // in order of preference; the slow ones were already running
+        tries.forEach { it.cancel() }
+        best
     }
 
     /** The sign-in, as the cookie your CasaTorch expects, on each of the home's addresses. */

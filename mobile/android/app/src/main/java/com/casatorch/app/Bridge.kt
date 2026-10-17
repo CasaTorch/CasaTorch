@@ -60,6 +60,13 @@ class Bridge(private val a: MainActivity) {
             val text = listOf(x.optString("text"), x.optString("url")).filter { it.isNotEmpty() }.joinToString("\n")
             a.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), null)); true
         }
+        "copy" -> {
+            val cm = a.getSystemService(android.content.ClipboardManager::class.java)
+            val clip = android.content.ClipData.newPlainText("CasaTorch setup key", x.optString("text"))
+            // a setup key: marked sensitive so Android doesn't show it in the clipboard preview
+            if (Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+            cm.setPrimaryClip(clip); true
+        }
         "deviceInfo" -> JSONObject().put("name", deviceName()).put("platform", "android").put("model", Build.MODEL.take(40)).put("app", BuildConfig.VERSION_NAME)
         "biometrics" -> {
             val pm = a.packageManager

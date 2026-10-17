@@ -1,6 +1,6 @@
 /* ---- Settings ---- */
 const PRO_FEATURES = [   // [name, what, ships now?]
-  ['3D Home', 'Your home as a live, tappable 3D plan - from a LiDAR scan, or drawn in the app.', true], ['Ask the house', 'Ask questions about your home; it lines up switches for you to confirm with a tap.', true], ['Ring (Labs)', 'Ring doorbells and cameras without Home Assistant.', true],
+  ['3D Home', 'Your home as a live, tappable 3D plan - from a LiDAR scan, or drawn in the app.', true], ['Home AI Agent', 'Your Home AI Agent: ask questions about your home; it lines up switches for you to confirm with a tap.', true], ['Ring (Labs)', 'Ring doorbells and cameras without Home Assistant.', true],
   ['Network monitoring', 'UniFi and Cisco Meraki: every device online or offline and how many are connected; Pi-hole and AdGuard Home: what they block. Alerts when something drops off.', true], ['Server monitor', 'Your NAS, servers and self-hosted apps: up or down, response time and certificates, with an alert when one stops.', true], ['Weekly report', 'Every Monday: energy and what it cost, what stays on all night, alerts and the internet - with tips, written by your own AI if you connect one.', true], ['Away from home', 'Secure remote access and phone alerts - no port forwarding.'], ['Smart alerts', 'Doorbell and motion only when nobody\'s home, and critical alerts that repeat until someone taps "Got it".', true],
   ['Energy history', '2 years of daily energy and cost instead of 7 days, and what each metered device used.', true], ['Self-healing', 'Restarts stuck integrations and tells you what it fixed.'], ['Multi-home, theme packs, cloud backup', ''],
 ];
@@ -23,7 +23,7 @@ function aiCard(s) {
   find.onclick = async () => { msg.textContent = 'Checking...'; try { const r = await post('/api/settings/ai/models', { provider: prov.value, apiKey: key.value, url: url.value }); model.replaceChildren(...r.models.map((m) => el('option', { value: m, selected: m === r.suggested }, m))); msg.textContent = `Found ${r.models.length} models.`; msg.style.color = 'var(--good)'; } catch (err) { msg.textContent = err.message; msg.style.color = 'var(--bad)'; } };
   const save = el('button', { class: 'btn primary' }, 'Save');
   save.onclick = async () => { try { await post('/api/settings/ai', { provider: prov.value, model: model.value, apiKey: key.value, url: url.value }, 'PUT'); S.settings = await api('/api/settings'); toast('Saved - try the Ask tab'); } catch (err) { msg.textContent = err.message; msg.style.color = 'var(--bad)'; } };
-  return el('div', { class: 'card' }, el('h2', {}, icon('spark', 15), 'Ask the house', el('span', { class: 'pill pro' }, 'PRO')), el('label', { class: 'field' }, el('span', {}, 'AI'), prov), help, keyF, urlF,
+  return el('div', { class: 'card' }, el('h2', {}, icon('spark', 15), T('Home AI Agent'), el('span', { class: 'pill pro' }, 'PRO')), el('label', { class: 'field' }, el('span', {}, 'AI'), prov), help, keyF, urlF,
     el('label', { class: 'field' }, el('span', {}, 'Model'), model), el('div', { class: 'row wrap' }, find, save), msg);
 }
 
@@ -60,7 +60,7 @@ function lookCard() {
     row(T('Mode'), seg('theme', [['dark', T('Dark')], ['light', T('Light')], ['auto', T('Match device')]])),
     row('Colors', el('div', {}, sw, el('div', { class: 'row', style: 'margin-top:10px' }, el('span', { class: 'small muted' }, 'Custom'), a1, a2))),
     row('Status bar across the top', seg('statusBar', [['panel', 'Panel mode'], ['always', 'Always'], ['off', 'Off']]), 'Shows the time, weather, alerts and everything CasaTorch is connected to.'),
-    el('label', { class: 'row small' }, askTog, 'Show the Ask the house bar in panel mode (Pro)'),
+    el('label', { class: 'row small' }, askTog, T('Show the Home AI Agent bar in panel mode (Pro)')),
     el('div', { class: 'row wrap', style: 'margin-top:14px' }, el('button', { class: 'btn', onclick: () => setPanel(true) }, icon('expand'), 'Panel mode on this screen'), el('button', { class: 'btn ghost', onclick: async () => { await post('/api/ui', { reset: true }, 'PUT'); S.ui = await api('/api/ui'); applyUi(); drawNav(); show('settings'); } }, icon('reset'), 'Reset look')),
     el('p', { class: 'tiny faint' }, 'Tip: open http://<this box>:8090/?panel=1 on a wall tablet to start it in panel mode.'));
 }
@@ -186,7 +186,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     ['appearance', 'Look & main bar', 'palette', 'Dark or light, colors, the main bar and the Home screen', async () => [lookCard(), barCard(), homeCard]],
     ['people', 'People & sign-in', 'user', 'Your account, two-step sign-in, people in the house and the security log', async () => securityCards()],
     ['safety', 'Safety', 'shield', 'What CasaTorch will never switch, and your exceptions', async () => [await safetyCard()], admin],
-    ['connections', 'Connections & AI', 'link', 'Home Assistant and your brands, Ask the house, secure access', async () => [conn, aiCard(s), await remoteCard(), await localHttpsCard()]],
+    ['connections', 'Connections & AI', 'link', 'Home Assistant and your brands, Home AI Agent, secure access', async () => [conn, aiCard(s), await remoteCard(), await localHttpsCard()]],
     ['phones', 'Phones & alerts', 'phone', 'The CasaTorch app, alerts on your phones, quiet hours', async () => [...(await appCards()), await phoneCard()]],
     ['updates', 'Updates & backup', 'download', 'Versions, automatic updates and an encrypted backup', async () => [await updatesCard(), await backupCard(s)]],
     ['pro', 'CasaTorch Pro', 'spark', 'Your plan and license key', async () => [pro]],

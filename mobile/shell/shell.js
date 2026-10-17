@@ -103,6 +103,7 @@
       el('p', { class: 'foot' }, 'Forgot your password? Someone who looks after CasaTorch can reset it in Settings › People & sign-in.'));
   }
   function step(r) {
+    S.lastStep = r;
     if (r.ticket) S.ticket = r.ticket; if (r.recovery) S.recovery = r.recovery;
     if (r.ok && r.token) return done(r);
     if (r.step === 'mfa') return code();
@@ -119,14 +120,38 @@
   }
   async function enroll() {
     let e0; try { e0 = await j(S.base, '/api/app/enroll', { ticket: S.ticket }); } catch (e) { return screen(back(signin), el('h2', {}, 'Sign in again'), el('p', { class: 'err' }, e.message)); }
+    const optional = S.lastStep?.optional !== false;
+    const key = e0.secret.replace(/(.{4})/g, '$1 ').trim();
     const c = el('input', { class: 'code', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, placeholder: '000000' });
     const err = el('p', { class: 'err' }), go = el('button', { class: 'btn primary' }, 'Turn on two-step sign-in');
     const run = async () => { busy(go, true); err.textContent = ''; try { step(await j(S.base, '/api/app/enroll', { ticket: S.ticket, code: c.value })); } catch (x) { err.textContent = x.message; busy(go, false, 'Turn on two-step sign-in'); haptic('error'); } };
-    go.onclick = run;
-    screen(back(signin), el('h2', {}, 'Two-step sign-in'), el('p', { class: 'muted' }, 'The app needs it: a 6-digit code from an authenticator app (Apple Passwords, Google Authenticator, 1Password…) as well as your password.'),
-      el('a', { class: 'btn', href: e0.uri }, 'Add to an authenticator on this phone'),
-      el('p', { class: 'small muted' }, 'Or scan this with another device:'), el('div', { class: 'qr', html: e0.qr }), el('div', { class: 'mono' }, e0.secret.replace(/(.{4})/g, '$1 ').trim()),
-      el('label', { class: 'field' }, el('span', {}, 'Then type the code it shows'), c), err, go);
+    go.onclick = run; c.oninput = () => { if (/^\d{6}$/.test(c.value)) run(); };
+    const copy = async () => { try { await (N?.copy ? N.copy(e0.secret) : navigator.clipboard.writeText(e0.secret)); haptic('success'); return true; } catch { return false; } };
+    // Your authenticator, your choice: Apple's opens straight from a link; the others take the setup key (copied for you).
+    const isIos = /ios|ipados/.test(N?.platform || '') || /iphone|ipad/i.test(navigator.userAgent);
+    const APPS = [['google', 'Google Authenticator'], ['microsoft', 'Microsoft Authenticator'], ['onepassword', '1Password'], ['authy', 'Authy'], ...(isIos ? [['apple', 'Apple Passwords']] : []), ['other', 'Another app']];
+    const how = el('div', { class: 'howto' });
+    const pick = (id) => {
+      for (const b of chips.children) b.classList.toggle('on', b.dataset.id === id);
+      const name = APPS.find(([k]) => k === id)?.[1] || 'your authenticator';
+      if (id === 'apple') { how.replaceChildren(el('a', { class: 'btn', href: e0.uri }, 'Add to Apple Passwords'), el('p', { class: 'small muted' }, 'Then come back here and type the 6-digit code it shows.')); return; }
+      const copied = el('span', { class: 'small muted' });
+      how.replaceChildren(
+        el('ol', { class: 'steps' }, el('li', {}, 'Copy your setup key: ', el('button', { class: 'btn small', onclick: async () => { copied.textContent = (await copy()) ? ' Copied ✓' : ' Select it below and copy'; } }, 'Copy key'), copied),
+          el('li', {}, `Open ${name}, tap `, el('b', {}, '+'), ', then ', el('b', {}, id === 'onepassword' ? 'One-Time Password' : 'Enter a setup key'), ' and paste it.'),
+          el('li', {}, 'Come back here and type the 6-digit code it shows.')),
+        el('div', { class: 'mono' }, key),
+        isIos ? null : el('a', { class: 'btn plain', href: e0.uri }, `Or open ${name} directly`));
+    };
+    const chips = el('div', { class: 'chips' }, ...APPS.map(([id, label]) => el('button', { class: 'chip', 'data-id': id, onclick: () => pick(id) }, label)));
+    pick('google');
+    screen(back(signin), el('h2', {}, 'Two-step sign-in'),
+      el('p', { class: 'muted' }, optional ? 'Recommended: a 6-digit code from an authenticator app as well as your password. Even if someone learns your password, they can\'t get into your home.' : 'This home requires it: a 6-digit code from an authenticator app as well as your password.'),
+      el('label', { class: 'field' }, el('span', {}, 'Which authenticator do you use?')), chips, how,
+      el('details', {}, el('summary', { class: 'small muted' }, 'Setting it up on another device?'), el('div', { class: 'qr', html: e0.qr })),
+      el('label', { class: 'field' }, el('span', {}, 'The 6-digit code'), c), err, go,
+      optional ? el('button', { class: 'btn plain', onclick: async (e) => { busy(e.target, true); try { step(await j(S.base, '/api/app/enroll', { ticket: S.ticket, skip: true })); } catch (x) { err.textContent = x.message; busy(e.target, false, 'Not now'); } } }, 'Not now') : null,
+      optional ? el('p', { class: 'foot' }, 'You can turn it on later in Settings › People & sign-in.') : null);
   }
   function terms(version) {
     const go = el('button', { class: 'btn primary' }, 'Agree and continue'), err = el('p', { class: 'err' });
@@ -214,7 +239,7 @@
     let h = null; try { h = (await N.homes()).find((x) => x.id === id); } catch { /* none */ }
     const name = h?.name || 'your home';
     const retry = el('button', { class: 'btn primary', onclick: () => N.openHome(id) }, 'Try again');
-    screen(el('div', { class: 'spacer' }), el('div', { class: 'big-ic', html: svg('wifi') }), el('h2', {}, `Can't reach ${name}`), el('p', { class: 'muted' }, 'This phone can\'t get to your CasaTorch right now. At home, check you\'re on its Wi-Fi. Away from home, CasaTorch needs secure access turned on (Settings › Connections & AI) - with Pro it works from anywhere.'),
+    screen(el('div', { class: 'spacer' }), el('div', { class: 'big-ic', html: svg('wifi') }), el('h2', {}, `Can't reach ${name}`), el('p', { class: 'muted' }, h?.addresses?.remote ? 'This phone can\'t get to your CasaTorch right now - it may be off, or its internet is down. On your home Wi-Fi it\'s reached directly.' : 'Away from home, the app needs secure access, and it isn\'t on for this home yet. On your home Wi-Fi, open CasaTorch › Settings › Connections & AI › Secure access and turn it on - then open the app once at home and it remembers the away-from-home address. (From anywhere is part of Pro.)'),
       h?.addresses ? el('div', { class: 'group' }, ...Object.entries(h.addresses).filter(([, v]) => v).map(([k, v]) => el('div', { class: 'row' }, el('div', { class: 'grow' }, el('b', {}, { lan: 'At home (secure)', remote: 'From anywhere', plain: 'At home', here: 'Last used' }[k] || k), el('small', {}, v.replace(/^https?:\/\//, '')))))) : null,
       el('div', { class: 'spacer' }), retry, el('button', { class: 'btn', onclick: homes }, 'Your homes'));
   }

@@ -1,5 +1,5 @@
 /* ======================================================================
- * Ask the house (Pro). Questions in plain English, answered from what
+ * Home AI Agent (Pro), formerly "Ask the house". Questions in plain English, answered from what
  * CasaTorch knows right now: devices, power, weather, calendar, scores,
  * headlines, the internet and open alerts.
  *
@@ -121,7 +121,7 @@ function demoAnswer(q, snap) {
   if (/music|play|song|speaker/.test(t)) { const p = snap.devices.filter((d) => d.playing); return { answer: p.length ? `${p.map((d) => `${d.name} is playing ${d.nowPlaying || 'music'}`).join('; ')}.` : 'Nothing is playing.', actions: p.map((d) => ({ deviceId: d.id, action: 'toggle', label: `Pause ${d.name}` })) }; }
   if (/internet|wifi|speed|network/.test(t)) return { answer: `The internet is ${snap.internet?.online ? 'up' : 'down'} - ${Math.round(snap.internet?.downMbps)} down / ${Math.round(snap.internet?.upMbps)} up Mbps, ${snap.internet?.pingMs} ms ping, ${snap.internet?.devicesOnNetwork} devices on the network.`, actions: [] };
   if (/door|leak|alert|wrong|problem|ok\b|everything/.test(t)) return { answer: snap.alerts.length ? `Needs a look: ${snap.alerts.join('; ')}. Doors are closed and no leaks.` : 'All clear - doors closed, no leaks.', actions: [] };
-  return { answer: 'In the demo I can answer about lights, power, the weather, the calendar, scores, music, the internet and alerts. Connect an AI in Settings > Ask the house to ask anything.', actions: [] };
+  return { answer: 'In the demo I can answer about lights, power, the weather, the calendar, scores, music, the internet and alerts. Connect an AI in Settings > Home AI Agent to ask anything.', actions: [] };
 }
 const askLog = [];
 app.post('/api/ask', express.json({ limit: '64kb' }), requirePro, async (req, res) => {
@@ -134,14 +134,14 @@ app.post('/api/ask', express.json({ limit: '64kb' }), requirePro, async (req, re
   const c = config.ai, p = c && aiOf(c.provider);
   if (!p || !c.model) {
     if (isDemo()) return res.json({ ...demoAnswer(q, snap), demo: true });
-    return res.status(409).json({ error: 'Connect an AI first: Settings > Ask the house.', setup: true });
+    return res.status(409).json({ error: 'Connect an AI first: Settings > Home AI Agent.', setup: true });
   }
   const history = (Array.isArray(req.body?.history) ? req.body.history : []).slice(-8).filter((m) => ['user', 'assistant'].includes(m?.role) && typeof m.content === 'string').map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
   try { res.json(parseReply(await p.chat(c, systemPrompt(snap), [...history, { role: 'user', content: q }]), snap)); }
   catch (err) { res.status(502).json({ error: `${p.name}: ${err.message}` }); }
 });
 
-/* Settings > Ask the house */
+/* Settings > Home AI Agent */
 app.post('/api/settings/ai/models', requireRole('admin'), express.json(), async (req, res) => {
   const b = req.body || {}, p = aiOf(b.provider);
   if (!p) return res.status(400).json({ error: 'pick a provider' });

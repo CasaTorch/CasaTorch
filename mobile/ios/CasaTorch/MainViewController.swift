@@ -79,7 +79,9 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
                 if HomeStore.shared.biometricLock { if let path { self.pendingAlert = (path, id) }; self.lock?.show(); return }   // Face ID was cancelled: the lock screen offers to try again
                 self.openShell("signedout=\(id)"); return
             }
-            guard let base = await Self.firstAnswering(home.candidates) else { if !Task.isCancelled { self.openShell("unreachable=\(id)") }; return }
+            guard let found = await Self.firstAnswering(home.candidates) else { if !Task.isCancelled { self.openShell("unreachable=\(id)") }; return }
+            let (base, hello) = found
+            HomeStore.shared.learn(id, hello: hello)   // secure access turned on since pairing: remember the away-from-home address
             guard !Task.isCancelled else { return }
             await self.setSessionCookie(token: token, for: home)
             HomeStore.shared.touch(id, workingAddress: base)
@@ -104,13 +106,22 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
         guard let token = tokenCache[id], let home = HomeStore.shared.home(id) else { lock?.show(); lock?.unlock(); return }
         Task { @MainActor in await self.setSessionCookie(token: token, for: home); _ = try? await self.web.evaluateJavaScript("window.casatorchRefresh && window.casatorchRefresh(); 1") }
     }
-    static func firstAnswering(_ list: [URL]) async -> URL? {
-        for u in list {
-            var r = URLRequest(url: u.appendingPathComponent("api/app/hello")); r.timeoutInterval = 3.5; r.cachePolicy = .reloadIgnoringLocalCacheData
-            if let (data, resp) = try? await URLSession.shared.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200,
-               let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], j["casatorch"] as? Bool == true { return u }
+    /// The first address that answers - all tried at once (home Wi-Fi first, then away-from-home), so being away
+    /// doesn't mean waiting for the home addresses to time out one by one. Also returns what the home says about itself.
+    static func firstAnswering(_ list: [URL]) async -> (URL, [String: Any])? {
+        await withTaskGroup(of: (Int, URL, [String: Any])?.self) { g in
+            for (i, u) in list.enumerated() {
+                g.addTask {
+                    var r = URLRequest(url: u.appendingPathComponent("api/app/hello")); r.timeoutInterval = 4; r.cachePolicy = .reloadIgnoringLocalCacheData
+                    guard let (data, resp) = try? await URLSession.shared.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200,
+                          let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], j["casatorch"] as? Bool == true else { return nil }
+                    return (i, u, j)
+                }
+            }
+            var best: (Int, URL, [String: Any])?
+            for await r in g { if let r, best == nil || r.0 < best!.0 { best = r; if r.0 == 0 { g.cancelAll(); break } } }
+            return best.map { ($0.1, $0.2) }
         }
-        return nil
     }
     /// The sign-in, as the cookie your CasaTorch expects, for each of the home's addresses (in memory while the app is locked).
     func setSessionCookie(token: String, for home: Home) async {

@@ -292,3 +292,28 @@ body:not(.editing) #left.dock > .dcard.k-tile { background: none; border: 0; pad
 body.arranging #left.dock > .dcard.k-tile, body.arranging #tiles.dock > .dcard.k-tile { padding: 40px 0 0 !important; }
 body #left.dock .dcard .dbar button { all: unset; box-sizing: border-box; cursor: pointer; height: 26px; min-width: 26px; display: grid; place-items: center; border-radius: 8px; font-size: 11px; font-weight: 700; color: var(--muted); background: color-mix(in srgb, var(--text) 8%, transparent); }
 body #left.dock .dcard .dbar .dsz button.on { background: var(--hl); color: var(--hl-ink, #04111c); } body #left.dock .dcard .dbar .dx { color: var(--bad); }
+/* On a touch screen the way out never disappears: Exit stays (dimmed) when the other controls fade, clear of the notch */
+#fsctl { top: max(12px, env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); }
+@media (hover: none) { body.fsidle #fsctl { opacity: 1; pointer-events: auto; } body.fsidle #fsctl .mini:not(.primary) { opacity: 0; pointer-events: none; } body.fsidle #fsctl .mini.primary { opacity: .7; } }
+/* Phones: the model gets the screen. Docked and floating cards live in a pull-up sheet behind the Cards button. */
+#cardsBtn { display: none; }
+@media (max-width: 760px) {
+  #cardsBtn { display: inline-flex; align-items: center; gap: 6px; position: fixed; z-index: 6; left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(58px + env(safe-area-inset-bottom, 0px)); padding: 9px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); backdrop-filter: var(--blur); color: var(--text); font: 600 14px var(--font, system-ui); }
+  #cardsBtn[aria-expanded=true] { background: var(--hl); color: #06101e; border-color: transparent; }
+  body:not(.editing) #left.dock:not(.roomopen), #floats { display: none !important; }
+  body.cards-open:not(.editing) #left.dock:not(.roomopen) { display: flex !important; position: fixed; left: 10px; right: 10px; width: auto; top: auto; bottom: calc(104px + env(safe-area-inset-bottom, 0px)); max-height: 58vh; overflow-y: auto; z-index: 7; padding: 6px; border-radius: 22px; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); backdrop-filter: var(--blur); }
+  body.immersive #cardsBtn { bottom: max(14px, env(safe-area-inset-bottom, 0px)); }
+  body.immersive.fsidle #cardsBtn { opacity: 0; pointer-events: none; transition: opacity .45s; }
+}
+@media (max-width: 760px) {
+  #tiles.dock { gap: 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; bottom: calc(100px + env(safe-area-inset-bottom, 0px)); }
+  #tiles.dock > .dcard { flex: 0 0 136px; min-width: 136px; scroll-snap-align: start; }
+  body.immersive #tiles.dock { bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 760px) {
+  body:not(.cards-open) #tiles.dock { display: none !important; }
+  body.cards-open #tiles.dock { display: flex !important; bottom: calc(104px + env(safe-area-inset-bottom, 0px)); z-index: 7; }
+  body.cards-open:not(.editing) #left.dock:not(.roomopen) { bottom: calc(232px + env(safe-area-inset-bottom, 0px)); max-height: 46vh; }
+}
+@media (max-width: 760px) { #tiles.dock > .dcard { flex: 0 0 44vw; width: 44vw; min-width: 0; overflow: hidden; } }
+@media (max-width: 760px) { body.cards-open #tiles.dock { left: 10px !important; right: 10px !important; width: auto !important; max-width: none !important; } }

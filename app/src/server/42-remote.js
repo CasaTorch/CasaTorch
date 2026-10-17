@@ -89,9 +89,9 @@ app.get('/api/remote', async (_req, res) => {
   res.json({ on: !!r.on, hostname: r.hostname || null, url: r.hostname ? `https://${r.hostname}` : null, state: r.on ? remote.state : 'off', why: remote.why, since: remote.since,
     anywhere: !!proStatus().pro, qr: r.hostname ? await QRCode.toString(`https://${r.hostname}`, { type: 'svg', margin: 1 }) : null, supported: !!CFD_FILES[`${process.platform}-${process.arch}`] });
 });
-app.post('/api/remote/on', requireRole('admin'), async (_req, res) => {
-  if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
-  try {
+/** Turn secure access on: this home's address and tunnel from casatorch.com, then the tunnel itself. */
+async function remoteOn() {
+  {
     await ensureCloudflared();
     const body = { id: installId(), name: config.house?.name || null, port: Number(PORT) || 8090, ...(config.remote?.secret ? { secret: config.remote.secret } : {}) };
     const r = await fetch(REMOTE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) });
@@ -100,8 +100,13 @@ app.post('/api/remote/on', requireRole('admin'), async (_req, res) => {
     stopTunnel();
     saveConfig({ ...config, remote: { on: true, hostname: j.hostname, token: j.token, secret: j.secret } });
     startTunnel();
-    res.json({ ok: true, hostname: j.hostname });
-  } catch (err) { remote.state = 'error'; remote.why = String(err.message); res.status(502).json({ error: String(err.message) }); }
+    return j.hostname;
+  }
+}
+app.post('/api/remote/on', requireRole('admin'), async (_req, res) => {
+  if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
+  try { res.json({ ok: true, hostname: await remoteOn() }); }
+  catch (err) { remote.state = 'error'; remote.why = String(err.message); res.status(502).json({ error: String(err.message) }); }
 });
 app.post('/api/remote/off', requireRole('admin'), async (_req, res) => {
   const r = config.remote || {};

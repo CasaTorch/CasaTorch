@@ -29,8 +29,8 @@ CasaTorch never phones home to check it.
 | App tests: common apps timed step by step, latency, jitter, loss, the path hop by hop (up to 8) | ✓ | ✓ | Now |
 | App tests for your own websites, every minute, alerts, up to 30 | | ✓ | Now |
 | **Your day** | | | |
-| Nudges: your own reminders (trash night, the dog's dinner, bills due) that light up every screen, with an icon or photo | ✓ | ✓ | Now |
-| Nudges sent to phones, anywhere, even in quiet hours | | ✓ | Now |
+| Reminders: your own reminders (trash night, the dog's dinner, bills due) that light up every screen, with an icon or photo | ✓ | ✓ | Now |
+| Reminders sent to phones, anywhere, even in quiet hours | | ✓ | Now |
 | Weather, family calendar (built in - no Google needed - plus Google/iCloud/Outlook links), sports scores, news, reminders | ✓ | ✓ | Now |
 | Photo reel: upload photos from any phone or computer, slideshow on the wall | ✓ | ✓ | Now |
 | **Your home** | | | |
@@ -41,7 +41,7 @@ CasaTorch never phones home to check it.
 | Alerts on the dashboard: leaks, smoke, low batteries, devices offline, internet down | ✓ | ✓ | Now |
 | **Pro** | | | |
 | **3D Home** - your home as a live 3D plan: **draw your floors in the app** (any device, or trace a floor-plan picture) or **upload a LiDAR scan** (iPhone 12 Pro or newer Pro, iPad Pro 2020 or newer); pin devices where they are; lights glow, music pulses, leaks flash; tap to switch | | ✓ | Now |
-| **Ask the house** - plain-English questions about your home; suggests actions you tap to do; in the panel-mode status bar too. Bring your own AI (Claude, OpenAI - **billed to you by them**) or run it free and privately with Ollama | | ✓ | Now |
+| **Home AI Agent** - plain-English questions about your home; suggests actions you tap to do; in the panel-mode status bar too. Bring your own AI (Claude, OpenAI - **billed to you by them**) or run it free and privately with Ollama | | ✓ | Now |
 | **Ring** doorbells and cameras without Home Assistant (Labs - unofficial API) | | ✓ | Now |
 | **Away from home** - secure remote access from your phone, no port forwarding | | ✓ | Coming |
 | **Phone alerts** - push notifications for leaks, doorbell, alarms, with quiet hours (web app on your home screen) | ✓ | ✓ | Now |
@@ -67,11 +67,11 @@ CasaTorch never phones home to check it.
 
 Everything you need to run your house from a wall screen is free and open source (AGPL-3.0).
 Pro pays for what costs money to run - the remote-access relay, push notifications, backups -
-and for the features that took the most work: the 3D Home, Ask the house and Ring.
+and for the features that took the most work: the 3D Home, Home AI Agent and Ring.
 
-## Using AI with Ask the house
+## Using AI with Home AI Agent
 
-**What it costs:** CasaTorch Pro unlocks Ask the house, but **the AI itself is not included**. You connect
+**What it costs:** CasaTorch Pro unlocks Home AI Agent, but **the AI itself is not included**. You connect
 your own AI and pay that company for what you use:
 
 | AI | Cost | Privacy |
@@ -85,7 +85,7 @@ platform.openai.com or console.anthropic.com, with billing set up there. Both le
 spending limit.
 
 
-Ask the house sends a snapshot of your home (device names and states, the calendar, weather) to
+Home AI Agent sends a snapshot of your home (device names and states, the calendar, weather) to
 the AI you choose, only when you ask a question. Choose **Ollama** and it never leaves your
 network. CasaTorch only suggests actions - you tap to do them - and it never unlocks doors or opens
 garage doors.

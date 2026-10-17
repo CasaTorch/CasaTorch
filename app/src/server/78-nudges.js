@@ -48,7 +48,7 @@ function nudgesFromSetup(list) {
   for (const r of list || []) {
     if (!r?.title || ng.list.some((n) => n.title.toLowerCase() === String(r.title).trim().toLowerCase())) continue;
     const days = Array.isArray(r.days) ? r.days.map(Number).filter((x) => x >= 0 && x <= 6) : [];
-    ng.list.push({ id: crypto.randomBytes(6).toString('hex'), title: String(r.title).trim().slice(0, 60), icon: 'bell', time: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : '18:00', repeat: days.length && days.length < 7 ? 'weekly' : 'daily', days, flash: true, push: false, on: true, createdAt: nowIso() });
+    ng.list.push({ id: crypto.randomBytes(6).toString('hex'), title: String(r.title).trim().slice(0, 60), icon: NUDGE_ICONS.includes(r.icon) ? r.icon : 'bell', sound: NUDGE_SOUNDS.includes(r.sound) ? r.sound : 'chime', time: /^\d{2}:\d{2}$/.test(r.time || '') ? r.time : '18:00', repeat: days.length && days.length < 7 ? 'weekly' : 'daily', days, flash: true, push: false, on: true, createdAt: nowIso() });
     added++;
   }
   if (added) nudgeSave();
@@ -119,7 +119,7 @@ app.get('/api/nudges/active', (_req, res) => {
 });
 app.post('/api/nudges', requireRole('member'), express.json({ limit: '4kb' }), (req, res) => {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
-  if (ng.list.length >= NUDGE_MAX) return res.status(400).json({ error: `Up to ${NUDGE_MAX} nudges - remove one first.` });
+  if (ng.list.length >= NUDGE_MAX) return res.status(400).json({ error: `Up to ${NUDGE_MAX} reminders - remove one first.` });
   try {
     const n = { id: crypto.randomBytes(6).toString('hex'), ...nudgeClean(req.body || {}), createdAt: nowIso(), by: req.user?.username || null };
     if (n.push && !proStatus().pro) n.push = false;   // phones are Pro: saved without it
@@ -128,7 +128,7 @@ app.post('/api/nudges', requireRole('member'), express.json({ limit: '4kb' }), (
 });
 app.put('/api/nudges/:id', requireRole('member'), express.json({ limit: '4kb' }), (req, res) => {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
-  const n = ng.list.find((x) => x.id === req.params.id); if (!n) return res.status(404).json({ error: 'That nudge is gone.' });
+  const n = ng.list.find((x) => x.id === req.params.id); if (!n) return res.status(404).json({ error: 'That reminder is gone.' });
   try {
     const c = nudgeClean(req.body || {}, n); if (c.push && !proStatus().pro) c.push = false;
     const timing = c.time !== n.time || c.repeat !== n.repeat || c.date !== n.date || String(c.days) !== String(n.days || []);
@@ -150,7 +150,7 @@ app.post('/api/nudges/:id/snooze', requireRole('member'), (req, res) => {
 });
 /* Try it: shows on the screens now (and on phones, if it's set to and you have Pro). */
 app.post('/api/nudges/:id/test', requireRole('member'), async (req, res) => {
-  const n = ng.list.find((x) => x.id === req.params.id); if (!n) return res.status(404).json({ error: 'That nudge is gone.' });
+  const n = ng.list.find((x) => x.id === req.params.id); if (!n) return res.status(404).json({ error: 'That reminder is gone.' });
   ng.active = ng.active.filter((a) => a.id !== n.id); ng.active.push({ id: n.id, at: nowIso(), until: new Date(Date.now() + 10 * 60_000).toISOString() }); nudgeSave();
   if (n.push && proStatus().pro) await nudgePush(n).catch(() => {});
   res.json({ ok: true });
@@ -159,7 +159,7 @@ app.post('/api/nudges/:id/test', requireRole('member'), async (req, res) => {
 const NUDGE_TYPES = [['jpg', 'image/jpeg', (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff], ['png', 'image/png', (b) => b.subarray(0, 4).toString('hex') === '89504e47'], ['webp', 'image/webp', (b) => b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP']];
 app.post('/api/nudges/:id/photo', requireRole('member'), express.raw({ type: '*/*', limit: '5mb' }), (req, res) => {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
-  const n = ng.list.find((x) => x.id === req.params.id); if (!n) return res.status(404).json({ error: 'That nudge is gone.' });
+  const n = ng.list.find((x) => x.id === req.params.id); if (!n) return res.status(404).json({ error: 'That reminder is gone.' });
   const buf = Buffer.isBuffer(req.body) ? req.body : null, t = buf && NUDGE_TYPES.find(([, , ok]) => buf.length > 12 && ok(buf));
   if (!t) return res.status(400).json({ error: 'Use a JPEG, PNG or WebP picture, up to 5 MB.' });
   fs.mkdirSync(NUDGE_DIR, { recursive: true, mode: 0o700 });

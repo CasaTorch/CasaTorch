@@ -1,10 +1,10 @@
-/* ---- Ask the house (Pro): a chat about your home; suggested actions need a tap ---- */
+/* ---- Home AI Agent (Pro): a chat about your home; suggested actions need a tap ---- */
 const ASK_SUGGEST = ['What\'s on the calendar this week?', 'Which lights are on?', 'What\'s using the most power?', 'Will it rain this week?', 'Did my team win?', 'Is everything OK at home?'];
 const askHistory = [];   // this screen only; never saved
 const askPush = (m) => { askHistory.push(m); if (askHistory.length > 60) askHistory.splice(0, askHistory.length - 60); };   // a wall panel asks all day: keep the last 60
 function askBox({ compact = false } = {}) {
   const log = el('div', { class: 'chat', style: compact ? 'flex:1;overflow-y:auto;min-height:0;padding-right:4px' : null });
-  const input = el('input', { type: 'text', placeholder: 'Ask about your home...', maxlength: 1000, 'aria-label': 'Ask the house' });
+  const input = el('input', { type: 'text', placeholder: T('Ask about your home...'), maxlength: 1000, 'aria-label': T('Ask your Home AI Agent') });
   const send = el('button', { class: 'btn primary', 'aria-label': 'Ask' }, icon('send'));
   const bubble = (m) => {
     const b = el('div', { class: `msg ${m.role === 'user' ? 'me' : 'ai'}` }, m.content);
@@ -24,7 +24,7 @@ function askBox({ compact = false } = {}) {
       const r = await post('/api/ask', { question: q, history: askHistory.slice(0, -1).slice(-8).map(({ role, content }) => ({ role, content })) });
       askPush({ role: 'assistant', content: r.answer, actions: r.actions });
     } catch (err) {
-      askPush({ role: 'assistant', content: err.body?.setup ? 'Connect an AI first: Settings > Ask the house.' : err.message, error: true });
+      askPush({ role: 'assistant', content: err.body?.setup ? T('Connect an AI first: Settings > Home AI Agent.') : err.message, error: true });
     }
     drawLog();
   }
@@ -33,10 +33,10 @@ function askBox({ compact = false } = {}) {
   drawLog();
   return el('div', { style: 'display:flex;flex-direction:column;gap:12px;flex:1;min-height:0' }, log, el('div', { class: 'asker' }, input, send));
 }
-tab({ id: 'ask', label: 'Ask', icon: 'spark', pro: true, async render(main) {
-  if (!isPro()) { main.replaceChildren(el('div', { class: 'card hero3d' }, el('div', { style: 'font-size:28px;font-weight:700;margin-bottom:10px' }, 'Ask the house'), el('p', { class: 'muted', style: 'max-width:540px;margin:0 auto 18px' }, '"Which lights are on?" "What\'s using the most power?" "Did the Niners win?" Answers from everything CasaTorch knows - and it can switch things for you with one tap.'), el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'))); return null; }
+tab({ id: 'ask', label: 'Home AI Agent', short: 'AI Agent', icon: 'spark', pro: true, async render(main) {
+  if (!isPro()) { main.replaceChildren(el('div', { class: 'card hero3d' }, el('div', { style: 'font-size:28px;font-weight:700;margin-bottom:10px' }, T('Your Home AI Agent')), el('p', { class: 'muted', style: 'max-width:540px;margin:0 auto 18px' }, '"Which lights are on?" "What\'s using the most power?" "Did the Niners win?" Answers from everything CasaTorch knows - and it can switch things for you with one tap.'), el('a', { class: 'btn primary', href: '#settings' }, T('Unlock with Pro')))); return null; }
   const ai = S.settings?.ai;
-  setTop(T('Ask the house'), ai ? `Answers by ${ai.provider === 'ollama' ? 'your own Ollama' : ai.provider} · ${ai.model}` : S.status?.demo ? 'Demo answers from the sample house' : 'Connect an AI in Settings to start', [askHistory.length ? el('button', { class: 'btn', onclick: () => { askHistory.length = 0; show('ask'); } }, icon('reset'), 'New chat') : null].filter(Boolean));
+  setTop(T('Home AI Agent'), ai ? `Answers by ${ai.provider === 'ollama' ? 'your own Ollama' : ai.provider} · ${ai.model}` : S.status?.demo ? 'Demo answers from the sample house' : 'Connect an AI in Settings to start', [askHistory.length ? el('button', { class: 'btn', onclick: () => { askHistory.length = 0; show('ask'); } }, icon('reset'), 'New chat') : null].filter(Boolean));
   main.replaceChildren(el('div', { class: 'card', style: 'display:flex;flex-direction:column;min-height:min(70vh,640px)' }, askBox(),
     el('p', { class: 'tiny faint', style: 'margin:12px 0 0' }, 'Each question sends a snapshot of your home (device names and states, calendar, weather) to the AI you chose. With Ollama it never leaves your network. CasaTorch only suggests actions - you tap to do them. Locks and doors are never touched.')));
   return null;

@@ -32,7 +32,7 @@ app.get('/api/status-bar', async (_req, res) => {   // (was /api/connections, wh
   if (isDemo()) {
     const inet = demoFixture('internet');
     add('internet', 'Internet', 'ok', `${Math.round(inet.speed.downMbps)} Mbps`); add('ha', 'Home Assistant', 'ok', '412 entities'); add('hue', 'Hue', 'ok', '3 lights'); add('shelly', 'Shelly', 'ok', '2 of 2');
-    add('cameras', 'Cameras', 'ok', '3'); add('yolink', 'YoLink', 'warn', 'low battery'); add('weather', 'Weather', 'ok'); add('calendar', 'Calendars', 'ok', '3'); add('sports', 'Scores', 'ok'); add('news', 'News', 'ok'); add('ai', 'Assistant', 'ok', 'demo');
+    add('cameras', 'Cameras', 'ok', '3'); add('yolink', 'YoLink', 'warn', 'low battery'); add('weather', 'Weather', 'ok'); add('calendar', 'Calendars', 'ok', '3'); add('sports', 'Scores', 'ok'); add('news', 'News', 'ok'); add('ai', 'Home AI Agent', 'ok', 'demo');
     return res.json({ items, at: nowIso() });
   }
   const settle = async (p) => { try { return await p; } catch (err) { return { error: String(err.message || err) }; } };
@@ -51,6 +51,6 @@ app.get('/api/status-bar', async (_req, res) => {   // (was /api/connections, wh
   if (cal) add('calendar', 'Calendars', cal.errors?.length ? 'warn' : 'ok', cal.errors?.length ? `${cal.errors.length} not loading` : null);
   if ((config.sports?.teams || []).length) add('sports', 'Scores', 'ok');
   if ((config.news?.feeds || []).length) add('news', 'News', 'ok');
-  add('ai', 'Assistant', config.ai?.model ? 'ok' : 'off', config.ai?.model ? config.ai.provider : 'not set up');
+  add('ai', 'Home AI Agent', config.ai?.model ? 'ok' : 'off', config.ai?.model ? config.ai.provider : 'not set up');
   res.json({ items, at: nowIso() });
 });
