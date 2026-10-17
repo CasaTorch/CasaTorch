@@ -1,6 +1,6 @@
 {
   "name": "casatorch",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "description": "CasaTorch: a self-hosted wall-panel dashboard for your house and your homelab",
