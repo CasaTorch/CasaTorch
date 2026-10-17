@@ -20,6 +20,12 @@ CasaTorch never phones home to check it.
 | Light and dark mode, color schemes and custom colors, menu on any side of the screen | ✓ | ✓ | Now |
 | Rename anything: menu items, tiles, devices, the house; hide what you don't use | ✓ | ✓ | Now |
 | Unlimited screens at home; sign-in with a password, PIN for risky actions | ✓ | ✓ | Now |
+| **Security Center** | | | |
+| Video wall of every camera (layouts, full screen, live video where available) | ✓ | ✓ | Now |
+| Doors and locks with "Lock all", the alarm (arm only), smoke and leak sensors | ✓ | ✓ | Now |
+| Devices on your home network, with an alert when a new one joins; daily check for risky open services | ✓ | ✓ | Now |
+| Security checklist and recent security events | ✓ | ✓ | Now |
+| Secure address at home (https on your home network) | ✓ | ✓ | Now |
 | **Your day** | | | |
 | Weather, family calendar (built in - no Google needed - plus Google/iCloud/Outlook links), sports scores, news, reminders | ✓ | ✓ | Now |
 | Photo reel: upload photos from any phone or computer, slideshow on the wall | ✓ | ✓ | Now |

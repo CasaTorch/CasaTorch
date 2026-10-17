@@ -118,7 +118,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main) {
   return null;
 } });
 /* Side-rail order */
-const TAB_ORDER = ['home', 'alerts', 'controls', 'cameras', 'calendar', 'photos', 'energy', 'network', 'house3d', 'ask', 'connect', 'settings'];
+const TAB_ORDER = ['home', 'alerts', 'controls', 'cameras', 'security', 'calendar', 'photos', 'energy', 'network', 'house3d', 'ask', 'connect', 'settings'];
 TABS.sort((a, b) => TAB_ORDER.indexOf(a.id) - TAB_ORDER.indexOf(b.id));
 
 /* "Get my key by e-mail": the e-mail used to buy Pro gets a 6-digit code; the key is saved here. */

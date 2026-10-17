@@ -296,5 +296,16 @@ t('secure address at home: only home-network addresses, and the plain address ha
   H.LOCAL_TLS.url = null;
 });
 
+t('Security Center: reads the neighbor table on Linux, Mac and Windows, and explains risky ports', () => {
+  const linux = 'IP address       HW type     Flags       HW address            Mask     Device\n192.168.1.1      0x1         0x2         3c:22:fb:10:00:01     *        eth0\n192.168.1.9      0x1         0x0         00:00:00:00:00:00     *        eth0\n';   // scrub-ok: sample
+  assert.deepEqual(H.parseNeighbors(linux, 'linux'), [{ ip: '192.168.1.1', mac: '3c:22:fb:10:00:01' }]);   // scrub-ok
+  const mac = '? (192.168.1.20) at 0:11:32:aa:0:2 on en0 ifscope [ethernet]\n? (224.0.0.251) at 1:0:5e:0:0:fb on en0 ifscope permanent [ethernet]\n';   // scrub-ok
+  assert.deepEqual(H.parseNeighbors(mac, 'darwin'), [{ ip: '192.168.1.20', mac: '00:11:32:aa:00:02' }], 'short Mac hex padded; multicast dropped');   // scrub-ok
+  const win = '  192.168.1.41          9c-8e-cd-00-00-04     dynamic\n  192.168.1.255         ff-ff-ff-ff-ff-ff     static\n';   // scrub-ok
+  assert.deepEqual(H.parseNeighbors(win, 'win32'), [{ ip: '192.168.1.41', mac: '9c:8e:cd:00:00:04' }]);   // scrub-ok
+  assert.equal(H.portInfo(23).level, 'warning'); assert.equal(H.portInfo(445).level, 'notice');
+  assert.ok(H.securityChecklist().some((i) => i.id === 'https'));
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);

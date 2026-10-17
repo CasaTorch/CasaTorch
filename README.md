@@ -189,6 +189,14 @@ Details: [docs/SUPPORT.md](docs/SUPPORT.md).
 
 ## Security
 
+- **Security Center** (the Security tab, included in Basic): a video wall of every camera (layouts,
+  full screen, live video where available), doors and locks with "Lock all", the alarm (arm only),
+  smoke and leak sensors, every device on your home network with an alert when a new one joins, a
+  daily check for risky open services (Telnet, FTP, file sharing, Remote Desktop, VNC, open camera
+  streams, unencrypted MQTT), a security checklist and recent security events.
+- **Secure address at home**: https on your home network straight to the box, with a Let's Encrypt
+  certificate made on the box (Settings > Secure address at home).
+
 - **Everyone gets their own sign-in** with a role: owner, admin (settings and people), member (can switch
   things) or viewer (can only look). Nobody can sign up on their own - the owner sends an invite link.
 - **Two-step sign-in** with any authenticator app, ten one-time recovery codes, and an option to require it
