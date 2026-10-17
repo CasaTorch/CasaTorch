@@ -1,3 +1,36 @@
+/* Nudge chimes: a few short sounds made right here in the browser (no sound files to download). Browsers only play
+   sound on a page that has been touched or clicked since it opened, so a wall screen needs one tap after it starts
+   (a kiosk browser can be told to allow it). Each plays twice, about 3 seconds in all. */
+const CHIMES = { chime: 'Chime', bell: 'Bell', dingdong: 'Ding-dong', marimba: 'Marimba', birds: 'Birds', alarm: 'Gentle alarm' };
+let chimeCtx = null;
+function chimeAudio() {
+  try { chimeCtx ||= new (window.AudioContext || window.webkitAudioContext)(); if (chimeCtx.state === 'suspended') chimeCtx.resume().catch(() => {}); return chimeCtx; } catch { return null; }
+}
+['pointerdown', 'keydown'].forEach((ev) => addEventListener(ev, () => { chimeAudio(); }, { once: true, passive: true }));   // the first tap unlocks sound on this screen
+function chimeTone(ac, at, freq, dur, { type = 'sine', vol = 0.25, to = null, overtones = [] } = {}) {
+  const g = ac.createGain(); g.connect(ac.destination);
+  g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  for (const [mult, v] of [[1, 1], ...overtones]) {
+    const o = ac.createOscillator(), og = ac.createGain(); o.type = type; o.frequency.setValueAtTime(freq * mult, at);
+    if (to) o.frequency.exponentialRampToValueAtTime(to * mult, at + dur * 0.6);
+    og.gain.value = v; o.connect(og); og.connect(g); o.start(at); o.stop(at + dur + 0.05);
+  }
+}
+function chimePlay(kind, times = 2) {
+  if (!CHIMES[kind]) return false;
+  const ac = chimeAudio(); if (!ac || ac.state !== 'running') return false;
+  const bell = [[2.0, 0.35], [3.0, 0.15], [4.2, 0.08]];
+  for (let r = 0; r < times; r++) {
+    const t = ac.currentTime + 0.05 + r * 1.6;
+    if (kind === 'chime') { chimeTone(ac, t, 880, 1.1, { overtones: [[2, 0.2]] }); chimeTone(ac, t + 0.22, 1318.5, 1.2, { overtones: [[2, 0.2]] }); }
+    else if (kind === 'bell') chimeTone(ac, t, 523.25, 1.5, { vol: 0.3, overtones: bell });
+    else if (kind === 'dingdong') { chimeTone(ac, t, 659.25, 0.9, { vol: 0.3, overtones: bell }); chimeTone(ac, t + 0.45, 523.25, 1.1, { vol: 0.3, overtones: bell }); }
+    else if (kind === 'marimba') [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => chimeTone(ac, t + i * 0.12, f, 0.45, { vol: 0.28, overtones: [[4, 0.1]] }));
+    else if (kind === 'birds') [0, 0.18, 0.5, 0.66].forEach((d, i) => chimeTone(ac, t + d, 2600 + i * 180, 0.14, { vol: 0.12, to: 3600 + i * 200 }));
+    else if (kind === 'alarm') [0, 0.3, 0.6].forEach((d) => chimeTone(ac, t + d, 740, 0.2, { type: 'triangle', vol: 0.22 }));
+  }
+  return true;
+}
 /* ---- Nudges: your home's own reminders (78-nudges.js). A card on the Alerts tab to add and change them,
    and the card that lights up every screen when one is due. ---- */
 const NUDGE_ICON_NAMES = { trash: 'Trash', paw: 'Pets', pill: 'Medicine', bill: 'Bills', plant: 'Plants', cake: 'Birthday', car: 'Car', school: 'School', laundry: 'Laundry', bell: 'Reminder' };
@@ -45,7 +78,7 @@ function nudgesCard(redraw) {
 }
 function nudgeEditor(n, d, redraw, fresh = false) {
   const isNew = !n?.id;
-  const v = { title: n?.title || '', icon: n?.icon || 'bell', time: n?.time || '18:00', repeat: n?.repeat || 'weekly', days: [...(n?.days || [])], date: n?.date || new Date().toISOString().slice(0, 10), flash: n?.flash !== false, push: d.pro ? (isNew ? true : !!n?.push) : false, on: n?.on !== false };
+  const v = { title: n?.title || '', icon: n?.icon || 'bell', sound: n ? n.sound || 'none' : 'chime', time: n?.time || '18:00', repeat: n?.repeat || 'weekly', days: [...(n?.days || [])], date: n?.date || new Date().toISOString().slice(0, 10), flash: n?.flash !== false, push: d.pro ? (isNew ? true : !!n?.push) : false, on: n?.on !== false };
   if (v.repeat === 'weekly' && !v.days.length) v.days = [new Date().getDay()];
   let photoFile = null, dropPhoto = false;
   const body = el('div', { class: 'nudgeedit' });
@@ -62,13 +95,16 @@ function nudgeEditor(n, d, redraw, fresh = false) {
     const days = v.repeat === 'weekly' ? el('div', { class: 'row wrap', style: 'gap:6px', role: 'group', 'aria-label': 'Days' }, DOW.map((l, i) => el('button', { type: 'button', class: `chipbtn${v.days.includes(i) ? ' on' : ''}`, 'aria-pressed': String(v.days.includes(i)), onclick: () => { v.days = v.days.includes(i) ? v.days.filter((x) => x !== i) : [...v.days, i]; draw(); } }, l))) : null;
     const date = ['once', 'monthly', 'yearly'].includes(v.repeat) ? el('label', { class: 'field' }, el('span', {}, v.repeat === 'once' ? 'Date' : v.repeat === 'monthly' ? 'Starting (it repeats on this day each month)' : 'Date (it repeats every year)'), el('input', { type: 'date', value: v.date, onchange: (e) => { v.date = e.target.value; } })) : null;
     const flash = el('input', { type: 'checkbox', checked: v.flash ? true : null, onchange: (e) => { v.flash = e.target.checked; } });
+    const sound = el('select', { 'aria-label': 'Sound', onchange: (e) => { v.sound = e.target.value; if (v.sound !== 'none') chimePlay(v.sound, 1); } }, [['none', 'No sound'], ...Object.entries(CHIMES)].map(([k, l]) => el('option', { value: k, selected: v.sound === k ? true : null }, l)));
+    const soundRow = el('div', { class: 'field' }, el('span', {}, 'Sound'), el('div', { class: 'row', style: 'gap:8px' }, sound, el('button', { type: 'button', class: 'btn small', title: 'Play it', onclick: () => { if (v.sound !== 'none' && !chimePlay(v.sound, 1)) toast('Tap anywhere on this screen once, then try again - browsers only play sound after a tap.'); } }, icon('play'), 'Play')),
+      el('span', { class: 'small muted' }, 'Plays on every screen showing it. A wall screen needs one tap after it starts before it can play sound.'));
     const push = el('input', { type: 'checkbox', checked: v.push ? true : null, disabled: d.pro ? null : true, onchange: (e) => { v.push = e.target.checked; } });
     const on = el('input', { type: 'checkbox', checked: v.on ? true : null, onchange: (e) => { v.on = e.target.checked; } });
     body.replaceChildren(...[
       el('label', { class: 'field' }, el('span', {}, 'Name'), title),
       el('div', { class: 'field' }, el('span', { class: 'small muted' }, 'Picture'), icons, photoRow),
       el('div', { class: 'row wrap', style: 'gap:12px' }, el('label', { class: 'field', style: 'flex:1;min-width:140px' }, el('span', {}, 'Time'), time), el('label', { class: 'field', style: 'flex:2;min-width:180px' }, el('span', {}, 'Repeats'), repeat)),
-      days, date,
+      days, date, soundRow,
       el('label', { class: 'check' }, flash, el('span', {}, el('b', {}, 'Show it on every screen'), el('span', { class: 'small muted', style: 'display:block' }, 'A card lights up on every CasaTorch screen until someone taps Done.'))),
       el('label', { class: `check${d.pro ? '' : ' locked'}` }, push, el('span', {}, el('b', {}, 'Send it to phones '), d.pro ? null : el('span', { class: 'pill pro' }, 'Pro'),
         el('span', { class: 'small muted', style: 'display:block' }, d.pro ? (d.phones ? 'To every phone with CasaTorch alerts on, wherever it is - even in quiet hours.' : 'No phones have CasaTorch alerts on yet - turn them on in Settings › Phone app & alerts.') : 'Reach everyone\'s phone wherever they are, even in quiet hours.'))),
@@ -80,7 +116,7 @@ function nudgeEditor(n, d, redraw, fresh = false) {
   const save = el('button', { class: 'btn primary', onclick: async () => {
     save.disabled = true; msg.textContent = ''; msg.style.color = '';
     try {
-      const payload = { title: v.title, icon: v.icon, time: v.time, repeat: v.repeat, days: v.days, date: v.date, flash: v.flash, push: v.push, on: v.on };
+      const payload = { title: v.title, icon: v.icon, sound: v.sound, time: v.time, repeat: v.repeat, days: v.days, date: v.date, flash: v.flash, push: v.push, on: v.on };
       const r = isNew ? await post('/api/nudges', payload) : await post(`/api/nudges/${encodeURIComponent(n.id)}`, payload, 'PUT');
       const id = r.nudge.id;
       if (photoFile) { const res = await fetch(`/api/nudges/${encodeURIComponent(id)}/photo`, { method: 'POST', body: photoFile, headers: { 'Content-Type': photoFile.type || 'application/octet-stream' } }); if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'The photo could not be saved.'); }
@@ -113,7 +149,7 @@ async function nudgeCheck() {
       canAct ? el('div', { class: 'row', style: 'gap:10px;justify-content:center' }, el('button', { class: 'btn primary', onclick: () => done('done') }, icon('check'), 'Done'), el('button', { class: 'btn', onclick: () => done('snooze') }, icon('clock'), '10 more minutes'))
         : el('button', { class: 'btn', onclick: () => card.remove() }, 'Close')));
   document.body.append(card);
-  if (!nudgeSeen.has(`${n.id}${n.at}`)) { nudgeSeen.add(`${n.id}${n.at}`); try { navigator.vibrate?.(200); } catch { /* fine */ } }
+  if (!nudgeSeen.has(`${n.id}${n.at}`)) { nudgeSeen.add(`${n.id}${n.at}`); try { navigator.vibrate?.(200); } catch { /* fine */ } if (n.sound && n.sound !== 'none') chimePlay(n.sound); }
 }
 setInterval(nudgeCheck, 30_000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) nudgeCheck(); });

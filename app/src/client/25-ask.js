@@ -1,13 +1,14 @@
 /* ---- Ask the house (Pro): a chat about your home; suggested actions need a tap ---- */
 const ASK_SUGGEST = ['What\'s on the calendar this week?', 'Which lights are on?', 'What\'s using the most power?', 'Will it rain this week?', 'Did my team win?', 'Is everything OK at home?'];
 const askHistory = [];   // this screen only; never saved
+const askPush = (m) => { askHistory.push(m); if (askHistory.length > 60) askHistory.splice(0, askHistory.length - 60); };   // a wall panel asks all day: keep the last 60
 function askBox({ compact = false } = {}) {
   const log = el('div', { class: 'chat', style: compact ? 'flex:1;overflow-y:auto;min-height:0;padding-right:4px' : null });
   const input = el('input', { type: 'text', placeholder: 'Ask about your home...', maxlength: 1000, 'aria-label': 'Ask the house' });
   const send = el('button', { class: 'btn primary', 'aria-label': 'Ask' }, icon('send'));
   const bubble = (m) => {
     const b = el('div', { class: `msg ${m.role === 'user' ? 'me' : 'ai'}` }, m.content);
-    if (m.actions?.length) b.append(el('div', { class: 'acts' }, m.actions.map((a) => { const btn = el('button', { class: 'btn small' }, icon('check'), a.label); btn.onclick = async () => { btn.disabled = true; try { await post(`/api/devices/${encodeURIComponent(a.deviceId)}/${a.action}`); btn.replaceChildren(icon('check'), 'Done'); } catch (err) { toast(err.message); btn.disabled = false; } }; return btn; })));
+    if (m.actions?.length) b.append(el('div', { class: 'acts' }, m.actions.map((a) => { const btn = el('button', { class: 'btn small' }, icon('check'), a.label); btn.onclick = async () => { btn.disabled = true; try { await post(`/api/devices/${encodeURIComponent(a.deviceId)}/${encodeURIComponent(a.action)}`); btn.replaceChildren(icon('check'), 'Done'); } catch (err) { toast(err.message); btn.disabled = false; } }; return btn; })));
     if (m.error) b.style.borderColor = 'var(--bad)';
     return b;
   };
@@ -17,13 +18,13 @@ function askBox({ compact = false } = {}) {
   };
   async function ask(q) {
     q = String(q || '').trim(); if (!q) return;
-    input.value = ''; askHistory.push({ role: 'user', content: q }); drawLog();
+    input.value = ''; askPush({ role: 'user', content: q }); drawLog();
     const wait = el('div', { class: 'msg ai' }, el('span', { class: 'typing' }, el('i'), el('i'), el('i'))); log.append(wait); wait.scrollIntoView?.({ block: 'nearest' });
     try {
       const r = await post('/api/ask', { question: q, history: askHistory.slice(0, -1).slice(-8).map(({ role, content }) => ({ role, content })) });
-      askHistory.push({ role: 'assistant', content: r.answer, actions: r.actions });
+      askPush({ role: 'assistant', content: r.answer, actions: r.actions });
     } catch (err) {
-      askHistory.push({ role: 'assistant', content: err.body?.setup ? 'Connect an AI first: Settings > Ask the house.' : err.message, error: true });
+      askPush({ role: 'assistant', content: err.body?.setup ? 'Connect an AI first: Settings > Ask the house.' : err.message, error: true });
     }
     drawLog();
   }

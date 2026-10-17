@@ -57,7 +57,7 @@ app.get('/api/integrations', async (_req, res) => {
 async function allDevices() {
   const out = [], errors = [];
   // Providers in parallel, each capped at 6 s, so one dead bridge never stalls the screen.
-  const cap = (pr) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error('did not answer in 6 s')), 6000))]);
+  const cap = (pr) => { let t; return Promise.race([pr, new Promise((_, no) => { t = setTimeout(() => no(new Error('did not answer in 6 s')), 6000); })]).finally(() => clearTimeout(t)); };   // no 6 s timer left behind per request
   await Promise.all(Object.entries(PROVIDERS).map(async ([name, p]) => {
     try { for (const d of await cap(cached(`dev:${name}`, 5_000, async () => ({ list: await p.list() }))).then((x) => x.list || [])) out.push(d); }
     catch (err) { errors.push({ provider: name, error: String(err.message) }); }
@@ -116,7 +116,9 @@ const SAFE_COVERS = new Set(['blind', 'shade', 'curtain', 'shutter', 'awning', '
 const RISKY_NAME = /garage|\bgates?\b|gate_|door(?!bell|_?sensor|_?contact)|\block|unlock|disarm|\balarm|opener|deadbolt|\b(puerta|port[oó]n|garaje|cerradura|alarma|verja|cerrojo|tor|t[üu]r|tuer|torantrieb|schloss|riegel|porte|portail|serrure|alarme|verrou|port[ãa]o|porta|garagem|fechadura|cancello|portone|serratura|allarme|poort|deur|hek|slot|alarm)\b|^shelly(plus|pro)?(1|2|uni|i3|i4)\b|^shelly(plus|pro)?1(pm|l)?[-_]/i;   // every language CasaTorch speaks; Shelly relay models keep their default name and often drive garage doors
 function riskOf(d) {
   if (!d) return null;
-  if ((config.safety?.allow || []).includes(d.id)) return null;
+  // The owner's "allow anyway" is for names caught by mistake - never for a real lock, alarm, or a cover that says it's a garage door, gate or door.
+  const sure = d.kind === 'lock' || d.kind === 'alarm' || (d.kind === 'cover' && (d.risky || RISKY_COVERS.has(d.haClass)));
+  if (!sure && (config.safety?.allow || []).includes(d.id)) return null;
   const words = `${d.id} ${d.originalName || d.name || ''}`;
   if (d.kind === 'lock') return { only: ['lock'], why: 'unlocking isn\'t available from CasaTorch - use your lock\'s own app' };
   if (d.kind === 'alarm') return { only: ['arm_home', 'arm_away', 'arm_night'], why: 'disarming isn\'t available from CasaTorch - use the alarm\'s own app or keypad' };
@@ -230,7 +232,11 @@ async function fetchImage(url, user, pass) {
   const chal = r.headers.get('www-authenticate');
   if (r.status === 401 && user && /digest/i.test(chal || '')) r = await fetch(u, { headers: { Authorization: digestHeader('GET', u.pathname + u.search, user, pass || '', chal) }, signal: AbortSignal.timeout(10000) });
   if (!r.ok) throw Object.assign(new Error(`camera answered HTTP ${r.status}`), { status: r.status });
-  return { type: r.headers.get('content-type') || 'image/jpeg', buf: Buffer.from(await r.arrayBuffer()) };
+  // A picture, not an endless stream: an address that points at a video feed would otherwise fill the memory.
+  const max = 20 * 1024 * 1024, chunks = []; let n = 0;
+  if (Number(r.headers.get('content-length') || 0) > max) { r.body?.cancel?.().catch?.(() => {}); throw new Error('the camera sent something too big for a picture'); }
+  for await (const c of r.body || []) { n += c.length; if (n > max) throw new Error('the camera sent something too big for a picture'); chunks.push(c); }
+  return { type: r.headers.get('content-type') || 'image/jpeg', buf: Buffer.concat(chunks) };
 }
 const CAMERA_SNAPSHOT = {
   frigate: (c) => fetchImage(`${String(c.url).replace(/\/+$/, '')}/api/${encodeURIComponent(c.camera)}/latest.jpg?h=720`),

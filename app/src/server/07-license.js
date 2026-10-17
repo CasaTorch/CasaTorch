@@ -12,7 +12,16 @@
 const LICENSE_PUBLIC_KEY = crypto.createPublicKey({ key: Buffer.from('MCowBQYDK2VwAyEABf+qQNUoFUyjunG6K/hZL7XnsA+950eq2nek4Sg/j7U=', 'base64'), format: 'der', type: 'spki' });
 const TRIAL_DAYS = 14, GRACE_DAYS = 14;
 const b64u = (b) => Buffer.from(b).toString('base64url');
+/* proStatus() runs on many requests: the signature check of the saved key is done once, not every time. */
+let licenseMemo = { key: null, out: null };
 function checkLicenseKey(key) {
+  const k = String(key || '');
+  if (licenseMemo.key === k) return licenseMemo.out;
+  const out = checkLicenseKeyNow(k);
+  licenseMemo = { key: k, out };
+  return out;
+}
+function checkLicenseKeyNow(key) {
   const [p, s] = String(key || '').trim().split('.');
   if (!p || !s) return { valid: false, why: 'that is not a CasaTorch license key' };
   let payload;

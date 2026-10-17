@@ -9,10 +9,12 @@ self.addEventListener('fetch', (e) => {
   const r = e.request, u = new URL(r.url);
   if (r.method !== 'GET' || u.origin !== location.origin || u.pathname.startsWith('/api/') || /^\/(login|setup)/.test(u.pathname)) return;
   // Network first (always the newest CasaTorch), the last copy only when the network fails.
+  // Each page is kept under its own path, so the dashboard offline is the dashboard - not the last page opened.
+  const nav = r.mode === 'navigate', key = nav ? u.pathname : r;
   e.respondWith(fetch(r).then((res) => {
-    if (res.ok && !res.redirected && res.type === 'basic' && (r.mode === 'navigate' || PRECACHE.includes(u.pathname))) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put(r.mode === 'navigate' ? '/' : r, copy)); }
+    if (res.ok && !res.redirected && res.type === 'basic' && ((nav && (u.pathname === '/' || u.pathname.endsWith('.html'))) || PRECACHE.includes(u.pathname))) { const copy = res.clone(); caches.open(SHELL).then((c) => c.put(key, copy)).catch(() => {}); }
     return res;
-  }).catch(() => caches.match(r.mode === 'navigate' ? '/' : r).then((hit) => hit || new Response('CasaTorch can\'t be reached right now.', { status: 503, headers: { 'Content-Type': 'text/plain' } }))));
+  }).catch(() => caches.match(key).then((hit) => hit || (nav ? caches.match('/') : null)).then((hit) => hit || new Response('CasaTorch can\'t be reached right now.', { status: 503, headers: { 'Content-Type': 'text/plain' } }))));
 });
 self.addEventListener('push', (e) => {
   let m = {}; try { m = e.data.json(); } catch { m = { title: 'CasaTorch', body: e.data?.text() || '' }; }
@@ -20,7 +22,8 @@ self.addEventListener('push', (e) => {
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const url = new URL(e.notification.data?.url || '/#alerts', location.origin).href;
+  let url = new URL('/#alerts', location.origin).href;
+  try { const u = new URL(e.notification.data?.url || '/#alerts', location.origin); if (u.origin === location.origin) url = u.href; } catch { /* keep the alerts page */ }   // only pages on this CasaTorch
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
     const w = list.find((c) => c.url.startsWith(location.origin));
     return w ? w.focus().then(() => w.navigate(url)).catch(() => self.clients.openWindow(url)) : self.clients.openWindow(url);

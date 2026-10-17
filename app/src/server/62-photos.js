@@ -16,6 +16,7 @@ app.post('/api/photos', express.raw({ type: '*/*', limit: '30mb' }), (req, res) 
   if (!Buffer.isBuffer(b) || b.length < 16) return res.status(400).json({ error: 'no file received' });
   const t = PHOTO_TYPES.find(([, , ok]) => ok(b));
   if (!t) return res.status(415).json({ error: 'that is not a photo CasaTorch can show (JPEG, PNG, WebP, GIF or HEIC)' });
+  if (isDemo() && photoList().length >= 50) return res.status(409).json({ error: 'the demo keeps up to 50 photos - remove some first' });   // the demo has no sign-in: anyone could fill the disk
   if (photoList().length >= 2000) return res.status(409).json({ error: 'the photo reel is full (2000 photos) - remove some first' });
   const id = `${crypto.randomBytes(8).toString('hex')}.${t[0]}`;
   writeFileSafe(path.join(PHOTO_DIR, id), b, 0o600);

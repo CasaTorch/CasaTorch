@@ -77,8 +77,9 @@ function ltServe() {
   const files = ltFiles(), c = ltConf(); if (!files || !c?.hostname) return;
   const info = certInfo(files.cert); lt.expires = info?.until?.toISOString() || null;
   if (!info || !info.names.includes(c.hostname) || info.until < new Date()) { lt.state = 'error'; lt.why = 'The certificate is missing or out of date - getting a new one.'; return; }
-  if (lt.server) { lt.server.setSecureContext(files); lt.state = 'ready'; LOCAL_TLS.url = ltUrl(c.hostname); return; }
-  const srv = https.createServer({ ...files, minVersion: 'TLSv1.2' }, app);
+  // A key that doesn't match its certificate throws here; that must not take CasaTorch down (it gets a new one).
+  if (lt.server) { try { lt.server.setSecureContext(files); } catch (e) { lt.state = 'error'; lt.why = `The certificate couldn't be used: ${e.message}`; return; } lt.state = 'ready'; LOCAL_TLS.url = ltUrl(c.hostname); return; }
+  let srv; try { srv = https.createServer({ ...files, minVersion: 'TLSv1.2' }, app); } catch (e) { lt.state = 'error'; lt.why = `The certificate couldn't be used: ${e.message}`; return; }
   srv.on('error', (e) => { lt.state = 'error'; lt.why = e.code === 'EADDRINUSE' ? `Port ${HTTPS_PORT} is already in use by another program.` : String(e.message); lt.server = null; LOCAL_TLS.url = null; });
   srv.listen(HTTPS_PORT, () => { lt.server = srv; lt.state = 'ready'; lt.why = null; LOCAL_TLS.url = ltUrl(c.hostname); console.log(`Secure address at home: ${LOCAL_TLS.url}`); });
 }

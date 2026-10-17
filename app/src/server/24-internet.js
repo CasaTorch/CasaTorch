@@ -53,4 +53,9 @@ async function internetNow() {
   };
 }
 app.get('/api/internet', async (_req, res) => { if (isDemo()) return res.json(demoFixture('internet')); try { res.json(await internetNow()); } catch (err) { res.status(502).json({ error: String(err.message) }); } });
-app.post('/api/internet/speedtest', async (_req, res) => res.json(await speedTest()));
+/* By hand: the demo shows its sample result, and a test that just ran is shown again (each one moves about 33 MB). */
+app.post('/api/internet/speedtest', async (_req, res) => {
+  if (isDemo()) return res.json(demoFixture('internet')?.speed || null);
+  if (speed.last?.at && !speed.last.error && Date.now() - Date.parse(speed.last.at) < 60_000) return res.json(speed.last);
+  res.json(await speedTest());
+});

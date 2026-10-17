@@ -27,6 +27,7 @@ const isLanHost = (h) => /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\
 function netRequest(url, { method = 'GET', headers = {}, body, timeout = 10000 } = {}) {
   return new Promise((ok, bad) => {
     let u; try { u = new URL(url); } catch { return bad(new Error('that address isn\'t valid')); }
+    if (blockedUrl(u)) return bad(new Error('That address is not allowed.'));   // the same rule as fetch (00-setup.js)
     const mod = u.protocol === 'https:' ? https : http;
     const data = body == null ? null : typeof body === 'string' ? body : JSON.stringify(body);
     const r = mod.request(u, { method, timeout, rejectUnauthorized: !isLanHost(u.hostname), headers: { 'User-Agent': UA, Accept: 'application/json', ...(data ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } : {}), ...headers } }, (res) => {
@@ -99,6 +100,7 @@ let netBusy = false;
 async function readNetSource(s) {
   const st = (netState[s.id] ||= { fails: 0 });
   try {
+    if (!Object.hasOwn(NET, s.kind)) throw new Error('unknown kind of source');
     const r = await NET[s.kind](s, s.secret ? unseal(s.secret) : '');
     Object.assign(st, { ok: true, error: null, fails: 0, at: nowIso(), summary: r.summary, devices: r.devices });
   } catch (e) {
@@ -149,7 +151,7 @@ app.get('/api/network', (_req, res) => {
 app.post('/api/network', requireRole('admin'), requirePro, express.json({ limit: '4kb' }), async (req, res) => {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
   const b = req.body || {}, kind = String(b.kind || '');
-  if (!NET[kind]) return res.status(400).json({ error: 'Pick what to connect.' });
+  if (!Object.hasOwn(NET, kind)) return res.status(400).json({ error: 'Pick what to connect.' });
   if (netSources().length >= 10) return res.status(400).json({ error: 'Up to 10 network sources - remove one first.' });
   const s = { id: crypto.randomBytes(5).toString('hex'), kind, name: String(b.name || NET_KINDS[kind]).trim().slice(0, 40) || NET_KINDS[kind] };
   if (kind !== 'meraki') {

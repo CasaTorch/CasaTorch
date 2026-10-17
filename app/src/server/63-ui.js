@@ -24,7 +24,7 @@ app.put('/api/ui', express.json({ limit: '128kb' }), (req, res) => {
 });
 
 /* The status bar: everything CasaTorch runs or talks to, and whether it's OK right now. */
-app.get('/api/connections', async (_req, res) => {
+app.get('/api/status-bar', async (_req, res) => {   // (was /api/connections, which Connect's own route answered first)
   const items = [];
   const add = (id, name, state, detail) => items.push({ id, name, state, detail: detail || null });   // state: ok | warn | down | off
   if (isDemo()) {

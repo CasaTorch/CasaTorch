@@ -92,6 +92,7 @@ if (Object.values(sessions).some((s) => !s.userId)) sessions = {};   // the old 
 let sessDirty = false;
 const saveSessions = () => { try { writeSecretJson(SESS_FILE, sessions); sessDirty = false; } catch { /* next time */ } };
 setInterval(() => { if (sessDirty) saveSessions(); }, 60_000).unref?.();
+process.on('exit', () => { if (sessDirty) saveSessions(); });   // a restart keeps the last minute of "last seen" too
 const cookieOf = (req) => (String(req.headers.cookie || '').match(/(?:^|;\s*)casatorch_session=([A-Za-z0-9_-]{20,})/) || [])[1];
 const cookieFlags = (req) => `Path=/; HttpOnly; SameSite=Lax${req.secure ? '; Secure' : ''}`;
 function sessionOf(req) {
@@ -105,7 +106,7 @@ function sessionOf(req) {
 }
 function startSession(req, res, u, { remember = false, kind = 'browser', mfa = false } = {}) {
   const tok = crypto.randomBytes(32).toString('base64url'), days = kind === 'panel' ? PANEL_DAYS : remember ? 365 : IDLE_DAYS;
-  for (const [k, v] of Object.entries(sessions)) if (Date.parse(v.expires) < Date.now()) delete sessions[k];
+  for (const [k, v] of Object.entries(sessions)) if (Date.parse(v.expires) < Date.now() || Date.now() - Date.parse(v.seen) > (v.kind === 'panel' ? PANEL_DAYS : IDLE_DAYS) * 86400_000) delete sessions[k];   // expired or unused too long
   sessions[sha256(tok)] = { id: newId(), userId: u.id, kind, mfa, created: nowIso(), seen: nowIso(), expires: new Date(Date.now() + days * 86400_000).toISOString(), ip: clientIp(req), agent: String(req.headers['user-agent'] || '').slice(0, 160) };
   saveSessions();
   if (!u.panel) { u.lastLogin = nowIso(); saveUsers(); }
@@ -115,7 +116,7 @@ const endSessionsOf = (userId, exceptKey) => { for (const [k, v] of Object.entri
 
 /* ---- brute-force limits ---- */
 const tries = new Map();
-function limited(key, max, windowMs = 15 * 60_000) { const now = Date.now(), list = (tries.get(key) || []).filter((t) => now - t < windowMs); tries.set(key, list); return list.length >= max; }
+function limited(key, max, windowMs = 15 * 60_000) { const now = Date.now(), list = (tries.get(key) || []).filter((t) => now - t < windowMs); if (list.length) tries.set(key, list); else tries.delete(key); return list.length >= max; }   // only keys with recent failures are kept
 const failed = (...keys) => { for (const k of keys) tries.set(k, [...(tries.get(k) || []), Date.now()]); };
 setInterval(() => { const now = Date.now(); for (const [k, v] of tries) if (!v.some((t) => now - t < 15 * 60_000)) tries.delete(k); }, 10 * 60_000).unref?.();
 
@@ -237,6 +238,7 @@ app.post('/api/auth/login', express.json({ limit: '4kb' }), (req, res) => {
 app.post('/api/auth/mfa', express.json({ limit: '4kb' }), (req, res) => {
   const t = ticketOf(req.body?.ticket); if (!t) return res.status(401).json({ error: 'That took too long - sign in again.' });
   const u = userById(t.userId), ip = clientIp(req);
+  if (!u) { tickets.delete(t.id); return res.status(401).json({ error: 'Sign in again.' }); }   // removed while signing in
   if (limited(`mfa:${u.id}`, 6) || limited(`ip:${ip}`, 30)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' });
   const how = secondFactorOk(u, req.body?.code);
   if (!how) { failed(`mfa:${u.id}`, `ip:${ip}`); audit(req, 'code-failed', { user: u.username }); return res.status(401).json({ error: 'That code is not right.' }); }
@@ -403,7 +405,7 @@ app.put('/api/users/:id', requireRole('admin'), express.json({ limit: '4kb' }), 
     audit(req, 'role-changed', { of: u.username, from: u.role, to: b.role }); u.role = b.role;
   }
   if (typeof b.name === 'string' && b.name.trim()) u.name = b.name.trim().slice(0, 60);
-  if (typeof b.email === 'string') { const e = b.email.trim().toLowerCase(); if (e && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return res.status(400).json({ error: 'That e-mail does not look right.' }); u.email = e || null; if (u.google) delete u.google; }
+  if (typeof b.email === 'string') { const e = b.email.trim().toLowerCase(); if (e && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return res.status(400).json({ error: 'That e-mail does not look right.' }); if (e && users.list.some((x) => x !== u && x.email === e)) return res.status(409).json({ error: 'Someone already has that e-mail.' }); u.email = e || null; if (u.google) delete u.google; }
   saveUsers(); res.json({ ok: true, user: safeUser(u) });
 });
 app.post('/api/users/:id/reset', requireRole('admin'), (req, res) => {

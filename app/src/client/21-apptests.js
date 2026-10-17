@@ -138,7 +138,7 @@ function atChart(runs) {
     hit.addEventListener('pointerleave', () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); mark.setAttribute('visibility', 'hidden'); });
     box.replaceChildren(svg, tip);
   };
-  let lastW = 0; const ro = new ResizeObserver(() => { if (Math.abs(box.clientWidth - lastW) > 4) { lastW = box.clientWidth; paint(); } }); ro.observe(box);
+  let lastW = 0; const ro = new ResizeObserver(() => { if (!box.isConnected) { if (lastW) ro.disconnect(); return; } if (Math.abs(box.clientWidth - lastW) > 4) { lastW = box.clientWidth; paint(); } }); ro.observe(box);   // let go once the chart is off the page
   return box;
 }
 /* The path, left to right: this CasaTorch, each hop grouped by whose network it's in, then the app. A hop that

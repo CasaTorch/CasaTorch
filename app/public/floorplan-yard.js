@@ -66,8 +66,12 @@ export class Yard {
   constructor(scene) { this.scene = scene; this.group = new THREE.Group(); this.group.name = 'yard'; scene.add(this.group); this.cars = []; this.labels = []; this.trees = []; this.y = 0; }
   clear() {
     for (const l of this.labels) { l.parent?.remove(l); l.element.remove(); }
-    this.labels = []; this.cars = []; this.trees = [];
-    for (const o of [...this.group.children]) { this.group.remove(o); o.traverse((x) => { if (x.isMesh && !Object.values(G).includes(x.geometry)) x.geometry.dispose(); }); }
+    this.labels = []; this.cars = []; this.trees = []; this.charger = null;   // a yard without a charger draws no cable to the old one
+    /* Free each build's own shapes and materials; the tree and car shapes are shared by every build and stay. */
+    const shared = new Set(Object.values(G)), mats = new Set(Object.values(this.mats || {}));
+    for (const o of [...this.group.children]) { this.group.remove(o); o.traverse((x) => { if ((x.isMesh || x.isLine) && !shared.has(x.geometry)) x.geometry.dispose(); if (x.material) mats.add(x.material); }); }
+    for (const m of mats) m.dispose();
+    this.mats = null;
   }
   /* yard: { areas: [{ kind, pts: [[x, z]...] }], items: [{ id, kind, pos: [x, z], rot, scale, ... }] }; y: ground height (world) */
   build(yard, y, theme, el) {
