@@ -8,11 +8,11 @@
  *   ring    sign-in -> added
  *   hue     already set up
  *
- *   node tools/mock-ha.mjs [port]      token: test-token
+ *   node tools/mock-ha.mjs [port]      token: test-token (or $MOCK_HA_TOKEN - CasaTorch wants a real-length one)
  */
 import http from 'node:http';
 import crypto from 'node:crypto';
-const PORT = Number(process.argv[2] || 18123), TOKEN = 'test-token';
+const PORT = Number(process.argv[2] || 18123), TOKEN = process.env.MOCK_HA_TOKEN || 'test-token';
 let streamsOpen = 0;   // how many live camera streams are open (to check viewers really close them)
 /* With a second argument (e.g. 1500) it also pretends to be a big, messy house: that many entities across
    every domain Home Assistant has, with odd states (unavailable, unknown, empty), odd units, long and

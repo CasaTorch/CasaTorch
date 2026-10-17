@@ -73,7 +73,7 @@ function nudgesCard(redraw) {
       card.replaceChildren(head, el('div', { class: 'row wrap', style: 'gap:8px' }, el('span', { class: 'small muted' }, 'Ideas:'), ideas.map(([title, ic, repeat, days, time]) => el('button', { class: 'btn small', disabled: canEdit ? null : true, onclick: () => nudgeEditor({ title, icon: ic, repeat, days, time, date: new Date().toISOString().slice(0, 10), flash: true, push: d.pro }, d, redraw, true) }, icon(ic), title))));
     } else {
       const today = new Set(d.today || []);
-      card.replaceChildren(head, el('div', { class: 'nudgelist' }, d.list.map((n) => el('button', { class: `nudgerow${n.on ? '' : ' off'}`, disabled: canEdit ? null : true, onclick: () => nudgeEditor(n, d, redraw), 'aria-label': `${n.title}, ${nudgeWhen(n)}${canEdit ? '. Change it' : ''}` },
+      card.replaceChildren(head, el('div', { class: 'nudgelist' }, d.list.map((n) => el('button', { class: `nudgerow${n.on ? '' : ' off'}`, disabled: canEdit ? null : true, onclick: () => nudgeEditor(n, d, redraw) },
         nudgePic(n, 'sm'), el('div', { class: 'grow', style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, n.title), el('span', { class: 'small muted' }, n.on ? nudgeWhen(n) : 'Off')),
         today.has(n.id) && n.on ? el('span', { class: 'pill good' }, 'Today') : null,
         n.push ? el('span', { class: 'tiny muted', title: 'Sent to phones' }, icon('send')) : null))));

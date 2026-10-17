@@ -1,30 +1,87 @@
+# Every push to main and every pull request: build, unit tests, security checks, the setup wizard end to end
+# in a real (headless) browser, the personal-data scrub and a dependency audit. Same commands as `npm test` in app/
+# (tools/test-all.mjs), so a red run here reproduces locally with one command.
 name: CI
 on:
   push: { branches: [main] }
   pull_request:
+  workflow_dispatch:
 permissions: { contents: read }
+concurrency: { group: "ci-${{ github.ref }}", cancel-in-progress: true }
+env:
+  PLAYWRIGHT_VERSION: "1.56.1"
 jobs:
   test:
+    name: Build, unit and security (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
-    strategy: { matrix: { node: [20, 22] } }
+    timeout-minutes: 15
+    strategy: { fail-fast: false, matrix: { node: [20, 22] } }
     defaults: { run: { working-directory: app } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: "${{ matrix.node }}", cache: npm, cache-dependency-path: app/package-lock.json }
       - run: npm ci --no-audit --no-fund
-      - run: node build.mjs
-      - run: node --check server.js && node --check public/app.js && node --check public/setup.js && node --check public/floorplan.js
-      - run: node test/unit.mjs
+      - name: Build, syntax, unit tests, security checks
+        run: node ../tools/test-all.mjs --no-e2e
       - name: Demo server answers
         run: |
           CASATORCH_DEMO=1 CASATORCH_DATA_DIR=$RUNNER_TEMP/hos PORT=18090 node server.js &
           for i in $(seq 1 20); do curl -fs localhost:18090/api/health && break; sleep 1; done
           for u in status home alerts devices internet settings floorplan floorplan/live; do curl -fs "localhost:18090/api/$u" >/dev/null || { echo "/api/$u failed"; exit 1; }; done
+
+  e2e:
+    name: Setup wizard end to end
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults: { run: { working-directory: app } }
+    env:
+      PLAYWRIGHT: ${{ github.workspace }}/.pw/node_modules/playwright
+      SHOTS: ${{ github.workspace }}/test-results
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/cache@v4
+        with: { path: ~/.cache/ms-playwright, key: "playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}" }
+      # Playwright stays out of CasaTorch's own dependencies: it is installed beside the checkout for the tests only.
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --no-audit --no-fund --loglevel=error --prefix "$GITHUB_WORKSPACE/.pw" "playwright@$PLAYWRIGHT_VERSION"
+          cd "$GITHUB_WORKSPACE/.pw" && npx playwright install --with-deps chromium
+      - name: Wizard with Home Assistant, wizard without it
+        run: node ../tools/test-all.mjs --only=build,e2e-wizard,e2e-noha
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: e2e-screenshots, path: test-results/, retention-days: 14, if-no-files-found: ignore }
+
+  hygiene:
+    name: Personal-data scrub and dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
       - name: No personal data
-        run: node ../tools/scrub-check.mjs ..
+        run: node tools/scrub-check.mjs .
+      # High-severity advisories are reported, not blocking: some (node-forge under acme-client) have no fix that
+      # doesn't break the dependency, and a red CI on every PR for a known, tracked advisory just gets ignored.
+      # Critical ones block. The full report is on the run's summary page.
+      - name: Audit (high and up - report)
+        working-directory: app
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          { echo '### npm audit (production dependencies, high and up)'; echo '```'; npm audit --omit=dev --audit-level=high 2>&1 | tail -60; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Audit (critical - blocking)
+        working-directory: app
+        run: npm audit --omit=dev --audit-level=critical
+
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - run: docker build -f app/Dockerfile -t casatorch:ci .

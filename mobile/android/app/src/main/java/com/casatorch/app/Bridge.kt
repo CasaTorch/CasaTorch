@@ -170,6 +170,8 @@ class Bridge(private val a: MainActivity) {
                 val code = c.responseCode
                 val out = JSONObject().put("status", code).put("net", net)
                 if (code in 200..299) runCatching { out.put("json", JSONObject(c.inputStream.bufferedReader().use { it.readText() }.take(256_000))) }
+                // 403 from the secure address away from home on Basic says so in JSON ({ away, needsPro }): the screens show it
+                else if (code == 403) runCatching { c.errorStream?.bufferedReader()?.use { it.readText() }?.take(16_000)?.let { out.put("json", JSONObject(it)) } }
                 out
             } finally { c.disconnect() }
         } catch (e: Exception) {

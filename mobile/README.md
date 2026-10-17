@@ -140,6 +140,11 @@ The two Firebase app files are listed in `.gitignore`; keep them out of the repo
 
 ## Store checklist
 
+**Pictures, icons and a step-by-step upload guide** for both stores are in [`store/README.md`](store/README.md):
+8 screenshots per device (iPhone 6.9" and 6.5", iPad 13", Android phone, 7" and 10" tablet), the Play feature
+graphic and icon, and the iOS 18 dark and tinted app icons. `store/tools/screenshots.mjs` makes the screenshots
+again from the demo house.
+
 **App Store (iPhone + iPad)**
 
 - **Bundle ids:** `com.casatorch.app` and `com.casatorch.app.alerts`.
@@ -150,6 +155,7 @@ The two Firebase app files are listed in `.gitignore`; keep them out of the repo
   `store/app-store/review_notes.txt`. `node mobile/tools/store-check.mjs` checks the length limits.
 - **Export compliance:** the app uses only standard encryption (HTTPS, AES-GCM through the system), so
   `ITSAppUsesNonExemptEncryption` is `false`.
+- **App icon:** `AppIcon` has the normal, iOS 18 dark and iOS 18 tinted versions (Xcode 16+).
 - **App Review notes:** the app connects to the reviewer's own CasaTorch. Provide a demo box address and a demo
   user, or a video of pairing.
 
@@ -162,3 +168,5 @@ The two Firebase app files are listed in `.gitignore`; keep them out of the repo
 - **Texts:** `store/google-play/en-US/` (title, short and full description, changelog for versionCode 700).
 - **Notifications permission:** asked only when you tap **Turn on alerts**.
 - **Target API:** 35.
+- **Launcher icon:** adaptive vector icon with a monochrome layer (themed icons, Android 13+); no density PNGs needed
+  (minSdk 28).

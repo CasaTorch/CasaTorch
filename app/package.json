@@ -10,7 +10,13 @@
     "build": "node build.mjs",
     "start": "node build.mjs && node server.js",
     "demo": "node build.mjs && CASATORCH_DEMO=1 node server.js",
-    "scrub": "node ../tools/scrub-check.mjs ."
+    "scrub": "node ../tools/scrub-check.mjs .",
+    "test": "node ../tools/test-all.mjs",
+    "test:all": "node ../tools/test-all.mjs",
+    "test:unit": "node build.mjs && node test/unit.mjs",
+    "test:security": "node build.mjs && node ../tools/test-security.mjs",
+    "test:e2e": "node ../tools/test-all.mjs --only=build,e2e-wizard,e2e-noha",
+    "test:fast": "node ../tools/test-all.mjs --no-e2e"
   },
   "engines": {
     "node": ">=20"

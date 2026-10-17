@@ -42,7 +42,7 @@ function widgetPicker(have, onPick, { devices = [], tiles = [], ctx, start = 'wi
     pv.__show = () => { if (!w.noPreview && !w.live) paint(); };
     const sizeBar = el('div', { class: 'seg seg-mini' }, sizes.map(([k, label, sz]) => el('button', { type: 'button', class: sz === chosen ? 'on' : '', title: label, onclick: (e) => { chosen = sz; [...sizeBar.children].forEach((x) => x.classList.toggle('on', x === e.currentTarget)); pv.__show(); } }, label.replace('Extra large', 'XL'))));
     const c = el('div', { class: 'wg-card' }, pv,
-      el('div', { class: 'wg-meta' }, el('b', {}, w.title, w.pro ? el('span', { class: 'pill pro', style: 'margin-left:6px' }, 'PRO') : null), el('div', { class: 'tiny muted' }, w.blurb || '')),
+      el('div', { class: 'wg-meta' }, el('b', {}, T(w.title), w.pro ? el('span', { class: 'pill pro', style: 'margin-left:6px' }, 'PRO') : null), el('div', { class: 'tiny muted' }, w.blurb || '')),
       sizes.length > 1 ? sizeBar : null,
       el('button', { class: 'btn small primary wg-add', onclick: () => pick(w.id, { w: chosen[0], h: chosen[1] }) }, icon('plus'), 'Add'));
     io ? io.observe(pv) : pv.__show();
@@ -50,7 +50,7 @@ function widgetPicker(have, onPick, { devices = [], tiles = [], ctx, start = 'wi
   };
   const drawWidgets = () => {
     const q = wq.value.trim().toLowerCase();
-    const shown = list.filter((w) => (cat === 'all' || w.cat === cat || (cat === 'essentials' && w.essential)) && (!q || `${w.title} ${w.blurb || ''} ${w.keywords || ''}`.toLowerCase().includes(q)));
+    const shown = list.filter((w) => (cat === 'all' || w.cat === cat || (cat === 'essentials' && w.essential)) && (!q || `${w.title} ${T(w.title)} ${w.blurb || ''} ${w.keywords || ''}`.toLowerCase().includes(q)));
     catBar.replaceChildren(...WIDGET_CATS.filter(([k]) => k === 'all' || list.some((w) => w.cat === k || (k === 'essentials' && w.essential))).map(([k, label]) => el('button', { class: `chip${k === cat ? ' on' : ''}`, onclick: () => { cat = k; drawWidgets(); } }, label)));
     cards.replaceChildren(...(shown.length ? shown.map(card) : [el('p', { class: 'muted' }, list.length ? 'No widget matches.' : 'Every widget is already on your Home screen.')]));
   };

@@ -183,7 +183,10 @@ object HomeStore {
         if (hello.optJSONObject("home")?.optString("id") != id) return
         fun ok(k: String) = hello.optString(k).takeIf { Uri.parse(it).let { u -> u.scheme == "https" && !u.host.isNullOrEmpty() } }
         val r = ok("remote"); val l = ok("secure")
-        val next = h.copy(remote = r ?: h.remote, lan = l ?: h.lan)
+        // "remote": null from the home itself = secure access was turned off: forget that address (an older CasaTorch leaves it out)
+        val gone = hello.has("remote") && hello.isNull("remote")
+        val next = h.copy(remote = if (gone) null else r ?: h.remote, lan = l ?: h.lan)
+        if (gone && h.remote != null && next.here?.let { Home.originOf(Uri.parse(it)) } == Home.originOf(Uri.parse(h.remote))) next.here = null
         if (next != h) { list[list.indexOf(h)] = next; save() }
     }
     fun remove(id: String) {

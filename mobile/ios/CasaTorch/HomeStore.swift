@@ -76,6 +76,13 @@ final class HomeStore {
         let ok: (Any?) -> String? = { v in guard let s = v as? String, let u = URL(string: s), u.scheme == "https", u.host != nil else { return nil }; return s }
         var changed = false
         if let r = ok(hello["remote"]), homes[i].addresses.remote != r { homes[i].addresses.remote = r; changed = true }
+        // "remote": null from the home itself = secure access was turned off: forget that address (an older CasaTorch leaves it out)
+        if hello.keys.contains("remote"), hello["remote"] is NSNull, let old = homes[i].addresses.remote {
+            homes[i].addresses.remote = nil
+            let origin: (String?) -> String? = { s in s.flatMap { URL(string: $0) }.flatMap { Home.originString($0) } }
+            if let h = origin(homes[i].addresses.here), h == origin(old) { homes[i].addresses.here = nil }
+            changed = true
+        }
         if let l = ok(hello["secure"]), homes[i].addresses.lan != l { homes[i].addresses.lan = l; changed = true }
         if changed { save() }
     }

@@ -21,7 +21,7 @@ function wallCard(cams, wall, redraw) {
   const grid = el('div', { class: 'wall', style: `--cols:${cols}` });
   const tile = (d) => {
     if (w.live && d.stream) {
-      const img = el('img', { alt: d.name, src: `${d.stream}${d.stream.includes('?') ? '&' : '?'}t=${Date.now()}`, onerror: () => img.replaceWith(camView(d)) });
+      const img = el('img', { alt: d.name, role: 'button', tabindex: 0, src: `${d.stream}${d.stream.includes('?') ? '&' : '?'}t=${Date.now()}`, onerror: () => img.replaceWith(camView(d)) });
       return el('div', { class: 'cam live', onclick: () => camModal(d) }, img, el('div', { class: 'cap' }, el('span', {}, d.name), el('span', { class: 'tiny livebadge' }, 'LIVE')));
     }
     return camView(d);

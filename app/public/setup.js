@@ -158,8 +158,8 @@ const CUSTOM = {
     const teams = store[f.id] ||= [];
     const box = el('div', {});
     box.append(el('div', { class: 'chips' }, ...teams.map((t, k) => el('span', { class: 'chip' }, `${t.name} · ${String(t.league).toUpperCase()}`, el('button', { type: 'button', 'aria-label': `Remove ${t.name}`, onclick: () => { teams.splice(k, 1); go(); } }, '×')))));
-    const league = el('select', {}, el('option', { value: '' }, 'League...'));
-    const team = el('select', { disabled: true }, el('option', { value: '' }, 'Team...'));
+    const league = el('select', { 'aria-label': 'League' }, el('option', { value: '' }, 'League...'));
+    const team = el('select', { disabled: true, 'aria-label': 'Team' }, el('option', { value: '' }, 'Team...'));
     let list = [];
     api('/api/setup/sports/leagues').then((r) => league.append(...r.leagues.map((l) => el('option', { value: l.id }, l.name)))).catch(() => {});
     league.onchange = async () => {
@@ -232,7 +232,7 @@ function haSigninEl(sub) {
       saveProgress(true);
       if (win) win.location = r.go; else location.href = r.go;
       msg.textContent = 'Sign in to Home Assistant in the window that opened…';
-    } catch (e) { win?.close(); msg.textContent = e.message; }
+    } catch (e) { win?.close(); msg.textContent = e.body?.msg ? [TM(null, e.body.msg, e.body.vars), e.body.fixMsg ? TM(null, e.body.fixMsg, e.body.vars) : ''].join(' ').trim() : e.message; }
   } }, 'Sign in with Home Assistant');
   box.append(el('h3', {}, 'Connect with your Home Assistant sign-in'), el('p', { class: 'note' }, 'Sign in with an administrator account. CasaTorch never sees your password.'),
     el('div', { class: 'row' }, url, find), el('div', { class: 'row', style: 'margin-top:10px' }, go2), msg,
@@ -252,8 +252,8 @@ addEventListener('message', async (e) => {
 function testEl(kind, store, label = T('Test connection')) {
   const out = el('div', { class: 'note' });
   const show = (r) => {
-    out.replaceChildren(r.ok ? el('span', { class: 'ok' }, `✓ ${r.message || T('Connected')}`) : el('span', { class: 'err' }, `✗ ${r.error}`));
-    if (!r.ok && r.fix) out.append(el('div', { class: 'fix' }, el('b', {}, T('How to fix:')), ' ', T(r.fix)));
+    out.replaceChildren(r.ok ? el('span', { class: 'ok' }, `✓ ${r.message || T('Connected')}`) : el('span', { class: 'err' }, `✗ ${TM(r.error, r.msg, r.vars)}`));
+    if (!r.ok && r.fix) out.append(el('div', { class: 'fix' }, el('b', {}, T('How to fix:')), ' ', TM(r.fix, r.fixMsg || r.fix, r.vars)));
     if (r.ok && r.warning) out.append(el('div', { class: 'warn' }, `⚠ ${T(r.warning)}`));
     if (r.fixedNote) out.append(el('div', { class: 'note' }, r.fixedNote));
     // a device with its own certificate (Frigate's secure port): show its fingerprint and trust exactly that one
@@ -460,14 +460,40 @@ function safeNote(compact = false) {
 
 /* After setup: the phone login's one-use QR code, for the CasaTorch app to scan. */
 function pairDone(p) {
-  $('#progress').replaceChildren(); $('#back').hidden = true;
-  $('#next').textContent = T('Open my dashboard'); $('#next').onclick = () => { location.href = W.rerun ? '/' : '/?tour'; };
+  $('#progress').replaceChildren(); $('#resume')?.replaceChildren(); $('#back').hidden = true;
+  $('#next').textContent = T('Open my dashboard'); $('#next').disabled = false; $('#next').onclick = () => { location.href = W.rerun ? '/' : '/?tour'; };
   $('#page').replaceChildren(el('h1', {}, T('Now your phone')),
     el('p', { class: 'intro' }, T('Open the CasaTorch app on your phone, tap "Scan a code", and point it at this. Your phone signs in as {user} - no typing.', { user: p.user })),
     el('div', { class: 'pairbox' }, (() => { const q = el('div', { class: 'qr' }); if (/^\s*<svg[\s>]/.test(p.qr || '')) q.innerHTML = p.qr; return q; })(), el('div', {}, el('div', { class: 'note' }, T('Or type this code in the app:')), el('div', { class: 'paircode' }, p.code),
       el('div', { class: 'note' }, T('Works once, for 30 minutes. Phone on your home Wi-Fi.')))),
-    el('p', { class: 'note' }, T('No app yet? Add a phone later in Settings › Phones & alerts.')), safeNote(true));
+    el('p', { class: 'note' }, T('No app yet? Add a phone later in Settings › Phones & alerts.')), awayCard(), safeNote(true));
   scrollTo(0, 0);
+}
+/* After setup: secure access (the phone app away from home) switches itself on in the background - say how it's going,
+   in the same words as Settings › Connections & AI › Secure access, with its address to send to the phone. */
+function awayCard() {
+  const box = el('div', { class: 'card', id: 'awaycard', hidden: true, 'aria-live': 'polite' });
+  let tries = 0;
+  const draw = async () => {
+    if (!box.isConnected && tries++ > 2) return;
+    let r = null; try { const x = await fetch('/api/remote', { cache: 'no-store' }); if (x.ok) r = await x.json(); } catch { /* try again below */ }
+    if (!r || (!r.on && !r.busy && r.view?.status !== 'problem')) { if (tries < 4) setTimeout(draw, 2500); return; }   // not turned on (or not allowed here): nothing to show
+    const v = r.view || {}, color = { working: '#34d399', problem: '#f87171' }[v.status] || '#fbbf24';
+    const fix = v.fix && v.fix.action !== 'check' ? el('button', { class: 'btn', type: 'button', onclick: async (e) => { e.currentTarget.disabled = true; await fetch(`/api/remote/${v.fix.action === 'on' ? 'on' : 'repair'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {}); draw(); } }, T(v.fix.label)) : null;
+    const copy = r.url ? el('button', { class: 'btn', type: 'button', onclick: async (e) => { try { await navigator.clipboard.writeText(r.url); e.currentTarget.textContent = T('Copied ✓'); } catch { e.currentTarget.textContent = r.url; } } }, T('Copy link')) : null;
+    const share = r.url && navigator.share ? el('button', { class: 'btn', type: 'button', onclick: () => navigator.share({ title: 'CasaTorch', url: r.url }).catch(() => {}) }, T('Send to phone')) : null;
+    const qr = r.qr && /^\s*<svg[\s>]/.test(r.qr) ? (() => { const q = el('div', { class: 'qr' }); q.innerHTML = r.qr; return q; })() : null;   // made by this CasaTorch
+    box.hidden = false;
+    box.replaceChildren(...[el('h3', {}, T('Away from home')),
+      el('p', { style: 'display:flex;gap:8px;align-items:flex-start;margin:6px 0' }, el('span', { 'aria-hidden': 'true', style: `width:10px;height:10px;border-radius:50%;flex:none;margin-top:6px;background:${color}` }), el('b', {}, T(v.title || ''), v.status === 'working' ? ' ✓' : '')),
+      v.detail ? el('p', { class: 'note' }, T(v.detail)) : null,
+      r.url ? el('p', { class: 'note' }, T('Its secure address: {url}. The CasaTorch app picks it up by itself - nothing to do on the phone.', { url: r.url })) : null,
+      el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, fix, share, copy),
+      qr && v.status === 'working' ? el('details', {}, el('summary', { class: 'note' }, T('Open it in the phone\'s browser instead')), el('div', { class: 'phonecard', style: 'margin-top:8px' }, qr, el('p', { class: 'note' }, T('Scan this with the phone\'s camera.')))) : null].filter(Boolean));
+    if (['starting', 'checking'].includes(v.status) && box.isConnected) setTimeout(draw, 3000);
+  };
+  setTimeout(draw, 300);
+  return box;
 }
 
 /* ---------- pages ---------- */

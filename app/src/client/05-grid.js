@@ -85,13 +85,13 @@ function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize }) {
     const w = wOf(t); if (!w) return null;
     const body = el('div', { class: 'tile-b' });
     body._t = t; body._saved = () => { save(); paint(node, true); };
-    const head = w.bare ? null : el('div', { class: 'tile-h' }, icon(w.icon), el('span', { class: 'ttl' }, t.title || w.title), w.pro && !isPro() ? el('span', { class: 'pill pro' }, 'PRO') : null, el('span', { class: 'grow' }), w.headerExtra ? w.headerExtra(ctx, t, () => { save(); paint(node, true); }) : null);
-    const node = el('section', { class: tileClass(t), 'data-id': t.id, role: 'listitem', 'aria-label': t.title || w.title },
+    const head = w.bare ? null : el('div', { class: 'tile-h' }, icon(w.icon), el('span', { class: 'ttl' }, t.title || T(w.title)), w.pro && !isPro() ? el('span', { class: 'pill pro' }, 'PRO') : null, el('span', { class: 'grow' }), w.headerExtra ? w.headerExtra(ctx, t, () => { save(); paint(node, true); }) : null);
+    const node = el('section', { class: tileClass(t), 'data-id': t.id, role: 'listitem', 'aria-label': t.title || T(w.title) },
       head, body,
       el('div', { class: 'tools' },
-        el('button', { class: 'grip', title: 'Drag to move', 'aria-label': `Move ${t.title || w.title}` }, icon('grip')),
-        el('button', { title: 'Customize', 'aria-label': `Customize ${t.title || w.title}`, onclick: () => onCustomize(t, () => { applyLook(node, t); place(node, t); const ttl = node.querySelector('.ttl'); if (ttl) ttl.textContent = t.title || w.title; node.setAttribute('aria-label', t.title || w.title); save(); paint(node, true); }) }, icon('sliders')),
-        el('button', { class: 'rm', title: 'Remove', 'aria-label': `Remove ${t.title || w.title}`, onclick: () => remove(node, t) }, icon('x'))),
+        el('button', { class: 'grip', title: 'Drag to move', 'aria-label': `Move ${t.title || T(w.title)}` }, icon('grip')),
+        el('button', { title: 'Customize', 'aria-label': `Customize ${t.title || T(w.title)}`, onclick: () => onCustomize(t, () => { applyLook(node, t); place(node, t); const ttl = node.querySelector('.ttl'); if (ttl) ttl.textContent = t.title || T(w.title); node.setAttribute('aria-label', t.title || T(w.title)); save(); paint(node, true); }) }, icon('sliders')),
+        el('button', { class: 'rm', title: 'Remove', 'aria-label': `Remove ${t.title || T(w.title)}`, onclick: () => remove(node, t) }, icon('x'))),
       el('div', { class: 'sizer', title: 'Drag to resize' }), el('div', { class: 'size-tag' }));
     applyLook(node, t);
     live.set(node, { t, body, widget: w });
@@ -193,7 +193,7 @@ function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize }) {
     add(id, init = {}) {
       const w = WIDGETS[id], t = { w: w.size?.[0] || 4, h: w.size?.[1] || 3, ...init, id: w.multi ? `${id}:${Math.random().toString(36).slice(2, 8)}` : id };
       tiles.push(t); const n = tileEl(t); grid.append(n); if (editing()) n.setAttribute('tabindex', '0'); paint(n, true);
-      n.scrollIntoView({ behavior: 'smooth', block: 'center' }); n.classList.add('wiggle-pop'); setTimeout(() => n.classList.remove('wiggle-pop'), 400);
+      n.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' }); n.classList.add('wiggle-pop'); setTimeout(() => n.classList.remove('wiggle-pop'), 400);
       save(); return { t, node: n, repaint: () => { save(); paint(n, true); } };
     },
   };
@@ -213,7 +213,7 @@ function previewBox(t, w, ctx) {
   // drawn at desktop size, then scaled to fit the sheet - so you see exactly what the wall screen will show
   const colW = 86, pw = Math.round(t.w * colW + (t.w - 1) * GAP_PX), ph = Math.round(t.h * ROW_PX + (t.h - 1) * GAP_PX);
   const body = el('div', { class: 'tile-b' }); body._t = t; body._saved = () => {};
-  const node = el('section', { class: tileClass(t), style: `width:${pw}px;height:${ph}px` }, w.bare ? null : el('div', { class: 'tile-h' }, icon(w.icon), el('span', { class: 'ttl' }, t.title || w.title)), body);
+  const node = el('section', { class: tileClass(t), style: `width:${pw}px;height:${ph}px` }, w.bare ? null : el('div', { class: 'tile-h' }, icon(w.icon), el('span', { class: 'ttl' }, t.title || T(w.title))), body);
   if (t.look === 'tint') node.style.setProperty('--tint', safeColor(t.tint, 'var(--accent)'));
   const stage = el('div', { class: 'wprev' }, node);
   const fit = () => { const avail = Math.max(200, stage.clientWidth - 8), s = Math.min(1, avail / pw, 340 / ph); node.style.transform = `scale(${s})`; stage.style.height = `${Math.round(ph * s) + 8}px`; };
@@ -231,7 +231,7 @@ function customizeTile(t, ctx, done) {
   const section = (label, ...kids) => el('div', { class: 'wopt' }, el('label', { class: 'wopt-l' }, label), ...kids);
   const draw = () => {
     const out = [];
-    out.push(section('Name', el('input', { value: t.title || '', placeholder: w.title, maxlength: 40, oninput: (e) => { t.title = e.target.value.trim() || undefined; repaint(); } })));
+    out.push(section('Name', el('input', { value: t.title || '', placeholder: T(w.title), maxlength: 40, oninput: (e) => { t.title = e.target.value.trim() || undefined; repaint(); } })));
     out.push(section('Size', el('div', { class: 'seg seg-wrap' }, presetsFor(w).map(([k, label, [pw, ph]]) => el('button', { type: 'button', class: t.w === pw && t.h === ph ? 'on' : '', onclick: () => { t.w = pw; t.h = ph; draw(); repaint(); } }, label))),
       el('div', { class: 'tiny muted', style: 'margin-top:6px' }, 'Or drag a widget\'s corner while arranging for any size in between.')));
     out.push(section('Look', el('div', { class: 'seg seg-wrap' }, LOOK_NAMES.map(([k, label]) => el('button', { type: 'button', class: (t.look || 'default') === k ? 'on' : '', onclick: () => { t.look = k === 'default' ? undefined : k; draw(); repaint(); } }, label))),
@@ -243,7 +243,7 @@ function customizeTile(t, ctx, done) {
   draw(); repaint();
   const cancel = () => { Object.keys(t).forEach((k) => delete t[k]); Object.assign(t, JSON.parse(before)); m.remove(); };
   const m = modal(el('div', { class: 'wcustom' }, holder, fields, el('div', { class: 'row', style: 'justify-content:flex-end;margin-top:14px;gap:8px' },
-    el('button', { class: 'btn ghost', onclick: cancel }, 'Cancel'), el('button', { class: 'btn primary', onclick: () => { m.remove(); done(); } }, 'Done'))), { title: `Customize ${w.title}`, wide: true });
+    el('button', { class: 'btn ghost', onclick: cancel }, 'Cancel'), el('button', { class: 'btn primary', onclick: () => { m.remove(); done(); } }, 'Done'))), { title: `Customize ${T(w.title)}`, wide: true });
   m.addEventListener('click', (e) => { if (e.target === m) { e.stopImmediatePropagation(); } }, true);   // a stray tap outside doesn't throw your changes away
 }
 /* One option field. f: { key, type, label, ...}. Types: select, toggle, text, textarea, number, date, datetime, place, symbols,
@@ -339,10 +339,10 @@ function optField(f, t, ctx, changed) {
       const box = el('div');
       const pickable = Object.values(WIDGETS).filter((x) => !x.hidden && !x.multi && !['stack', 'photos', 'house3d', 'ask', 'camera', 'doorbell', 'timer'].includes(x.id));
       const draw = () => {
-        box.replaceChildren(el('ol', { class: 'stack-list' }, cur.map((x, i) => el('li', {}, icon(WIDGETS[x.id]?.icon || 'dotc', 16), el('span', { class: 'grow' }, WIDGETS[x.id]?.title || x.id),
+        box.replaceChildren(el('ol', { class: 'stack-list' }, cur.map((x, i) => el('li', {}, icon(WIDGETS[x.id]?.icon || 'dotc', 16), el('span', { class: 'grow' }, WIDGETS[x.id]?.title ? T(WIDGETS[x.id].title) : x.id),
           el('button', { type: 'button', class: 'btn small ghost', disabled: i === 0 || null, 'aria-label': 'Move up', onclick: () => { [cur[i - 1], cur[i]] = [cur[i], cur[i - 1]]; set(cur.map((y) => ({ ...y }))); draw(); } }, '↑'),
           el('button', { type: 'button', class: 'btn small ghost', 'aria-label': 'Remove', onclick: () => { cur.splice(i, 1); set(cur.map((y) => ({ ...y }))); draw(); } }, '×')))),
-        cur.length < 8 ? el('select', { onchange: (e) => { if (e.target.value) { cur.push({ id: e.target.value }); set(cur.map((y) => ({ ...y }))); draw(); } } }, el('option', { value: '' }, '+ Add a widget to the stack'), pickable.map((x) => el('option', { value: x.id }, x.title))) : null);
+        cur.length < 8 ? el('select', { onchange: (e) => { if (e.target.value) { cur.push({ id: e.target.value }); set(cur.map((y) => ({ ...y }))); draw(); } } }, el('option', { value: '' }, '+ Add a widget to the stack'), pickable.map((x) => el('option', { value: x.id }, T(x.title)))) : null);
       };
       draw(); return box;
     }

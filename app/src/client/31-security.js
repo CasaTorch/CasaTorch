@@ -36,7 +36,7 @@ function accountCard(me) {
           tsa.replaceChildren(el('p', { class: 'small' }, '1. Scan this with an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password, Authy…).'), qr,
             el('p', { class: 'small muted mono' }, `Can't scan? Enter: ${e.secret.replace(/(.{4})/g, '$1 ').trim()}`),
             el('label', { class: 'field' }, el('span', {}, '2. Type the 6-digit code it shows'), code),
-            el('div', { class: 'row' }, el('button', { class: 'btn primary', onclick: async () => { try { const r = await post('/api/auth/2fa/enable', { code: code.value }); u.twoStep = true; me.recoveryLeft = 10; draw(); box.querySelector('.tsa').append(codesBox(r.recovery)); toast('Two-step sign-in is on'); } catch (x) { toast(x.message, 4000); } } }, 'Turn on'), el('button', { class: 'btn ghost', onclick: tsaOff }, 'Cancel')));
+            el('div', { class: 'row' }, el('button', { class: 'btn primary', onclick: async () => { try { const r = await post('/api/auth/2fa/enable', { code: code.value }); u.twoStep = true; me.recoveryLeft = 10; draw(); box.querySelector('.tsa').append(codesBox(r.recovery)); toast('Two-step sign-in is on'); } catch (x) { toast(x.message, 4000); } } }, 'Turn on'), el('button', { class: 'btn ghost', onclick: tsaOff }, T('Cancel'))));
         } catch (x) { toast(x.message, 4000); }
       } }, icon('lock'), 'Turn on two-step sign-in'));
     const tsaOn = () => {

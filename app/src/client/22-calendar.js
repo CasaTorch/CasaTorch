@@ -41,7 +41,7 @@ tab({ id: 'calendar', label: 'Calendar', icon: 'calendar', async render(main) {
     for (let i = 0; i < 42; i++) {
       const d = new Date(gridStart.getTime() + i * 86400_000), k = d.toISOString().slice(0, 10), list = byDay.get(k) || [];
       cells.push(el('div', { class: `day${d.getUTCMonth() !== m - 1 ? ' other' : ''}${k === today ? ' today' : ''}`, onclick: (ev) => { if (ev.target.closest('.chip')) return; eventEditor(null, draw, k); } },
-        el('span', { class: 'n' }, d.getUTCDate()), ...list.slice(0, 4).map((e) => el('div', { class: 'chip', style: `background:${safeColor(e.color)}`, title: `${e.title}${e.allDay ? '' : ` - ${fmtTime(e.start)}`}`,
+        el('span', { class: 'n', role: 'button', tabindex: 0, 'aria-label': `${d.getUTCDate()} - ${fmt(d.toISOString(), { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' })}: add an event` }, d.getUTCDate()), ...list.slice(0, 4).map((e) => el('div', { class: 'chip', role: 'button', tabindex: 0, style: `background:${safeColor(e.color)}`, title: `${e.title}${e.allDay ? '' : ` - ${fmtTime(e.start)}`}`,
           onclick: () => (e.mine && myById.get(e.id) ? eventEditor(myById.get(e.id), draw) : modal(el('div', {}, el('p', {}, e.allDay ? 'All day' : `${fmtWhen(e.start)} - ${fmtTime(e.end)}`), e.location ? el('p', { class: 'muted' }, e.location) : null, el('p', { class: 'small muted' }, `From ${e.calendar || 'a linked calendar'} - change it there.`)), { title: e.title })) }, e.allDay ? e.title : `${fmtTime(e.start).replace(':00', '')} ${e.title}`)),
         list.length > 4 ? el('span', { class: 'tiny muted' }, `+${list.length - 4} more`) : null));
     }
@@ -59,6 +59,21 @@ tab({ id: 'calendar', label: 'Calendar', icon: 'calendar', async render(main) {
 } });
 
 /* ---- Photos: upload for the Photo reel ---- */
+/* Phone photos are often 4000+ pixels and several MB, and a wall tablet would decode each one at full size every
+   time the Photo reel turns. Big JPEG and WebP photos are sent at 2560 pixels on the long side instead (drawn
+   upright, as the phone took them). PNG, GIF and HEIC go as they are, and so does anything that can't be shrunk. */
+async function photoShrink(f) {
+  if (!/^image\/(jpeg|webp)$/.test(f.type) || f.size < 1.5e6) return f;
+  const url = URL.createObjectURL(f);
+  try {
+    const img = new Image(); img.src = url; await img.decode();
+    const k = Math.min(1, 2560 / Math.max(img.naturalWidth, img.naturalHeight)); if (k === 1 && f.size < 4e6) return f;
+    const c = el('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const out = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.86)); c.width = c.height = 0;
+    return out && out.size < f.size ? out : f;
+  } catch { return f; } finally { URL.revokeObjectURL(url); }
+}
 tab({ id: 'photos', label: 'Photos', icon: 'camera', async render(main) {
   const input = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
   const status = el('span', { class: 'small muted' });
@@ -66,7 +81,7 @@ tab({ id: 'photos', label: 'Photos', icon: 'camera', async render(main) {
     let ok = 0; const list = [...files].filter((f) => /^image\//.test(f.type) || /\.(heic|heif)$/i.test(f.name));
     for (const [i, f] of list.entries()) {
       status.textContent = `Uploading ${i + 1} of ${list.length}...`;
-      try { const r = await fetch('/api/photos', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f }); const j = await r.json(); if (!r.ok) throw new Error(j.error); ok++; } catch (err) { toast(`${f.name}: ${err.message}`, 4000); }
+      try { const r = await fetch('/api/photos', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: await photoShrink(f) }); const j = await r.json(); if (!r.ok) throw new Error(j.error); ok++; } catch (err) { toast(`${f.name}: ${err.message}`, 4000); }
     }
     status.textContent = ''; if (ok) toast(`Added ${ok} photo${ok === 1 ? '' : 's'}`); draw();
   }
@@ -74,7 +89,7 @@ tab({ id: 'photos', label: 'Photos', icon: 'camera', async render(main) {
   setTop(T('Photos'), 'For the Photo reel on your Home screen', [el('button', { class: 'btn primary', onclick: () => input.click() }, icon('plus'), T('Upload photos'))]);
   const draw = async () => {
     const { photos = [] } = await api('/api/photos');
-    const drop = el('div', { class: 'card', style: 'border-style:dashed;text-align:center;padding:30px;cursor:pointer', onclick: () => input.click() }, el('div', { style: 'font-weight:600;margin-bottom:4px' }, 'Drop photos here, or tap to choose'), el('div', { class: 'small muted' }, 'JPEG, PNG, WebP, GIF or HEIC, up to 30 MB each. They stay on your CasaTorch box.'), status);
+    const drop = el('div', { class: 'card', role: 'button', tabindex: 0, style: 'border-style:dashed;text-align:center;padding:30px;cursor:pointer', onclick: () => input.click() }, el('div', { style: 'font-weight:600;margin-bottom:4px' }, 'Drop photos here, or tap to choose'), el('div', { class: 'small muted' }, 'JPEG, PNG, WebP, GIF or HEIC, up to 30 MB each. They stay on your CasaTorch box.'), status);
     drop.ondragover = (e) => { e.preventDefault(); drop.style.borderColor = 'var(--accent)'; }; drop.ondragleave = () => { drop.style.borderColor = ''; };
     drop.ondrop = (e) => { e.preventDefault(); drop.style.borderColor = ''; upload(e.dataTransfer.files); };
     const grid = el('div', { style: 'display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-top:14px' }, photos.map((p) => el('div', { style: 'position:relative;border-radius:14px;overflow:hidden;aspect-ratio:1;background:#000' },

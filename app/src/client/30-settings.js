@@ -19,9 +19,9 @@ function aiCard(s) {
     help.textContent = { anthropic: 'Get a key at console.anthropic.com > API keys. Anthropic bills you directly for what you use - typically a fraction of a cent per question. Not included in CasaTorch Pro.', openai: 'Get a key at platform.openai.com > API keys. OpenAI bills you directly for what you use (a ChatGPT Plus subscription does not include API use). Not included in CasaTorch Pro.', ollama: 'Free and private: install Ollama on a PC or Mac at home, run "ollama pull llama3.1", and enter its address. Nothing leaves your network.', compatible: 'Any server that speaks the OpenAI API. Enter its base address (ending in /v1).', none: 'Pick an AI to answer questions about your home.' }[p];
   };
   prov.onchange = () => { model.replaceChildren(el('option', { value: '' }, 'Press "Find models" first')); sync(); }; sync();
-  const find = el('button', { class: 'btn' }, 'Find models');
+  const find = el('button', { class: 'btn' }, T('Find models'));
   find.onclick = async () => { msg.textContent = 'Checking...'; try { const r = await post('/api/settings/ai/models', { provider: prov.value, apiKey: key.value, url: url.value }); model.replaceChildren(...r.models.map((m) => el('option', { value: m, selected: m === r.suggested }, m))); msg.textContent = `Found ${r.models.length} models.`; msg.style.color = 'var(--good)'; } catch (err) { msg.textContent = err.message; msg.style.color = 'var(--bad)'; } };
-  const save = el('button', { class: 'btn primary' }, 'Save');
+  const save = el('button', { class: 'btn primary' }, T('Save'));
   save.onclick = async () => { try { await post('/api/settings/ai', { provider: prov.value, model: model.value, apiKey: key.value, url: url.value }, 'PUT'); S.settings = await api('/api/settings'); toast('Saved - try the Ask tab'); } catch (err) { msg.textContent = err.message; msg.style.color = 'var(--bad)'; } };
   return el('div', { class: 'card' }, el('h2', {}, icon('spark', 15), T('Home AI Agent'), el('span', { class: 'pill pro' }, 'PRO')), el('label', { class: 'field' }, el('span', {}, 'AI'), prov), help, keyF, urlF,
     el('label', { class: 'field' }, el('span', {}, 'Model'), model), el('div', { class: 'row wrap' }, find, save), msg);
@@ -47,9 +47,9 @@ function langPicker() {
 }
 function lookCard() {
   const u = { ...S.ui };
-  const seg = (key, opts) => { const box = el('div', { class: 'seg' }); const draw = () => box.replaceChildren(...opts.map(([v, l]) => el('button', { class: u[key] === v ? 'on' : null, onclick: async () => { u[key] = v; draw(); await saveUi({ [key]: v }); } }, l))); draw(); return box; };
+  const seg = (key, opts) => { const box = el('div', { class: 'seg' }); const draw = () => box.replaceChildren(...opts.map(([v, l]) => el('button', { class: u[key] === v ? 'on' : null, 'aria-pressed': String(u[key] === v), onclick: async () => { u[key] = v; draw(); await saveUi({ [key]: v }); } }, l))); draw(); return box; };
   const sw = el('div', { class: 'swatches' });
-  const a1 = el('input', { type: 'color', value: u.accent, style: 'width:54px;height:38px;padding:2px' }), a2 = el('input', { type: 'color', value: u.accent2, style: 'width:54px;height:38px;padding:2px' });
+  const a1 = el('input', { type: 'color', value: u.accent, 'aria-label': 'Main color', style: 'width:54px;height:38px;padding:2px' }), a2 = el('input', { type: 'color', value: u.accent2, 'aria-label': 'Second color', style: 'width:54px;height:38px;padding:2px' });
   const drawSw = () => sw.replaceChildren(...PALETTES.map(([name, x, y]) => el('button', { class: `swatch${u.accent === x && u.accent2 === y ? ' on' : ''}`, title: name, 'aria-label': `${name} colors`, style: `background:linear-gradient(135deg,${x},${y})`, onclick: async () => { u.accent = x; u.accent2 = y; a1.value = x; a2.value = y; drawSw(); await saveUi({ accent: x, accent2: y }); } })));
   drawSw();
   let t = null; const live = () => { u.accent = a1.value; u.accent2 = a2.value; S.ui = { ...S.ui, accent: u.accent, accent2: u.accent2 }; applyUi(); drawSw(); clearTimeout(t); t = setTimeout(() => saveUi({ accent: u.accent, accent2: u.accent2 }), 500); };
@@ -61,7 +61,7 @@ function lookCard() {
     row('Colors', el('div', {}, sw, el('div', { class: 'row', style: 'margin-top:10px' }, el('span', { class: 'small muted' }, 'Custom'), a1, a2))),
     row('Status bar across the top', seg('statusBar', [['panel', 'Panel mode'], ['always', 'Always'], ['off', 'Off']]), 'Shows the time, weather, alerts and everything CasaTorch is connected to.'),
     el('label', { class: 'row small' }, askTog, T('Show the Home AI Agent bar in panel mode (Pro)')),
-    el('div', { class: 'row wrap', style: 'margin-top:14px' }, el('button', { class: 'btn', onclick: () => setPanel(true) }, icon('expand'), 'Panel mode on this screen'), el('button', { class: 'btn ghost', onclick: async () => { await post('/api/ui', { reset: true }, 'PUT'); S.ui = await api('/api/ui'); applyUi(); drawNav(); show('settings'); } }, icon('reset'), 'Reset look')),
+    el('div', { class: 'row wrap', style: 'margin-top:14px' }, el('button', { class: 'btn', onclick: () => setPanel(true) }, icon('expand'), T('Panel mode on this screen')), el('button', { class: 'btn ghost', onclick: async () => { await post('/api/ui', { reset: true }, 'PUT'); S.ui = await api('/api/ui'); applyUi(); drawNav(); show('settings'); } }, icon('reset'), 'Reset look')),
     el('p', { class: 'tiny faint' }, 'Tip: open http://<this box>:8090/?panel=1 on a wall tablet to start it in panel mode.'));
 }
 /* The main bar: which buttons, in what order, what they're called, how big, and where. Saved for every screen; changes show at once. */
@@ -125,16 +125,16 @@ async function logCard() {
   const lv = el('div', { class: 'seg seg-mini' }, ...[['all', 'Everything'], ['problems', 'Problems'], ['error', 'Errors']].map(([v, l]) => el('button', { class: v === level ? 'on' : null, onclick: (e) => { level = v; [...lv.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); load(); } }, l)));
   const search = el('input', { type: 'search', placeholder: 'Search the log', style: 'max-width:240px', oninput: (e) => { q = e.target.value; clearTimeout(timer); timer = setTimeout(load, 250); } });
   const card = el('div', { class: 'card wide' }, el('h2', {}, icon('log', 15), 'Log'), el('p', { class: 'small muted', style: 'margin-top:0' }, 'What CasaTorch has been doing - the last 600 lines, newest at the bottom. Passwords, keys and tokens are masked.'),
-    el('div', { class: 'row wrap', style: 'gap:8px;margin-bottom:8px' }, lv, search, el('button', { class: 'btn small', onclick: load }, icon('reset', 14), 'Refresh'), el('a', { class: 'btn small', href: '/api/system/diagnostics', download: '' }, icon('download', 14), 'Diagnostics file')), box,
+    el('div', { class: 'row wrap', style: 'gap:8px;margin-bottom:8px' }, lv, search, el('button', { class: 'btn small', onclick: load }, icon('reset', 14), T('Refresh')), el('a', { class: 'btn small', href: '/api/system/diagnostics', download: '' }, icon('download', 14), T('Diagnostics file'))), box,
     el('p', { class: 'tiny faint' }, 'The diagnostics file has the version, how it\'s installed, memory, which kinds of things are set up (not their settings) and the log - safe to send to support@casatorch.com.'));   // scrub-ok: the public support address
   load(); const live = setInterval(() => { if (!card.isConnected) return clearInterval(live); if (!document.hidden) load(); }, 5000);
   return card;
 }
 function maintCard(s, me) {
   const pw = el('input', { type: 'password', placeholder: 'Your CasaTorch password', autocomplete: 'current-password' });
-  const rerun = el('button', { class: 'btn' }, icon('reset', 14), 'Run setup again');
+  const rerun = el('button', { class: 'btn' }, icon('reset', 14), T('Run setup again'));
   rerun.onclick = async () => { try { const r = await post('/api/settings/rerun-setup', { password: pw.value }); location.href = sameOrigin(r.url, '/setup.html'); } catch (err) { toast(err.message); } };
-  const restart = el('button', { class: 'btn' }, 'Restart CasaTorch');
+  const restart = el('button', { class: 'btn' }, T('Restart CasaTorch'));
   restart.onclick = async () => { restart.disabled = true; try { const r = await post('/api/system/restart', {}); toast(r.demo ? 'The demo doesn\'t restart.' : 'Restarting - this page reconnects in a few seconds.', 5000); } catch (e) { toast(e.message, 5000); restart.disabled = false; } };
   return el('div', { class: 'card' }, el('h2', {}, icon('gear', 15), 'Maintenance'),
     el('p', { class: 'small muted', style: 'margin-top:0' }, 'Change your town, time zone, devices, calendars, teams and news by running setup again - everything you have is kept.'),
@@ -149,7 +149,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
   const p = s.pro || {};
   const status = p.plan === 'trial' ? `Pro trial - ${p.trialDaysLeft} day${p.trialDaysLeft === 1 ? '' : 's'} left` : p.pro ? `Pro (${p.plan})${p.email ? ` - ${p.email}` : ''}${p.expires ? `, renews ${fmt(p.expires, { dateStyle: 'medium' })}` : ''}` : 'Free';
   const key = el('textarea', { rows: 3, placeholder: 'Paste your CasaTorch license key', spellcheck: 'false', autocomplete: 'off' });
-  const saveKey = el('button', { class: 'btn primary' }, 'Save key');
+  const saveKey = el('button', { class: 'btn primary' }, T('Save key'));
   saveKey.onclick = async () => { try { await post('/api/license', { key: key.value }); toast('Pro is on. Thank you!'); await loadStatus(); show('settings'); } catch (err) { toast(err.message, 4000); } };
   const pro = el('div', { class: 'card', style: 'grid-column:1/-1' }, el('h2', {}, T('CasaTorch Pro')), el('div', { class: 'row between wrap' }, el('b', { style: 'font-size:18px' }, status), el('a', { href: 'https://casatorch.com/pro', target: '_blank', rel: 'noopener' }, '$5/mo or $49/yr')),
     el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 18px;margin:12px 0' }, PRO_FEATURES.map(([t, d, now]) => el('div', { style: 'padding:8px 0;border-top:1px solid var(--line)' }, el('b', {}, t), now ? el('span', { class: 'pill good', style: 'margin-left:6px' }, 'ready') : el('span', { class: 'pill', style: 'margin-left:6px' }, 'coming'), d ? el('div', { class: 'small muted' }, d) : null))),
@@ -159,12 +159,12 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
   const hname = el('input', { type: 'text', maxlength: '60', value: s.house?.name || '' });
   const rate = el('input', { type: 'number', step: '0.01', min: '0', value: s.energy?.ratePerKwh ?? '', placeholder: '0.17' });
   const note = el('input', { type: 'text', maxlength: '280', value: s.note || '', placeholder: 'e.g. Plumber coming Thursday 10-12' });
-  const saveV = el('button', { class: 'btn' }, 'Save');
+  const saveV = el('button', { class: 'btn' }, T('Save'));
   saveV.onclick = async () => { try { await post('/api/settings', { houseName: hname.value, ratePerKwh: rate.value === '' ? 0 : Number(rate.value), note: note.value }, 'PUT'); toast('Saved'); } catch (err) { toast(err.message); } };
   const everyday = el('div', { class: 'card' }, el('h2', {}, T('Everyday')), el('label', { class: 'field' }, el('span', {}, 'Name of your home'), hname), el('label', { class: 'field' }, el('span', {}, 'Electricity rate ($ per kWh)'), rate), el('label', { class: 'field' }, el('span', {}, 'Note on the Home screen'), note), saveV);
 
   const homeCard = el('div', { class: 'card' }, el('h2', {}, 'Home screen'), el('p', { class: 'small muted', style: 'margin-top:0' }, 'Add widgets, drag them around and resize them right on the Home screen (Edit layout). The layout is saved on this CasaTorch, so every screen in the house matches.'),
-    el('div', { class: 'row wrap' }, el('a', { class: 'btn primary', href: '#home', onclick: () => setTimeout(() => $('.top .btn.primary')?.click(), 400) }, icon('plus'), 'Add a widget'), el('button', { class: 'btn', onclick: async () => { await post('/api/layout', { reset: true }, 'PUT'); toast('Home screen reset'); } }, icon('reset'), 'Reset layout'), el('a', { class: 'btn', href: '#photos' }, 'Manage photos'), el('a', { class: 'btn', href: '#calendar' }, 'Calendar')));
+    el('div', { class: 'row wrap' }, el('a', { class: 'btn primary', href: '#home', onclick: () => setTimeout(() => $('.top .btn.primary')?.click(), 400) }, icon('plus'), T('Add a widget')), el('button', { class: 'btn', onclick: async () => { await post('/api/layout', { reset: true }, 'PUT'); toast('Home screen reset'); } }, icon('reset'), 'Reset layout'), el('a', { class: 'btn', href: '#photos' }, T('Manage photos')), el('a', { class: 'btn', href: '#calendar' }, T('Calendar'))));
 
   const c = s.connected || {}, yes = (v) => (v ? (typeof v === 'number' ? `${v}` : 'Connected') : '-');
   const conn = el('div', { class: 'card' }, el('h2', {}, T('Connected')), el('dl', { class: 'kv' },
@@ -172,38 +172,38 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     el('dt', {}, 'Weather for'), el('dd', {}, s.location?.name || '-'), el('dt', {}, 'Calendars'), el('dd', {}, [...(s.calendars || []), 'CasaTorch calendar'].join(', ')), el('dt', {}, 'Teams'), el('dd', {}, s.teams?.join(', ') || '-'), el('dt', {}, 'News'), el('dd', {}, s.feeds?.join(', ') || '-')));
 
   const pw = el('input', { type: 'password', placeholder: 'Your CasaTorch password', autocomplete: 'current-password' });
-  const rerun = el('button', { class: 'btn' }, 'Run setup again');
+  const rerun = el('button', { class: 'btn' }, T('Run setup again'));
   rerun.onclick = async () => { try { const r = await post('/api/settings/rerun-setup', { password: pw.value }); location.href = sameOrigin(r.url, '/setup.html'); } catch (err) { toast(err.message); } };
-  const out = el('button', { class: 'btn ghost' }, 'Sign out');
+  const out = el('button', { class: 'btn ghost' }, T('Sign out'));
   out.onclick = async () => { await fetch('/api/logout', { method: 'POST' }); location.href = '/login.html'; };
   const acct = el('div', { class: 'card' }, el('h2', {}, T('This CasaTorch')), el('dl', { class: 'kv' }, el('dt', {}, 'House'), el('dd', {}, s.house?.name || '-'), el('dt', {}, 'Time zone'), el('dd', {}, s.house?.timezone || '-'), el('dt', {}, 'Version'), el('dd', {}, s.version)),
-    el('div', { class: 'row wrap' }, el('a', { class: 'btn', href: '#settings/advanced' }, 'Run setup again…'), out),
+    el('div', { class: 'row wrap' }, el('a', { class: 'btn', href: '#settings/advanced' }, T('Run setup again…')), out),
     el('p', { class: 'small muted' }, `CasaTorch ${s.version} · open-source core (AGPL-3.0) · `, el('a', { href: 'https://casatorch.com', target: '_blank', rel: 'noopener' }, 'casatorch.com')));
-  conn.append(el('div', { class: 'row wrap', style: 'margin-top:12px' }, el('a', { class: 'btn primary', href: '#connect' }, icon('plus', 14), 'Connect more'), el('a', { class: 'btn', href: '#connect' }, 'Manage connections')));
+  conn.append(el('div', { class: 'row wrap', style: 'margin-top:12px' }, el('a', { class: 'btn primary', href: '#connect' }, icon('plus', 14), T('Connect more')), el('a', { class: 'btn', href: '#connect' }, T('Manage connections'))));
   /* Sections, like a phone's Settings: a list on the left (the whole page on a phone), one section at a time, and search. */
   const SECTIONS = [
-    ['general', 'General', 'home', 'Your home\'s name, language, energy price and this CasaTorch', async () => [acct, langCard(s), everyday]],
-    ['health', 'Health', 'checkc', 'Is everything working? Checks, one-tap fixes and saved copies of your settings', async () => healthCards(s, me), admin],
-    ['appearance', 'Look & main bar', 'palette', 'Dark or light, colors, the main bar and the Home screen', async () => [lookCard(), barCard(), homeCard]],
-    ['people', 'People & sign-in', 'user', 'Your account, two-step sign-in, people in the house and the security log', async () => securityCards()],
-    ['safety', 'Safety', 'shield', 'What CasaTorch will never switch, and your exceptions', async () => [await safetyCard()], admin],
-    ['connections', 'Connections & AI', 'link', 'Home Assistant and your brands, Home AI Agent, secure access', async () => [conn, aiCard(s), await remoteCard(), await localHttpsCard()]],
-    ['phones', 'Phones & alerts', 'phone', 'The CasaTorch app, alerts on your phones, quiet hours', async () => [...(await appCards()), await phoneCard()]],
-    ['updates', 'Updates & backup', 'download', 'Versions, automatic updates and an encrypted backup', async () => [await updatesCard(), await backupCard(s)]],
-    ['pro', 'CasaTorch Pro', 'spark', 'Your plan and license key', async () => [pro]],
-    ['help', 'Help', 'help', 'Guides, the tour and getting help', async () => [helpCard()]],
-    ['advanced', 'Advanced', 'log', 'How it\'s running, its log, diagnostics and maintenance', async () => [await systemCard(), await logCard(), maintCard(s, me)], admin],
+    ['general', T('General'), 'home', T('Your home\'s name, language, energy price and this CasaTorch'), async () => [acct, langCard(s), everyday]],
+    ['health', T('Health|settings'), 'checkc', T('Is everything working? Checks, one-tap fixes and saved copies of your settings'), async () => healthCards(s, me), admin],
+    ['appearance', T('Look & main bar'), 'palette', T('Dark or light, colors, the main bar and the Home screen'), async () => [lookCard(), barCard(), homeCard]],
+    ['people', T('People & sign-in'), 'user', T('Your account, two-step sign-in, people in the house and the security log'), async () => securityCards()],
+    ['safety', T('Safety'), 'shield', T('What CasaTorch will never switch, and your exceptions'), async () => [await safetyCard()], admin],
+    ['connections', T('Connections & AI'), 'link', T('Home Assistant and your brands, Home AI Agent, secure access'), async () => [conn, aiCard(s), await remoteCard(), await localHttpsCard()]],
+    ['phones', T('Phones & alerts'), 'phone', T('The CasaTorch app, alerts on your phones, quiet hours'), async () => [...(await appCards()), await phoneCard()]],
+    ['updates', T('Updates & backup'), 'download', T('Versions, automatic updates and an encrypted backup'), async () => [await updatesCard(), await backupCard(s)]],
+    ['pro', T('CasaTorch Pro'), 'spark', T('Your plan and license key'), async () => [pro]],
+    ['help', T('Help'), 'help', T('Guides, the tour and getting help'), async () => [helpCard()]],
+    ['advanced', T('Advanced'), 'log', T('How it\'s running, its log, diagnostics and maintenance'), async () => [await systemCard(), await logCard(), maintCard(s, me)], admin],
   ].filter((x) => x[5] !== false);
   const built = new Map();
   const cardsOf = async (k) => { if (!built.has(k)) built.set(k, (await SECTIONS.find((x) => x[0] === k)[4]()).flat().filter(Boolean)); return built.get(k); };
   const cur = SECTIONS.some((x) => x[0] === sub) ? sub : null, phone = window.innerWidth <= 760;
   const pick = cur || (phone ? null : 'general');
-  const search = el('input', { type: 'search', placeholder: 'Search settings', 'aria-label': 'Search settings' });
-  const nav = el('nav', { class: 'set-nav', 'aria-label': 'Settings sections' }, search, ...SECTIONS.map(([k, label, ic, blurb]) => el('a', { href: `#settings/${k}`, class: `set-link${k === pick ? ' on' : ''}` }, el('span', { class: 'set-ic' }, icon(ic, 18)), el('span', { class: 'grow', style: 'min-width:0' }, el('b', {}, label), el('small', { class: 'ellipsis' }, blurb)), phone ? icon('chevr', 16) : null)));
+  const search = el('input', { type: 'search', placeholder: T('Search settings'), 'aria-label': T('Search settings') });
+  const nav = el('nav', { class: 'set-nav', 'aria-label': T('Settings sections') }, search, ...SECTIONS.map(([k, label, ic, blurb]) => el('a', { href: `#settings/${k}`, class: `set-link${k === pick ? ' on' : ''}` }, el('span', { class: 'set-ic' }, icon(ic, 18)), el('span', { class: 'grow', style: 'min-width:0' }, el('b', {}, label), el('small', { class: 'ellipsis' }, blurb)), phone ? icon('chevr', 16) : null)));
   const pane = el('div', { class: 'set-pane' });
   const showSection = async (k) => {
     const [, label, , blurb] = SECTIONS.find((x) => x[0] === k);
-    pane.replaceChildren(el('div', { class: 'set-head' }, phone ? el('a', { class: 'btn ghost small', href: '#settings' }, icon('chevl', 14), 'Settings') : null, el('h2', {}, label), el('p', { class: 'small muted' }, blurb)), el('div', { class: 'cards' }, el('div', { class: 'card skeleton' })));
+    pane.replaceChildren(el('div', { class: 'set-head' }, phone ? el('a', { class: 'btn ghost small', href: '#settings' }, icon('chevl', 14), T('Settings')) : null, el('h2', {}, label), el('p', { class: 'small muted' }, blurb)), el('div', { class: 'cards' }, el('div', { class: 'card skeleton' })));
     const cards = await cardsOf(k); if (!pane.isConnected) return;
     pane.lastChild.replaceChildren(...cards);
   };
@@ -214,7 +214,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     main.classList.add('set-searching');
     const hits = [];
     for (const [k, label] of SECTIONS) for (const c of await cardsOf(k)) if (c.textContent.toLowerCase().includes(q)) hits.push([label, c]);
-    pane.replaceChildren(el('div', { class: 'set-head' }, el('h2', {}, `Results for "${search.value.trim()}"`)), hits.length ? el('div', { class: 'cards' }, ...hits.map(([l, c]) => { c.dataset.section = l; return c; })) : el('p', { class: 'muted' }, 'No setting matches - try another word.'));
+    pane.replaceChildren(el('div', { class: 'set-head' }, el('h2', {}, T('Results for "{q}"', { q: search.value.trim() }))), hits.length ? el('div', { class: 'cards' }, ...hits.map(([l, c]) => { c.dataset.section = l; return c; })) : el('p', { class: 'muted' }, T('No setting matches - try another word.')));
   }, 200); };
   main.replaceChildren(el('div', { class: `settings${phone ? (pick ? ' set-detail' : ' set-list') : ''}` }, nav, pane));
   if (pick) await showSection(pick);
@@ -230,8 +230,8 @@ function claimKey(done) {
   const code = el('input', { inputmode: 'numeric', maxlength: '6', placeholder: '6-digit code', autocomplete: 'one-time-code' });
   const msg = el('p', { class: 'small muted' }, 'Use the e-mail address you bought Pro with.');
   const stepB = el('div', { hidden: true }, el('label', { class: 'field' }, el('span', {}, 'Code from the e-mail'), code));
-  const send = el('button', { class: 'btn primary' }, 'Send me a code');
-  const m = modal(el('div', {}, el('label', { class: 'field' }, el('span', {}, 'E-mail address'), email), stepB, msg, el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { class: 'btn ghost', onclick: () => m.remove() }, 'Cancel'), send)), { title: 'Get my Pro key' });
+  const send = el('button', { class: 'btn primary' }, T('Send me a code'));
+  const m = modal(el('div', {}, el('label', { class: 'field' }, el('span', {}, 'E-mail address'), email), stepB, msg, el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { class: 'btn ghost', onclick: () => m.remove() }, T('Cancel')), send)), { title: 'Get my Pro key' });
   let sent = false;
   send.onclick = async () => {
     send.disabled = true;
@@ -265,7 +265,7 @@ async function backupCard(s) {
     } catch (e) { msg.style.color = 'var(--bad)'; msg.textContent = e.message; }
     make.disabled = false;
   } }, 'Download backup');
-  const restore = el('button', { class: 'btn', onclick: () => restoreModal('/api/restore') }, 'Restore from a backup');
+  const restore = el('button', { class: 'btn', onclick: () => restoreModal('/api/restore') }, T('Restore from a backup'));
   return el('div', { class: 'card' }, el('h2', {}, T('Backup')),
     el('p', { class: 'small muted' }, 'One file with your settings and connections, sign-ins, calendar, floor plans, history and photos - to keep safe, or to move CasaTorch to new hardware. It\'s encrypted with a passphrase you pick; CasaTorch doesn\'t keep the passphrase.'),
     el('label', { class: 'field' }, el('span', {}, 'Passphrase'), pass), el('label', { class: 'field' }, el('span', {}, 'Passphrase again'), pass2),
@@ -299,11 +299,11 @@ async function updatesCard() {
   const INSTALLS = { 'ha-addon': 'Home Assistant add-on', docker: 'Docker', deb: 'Linux package', 'pi-image': 'Raspberry Pi / CasaTorch Box', windows: 'Windows', macos: 'Mac', manual: 'From source' };
   const sw = (label, on, onchange, hint) => el('label', { class: 'field check', style: 'display:flex;gap:10px;align-items:flex-start' }, el('input', { type: 'checkbox', checked: on, onchange, style: 'width:auto;margin-top:4px' }), el('span', {}, label, hint ? el('span', { class: 'small muted', style: 'display:block' }, hint) : null));
   const save = async (body) => { try { await post('/api/updates', body); toast('Saved'); } catch (err) { toast(err.message); } };
-  const checkBtn = el('button', { class: 'btn' }, 'Check now');
+  const checkBtn = el('button', { class: 'btn' }, T('Check now'));
   checkBtn.onclick = async () => { checkBtn.disabled = true; try { S.updates = await post('/api/updates', { checkNow: true }); drawBanner(); show('settings'); } catch (err) { toast(err.message); } checkBtn.disabled = false; };
   return el('div', { class: 'card' }, el('h2', {}, T('Updates')),
     el('dl', { class: 'kv' }, el('dt', {}, 'This version'), el('dd', {}, u.version), el('dt', {}, 'Installed as'), el('dd', {}, INSTALLS[u.install] || u.install), el('dt', {}, 'Newest'), el('dd', {}, u.latest ? `${u.latest}${u.available ? ' - available' : ' - you have it'}` : !u.check ? 'not checking' : u.error ? 'could not check right now' : u.checked ? '-' : 'checks within a few minutes of starting')),
-    u.available ? el('p', { class: 'small' }, u.how, ' ', el('a', { href: safeHref(u.download), target: '_blank', rel: 'noopener' }, 'Downloads')) : null,
+    u.available ? el('p', { class: 'small' }, u.how, ' ', el('a', { href: safeHref(u.download), target: '_blank', rel: 'noopener' }, T('Downloads'))) : null,
     sw('Check for updates once a day', u.check, (e) => save({ check: e.target.checked }), 'Sends only the version number to casatorch.com.'),
     u.canAuto ? sw('Install updates automatically overnight', u.auto, (e) => save({ auto: e.target.checked })) : null,
     f ? sw('Open this CasaTorch from casatorch.com/home', f.announce, async (e) => { try { await post('/api/find', { announce: e.target.checked }); toast('Saved'); } catch (err) { toast(err.message); } }, `Shares only its home-network address${f.address ? ` (${f.address})` : ''}, and only with browsers on your own internet connection.`) : null,
@@ -334,19 +334,19 @@ async function healthCards(s, me, fresh = false) {
       const b = el('button', { class: `btn small${c.status === 'bad' ? ' primary' : ''}` }, T(f.label));
       b.onclick = async () => {
         if (f.action === 'link') { location.hash = f.href; return; }
-        if (f.action === 'history') { wrap.querySelector('#sethist')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+        if (f.action === 'history') { wrap.querySelector('#sethist')?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' }); return; }
         if (f.action === 'reconnect') return reconnectModal(f.href, s);
         if (f.action === 'restore' && !confirm(T('Put back this saved copy of your settings? Your current settings are saved first, so you can switch back.'))) return;
         b.disabled = true; const label = b.textContent; b.textContent = T('Working…');
-        try { const r = await post('/api/doctor/fix', { action: f.action, id: f.id }); toast(T(r.message || 'Done'), 4500); if (r.restarting) { setTimeout(() => location.reload(), 9000); return; } await draw(false); }
+        try { const r = await post('/api/doctor/fix', { action: f.action, id: f.id }); toast(TM(r.message || 'Done', r.msg, r.vars), 4500); if (r.restarting) { setTimeout(() => location.reload(), 9000); return; } await draw(false); }
         catch (e) { toast(e.message, 5000); b.disabled = false; b.textContent = label; }
       };
       return b;
     };
     const row = (c) => el('div', { class: 'health-row', style: 'display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)' },
-      el('span', { title: T(HEALTH_WORD[c.status]), 'aria-label': T(HEALTH_WORD[c.status]), style: `width:10px;height:10px;border-radius:50%;flex:none;margin-top:6px;background:${HEALTH_COLOR[c.status]}` }),
+      el('span', { role: 'img', title: T(HEALTH_WORD[c.status]), 'aria-label': T(HEALTH_WORD[c.status]), style: `width:10px;height:10px;border-radius:50%;flex:none;margin-top:6px;background:${HEALTH_COLOR[c.status]}` }),
       el('div', { class: 'grow' }, el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap' }, el('b', {}, T(c.title)), c.status !== 'ok' ? el('span', { class: `pill ${c.status === 'bad' ? 'bad' : c.status === 'warn' ? 'warn' : ''}` }, T(HEALTH_WORD[c.status])) : null),
-        el('div', { class: 'small muted', style: 'margin-top:2px' }, T(c.detail)), c.why && c.status !== 'ok' ? el('div', { class: 'small', style: 'margin-top:4px' }, T(c.why)) : null),
+        el('div', { class: 'small muted', style: 'margin-top:2px' }, TM(c.detail, c.msg, c.vars)), c.why && c.status !== 'ok' ? el('div', { class: 'small', style: 'margin-top:4px' }, T(c.why)) : null),
       c.status === 'ok' && c.fix?.action !== 'check-updates' ? null : fixBtn(c));
     const cards = HEALTH_GROUPS.map(([g, title]) => { const list = d.checks.filter((c) => c.group === g); return list.length ? el('div', { class: 'card' }, el('h2', {}, T(title)), ...list.map(row)) : null; });
     const healed = d.healed?.length ? el('div', { class: 'card' }, el('h2', {}, icon('checkc', 15), T('Fixed by itself')), el('p', { class: 'small muted', style: 'margin-top:0' }, T('What CasaTorch noticed and fixed on its own since it last started.')),

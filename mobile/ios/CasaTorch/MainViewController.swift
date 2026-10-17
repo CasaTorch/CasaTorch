@@ -103,9 +103,9 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             }
             guard let found = await Self.firstAnswering(home.candidates) else { if !Task.isCancelled { self.openShell("unreachable=\(id)") }; return }
             let base = found.0
-            HomeStore.shared.learn(id, hello: found.1)   // secure access turned on since pairing: remember the away-from-home address
+            HomeStore.shared.learn(id, hello: found.1)   // secure access turned on (or off) since pairing: remember (or forget) the away-from-home address
             guard !Task.isCancelled else { return }
-            await self.setSessionCookie(token: token, for: home, at: base)
+            await self.setSessionCookie(token: token, for: HomeStore.shared.home(id) ?? home, at: base)   // with what it just learned: the sign-in goes to the secure address too
             HomeStore.shared.touch(id, workingAddress: base)
             self.web.load(URLRequest(url: path.flatMap { URL(string: $0, relativeTo: base)?.absoluteURL } ?? base))
             Push.refreshIfNeeded(home: id, base: base, token: token)
@@ -210,8 +210,9 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             guard !Task.isCancelled, let now = self.web.url, Home.originString(now) == here else { return }   // you moved on meanwhile
             guard let found else { self.openShell("unreachable=\(id)"); return }
             guard let base = Home.originString(found.0), base != here else { return }
+            HomeStore.shared.learn(id, hello: found.1)
             HomeStore.shared.touch(id, workingAddress: found.0)
-            if let token = self.tokenCache[id] { await self.setSessionCookie(token: token, for: home, at: found.0) }
+            if let token = self.tokenCache[id] { await self.setSessionCookie(token: token, for: HomeStore.shared.home(id) ?? home, at: found.0) }
             let c = URLComponents(url: now, resolvingAgainstBaseURL: false)
             let tail = (c?.percentEncodedPath.isEmpty == false ? c?.percentEncodedPath ?? "/" : "/") + (c?.percentEncodedQuery.map { "?\($0)" } ?? "") + (c?.percentEncodedFragment.map { "#\($0)" } ?? "")
             self.web.load(URLRequest(url: URL(string: base + tail) ?? found.0))

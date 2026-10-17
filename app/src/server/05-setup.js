@@ -76,7 +76,7 @@ app.put('/api/setup/progress', (req, res) => {
 });
 app.delete('/api/setup/progress', (_req, res) => { progressClear(); res.json({ ok: true }); });
 app.get('/api/setup/state', (_req, res) => res.json({ open: setupOpen(), configured: isConfigured(), demo: isDemo(), ha: draft.ha ? { url: draft.ha.url, version: draft.ha.version } : null }));
-app.get('/api/setup/catalog', (_req, res) => res.sendFile(SETUP_CATALOG));
+app.get('/api/setup/catalog', (_req, res) => res.type('json').send(fs.readFileSync(SETUP_CATALOG)));   // sent (not streamed) so it's compressed: 44 KB becomes about 8
 
 /* ---- talking to things ---- */
 const clean = (u) => String(u || '').trim().replace(/\/+$/, '');
@@ -179,7 +179,7 @@ const haSignins = new Map();   // state -> { url, origin, exp }
 app.post('/api/setup/ha/signin', async (req, res) => {
   let url;
   try { url = (await haPickUrl(req.body?.url)).url; }
-  catch (err) { const f = friendlyError(err, { what: 'Home Assistant', url: err.triedUrl || '' }); return res.status(400).json({ error: f.fix ? `${f.error} ${f.fix}` : f.error }); }
+  catch (err) { const f = friendlyError(err, { what: 'Home Assistant', url: err.triedUrl || '' }); return res.status(400).json({ error: f.fix ? `${f.error} ${f.fix}` : f.error, msg: f.msg, fixMsg: f.fixMsg, vars: f.vars }); }
   const origin = `${req.protocol}://${req.headers.host}`, state = crypto.randomBytes(18).toString('base64url');
   for (const [k, v] of haSignins) if (v.exp < Date.now()) haSignins.delete(k);
   haSignins.set(state, { url, origin, exp: Date.now() + 10 * 60_000 });
@@ -223,7 +223,7 @@ app.post('/api/setup/test/:kind', async (req, res) => {
   catch (err) {
     const f = friendlyError(err, { what: TEST_NAMES[req.params.kind] || 'it', url: err.triedUrl || tidy.body.url || tidy.body.dnsUrl || tidy.body.snapshotUrl || '' });
     if (req.params.kind === 'homeassistant' && err.triedUrl && err.triedUrl !== String(tidy.body.url || '').trim()) fixed.fixed = { url: err.triedUrl };   // show the address as tried
-    res.json({ ok: false, error: f.error, fix: f.fix, ...fixed });
+    res.json({ ok: false, error: f.error, fix: f.fix, msg: f.msg, fixMsg: f.fixMsg, vars: f.vars, ...fixed });
   }
 });
 

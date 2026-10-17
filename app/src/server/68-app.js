@@ -39,7 +39,8 @@ const appHome = (req) => ({ id: installId(), name: config.house?.name || 'Home',
 const cleanDevice = (d) => ({ name: String(d?.name || 'Phone').replace(/[^\p{L}\p{N} '’._-]/gu, '').trim().slice(0, 40) || 'Phone', platform: ['ios', 'ipados', 'android'].includes(d?.platform) ? d.platform : 'phone', model: String(d?.model || '').slice(0, 40), app: String(d?.app || '').slice(0, 16) });
 /* Who's asking, before any sign-in: so the app can show the home's name and check it's a CasaTorch. */
 const APP_MIN = '0.7.0';   // the oldest CasaTorch phone app that works with this server (the apps ask you to update below it)
-app.get('/api/app/hello', (req, res) => res.json({ casatorch: true, appMin: APP_MIN, home: { id: installId(), name: config.house?.name || 'Home', version: VERSION }, signIn: signInOn(), configured: isConfigured(), demo: isDemo(), secure: LOCAL_TLS?.url || null, remote: config.remote?.hostname ? `https://${config.remote.hostname}` : null }));   // where to sign in encrypted
+app.get('/api/app/hello', (req, res) => res.json({ casatorch: true, appMin: APP_MIN, home: { id: installId(), name: config.house?.name || 'Home', version: VERSION }, signIn: signInOn(), configured: isConfigured(), demo: isDemo(), secure: LOCAL_TLS?.url || null, remote: config.remote?.hostname ? `https://${config.remote.hostname}` : null,   // where to sign in encrypted; null = secure access is off (the app forgets it)
+  ...(remoteNonceOk(req) && String(req.headers.host || '').toLowerCase() === String(config.remote?.hostname || '').toLowerCase() ? { check: remote.nonce } : {}) }));   // CasaTorch checking itself from outside (42-remote.js)
 app.post('/api/app/hello', (req, res) => res.json({ casatorch: true }));
 
 /* ---- signing in on the phone ---- */

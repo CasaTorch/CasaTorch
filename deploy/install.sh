@@ -83,7 +83,9 @@ StartLimitIntervalSec=0
 [Service]
 User=casatorch
 WorkingDirectory=$APP_DIR/app
-Environment=NODE_ENV=production CASATORCH_DATA_DIR=$DATA_DIR PORT=$PORT
+# CASATORCH_INSTALL tells CasaTorch a service manager runs it: its watchdog may restart a stuck process, and
+# Settings > Health can offer "Restart CasaTorch" (systemd starts it again because of Restart=always).
+Environment=NODE_ENV=production CASATORCH_DATA_DIR=$DATA_DIR PORT=$PORT CASATORCH_INSTALL=script
 ExecStart=$(command -v node) server.js
 Restart=always
 RestartSec=5
@@ -108,6 +110,12 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 [ "$up" = 1 ] || { journalctl -u casatorch -n 30 --no-pager; die "CasaTorch did not start - the log is above"; }
+# It knows it runs as a service (self-restart and the watchdog depend on that), not as a copy started by hand.
+health=$(curl -fsS --max-time 3 "http://127.0.0.1:$PORT/api/health" 2>/dev/null || true)
+case "$health" in
+  *'"install":"script"'*) say "Service checks passed: restarts and the watchdog are on" ;;
+  *) die "CasaTorch is running but doesn't see CASATORCH_INSTALL=script (health: ${health:-no answer}) - check /etc/systemd/system/casatorch.service" ;;
+esac
 
 ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 say "CasaTorch is running. Open http://${ip:-this-machine}:$PORT on any screen at home to set it up."

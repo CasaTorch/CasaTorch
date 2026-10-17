@@ -322,7 +322,7 @@ function haEnergyCard() {
   const kwh = (v) => (v == null ? '-' : v >= 100 ? `${Math.round(v)} kWh` : `${v.toFixed(v < 10 ? 2 : 1)} kWh`);
   const draw = async () => {
     const d = await api(`/api/energy/ha?days=${days}`).catch(() => null);
-    if (!d?.ha || d.configured === false) { if (!card.dataset.shown) card.remove(); return; }
+    if (!d?.ha || d.configured === false) { if (!card.dataset.shown) { card.remove(); clearInterval(tm); } return; }   // never shown: stop asking (it used to keep asking every 2 minutes after you left)
     card.dataset.shown = '1';
     const money = (v) => (v == null ? null : new Intl.NumberFormat(undefined, { style: 'currency', currency: d.currency || 'USD', maximumFractionDigits: 2 }).format(v));
     const seg = el('div', { class: 'seg' }, [[1, 'Today'], [7, '7 days'], [30, '30 days']].map(([v, l]) => el('button', { class: v === days ? 'on' : '', onclick: () => { days = v; draw(); } }, T(l))));

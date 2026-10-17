@@ -153,6 +153,8 @@
     r = r || { error: 'other' };
     if (r.error) return { ok: false, kind: r.error, base, net: r.net || netNow() };
     if (r.status >= 300 && r.status < 400) return { ok: false, kind: 'portal', base };
+    // your CasaTorch's secure address, away from home, on Basic: it says so in JSON ({ away, needsPro }) - that's an answer, not an error
+    if (r.status === 403 && r.json && (r.json.needsPro || r.json.away)) return { ok: false, kind: 'needspro', base };
     if (r.status === 404) return { ok: false, kind: 'old', base };
     if (r.status >= 500) return { ok: false, kind: 'server', status: r.status, base };
     const h = r.json;
@@ -169,8 +171,9 @@
     const tries = uniq.map((b) => probe(b, timeout));
     const fails = [];
     for (const t of tries) { const r = await t; if (r.ok) return r; fails.push(r); }
-    // an answer that says what's wrong beats a silence; else what the first (best) address said
-    return fails.find((f) => ['appold', 'old', 'notcasa', 'portal', 'server', 'tls'].includes(f.kind) && f.base === uniq[0])
+    // an answer that says what's wrong beats a silence; else what the first (best) address said.
+    // "away from home, that's Pro" first: the home addresses can't answer from here anyway.
+    return fails.find((f) => f.kind === 'needspro') || fails.find((f) => ['appold', 'old', 'notcasa', 'portal', 'server', 'tls'].includes(f.kind) && f.base === uniq[0])
       || fails.find((f) => ['appold', 'old', 'notcasa', 'portal', 'server'].includes(f.kind)) || fails[0];
   }
   /** The best address to sign in at: its secure address (encrypted on your Wi-Fi) when this phone can reach it, else the one that answered. */
@@ -198,6 +201,7 @@
       case 'old': return f.version ? T('This CasaTorch ({version}) needs an update before the app can use it. On a computer, open CasaTorch › Settings › Updates & backup and update it, then try again.', { version: f.version }) : T('This CasaTorch needs an update before the app can use it. On a computer, open CasaTorch › Settings › Updates & backup and update it, then try again.');
       case 'appold': return T('This CasaTorch needs a newer version of the app ({need} or later). Update CasaTorch in the {store}.', { need: f.need, store: storeName() });
       case 'notcasa': return port === '8123' ? T('That\'s Home Assistant, not CasaTorch. CasaTorch usually uses port 8090 on the same address.') : local ? T('Something answered at {host}, but it isn\'t CasaTorch.', { host }) : T('Something answered at {host}, but it isn\'t CasaTorch. If this Wi-Fi has a sign-in page (like at a hotel or café), open your browser and sign in first.', { host });
+      case 'needspro': return T('You\'re away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).');
       case 'portal': return T('This Wi-Fi wants you to sign in first (like at a hotel or café). Open your browser, sign in, then try again.');
       case 'server': return T('CasaTorch had a problem ({status}). Wait a moment and try again.', { status: f.status || 500 });
       default: return navigator.onLine === false ? T('This phone is offline. Turn off Airplane Mode or join your home Wi-Fi, then try again.') : T('Can\'t reach {host} from this phone. Check it\'s on your home Wi-Fi.', { host: host || T('your CasaTorch') });
@@ -565,7 +569,8 @@
     const status = el('p', { class: 'status small muted', 'aria-live': 'polite' });
     const retry = el('button', { class: 'btn primary', type: 'button' }, T('Try now'));
     const away = ad.remote ? null : el('div', { class: 'note' }, el('span', { html: svg('wifi', 18) }), el('span', {}, T('Away from home: coming with Secure access (Pro). For now the app connects on your home Wi-Fi.')));
-    const gen = screen(el('div', { class: 'spacer' }), bigIcon('wifi', 'calm'), el('h2', {}, T('Can\'t reach {name}', { name: h.name })), why, away,
+    const title = el('h2', {}, T('Can\'t reach {name}', { name: h.name })), icon = bigIcon('wifi', 'calm');
+    const gen = screen(el('div', { class: 'spacer' }), icon, title, why, away,
       h.last ? el('p', { class: 'small muted' }, T('Last connected {when}.', { when: lastSeen(h.last) })) : null,
       el('div', { class: 'spacer' }), status, retry, el('button', { class: 'btn plain', type: 'button', onclick: homes }, T('Your homes')));
     const attempt = async () => {
@@ -577,7 +582,13 @@
         setTimeout(() => { if (gen === S.gen) unreachable(id); }, 15000);   // still here: the app couldn't open it after all
         return true;
       }
-      why.textContent = explain(r);
+      // away from home on Basic: a clear screen of its own, never a generic error (it opens by itself once home, or with Pro)
+      const pro = r.kind === 'needspro';
+      title.textContent = pro ? T('You\'re away from home') : T('Can\'t reach {name}', { name: h.name });
+      why.textContent = pro ? T('Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.') : explain(r);
+      icon.innerHTML = svg(pro ? 'lock' : 'wifi');
+      retry.textContent = pro ? T('Try again') : T('Try now');
+      if (away) away.hidden = pro;
       return false;
     };
     const loop = keepTrying(gen, attempt, (s) => { status.textContent = waitText(s); retry.disabled = s === 0; });

@@ -214,8 +214,8 @@ widget({ id: 'stack', title: 'Smart Stack', icon: 'list', cat: 'essentials', ess
       const it = items[b._i], w = WIDGETS[it.id], sub = el('div', { class: 'tile-b' });   // a fresh box each turn: the last widget's own timers stop with it
       sub._t = { id: it.id, opts: it.opts || {} }; sub._saved = () => {};
       view.classList.remove('in-l', 'in-r'); void view.offsetWidth; view.classList.add(dir > 0 ? 'in-r' : 'in-l');
-      dots.replaceChildren(...items.map((x, k) => el('button', { type: 'button', class: k === b._i ? 'on' : '', 'aria-label': WIDGETS[x.id]?.title || x.id, onclick: () => go(k, k > b._i ? 1 : -1) })));
-      view.replaceChildren(el('div', { class: 'stack-title' }, icon(w.icon, 13), w.title), sub);
+      dots.replaceChildren(...items.map((x, k) => el('button', { type: 'button', class: k === b._i ? 'on' : '', 'aria-label': WIDGETS[x.id]?.title ? T(WIDGETS[x.id].title) : x.id, onclick: () => go(k, k > b._i ? 1 : -1) })));
+      view.replaceChildren(el('div', { class: 'stack-title' }, icon(w.icon, 13), T(w.title)), sub);
       try { await w.render(sub, ctx, { ...size, h: Math.max(1, size.h) }); } catch (err) { sub.replaceChildren(el('div', { class: 'muted small' }, err.message)); }
     };
     b.replaceChildren(view, items.length > 1 ? dots : '');

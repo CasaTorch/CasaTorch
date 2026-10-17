@@ -27,7 +27,7 @@ async function appCards() {
 function pairCard(me) {
   const box = el('div');
   const has2 = me.user?.twoStep;
-  const go = el('button', { class: 'btn primary', disabled: has2 ? null : true }, icon('plus', 14), 'Add a phone');
+  const go = el('button', { class: 'btn primary', disabled: has2 ? null : true }, icon('plus', 14), T('Add a phone'));
   go.onclick = async () => {
     go.disabled = true;
     try {
@@ -45,7 +45,7 @@ function pairCard(me) {
   return el('div', { class: 'card' }, el('h2', {}, icon('phone', 15), 'The CasaTorch app'),
     el('p', { class: 'small muted', style: 'margin-top:0' }, 'All of CasaTorch on your iPhone, iPad or Android phone - controls, cameras, the 3D home, alerts - signed in to this home only, behind Face ID or your fingerprint. There\'s no CasaTorch account: the app talks to your CasaTorch, at home or (with secure access) from anywhere.'),
     has2 ? null : el('p', { class: 'small', style: 'color:var(--warn)' }, 'Turn on two-step sign-in for your account first (People & sign-in) - the app requires it.'),
-    el('div', { class: 'row wrap' }, go, el('a', { class: 'btn', href: 'https://casatorch.com/docs/use/mobile-app.html', target: '_blank', rel: 'noopener' }, 'How the app works')),
+    el('div', { class: 'row wrap' }, go, el('a', { class: 'btn', href: 'https://casatorch.com/docs/use/mobile-app.html', target: '_blank', rel: 'noopener' }, T('How the app works'))),
     box,
     phones.length ? el('h3', { class: 'sub' }, 'Your phones') : null,
     ...phones.map((s) => el('div', { class: 'row between', style: 'gap:8px;margin:6px 0' }, el('span', {}, s.agent || 'Phone', el('small', { class: 'muted' }, ` · last used ${fmtWhen(s.seen)}`)),
@@ -71,7 +71,7 @@ async function thisPhoneCard() {
           : el('button', { class: 'btn primary', onclick: async (e) => { e.target.disabled = true; try { const r = await n.pushEnable(); await post('/api/app/push', { ...r, level: level.value }); await post('/api/app/push/test', {}).catch(() => {}); toast('Alerts are on - a test alert is on its way.', 4000); } catch (x) { toast(x.message, 6000); } draw(); } }, icon('bell', 14), 'Turn on alerts'),
         p.on ? el('button', { class: 'btn small ghost', onclick: () => api('/api/app/push', { method: 'DELETE' }).then(draw) }, 'Turn off') : null),
       el('h3', { class: 'sub' }, 'Homes'),
-      el('div', { class: 'row wrap', style: 'gap:8px' }, el('button', { class: 'btn', onclick: () => n.switchHome() }, 'Switch or add a home'),
+      el('div', { class: 'row wrap', style: 'gap:8px' }, el('button', { class: 'btn', onclick: () => n.switchHome() }, T('Switch or add a home')),
         el('button', { class: 'btn ghost', onclick: async () => { await post('/api/app/signout', {}).catch(() => {}); n.signOut(); } }, 'Sign this phone out')));
     level.onchange = () => { if (p.on) post('/api/app/push', { level: level.value }, 'PUT').then(() => toast('Saved')).catch((e) => toast(e.message)); };
   };

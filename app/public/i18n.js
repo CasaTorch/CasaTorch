@@ -21,6 +21,15 @@
     if (vars) out = out.replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? vars[k] : m));
     return out;
   }
+  /* A sentence from the server with values in it: the English as sent, plus a stable key and its values
+     ({ msg: 'Almost full: {free}', vars: { free: '1.2 GB' } }). Shown in the home's language when there's a
+     translation; a value that is itself a known phrase ("The Hue bridge") is translated too. */
+  function TM(text, msg, vars) {
+    const key = msg || text;
+    if (lang === 'en' || key == null || !dict[key]) return text != null ? String(text) : T(String(key || ''), vars);
+    const v = {}; for (const [k, x] of Object.entries(vars || {})) v[k] = typeof x === 'string' && dict[x] ? dict[x] : x;
+    return T(key, v);
+  }
   /* Switch language; resolves true when it changed (the page then redraws what it shows). */
   async function use(l) {
     l = LANGS[l] ? l : 'en';
@@ -31,6 +40,6 @@
     try { localStorage.setItem(KEY, JSON.stringify({ lang, dict })); } catch { /* private window */ }
     return true;
   }
-  window.CasaI18n = { LANGS, T, use, guess, get lang() { return lang; } };
-  window.T = T;
+  window.CasaI18n = { LANGS, T, TM, use, guess, get lang() { return lang; } };
+  window.T = T; window.TM = TM;
 })();

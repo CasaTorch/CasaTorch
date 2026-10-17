@@ -1,5 +1,6 @@
 /* Unit tests for the parts that read other people's data formats. Run: node test/unit.mjs */
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import * as fsMod from 'node:fs';
 import { createRequire } from 'node:module';
 const req = createRequire(import.meta.url);
@@ -575,6 +576,69 @@ await t('self-healing: a damaged settings file with no good copy stops CasaTorch
     assert.equal(fsMod.readFileSync(`${dir}/config.json`, 'utf8'), broken, 'the damaged file is left as it was');
     assert.ok(fsMod.readdirSync(dir).some((f) => f.startsWith('config.json.damaged-')), 'and a copy is kept');
   } finally { child.kill(); }
+});
+
+/* Secure access (42-remote.js, 02-remote-gate.js): the words for each state, the self-test, cloudflared's lines, the Basic gate. */
+const RM = globalThis.__casatorchRemote;
+t('secure access: each state in plain words, with the right fix', () => {
+  const V = (o) => RM.remoteView({ on: true, state: 'connected', code: null, check: { ok: true }, anywhere: true, ...o });
+  assert.equal(RM.remoteView({ on: false }).status, 'off');
+  assert.equal(V({ state: 'downloading' }).title, 'Getting ready…');
+  assert.equal(V({ state: 'connecting', check: { ok: null } }).title, 'Connecting…');
+  assert.equal(V({ state: 'connecting' }).title, 'Reconnecting…', 'it worked before: the connection came back by itself');
+  assert.equal(V({ check: { ok: null } }).status, 'checking');
+  assert.deepEqual([V({}).status, V({}).title], ['working', 'Working from anywhere']);
+  assert.equal(V({ anywhere: false }).title, 'Working on your home Wi-Fi'); assert.match(V({ anywhere: false }).detail, /part of Pro/);
+  for (const [code, fix] of [['token', 'repair'], ['tunnel', 'repair'], ['mismatch', 'repair'], ['download', 'repair'], ['blocked', 'check'], ['edgedns', 'check'], ['offline', 'check']]) {
+    const v = V({ code }); assert.equal(v.status, 'problem', code); assert.equal(v.fix.action, fix, code); assert.ok(v.title && v.detail, code);
+  }
+  assert.match(V({ code: 'blocked' }).detail, /port 7844/);
+  assert.equal(V({ code: 'dns' }).status, 'checking', 'a brand-new name: still checking, not broken');
+  assert.match(V({ code: 'service', why: 'casatorch.com is busy' }).detail, /^casatorch\.com is busy\. /);
+  assert.equal(V({ state: 'error', code: null, why: 'Something odd' }).fix.action, 'repair');
+  for (const [, [title, detail]] of Object.entries(RM.REMOTE_WHY)) assert.ok(!/[A-Z]{3,}_|Error:|undefined/.test(title + (detail || '')), title);
+});
+t('secure access: what the self-test answer means', () => {
+  const R = RM.remoteCheckResult, e = (code) => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error(code), { code }) });
+  const home = { id: 'h1' }, good = { casatorch: true, home, check: 'n0nce' };
+  assert.deepEqual(R({ status: 200, json: good, nonce: 'n0nce', homeId: 'h1' }), { ok: true, code: 'ok' });
+  assert.equal(R({ status: 200, json: { ...good, check: undefined }, nonce: 'n0nce', homeId: 'h1' }).code, 'mismatch', 'answered, but not to our code');
+  assert.equal(R({ status: 200, json: { ...good, home: { id: 'other' } }, nonce: 'n0nce', homeId: 'h1' }).code, 'mismatch', 'another CasaTorch');
+  assert.equal(R({ error: e('ENOTFOUND') }).code, 'dns'); assert.equal(R({ error: e('EAI_AGAIN') }).code, 'dns');
+  assert.equal(R({ error: Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }) }).code, 'unreachable');
+  assert.equal(R({ error: e('ECONNREFUSED') }).code, 'unreachable');
+  for (const s of [502, 530]) assert.equal(R({ status: s, json: null }).code, 'tunnel', `Cloudflare ${s}`);
+  assert.equal(R({ status: 403, json: { needsPro: true } }).code, 'unreachable');
+});
+t('secure access: cloudflared\'s log lines', () => {
+  const K = RM.remoteLineKind;
+  assert.equal(K('2026-10-17T12:00:00Z INF Registered tunnel connection connIndex=0 connection=abc event=0 ip=198.41.200.13 location=sjc01 protocol=quic'), 'registered');
+  assert.equal(K('ERR Register tunnel error from server side error="Unauthorized: Invalid tunnel secret" connIndex=0'), 'token');
+  assert.equal(K('ERR Failed to dial a quic connection error="failed to dial to edge with quic: timeout: no recent network activity" connIndex=0'), 'quic');
+  assert.equal(K('ERR Unable to establish connection with Cloudflare edge error="DialContext error: dial tcp 198.41.192.7:7844: i/o timeout"'), 'dial');
+  assert.equal(K('ERR edge discovery: error looking up Cloudflare edge IPs: the DNS query failed error="lookup _v2-origintunneld._tcp.argotunnel.com"'), 'edgedns');
+  assert.equal(K('INF Unregistered tunnel connection connIndex=1'), 'dropped');
+  assert.equal(K('INF Starting tunnel tunnelID=abc'), null);
+  const restore = RM.patchConfig({ remote: { token: 'eyJhIjoiYmMifQsecretTOKENvalue' } });
+  try { const m = RM.remoteMask('token eyJhIjoiYmMifQsecretTOKENvalue at 198.41.192.7'); assert.ok(!m.includes('secretTOKEN') && !m.includes('198.41')); } finally { restore(); }
+});
+await t('secure access: Basic, away from home - JSON for the app, a page for browsers; at home, Pro and the self-test get through', async () => {
+  const restore = RM.patchConfig({ remote: { on: true, hostname: 'home-test.casatorch.test' }, setupAt: '2020-01-01T00:00:00.000Z', license: undefined });
+  const H0 = { ...H.remote.homeIps }; H.remote.homeIps = { v4: '198.51.100.7', v6: null, at: Date.now() };
+  const srv = H.app.listen(0, '127.0.0.1'); await new Promise((ok) => srv.once('listening', ok));
+  const get = (p, ip, headers = {}) => new Promise((ok, bad) => { const rq = http.get({ host: '127.0.0.1', port: srv.address().port, path: p, headers: { host: 'home-test.casatorch.test', 'cf-connecting-ip': ip, ...headers } }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => ok({ status: r.statusCode, type: r.headers['content-type'] || '', body: b })); }); rq.on('error', bad); });
+  try {
+    const a = await get('/api/app/hello', '203.0.113.50');
+    assert.equal(a.status, 403); assert.match(a.type, /json/); assert.deepEqual(JSON.parse(a.body), { error: 'You\'re away from home. Using CasaTorch from anywhere is part of Pro.', away: true, needsPro: true });
+    const pg = await get('/', '203.0.113.50', { accept: 'text/html' }); assert.equal(pg.status, 403); assert.match(pg.type, /html/); assert.match(pg.body, /away from home/);
+    assert.equal((await get('/api/app/hello', '198.51.100.7')).status, 200, 'from home: fine');
+    H.remote.nonce = 'q1w2e3r4t5y6u7i8';
+    const self = await get('/api/app/hello', '203.0.113.50', { 'x-casatorch-check': 'q1w2e3r4t5y6u7i8' });
+    assert.equal(self.status, 200); assert.equal(JSON.parse(self.body).check, 'q1w2e3r4t5y6u7i8', 'the self-test is recognized');
+    assert.equal((await get('/api/app/hello', '203.0.113.50', { 'x-casatorch-check': 'q1w2e3r4t5y6u7i9' })).status, 403, 'a wrong code is not');
+    H.remote.nonce = null;
+    assert.equal((await get('/api/app/hello', '203.0.113.50', { 'x-casatorch-check': 'q1w2e3r4t5y6u7i8' })).status, 403, 'nor an old one');
+  } finally { H.remote.nonce = null; H.remote.homeIps = H0; srv.close(); restore(); }
 });
 
 console.log(`\n${n} passed`);

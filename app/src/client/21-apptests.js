@@ -26,7 +26,7 @@ function atSpark(vals) {
 }
 function atTile(t, onOpen) {
   const [dot, word] = t.paused ? ['warn', 'Paused (Pro)'] : atState(t), l = t.last;
-  return el('button', { class: `attile${t.down ? ' down' : ''}`, onclick: () => onOpen(t.id), 'aria-label': `${t.name}: ${word}${l?.total ? `, ${atMs(l.total)}` : ''}. Open details` },
+  return el('button', { class: `attile${t.down ? ' down' : ''}`, onclick: () => onOpen(t.id) },
     el('div', { class: 'row', style: 'gap:10px' }, el('span', { class: 'atbadge', 'aria-hidden': 'true' }, t.short || t.name[0]), el('b', { class: 'grow ellipsis' }, t.name), el('span', { class: `pill ${dot}` }, el('span', { class: `dot ${dot}` }), word)),
     el('div', { class: 'row', style: 'gap:8px;align-items:baseline;margin-top:10px' }, el('span', { class: `atbig${l && !l.ok ? ' fail' : ''}` }, l?.ok ? atMs(l.total) : l ? 'No answer' : '…'), l?.ok ? el('span', { class: 'tiny muted' }, 'to load') : el('span', { class: 'tiny muted ellipsis' }, l?.error || '')),
     atBar(l),
@@ -163,5 +163,5 @@ function atPath(t, a) {
     })))));
   const legend = el('p', { class: 'tiny muted', style: 'margin:8px 0 0' }, 'Times are the round trip from this CasaTorch to each hop. ▲ marks a jump of 30 ms or more - where a slowdown starts. Hollow hops didn\'t answer the trace (normal for many routers).');
   const changed = t.pathChangedAt ? el('p', { class: 'small', style: 'color:var(--warn);margin:8px 0 0' }, `The path changed ${ago(t.pathChangedAt)}. Routes change now and then; if the app got slower at the same time, the new route may be the reason.`) : null;
-  return el('div', {}, el('div', { class: 'atpathwrap' }, row), legend, changed);
+  return el('div', {}, el('div', { class: 'atpathwrap', tabindex: 0, role: 'region', 'aria-label': 'Network path' }, row), legend, changed);
 }

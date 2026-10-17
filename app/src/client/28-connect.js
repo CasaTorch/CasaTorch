@@ -119,7 +119,7 @@ function haFlowModal({ domain, flowId, label }, onDone) {
 async function haDiscoveredCard(conn) {
   const box = el('div', { class: 'card ha-found' }), list = el('div', { class: 'ha-found-list' });
   const load = async () => {
-    let r; try { r = await api('/api/ha/discovered'); } catch (e) { box.hidden = /admin|403/i.test(e.message); list.replaceChildren(el('p', { class: 'muted small' }, `Could not ask Home Assistant: ${e.message}`)); return; }
+    let r; try { r = await api('/api/ha/discovered'); } catch (e) { box.hidden = /admin|403/i.test(e.body?.error || e.message); list.replaceChildren(el('p', { class: 'muted small' }, `Could not ask Home Assistant: ${e.message}`)); return; }
     list.replaceChildren(...(r.found.length ? r.found.map((f) => el('div', { class: 'ha-found-row' }, monogram(f.name || f.domain), el('div', { class: 'grow', style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, f.name || pretty(f.domain)), el('small', { class: 'muted' }, `${pretty(f.domain)} · found by Home Assistant`)),
       el('button', { class: 'btn small ghost', title: 'Don\'t show this again', onclick: async () => { await post('/api/ha/discovered/ignore', { key: f.key }).catch(() => {}); load(); } }, 'Hide'),
       el('button', { class: 'btn small primary', onclick: () => haFlowModal({ flowId: f.flowId, domain: f.domain, label: f.name || pretty(f.domain) }, load) }, 'Add')))

@@ -5,7 +5,7 @@
  * Connecting something opens the guided setup at exactly that item - nobody
  * needs a command line.
  * ====================================================================== */
-app.get('/api/catalog', (_req, res) => { res.setHeader('Cache-Control', 'no-cache'); res.sendFile(SETUP_CATALOG); });
+app.get('/api/catalog', (_req, res) => { res.setHeader('Cache-Control', 'no-cache'); res.type('json').send(fs.readFileSync(SETUP_CATALOG)); });
 async function haDomainsNow() {
   const h = config.homeAssistant; if (!h?.url) return [];
   try {

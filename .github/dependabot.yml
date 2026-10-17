@@ -1,0 +1,25 @@
+# Weekly dependency updates, grouped so a normal week is at most a couple of pull requests:
+# one for all minor/patch npm updates, one for all GitHub Actions updates. Major npm updates come one by one
+# (they can break things and deserve their own look). Security updates are not held to this schedule.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /app
+    schedule: { interval: weekly, day: monday, time: "06:00" }
+    open-pull-requests-limit: 5
+    commit-message: { prefix: "deps" }
+    groups:
+      app-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # werift is pinned through "overrides" in app/package.json for ring-client-api; move it by hand with Ring.
+      - dependency-name: werift
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday, time: "06:00" }
+    open-pull-requests-limit: 3
+    commit-message: { prefix: "ci" }
+    groups:
+      actions:
+        patterns: ["*"]

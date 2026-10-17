@@ -29,7 +29,7 @@ widget({ id: 'clock', title: 'Clock', icon: 'clock', bare: true, live: true, cat
       const now = new Date().toISOString(), hr = Number(fmt(now, { hour: 'numeric', hourCycle: 'h23' }));
       const greet = hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
       greetEl.textContent = `${greet}${ctx.data.home?.house ? ` · ${ctx.data.home.house}` : ''}`;
-      const parts = new Intl.DateTimeFormat('en-US', { timeZone: S.tz, hour: 'numeric', minute: '2-digit', ...(secs ? { second: '2-digit' } : {}), hourCycle: o.h24 ? 'h23' : 'h12' }).formatToParts(new Date(now));
+      const parts = dtf('en-US', { timeZone: S.tz, hour: 'numeric', minute: '2-digit', ...(secs ? { second: '2-digit' } : {}), hourCycle: o.h24 ? 'h23' : 'h12' }).formatToParts(new Date(now));
       const ampm = parts.find((x) => x.type === 'dayPeriod')?.value;
       big.replaceChildren(parts.filter((x) => x.type !== 'dayPeriod').map((x) => x.value).join('').trim(), ampm && w >= 3 ? el('span', { class: 'clock-ampm' }, ampm) : '');
       const wx = ctx.data.home?.weather?.now;
@@ -350,7 +350,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) for 
 function camView(d) {
   let c = CAMS.get(d.id);
   if (!c) {
-    const img = el('img', { alt: d.name, decoding: 'async' }), age = el('span', { class: 'cam-age' }), name = el('span', {}, d.name);
+    const img = el('img', { alt: d.name, decoding: 'async', role: 'button', tabindex: 0 }), age = el('span', { class: 'cam-age' }), name = el('span', {}, d.name);
     const wrap = el('div', { class: 'cam cam-wait', onclick: () => { camLive(c, false); camModal(c.d, () => camLive(c, c.visible && !document.hidden)); } }, img, el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, `${d.source || d.provider}${camLiveTile(d) ? ' · live' : d.stream ? ' · live on tap' : ''}`)), age);
     c = { d, img, age, name, wrap, visible: true, last: 0, etag: null, url: null, busy: false }; wrap.__cam = c; CAMS.set(d.id, c);
     camSeen?.observe(wrap); camFetch(c, true);

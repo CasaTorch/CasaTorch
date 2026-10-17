@@ -261,9 +261,9 @@ class MainActivity : AppCompatActivity() {
             if (token == null) return@launch openShell("signedout=$id")
             tokenCache[id] = token
             val (base, hello) = firstAnswering(home.candidates) ?: return@launch openShell("unreachable=$id")
-            HomeStore.learn(id, hello)   // secure access turned on since pairing: remember the away-from-home address
+            HomeStore.learn(id, hello)   // secure access turned on (or off) since pairing: remember (or forget) the away-from-home address
             if (!isActive) return@launch
-            setSessionCookie(token, home, base)
+            setSessionCookie(token, HomeStore.home(id) ?: home, base)   // with what it just learned: the sign-in goes to the secure address too
             HomeStore.touch(id, base)
             if (onShell) clearHistoryOnLoad = true
             web.loadUrl(Home.originOf(base) + (path ?: "/"))
@@ -349,8 +349,9 @@ class MainActivity : AppCompatActivity() {
             if (found == null) return@launch openShell("unreachable=$id")
             val base = Home.originOf(found.first)
             if (base == here) return@launch
+            HomeStore.learn(id, found.second)
             HomeStore.touch(id, found.first)
-            tokenCache[id]?.let { setSessionCookie(it, home, found.first) }
+            tokenCache[id]?.let { setSessionCookie(it, HomeStore.home(id) ?: home, found.first) }
             val tail = (now.encodedPath?.takeIf { it.isNotEmpty() } ?: "/") + (now.encodedQuery?.let { "?$it" } ?: "") + (now.encodedFragment?.let { "#$it" } ?: "")
             web.loadUrl(base + tail)
         }

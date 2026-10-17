@@ -38,7 +38,8 @@ const api = async (url, opts = {}) => {
   if (r.status === 401) { location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.hash)}`; throw new Error('sign in first'); }
   const j = await r.json().catch(() => ({}));
   if (r.status === 403 && j.terms) { location.href = '/login.html?step=terms'; throw new Error(j.error); }
-  if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status, body: j });
+  /* The server's error in the home's language when it's a known sentence (body.error keeps the English). */
+  if (!r.ok) throw Object.assign(new Error(j.error ? TM(j.error, j.msg, j.vars) : `HTTP ${r.status}`), { status: r.status, body: j });
   return j;
 };
 const post = (url, body, method = 'POST') => api(url, { method, body: JSON.stringify(body || {}) });
@@ -53,14 +54,31 @@ const isPro = () => !!S.status?.pro?.pro;
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ms); }
 function modal(content, { wide = false, title } = {}) {
   const box = el('div', { class: `box${wide ? ' wide' : ''}` }, title ? el('div', { class: 'row between', style: 'margin-bottom:12px' }, el('h3', { style: 'margin:0' }, title), el('button', { class: 'btn ghost small', 'aria-label': 'Close', onclick: () => m.remove() }, icon('x'))) : null, content);
-  const m = el('div', { id: 'modal', onclick: (e) => { if (e.target === m) m.remove(); } }, box);
-  $('#modal')?.remove(); document.body.append(m); return m;
+  const m = el('div', { id: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': typeof title === 'string' ? title : null, onclick: (e) => { if (e.target === m) m.remove(); } }, box);
+  // a real dialog for keyboards and screen readers: focus moves in, Tab stays inside, and closing returns focus to where it was
+  const back = $('#modal')?._back || document.activeElement, rm = m.remove.bind(m); m._back = back; box.tabIndex = -1;
+  m.remove = () => { rm(); if (back?.isConnected && !$('#modal')) back.focus?.({ preventScroll: true }); };
+  m.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    const f = [...box.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')].filter((x) => x.offsetParent || x === document.activeElement);
+    if (!f.length) { e.preventDefault(); box.focus(); return; }
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && (i === f.length - 1 || i < 0)) { e.preventDefault(); f[0].focus(); }
+  });
+  const old = $('#modal'); if (old) Element.prototype.remove.call(old); document.body.append(m);
+  requestAnimationFrame(() => { if (m.isConnected && !m.contains(document.activeElement)) box.focus({ preventScroll: true }); });   // the box, not a field: no phone keyboard popping up
+  return m;
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#modal')?.remove(); });
+// things drawn as a picture or a chip but acting as a button (role=button, tabindex=0) work from the keyboard too
+document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[role=button][tabindex]:not(button, a, input)')) { e.preventDefault(); e.target.click(); } });
 /* Time in the house's time zone (a wall panel in another zone still shows house time). */
-const fmt = (iso, o) => (iso ? new Intl.DateTimeFormat('en-US', { timeZone: S.tz, ...o }).format(new Date(iso)) : '');
+// Building a date formatter is slow (tens of ms on a Pi at first paint); each one is made once and reused.
+const DTF = new Map();
+const dtf = (loc, o) => { const k = `${loc}|${JSON.stringify(o)}`; let f = DTF.get(k); if (!f) { if (DTF.size > 300) DTF.clear(); f = new Intl.DateTimeFormat(loc, o); DTF.set(k, f); } return f; };
+const fmt = (iso, o) => (iso ? dtf('en-US', { timeZone: S.tz, ...o }).format(new Date(iso)) : '');
 const fmtTime = (iso) => fmt(iso, { hour: 'numeric', minute: '2-digit' });
-const dayKey = (iso, tz = S.tz) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+const dayKey = (iso, tz = S.tz) => dtf('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
 const fmtWhen = (iso) => { const k = dayKey(iso), today = dayKey(new Date().toISOString()), tom = dayKey(new Date(Date.now() + 86400_000).toISOString()); return k === today ? `Today ${fmtTime(iso)}` : k === tom ? `Tomorrow ${fmtTime(iso)}` : `${fmt(iso, { weekday: 'short', month: 'short', day: 'numeric' })} ${fmtTime(iso)}`; };
 const ago = (iso) => { const s = Math.round((Date.now() - Date.parse(iso)) / 1000); if (!(s >= 0)) return ''; if (s < 60) return 'just now'; if (s < 3600) return `${Math.round(s / 60)} min ago`; if (s < 86400) return `${Math.round(s / 3600)} h ago`; return `${Math.round(s / 86400)} d ago`; };
 const hm = (t) => { const [h, m] = String(t).split(':').map(Number); return Number.isFinite(h) ? `${(h % 12) || 12}:${String(m || 0).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}` : t; };

@@ -87,6 +87,24 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
   next();
 });
+/* API answers (JSON) are compressed too once they're worth it (the device list, history, the catalog): a few KB
+   instead of tens over Wi-Fi or secure access. Only reads, and only for CasaTorch's own pages (never another site's
+   request), so nothing a page sends in can be compared against a secret in the answer. Quick Brotli/gzip settings. */
+app.use('/api', (req, res, next) => {
+  const ae = String(req.headers['accept-encoding'] || ''), enc = /\bbr\b/.test(ae) ? 'br' : /\bgzip\b/.test(ae) ? 'gzip' : null, site = req.headers['sec-fetch-site'];
+  if (!enc || req.method !== 'GET' || (site && site !== 'same-origin' && site !== 'none')) return next();
+  const send = res.send;
+  res.send = function packJson(body) {
+    if ((typeof body === 'string' || Buffer.isBuffer(body)) && /json/.test(String(res.getHeader('Content-Type') || '')) && !res.getHeader('Content-Encoding') && Buffer.byteLength(body) >= 1400) {
+      const raw = Buffer.isBuffer(body) ? body : Buffer.from(body);
+      const out = enc === 'br' ? zlib.brotliCompressSync(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } }) : zlib.gzipSync(raw, { level: 6 });
+      res.setHeader('Content-Encoding', enc); res.vary('Accept-Encoding');
+      return send.call(this, out);
+    }
+    return send.call(this, body);
+  };
+  next();
+});
 
 /* Compressed static files, cached in memory per file version. Mounted later (99-start), after sign-in. */
 const packed = new Map();
