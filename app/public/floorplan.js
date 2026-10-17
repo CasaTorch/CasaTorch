@@ -778,6 +778,19 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     onend: () => fitSave(P),
   });
 }, true);
+/* Editor > Yard: press on a car, the charger or a tree and drag it to where it really is. */
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (S.mode !== 'edit' || S.tab !== 'yard' || S.tool || e.button !== 0 || !yard.group.visible) return;
+  const hit = rayAt(e.clientX, e.clientY).intersectObject(yard.group, true).find((h) => h.object.isMesh); if (!hit) return;
+  let o = hit.object; while (o && !o.userData.yard && o.parent !== yard.group) o = o.parent;
+  if (!o?.userData.yard) return;
+  e.stopImmediatePropagation();
+  const plane = new THREE.Plane(new V3(0, 1, 0), -groundY()), start = rayAt(e.clientX, e.clientY).ray.intersectPlane(plane, new V3()), p0 = o.position.clone(); if (!start) return;
+  dragging(e, {
+    onmove: (ev) => { const w = rayAt(ev.clientX, ev.clientY).ray.intersectPlane(plane, new V3()); if (!w) return; o.position.set(p0.x + w.x - start.x, p0.y, p0.z + w.z - start.z); o.updateMatrixWorld(true); drawPowerSoon(); },
+    onend: () => { const y = yardData(), it = y.items.find((x) => x.id === o.userData.yard.item); if (!it) return; it.pos = [+o.position.x.toFixed(2), +o.position.z.toFixed(2)]; S.yardSel = it.id; saveYard(y); },
+  });
+}, true);
 /* A device dragged from the list and let go over the house: it goes where it was dropped. */
 function placeAt(d, cx, cy) {
   const r = renderer.domElement.getBoundingClientRect(), under = document.elementFromPoint(cx, cy);
@@ -919,7 +932,7 @@ async function savePins() {
 const savePinsSoon = debounce(savePins, 500);
 /* ---------- the yard: drawing areas, placing trees and cars ---------- */
 const newId = () => Math.random().toString(36).slice(2, 10);
-const yardData = () => { const y = S.plan.yard || {}; return { areas: [...(y.areas || [])], items: (y.items || []).map((it) => ({ ...it, bind: { ...(it.bind || {}) } })) }; };
+const yardData = () => { const y = S.plan.yard || {}; return { areas: [...(y.areas || [])], items: (y.items || []).map((it) => ({ ...it, bind: { ...(it.bind || {}) } })), seen: [...(y.seen || [])] }; };
 async function saveYard(y, quiet) {
   S.plan.yard = y; buildYard(); layout(false); if (!quiet) editor();   // show it right away; the CasaTorch keeps it
   try { const r = await send('/api/floorplan/yard', 'PUT', y); S.plan.yard = r.yard; await refresh(); }
@@ -941,6 +954,61 @@ function yardClick(g) {
   if (t.type === 'yard-place') { const it = { id: newId(), kind: t.kind, pos: at, rot: 0, scale: 1, ...(t.kind === 'car' ? { name: 'Car', color: '#cfd6df', body: 'sedan', bind: {} } : {}) }; y.items.push(it); S.yardSel = it.id; }
   if (t.type === 'yard-move') { const it = y.items.find((x) => x.id === t.id); if (it) it.pos = at; }
   S.tool = null; saveYard(y);
+}
+/* ---------- cars park themselves ----------
+   Every car Home Assistant knows (Tesla - the app or BLE - and most EVs) is found by its sensors and parked where it parks:
+   the middle of your driveway (side by side, or one behind the other on a narrow one), else by the EV charger, else beside
+   the house. Done once per car; move it in Editor > Yard, and a car you remove stays removed. */
+const CARISH = /tesla|\bcar\b|vehicle|\bev\b|model[ _]?[3sxy]\b|leaf|ioniq|mach[ _-]?e|bolt|polestar|rivian|lucid|taycan|bmw|audi|volvo|kia|hyundai|mercedes|volkswagen|\bvw\b|toyota|lexus|subaru|nissan|ford|chevy|chevrolet/i;
+function findCars(devs) {
+  const ent = (d) => d.id.replace(/^ha:[a-z_]+\./, ''), txt = (d) => `${ent(d)} ${d.name}`.replace(/_/g, ' ');
+  const anchors = devs.filter((d) => (d.pres && (/_location$/.test(ent(d)) || CARISH.test(txt(d)))) || (d.bat && CARISH.test(txt(d))));
+  const out = [], done = new Set();
+  for (const a of anchors) {
+    const stem = ent(a).replace(/_(location|battery(_level)?|state_of_charge|soc|charge_level|charge)$/, '');
+    const key = a.dev ? `dev:${a.dev}` : `stem:${stem}`; if (done.has(key)) continue; done.add(key);
+    const mine = devs.filter((d) => (a.dev && d.dev === a.dev) || ent(d) === stem || ent(d).startsWith(`${stem}_`));
+    const best = (list, ...res) => { for (const re of res) { const hit = list.find((d) => re.test(ent(d))); if (hit) return hit; } return null; };
+    const plug = best(mine.filter((d) => d.bin || d.kind === 'switch'), /charge_cable|charging_cable|charger_cable|vehicle_connected|plugged|plug_state|charge_port|charge_flap|charger_connected/, /charger$|charging$/);
+    const power = best(mine.filter((d) => d.pw), /charger_power|charging_power|charge_power|charge_rate|charging_rate|charger_rate/, /power/) || best(devs.filter((d) => d.pw), /wall_connector.*power/);
+    const battery = best(mine.filter((d) => d.bat), /battery_level$|state_of_charge|_soc$|charge_level$/, /battery$|battery/);
+    const home = mine.find((d) => d.pres) || null;
+    if (!plug && !power && !battery) continue;
+    const name = String(a.name || 'Car').replace(/\s+(location|battery( level)?|state of charge|charge level)$/i, '').trim() || 'Car';
+    out.push({ key, name, bind: Object.fromEntries(Object.entries({ home: home?.id, plugged: plug?.id, power: power?.id, battery: battery?.id }).filter(([, v]) => v)) });
+  }
+  return out;
+}
+const polyArea = (pts) => { let s = 0; pts.forEach((p, k) => { const q = pts[(k + 1) % pts.length]; s += p[0] * q[1] - q[0] * p[1]; }); return Math.abs(s / 2); };
+function parkSpot(i, n, yd) {
+  const dw = (yd.areas || []).filter((a) => a.kind === 'driveway').sort((a, b) => polyArea(b.pts) - polyArea(a.pts))[0];
+  if (dw) {
+    const c = dw.pts.reduce((m, p) => [m[0] + p[0] / dw.pts.length, m[1] + p[1] / dw.pts.length], [0, 0]);
+    let dir = [1, 0], len = 0; dw.pts.forEach((p, k) => { const q = dw.pts[(k + 1) % dw.pts.length], dx = q[0] - p[0], dz = q[1] - p[1], l = Math.hypot(dx, dz); if (l > len) { len = l; dir = [dx / l, dz / l]; } });
+    const side = [-dir[1], dir[0]], proj = (v) => dw.pts.map((p) => (p[0] - c[0]) * v[0] + (p[1] - c[1]) * v[1]), w = Math.max(...proj(side)) - Math.min(...proj(side));
+    const k = i - (n - 1) / 2, wide = w >= n * 2.5, step = wide ? 2.6 : 5.2, v = wide ? side : dir;   // side by side if it fits, else one behind the other
+    return { pos: [c[0] + v[0] * k * step, c[1] + v[1] * k * step].map((x) => +x.toFixed(2)), rot: Math.round(-Math.atan2(dir[1], dir[0]) * 180 / Math.PI) };
+  }
+  const ch = (yd.items || []).find((it) => it.kind === 'charger');
+  if (ch) return { pos: [+(ch.pos[0] + 1.6 + i * 2.6).toFixed(2), ch.pos[1]], rot: 90 };
+  const B = S.houseBox; if (!B) return null;
+  return { pos: [+(B.max.x + 3 + i * 2.6).toFixed(2), +((B.min.z + B.max.z) / 2).toFixed(2)], rot: 90 };
+}
+async function autoCars() {
+  if (S.autoCarsTried || !S.plan?.pro?.pro || !S.live?.devices?.length || !S.houseBox) return; S.autoCarsTried = true;
+  const y = yardData(), have = y.items.filter((it) => it.kind === 'car'), used = new Set(have.flatMap((it) => Object.values(it.bind || {})));
+  const found = findCars(S.live.devices).filter((c) => !y.seen.includes(c.key) && !Object.values(c.bind).some((v) => used.has(v)));
+  if (!found.length) return;
+  const named = [];
+  const blank = have.filter((it) => !Object.keys(it.bind || {}).length), blank0 = blank.length;   // a car you added but never linked: link it, where you put it
+  found.forEach((c, i) => { const mine = blank.shift(); if (mine) { mine.bind = c.bind; if (!mine.name || mine.name === 'Car') mine.name = c.name.slice(0, 30); y.seen.push(c.key); named.push(c.name); return; } const sp = parkSpot(have.length + i, have.length + found.length, y); if (!sp) return; y.items.push({ id: newId(), kind: 'car', name: c.name.slice(0, 30), color: '#cfd6df', body: /model[ _]?[xy]\b|suv/i.test(c.name) ? 'suv' : 'sedan', pos: sp.pos, rot: sp.rot, scale: 1, bind: c.bind }); y.seen.push(c.key); named.push(c.name); });
+  const blankUsed = blank.length < blank0;
+  if (!named.length) return;
+  try {
+    const r = await send('/api/floorplan/yard', 'PUT', y); S.plan.yard = r.yard; buildYard(); layout(false); fitView(); S.liveSig = null; await refresh(); if (S.mode === 'edit') editor();
+    const where = blankUsed ? 'where you put it' : (y.areas || []).some((a) => a.kind === 'driveway') ? 'on the driveway' : 'next to the house';
+    toast(`Found ${named.join(' and ')} - ${named.length > 1 ? 'they show' : 'it shows'} on your 3D home${blankUsed ? '' : ` ${where}`}. Drag a car in Editor › Yard to change where it parks.`);
+  } catch { /* someone who can only look: nothing is saved */ }
 }
 /* Find a car's sensors by their names - Tesla, and most EVs in Home Assistant, name them the same way. */
 function guessCar(devs) {
@@ -970,13 +1038,13 @@ function edYard() {
       el('div', { class: 'row' }, el('label', {}, 'Name'), el('input', { type: 'text', value: it.name, maxlength: 30, oninput: (e) => { it.name = e.target.value || 'Car'; save(); } }), el('input', { type: 'color', value: it.color, title: 'Paint color', oninput: (e) => { it.color = e.target.value; save(); } })),
       seg([['sedan', 'Car'], ['suv', 'SUV']], it.body, (v) => { it.body = v; saveYard(y); }),
       el('p', { class: 'note' }, 'Link it to your car\'s sensors to show it home or away, plugged in, charging and its battery. Needs your car in Home Assistant (Tesla, and many other EVs). CasaTorch only shows the car - it never controls it.'),
-      el('button', { type: 'button', class: 'mini', onclick: () => { const g = guessCar(devs); const n = Object.values(g).filter(Boolean).length; if (!n) { toast('No car sensors found. Add your car to Home Assistant first (Connect > Add any Home Assistant integration).'); return; } it.bind = Object.fromEntries(Object.entries(g).filter(([, v]) => v)); toast(`Found ${n} of 4 - check them below.`); saveYard(y); } }, 'Find my car\'s sensors'),
+      el('button', { type: 'button', class: 'mini', onclick: () => { const g = findCars(devs)[0]?.bind || guessCar(devs); const n = Object.values(g).filter(Boolean).length; if (!n) { toast('No car sensors found. Add your car to Home Assistant first (Connect > Add any Home Assistant integration).'); return; } it.bind = Object.fromEntries(Object.entries(g).filter(([, v]) => v)); toast(`Found ${n} of 4 - check them below.`); saveYard(y); } }, 'Find my car\'s sensors'),
       pick('Home or away', 'home', it, (d) => d.pres), pick('Plugged in', 'plugged', it, (d) => d.bin || d.kind === 'switch'), pick('Charging power', 'power', it, (d) => d.pw), pick('Battery', 'battery', it, (d) => d.bat))
       : it.kind === 'charger' ? el('p', { class: 'note' }, 'The charging cable runs from here to a car that\'s plugged in, and a power line runs here from your panel.')
       : el('div', { class: 'row' }, el('label', {}, 'Size'), el('input', { type: 'range', min: 0.4, max: 3, step: 0.1, value: it.scale || 1, oninput: (e) => { it.scale = Number(e.target.value); save(); } }));
     return el('div', { class: `edrow${sel ? ' sel' : ''}` }, head, btns, more);
   };
-  return el('div', {}, el('p', { class: 'note' }, 'Draw the yard and add trees, bushes and your car so the 3D home looks like your place. Trees and cars cast shadows in the sunlight view.'),
+  return el('div', {}, el('p', { class: 'note' }, 'Draw the yard and add trees, bushes and your car so the 3D home looks like your place. Cars from Home Assistant park themselves on your driveway. Drag a car, the charger or a tree on the house to where it really is.'),
     el('h3', {}, 'Draw an area'),
     el('div', { class: 'row wrap' }, ...Object.entries(AREA_KINDS).map(([k, [n]]) => el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'yard-area', kind: k, pts: [] }; editor(); } }, n))),
     y.areas.length ? el('div', {}, ...y.areas.map((a, i) => el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, el('i', { class: 'swatch', style: `--rc:${AREA_KINDS[a.kind][1]}` }), el('span', {}, AREA_KINDS[a.kind][0]), el('small', {}, `${a.pts.length} corners`)),
@@ -1239,7 +1307,7 @@ function drawTotals() {
     ...(t.openDoors ? [el('span', { class: 'stat bad' }, el('small', {}, 'Open'), `${t.openDoors}`)] : []), ...(t.leaks ? [el('span', { class: 'stat bad' }, el('small', {}, 'Leak'), '!')] : []));
 }
 async function refresh() {
-  try { S.live = await api('/api/floorplan/live'); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color, route }) => ({ deviceId, floor, pos, label, color, route })); const sig = JSON.stringify([S.live.pins, S.live.devices, S.live.totals, S.live.cars, S.live.weather]); if (sig === S.liveSig) return; S.liveSig = sig;   // nothing changed: leave the scene alone
+  try { S.live = await api('/api/floorplan/live'); if (!S.autoCarsTried) setTimeout(autoCars, 0); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color, route }) => ({ deviceId, floor, pos, label, color, route })); const sig = JSON.stringify([S.live.pins, S.live.devices, S.live.totals, S.live.cars, S.live.weather]); if (sig === S.liveSig) return; S.liveSig = sig;   // nothing changed: leave the scene alone
     drawPins(); drawTotals(); if (S.mode === 'edit' && S.tab === 'devices' && !$('#left').contains(document.activeElement)) editor(); }
   catch { /* next time */ }
 }

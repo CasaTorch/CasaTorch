@@ -123,7 +123,7 @@ export class Yard {
       const s = states?.[c.it.id] || {}, away = s.home === false, charging = !away && (s.powerW ?? 0) > 50, plugged = !away && (s.plugged || charging);
       c.o.traverse((x) => { if (x.isMesh) { x.material.opacity = away ? .14 : 1; x.material.depthWrite = !away; x.castShadow = !away; } });
       const bits = [s.battery != null ? `${Math.round(s.battery)}%` : null, away ? 'Away' : charging ? `Charging ${fmtW(s.powerW)}` : plugged ? 'Plugged in' : null].filter(Boolean);
-      c.lab.element.replaceChildren(el('b', {}, c.it.name || 'Car'), bits.length ? el('small', {}, bits.join(' · ')) : null);
+      c.lab.element.replaceChildren(...[el('b', {}, c.it.name || 'Car'), bits.length ? el('small', {}, bits.join(' · ')) : null].filter(Boolean));
       c.lab.element.className = `carlab${charging ? ' charging' : ''}${away ? ' away' : ''}`;
       if (plugged && this.charger) {
         const a = this.charger.localToWorld(this.charger.userData.plug.clone()), b = c.o.localToWorld(c.o.userData.port.clone()), gy = this.y + .03;

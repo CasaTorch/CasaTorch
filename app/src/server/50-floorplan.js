@@ -151,7 +151,8 @@ app.put('/api/floorplan/yard', requirePro, express.json({ limit: '512kb' }), (re
       bind: Object.fromEntries(CAR_BINDS.filter((k) => typeof it.bind?.[k] === 'string' && it.bind[k].length <= 200 && it.bind[k]).map((k) => [k, it.bind[k]])) });
     return o;
   });
-  d.yard = { areas, items }; fpWrite(d); res.json({ ok: true, yard: d.yard });
+  const seen = Array.isArray(b.seen) ? [...new Set(b.seen.filter((k) => typeof k === 'string' && /^[\w:.-]{1,120}$/.test(k)))].slice(0, 30) : d.yard?.seen || [];   // cars already parked once (a removed one stays removed)
+  d.yard = { areas, items, seen }; fpWrite(d); res.json({ ok: true, yard: d.yard });
 });
 /* Where the electrical panel is (the power lines start there) and which side is the front of the house. */
 app.put('/api/floorplan/settings', requirePro, express.json(), (req, res) => {
