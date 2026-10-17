@@ -42,15 +42,50 @@ app.use('/api/setup', express.json({ limit: '64kb' }), (req, res, next) => {
   if (!setupOpen()) return res.status(403).json({ error: 'CasaTorch is already set up. To change it, open Settings > Run setup again, or Connect in the dashboard.' });
   next();
 });
+/* ---- progress: every answer is kept as you go, so a refresh, a closed tab, a crash or a power cut picks up at the same
+   step. Kept sealed (AES-256-GCM, like config.json) in data/setup-progress.json; sign-in passwords are never kept (they're
+   asked again), and the file is deleted when setup finishes. What setup has proven (Home Assistant, Hue, Ring) comes back too. */
+const PROGRESS_FILE = path.join(DATA_DIR, 'setup-progress.json');
+const PROGRESS_DAYS = 30;
+const dropSignInPasswords = (a) => { const o = JSON.parse(JSON.stringify(a || {})); for (const k of ['account', 'phone']) if (o[k]) { delete o[k].password; delete o[k].password2; } return o; };
+function progressRead() {
+  try {
+    const p = JSON.parse(unseal(fs.readFileSync(PROGRESS_FILE, 'utf8').trim()) || 'null');
+    if (!p || Date.now() - Date.parse(p.at) > (p.rerun ? 1 : PROGRESS_DAYS) * 86400_000) return null;   // changing an existing setup: kept for a day
+    return p;
+  } catch { return null; }
+}
+function progressWrite(p) { writeFileSafe(PROGRESS_FILE, seal(JSON.stringify(p)), 0o600); }
+const progressClear = () => { try { fs.rmSync(PROGRESS_FILE, { force: true }); } catch { /* gone */ } };
+/* Started again after a crash or power cut: what setup had proven is still there. */
+{ const p = !isDemo() && progressRead(); if (p?.draft) { if (p.draft.ha?.url && p.draft.ha?.token) draft.ha = p.draft.ha; if (p.draft.hue?.username) draft.hue = p.draft.hue; if (p.draft.ring?.refreshToken) draft.ring = p.draft.ring; } }
+app.get('/api/setup/progress', (_req, res) => {
+  const p = progressRead(); if (!p) return res.json({ progress: null });
+  if (!draft.ha && p.draft?.ha?.url) draft.ha = p.draft.ha;   // proven earlier in this run
+  if (!draft.hue && p.draft?.hue?.username) draft.hue = p.draft.hue;
+  res.json({ progress: { at: p.at, rerun: !!p.rerun, i: p.i, max: p.max, answers: p.answers, added: p.added || [], focus: p.focus || null, ui: p.ui || {}, haOk: !!draft.ha } });
+});
+app.put('/api/setup/progress', (req, res) => {
+  if (isDemo()) return res.json({ ok: true, demo: true });
+  const b = req.body || {};
+  if (!b.answers || typeof b.answers !== 'object') return res.status(400).json({ error: 'nothing to keep' });
+  try {
+    progressWrite({ at: nowIso(), rerun: isConfigured(), i: Math.max(0, Math.min(99, Number(b.i) || 0)), max: Math.max(0, Math.min(99, Number(b.max) || 0)), answers: dropSignInPasswords(b.answers), added: Array.isArray(b.added) ? b.added.slice(0, 50) : [], focus: b.focus || null, ui: b.ui && typeof b.ui === 'object' ? b.ui : {}, draft: { ha: draft.ha, hue: draft.hue, ring: draft.ring } });
+    res.json({ ok: true });
+  } catch (err) { res.status(507).json({ error: `Couldn't keep your answers: ${err.code === 'ENOSPC' ? 'the disk is full' : err.message}` }); }
+});
+app.delete('/api/setup/progress', (_req, res) => { progressClear(); res.json({ ok: true }); });
 app.get('/api/setup/state', (_req, res) => res.json({ open: setupOpen(), configured: isConfigured(), demo: isDemo(), ha: draft.ha ? { url: draft.ha.url, version: draft.ha.version } : null }));
 app.get('/api/setup/catalog', (_req, res) => res.sendFile(SETUP_CATALOG));
 
 /* ---- talking to things ---- */
 const clean = (u) => String(u || '').trim().replace(/\/+$/, '');
 const badUrl = (u) => !/^https?:\/\/[^\s/]+/i.test(u);
-/** fetch that also accepts the self-signed certificates home gear ships with (UniFi, OPNsense). */
+/** fetch that also accepts the self-signed certificates home gear ships with (UniFi, OPNsense) - but only for
+ *  addresses on the home network (isLanHost, 74-network.js). An internet address must have a real certificate. */
+const lanHttps = (url) => { try { const u = new URL(url); return u.protocol === 'https:' && isLanHost(u.hostname); } catch { return false; } };
 function getJson(url, { headers = {}, method = 'GET', body, insecure = false, timeout = 10000 } = {}) {
-  if (!insecure || !url.startsWith('https:')) {
+  if (!insecure || !lanHttps(url)) {
     return fetch(url, { method, headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout) })
       .then(async (r) => { const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch { /* text */ } if (!r.ok) throw Object.assign(new Error(j?.message || j?.error || `HTTP ${r.status}`), { status: r.status, body: j }); return j; });
   }
@@ -62,29 +97,33 @@ function getJson(url, { headers = {}, method = 'GET', body, insecure = false, ti
     req.on('timeout', () => req.destroy(new Error('timed out'))); req.on('error', fail); if (body) req.write(JSON.stringify(body)); req.end();
   });
 }
-const why = (err) => {
-  const m = String(err?.cause?.code || err?.message || err);
-  if (/ENOTFOUND|EAI_AGAIN/.test(m)) return 'that address could not be found on your network';
-  if (/ECONNREFUSED/.test(m)) return 'nothing answered at that address and port';
-  if (/timed out|TimeoutError|aborted/i.test(m)) return 'it did not answer in time';
-  if (err?.status === 401 || err?.status === 403) return 'it refused the key or token';
-  if (/certificate|SELF_SIGNED/i.test(m)) return 'its security certificate is not trusted';
-  return m;
-};
+/* One plain sentence for what went wrong, and one for the fix (05b-setup-net.js). */
+const why = (err, ctx = {}) => { const f = friendlyError(err, ctx); return f.fix ? `${f.error} ${f.fix}` : f.error; };
 
 const TESTS = {
-  /* Home Assistant: the token must work AND be an admin's, or adding integrations will fail later. */
+  /* Home Assistant: the token must work AND be an admin's, or adding integrations will fail later. The address is
+     forgiving: "homeassistant.local", "192.168.1.20" or a pasted dashboard link all find it (05b-setup-net.js). */
   async homeassistant({ url, token }) {
-    url = clean(url);
-    if (badUrl(url)) throw new Error('the address should start with http:// or https://');
-    const H = { Authorization: `Bearer ${String(token || '').trim()}` };
-    const cfg = await getJson(`${url}/api/config`, { headers: H });
+    const base = await haPickUrl(url);
+    const tok = cleanToken(token);
+    if (!tok) throw userErr('Paste the access token, or use "Sign in with Home Assistant" above.');
+    if (tok.length < 40) throw userErr('That token looks too short. A Home Assistant token is a long code (about 180 characters) with two dots in it.', 'In Home Assistant: your profile > Security > Long-lived access tokens > Create token, then copy all of it.');
+    const H = { Authorization: `Bearer ${tok}` };
+    let cfg;
+    try { cfg = await withRetry(() => getJson(`${base.url}/api/config`, { headers: H })); }
+    catch (err) {
+      if (err.status === 401 || err.status === 403) {
+        const exp = jwtInfo(tok)?.exp;
+        if (exp && exp * 1000 < Date.now()) throw userErr(`That token expired on ${new Date(exp * 1000).toISOString().slice(0, 10)}.`, 'Make a new long-lived token in Home Assistant (your profile > Security) and paste it - or use "Sign in with Home Assistant", which makes one for you.');
+      }
+      throw err;
+    }
     let entries = [];
-    try { entries = await getJson(`${url}/api/config/config_entries/entry`, { headers: H }); }
-    catch (err) { if (err.status === 401 || err.status === 403) throw new Error('the token works, but its user is not an administrator - CasaTorch needs an admin token to add integrations'); }
-    draft.ha = { url, token: String(token).trim(), version: cfg?.version || null };
+    try { entries = await withRetry(() => getJson(`${base.url}/api/config/config_entries/entry`, { headers: H })); }
+    catch (err) { if (err.status === 401 || err.status === 403) throw userErr('The token works, but its user is not an administrator - CasaTorch needs an admin token to add integrations.', 'Sign in with an administrator account, or turn on "Administrator" for that user in Home Assistant (Settings > People).'); }
+    draft.ha = { url: base.url, token: tok, version: cfg?.version || null };
     const domains = [...new Set((entries || []).map((e) => e.domain))];
-    return { ok: true, message: `Connected to Home Assistant ${cfg?.version || ''} at "${cfg?.location_name || 'Home'}"`, version: cfg?.version, timeZone: cfg?.time_zone, units: cfg?.unit_system?.temperature, domains };
+    return { ok: true, message: `Connected to Home Assistant ${cfg?.version || ''} at "${cfg?.location_name || 'Home'}"`, version: cfg?.version, timeZone: cfg?.time_zone, units: cfg?.unit_system?.temperature, domains, url: base.url, ...(base.url !== String(url || '').trim() ? { fixed: { url: base.url } } : {}), ...(base.warning ? { warning: base.warning } : {}) };
   },
   frigate: (b) => frigateTest(b),   // 29f-frigate.js
   /* The Home AI Agent: the key (or address) works, and which model to use. */
@@ -129,24 +168,23 @@ const TESTS = {
    2. "Sign in with Home Assistant": its own login page opens (in a small window), the person signs in
       there, Home Assistant hands back a one-time code, and CasaTorch turns that into a long-lived token
       named "CasaTorch" (visible - and removable - in Home Assistant under Profile > Security). */
-const HA_GUESSES = ['http://homeassistant.local:8123', 'http://homeassistant:8123', 'http://home-assistant.local:8123'];
-async function looksLikeHa(url) {
-  try { const r = await fetch(`${url}/api/`, { signal: AbortSignal.timeout(3500), redirect: 'manual' }); return r.status === 401 || r.status === 200; } catch { return false; }
-}
 app.get('/api/setup/ha/find', async (_req, res) => {
-  const hits = await Promise.all(HA_GUESSES.map(async (u) => ((await looksLikeHa(u)) ? u : null)));
-  res.json({ url: hits.find(Boolean) || null });
+  if (process.env.SUPERVISOR_TOKEN) return res.json({ url: SUPERVISOR_HA, all: [SUPERVISOR_HA] });
+  const all = await DISCOVERERS.homeassistant().catch(() => []);   // what it announces on the network (mDNS), then the usual names
+  res.json({ url: all[0] || null, all });
 });
+/* Everything setup can find by itself, to fill in (05b-setup-net.js). */
+app.get('/api/setup/discover', async (req, res) => res.json(await discoverAll(req.query.fresh === '1')));
 const haSignins = new Map();   // state -> { url, origin, exp }
 app.post('/api/setup/ha/signin', async (req, res) => {
-  const url = clean(req.body?.url);
-  if (badUrl(url)) return res.status(400).json({ error: 'The address should start with http:// or https://' });
-  if (!(await looksLikeHa(url))) return res.status(400).json({ error: `Home Assistant didn't answer at ${url}. Check the address (it usually ends in :8123).` });
+  let url;
+  try { url = (await haPickUrl(req.body?.url)).url; }
+  catch (err) { const f = friendlyError(err, { what: 'Home Assistant', url: err.triedUrl || '' }); return res.status(400).json({ error: f.fix ? `${f.error} ${f.fix}` : f.error }); }
   const origin = `${req.protocol}://${req.headers.host}`, state = crypto.randomBytes(18).toString('base64url');
   for (const [k, v] of haSignins) if (v.exp < Date.now()) haSignins.delete(k);
   haSignins.set(state, { url, origin, exp: Date.now() + 10 * 60_000 });
   const q = new URLSearchParams({ response_type: 'code', client_id: `${origin}/`, redirect_uri: `${origin}/api/setup/ha/callback`, state });
-  res.json({ go: `${url}/auth/authorize?${q}` });
+  res.json({ go: `${url}/auth/authorize?${q}`, url });
 });
 function haWsAt(url, token, msg) {
   return new Promise((ok, bad) => {
@@ -178,7 +216,15 @@ app.get('/api/setup/ha/signin-result', (_req, res) => { const r = haSigninResult
 app.post('/api/setup/test/:kind', async (req, res) => {
   const t = Object.hasOwn(TESTS, req.params.kind) ? TESTS[req.params.kind] : null;   // only the tests above, never Object's own properties
   if (!t) return res.status(404).json({ ok: false, error: 'unknown test' });
-  try { res.json(await t(req.body || {})); } catch (err) { res.json({ ok: false, error: why(err) }); }
+  const tidy = tidyTestBody(req.params.kind, req.body || {});   // "homeassistant.local" -> http://homeassistant.local:8123 and the like
+  if (tidy.error) return res.json({ ok: false, error: tidy.error });
+  const fixed = Object.keys(tidy.fixed).length ? { fixed: tidy.fixed } : {};
+  try { const r = await withRetry(() => t(tidy.body)); res.json({ ...fixed, ...r, ...(r.fixed || fixed.fixed ? { fixed: { ...fixed.fixed, ...r.fixed } } : {}) }); }   // a blip is tried again before anyone sees it
+  catch (err) {
+    const f = friendlyError(err, { what: TEST_NAMES[req.params.kind] || 'it', url: err.triedUrl || tidy.body.url || tidy.body.dnsUrl || tidy.body.snapshotUrl || '' });
+    if (req.params.kind === 'homeassistant' && err.triedUrl && err.triedUrl !== String(tidy.body.url || '').trim()) fixed.fixed = { url: err.triedUrl };   // show the address as tried
+    res.json({ ok: false, error: f.error, fix: f.fix, ...fixed });
+  }
 });
 
 /* ---- adding integrations to Home Assistant (its own config flows) ---- */
@@ -258,11 +304,18 @@ app.get('/api/setup/current', async (_req, res) => {
     controls: c.controls || c.hue || (c.shelly || []).length ? { has: 'yes', kinds: haKinds(c.controls?.kinds) } : { has: 'no' },
     sensors: c.sensors?.kinds || c.yolink ? { has: 'yes', kinds: haKinds(c.sensors?.kinds), alertOn: c.sensors?.alertOn || ['leak', 'smoke', 'battery'] } : { has: 'no' },
     network: { kind: c.network?.provider || undefined, speedtest: c.network?.speedtest === false ? 'no' : 'yes' },
-    energy: c.energy ? { track: 'yes', utility: c.energy.utility || 'other', rate: c.energy.ratePerKwh ?? '', budget: c.energy.budget ?? '' } : {},
-    alerts: { quiet: c.alerts?.quietHours || '22-7' },
+    energy: c.energy ? { track: 'yes', utility: c.energy.utility || 'other', rate: c.energy.ratePerKwh ?? '', budget: c.energy.budget ?? '', kinds: haKinds(c.energy.kinds) } : {},
+    alerts: { quiet: c.alerts?.quietHours || '22-7', phone: c.alerts?.phone === 'homeassistant' ? 'ha' : 'no' },   // as saved - not the default
   }, keeps: { homeAssistant: !!c.homeAssistant, hue: !!c.hue, shelly: (c.shelly || []).length, yolink: !!c.yolink, cameras: (c.cameras || []).length, ring: !!c.ring, license: !!c.license } });
 });
+/* Finish can only run once at a time (a double tap, or a retry while the first is still saving). */
+let setupFinishing = false;
 app.post('/api/setup/finish', async (req, res) => {
+  if (setupFinishing) return res.status(409).json({ error: 'Already saving - one moment.', busy: true });
+  setupFinishing = true;
+  try { await setupFinish(req, res); } finally { setupFinishing = false; }
+});
+async function setupFinish(req, res) {
   const raw = req.body?.answers || {};
   const a = strip(raw);
   const prev = isDemo() ? {} : config;   // run again: anything not answered now is kept
@@ -323,12 +376,15 @@ app.post('/api/setup/finish', async (req, res) => {
     ring: draft.ring || prev.ring || undefined,
     controls: a.controls?.has === 'yes' ? { kinds: picked('controls') } : null,
     sensors: a.sensors?.has === 'yes' ? { kinds: picked('sensors'), alertOn: a.sensors.alertOn || [] } : { alertOn: ['leak', 'smoke', 'battery'] },
-    network: { provider: a.network?.kind || 'other', meraki: a.network?.meraki || a.cameras?.['meraki-mv'] || a.sensors?.['meraki-mt'] || null, unifi: a.network?.unifi || null,
-      dns: a.network?.dns && a.network.dns !== 'none' ? { kind: a.network.dns, url: a.network.dnsUrl || null, key: a.network.dnsKey || null } : null, speedtest: a.network?.speedtest !== 'no' },
+    // Running setup again keeps what wasn't asked about this time (the UniFi console, the DNS blocker).
+    network: { provider: a.network?.kind || 'other', meraki: a.network?.meraki || a.cameras?.['meraki-mv'] || a.sensors?.['meraki-mt'] || null,
+      unifi: a.network?.unifi?.apiKey ? a.network.unifi : (a.network?.kind || 'other') === (prev.network?.provider || 'other') ? prev.network?.unifi || null : null,
+      dns: a.network?.dns === undefined || (a.network.dns === prev.network?.dns?.kind && !a.network.dnsUrl) ? prev.network?.dns || null : a.network.dns && a.network.dns !== 'none' ? { kind: a.network.dns, url: a.network.dnsUrl || null, key: a.network.dnsKey || null } : null, speedtest: a.network?.speedtest !== 'no' },
     energy: a.energy?.track === 'yes' ? { utility: a.energy.utility && a.energy.utility !== 'other' ? a.energy.utility : null, ratePerKwh: Number(a.energy.rate) || null, budget: Number(a.energy.budget) || null, kinds: picked('energy') } : null,
     ai: aiOf(a.ai?.provider) && raw.ai?._test?.ok && raw.ai._test.model ? { provider: a.ai.provider, model: String(raw.ai._test.model).slice(0, 120), url: a.ai.url ? String(a.ai.url).trim() : null, apiKey: a.ai.apiKey ? String(a.ai.apiKey).trim() : null } : prev.ai || undefined,
     alerts: { phone: a.alerts?.phone === 'ha' && usesHa ? 'homeassistant' : null, quietHours: a.alerts?.quiet || '22-7' },
-    addedToHomeAssistant: [...(prev.addedToHomeAssistant || []), ...(Array.isArray(raw._added) ? raw._added.slice(0, 50).map((x) => ({ domain: String(x.domain), title: String(x.title) })) : [])],
+    // each integration once, however many times setup runs
+    addedToHomeAssistant: [...new Map([...(prev.addedToHomeAssistant || []), ...(Array.isArray(raw._added) ? raw._added.slice(0, 50).map((x) => ({ domain: String(x.domain), title: String(x.title) })) : [])].map((x) => [`${x.domain}|${x.title}`, x])).values()].slice(-100),
   };
   // Network monitoring keys entered in setup become Network sources (the same as adding them in the Network tab).
   const mer = [a.network?.kind === 'meraki' && a.network?.meraki, opt('cameras', 'meraki-mv'), opt('sensors', 'meraki-mt')].find((x) => x?.apiKey);
@@ -339,7 +395,10 @@ app.post('/api/setup/finish', async (req, res) => {
   next.network.sources = srcs.slice(0, 10);
   if (mer) next.network.meraki = null;   // the key lives in its source now (sealed there)
   for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
-  try { saveConfig(next); } catch (err) { return res.status(500).json({ error: `could not save the settings: ${err.message}` }); }
+  if (isConfigured() && !isDemo() && typeof settingsSnapshot === 'function') settingsSnapshot('before-setup-change');   // Settings › Health can put it back
+  try { saveConfig(next); } catch (err) { return res.status(500).json({ error: err.code === 'ENOSPC' ? 'The disk is full, so your settings couldn\'t be saved. Free some space (Settings › Health shows how), then press Finish again - your answers are kept.' : err.code === 'EACCES' || err.code === 'EROFS' || err.code === 'EPERM' ? 'CasaTorch isn\'t allowed to save in its data folder. Check the folder\'s permissions (or the NAS share), then press Finish again - your answers are kept.' : `could not save the settings: ${err.message}` }); }
+  progressClear();
+  if (!isDemo() && typeof settingsSnapshot === 'function') settingsSnapshot('after-setup');
   if (typeof nudgesFromSetup === 'function') nudgesFromSetup((a.reminders?.list || []).filter((r) => r?.title).map((r) => ({ title: r.title, days: Array.isArray(r.days) ? r.days.map(Number) : null, time: r.time || null, icon: r.icon, sound: r.sound })));
   if (!isDemo()) authSetOwner({ username: acct.username, passwordHash: keepPw ? null : hashSecret(acct.password), acceptedTerms: acct.terms === true });
   let pair = null;
@@ -353,7 +412,7 @@ app.post('/api/setup/finish', async (req, res) => {
   if (next.ring && typeof ringConnect === 'function' && proStatus().pro) ringConnect();
   console.log(`  setup: done for "${next.house.name}"`);
   res.json({ ok: true, ...(pair ? { pair } : {}) });
-});
+}
 app.post('/api/setup/demo', (_req, res) => {
   if (isConfigured() && !isDemo()) return res.status(403).json({ error: 'already set up' });
   saveConfig({ demo: true }); res.json({ ok: true });

@@ -50,7 +50,7 @@ CasaTorch never phones home to check it.
 | Fewer false alarms: an alert must still be there a minute later (water and smoke go out at once) | ✓ | ✓ | Now |
 | **Weekly report** - every Monday: energy and cost vs the week before, always-on load, top devices, alerts, internet and server downtime, tips (written by your AI if connected, otherwise by rules); phone alert | | ✓ | Now |
 | Bill forecast for the month | | ✓ | Now |
-| **Self-healing** - restarts stuck integrations and tells you what it fixed | | ✓ | Coming |
+| **Health** - CasaTorch checks itself every 15 minutes (storage, clock, settings, connections, certificates, backups), tries a connection that stops answering again, puts back damaged settings from its own history, restarts itself if it gets stuck, and tells you what it fixed | ✓ | ✓ | Now |
 | Energy history (by day and by device) | 7 days | 2 years | Now |
 | Multiple homes (cabin, parents' house) in one app | | ✓ | Coming |
 | Extra wall-panel layouts and theme packs | | ✓ | Coming |

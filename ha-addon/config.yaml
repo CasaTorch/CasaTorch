@@ -12,6 +12,8 @@ init: false
 # Host networking lets CasaTorch find Hue bridges, Shelly plugs and count devices on your network.
 host_network: true
 webui: "http://[HOST]:[PORT:8090]"
+# Home Assistant restarts the add-on if CasaTorch stops answering.
+watchdog: "http://[HOST]:[PORT:8090]/api/health"
 ports:
   8090/tcp: 8090
   8443/tcp: 8443

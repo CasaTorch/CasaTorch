@@ -41,8 +41,8 @@ const clientIp = (req) => {
 function verifySecret(stored, given) {
   const [kind, salt, hash] = String(stored || '').split('$');
   if (kind !== 'scrypt' || !salt || !hash) return false;
-  const got = crypto.scryptSync(String(given), Buffer.from(salt, 'hex'), 32);
-  return crypto.timingSafeEqual(got, Buffer.from(hash, 'hex'));
+  const got = crypto.scryptSync(String(given), Buffer.from(salt, 'hex'), 32), want = Buffer.from(hash, 'hex');   // scrypt N=16384, r=8, p=1
+  return want.length === got.length && crypto.timingSafeEqual(got, want);   // a damaged hash is a wrong password, not a crash
 }
 const DUMMY_HASH = `scrypt$${'00'.repeat(16)}$${'00'.repeat(32)}`;
 

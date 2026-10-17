@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="format-detection" content="telephone=no, address=no, email=no">
   <meta name="color-scheme" content="dark light">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https: http:; base-uri 'none'; form-action 'none'">
   <title>CasaTorch</title>
   <link rel="stylesheet" href="shell.css">
 </head>
 <body>
-  <main id="app" aria-live="polite"></main>
+  <main id="app"></main>
+  <noscript>CasaTorch</noscript>
+  <script src="i18n/words.js"></script>
   <script src="bridge.js"></script>
   <script src="shell.js"></script>
 </body>

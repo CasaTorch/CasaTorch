@@ -33,7 +33,7 @@ data class Home(
 ) {
     /** The address that worked last time first, then the secure one at home, then from anywhere, then plain. */
     val candidates: List<Uri>
-        get() = listOfNotNull(here, lan, remote, plain).distinct().map(Uri::parse).filter { (it.scheme == "https" || it.scheme == "http") && !it.host.isNullOrEmpty() }
+        get() = listOfNotNull(here, lan, remote, plain).distinct().map(Uri::parse).filter(::allowed)   // plain http only on the home network
     val hosts: Set<String> get() = candidates.mapNotNull { it.host?.lowercase() }.toSet()
     val origins: Set<String> get() = candidates.map(::originOf).toSet()
 
@@ -45,6 +45,8 @@ data class Home(
     }
 
     companion object {
+        /** https anywhere, plain http only to an address on the home network. */
+        fun allowed(u: Uri): Boolean = !u.host.isNullOrEmpty() && (u.scheme == "https" || (u.scheme == "http" && Net.isLocalHost(u.host!!)))
         /** scheme://host[:port], the way the web view reports a page's origin (no default port). */
         fun originOf(u: Uri): String {
             val dflt = (u.scheme == "https" && u.port == 443) || (u.scheme == "http" && u.port == 80)
@@ -56,6 +58,33 @@ data class Home(
             fun str(j: JSONObject, k: String) = if (j.isNull(k)) null else j.optString(k).takeIf { it.isNotEmpty() }
             return Home(o.getString("id"), o.optString("name", "Home"), str(u, "name"), str(u, "role"), str(a, "lan"), str(a, "remote"), str(a, "plain"), str(a, "here"), o.optLong("last"))
         }
+    }
+}
+
+/** The phone's connection, and which addresses count as "at home" (the same rule as the shell and the iPhone app). */
+object Net {
+    /** Addresses that only exist inside a home network (or a private one like Tailscale): the only places plain http goes. */
+    fun isLocalHost(raw: String): Boolean {
+        val h = raw.lowercase().removePrefix("[").removeSuffix("]").removeSuffix(".")
+        if (h.isEmpty()) return false
+        if (h == "localhost") return true
+        val v4 = Regex("^(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})$").find(h)
+        if (v4 != null) {
+            val a = v4.groupValues[1].toInt(); val b = v4.groupValues[2].toInt()
+            return a == 10 || a == 127 || (a == 172 && b in 16..31) || (a == 192 && b == 168) || (a == 169 && b == 254) || (a == 100 && b in 64..127)
+        }
+        if (':' in h) return h == "::1" || h.startsWith("fc") || h.startsWith("fd") || Regex("^fe[89ab]").containsMatchIn(h)
+        if ('.' !in h) return true
+        return listOf(".local", ".lan", ".home", ".home.arpa", ".internal", ".localdomain").any { h.endsWith(it) }
+    }
+    /** { online, wifi, cellular } for the app's own screens. */
+    fun json(ctx: Context): JSONObject {
+        val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)
+        val caps = runCatching { cm?.getNetworkCapabilities(cm.activeNetwork) }.getOrNull()
+        val online = caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        val wifi = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true || caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) == true
+        val cell = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true
+        return JSONObject().put("online", online || wifi).put("wifi", wifi).put("cellular", cell)
     }
 }
 

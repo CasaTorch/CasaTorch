@@ -38,6 +38,8 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             switch a["kind"] as? String {
             case "success": UINotificationFeedbackGenerator().notificationOccurred(.success)
             case "error": UINotificationFeedbackGenerator().notificationOccurred(.error)
+            case "warning": UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            case "light": UIImpactFeedbackGenerator(style: .light).impactOccurred()
             case "medium": UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             default: UISelectionFeedbackGenerator().selectionChanged()
             }
@@ -92,11 +94,21 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                 off += chunk
             }
             return ["name": r.name, "size": r.data.count, "chunked": true]
+        case "probe":
+            // the app's own screens asking "is there a CasaTorch at this address?" - see Probe in Net.swift
+            guard fromShell, let s = a["url"] as? String, let u = URL(string: s), ["http", "https"].contains(u.scheme ?? ""), u.host != nil else { throw Failure("Not allowed here.") }
+            let ms = (a["timeout"] as? Double) ?? 5000
+            return await Probe.run(u, timeout: min(max(ms, 1000), 15000) / 1000)
+        case "discover":
+            // the app's own Find screen: CasaTorch boxes announcing themselves on this Wi-Fi - see Discover in Net.swift
+            guard fromShell else { throw Failure("Not allowed here.") }
+            let ms = (a["timeout"] as? Double) ?? 3000
+            return await Discover.run(timeout: min(max(ms, 1000), 8000) / 1000)
         case "scanQR":
             return try await QRScanner.scan(from: vc)
         case "homes":
             return HomeStore.shared.homes.map { h -> [String: Any] in
-                var o: [String: Any] = ["id": h.id, "name": h.name, "user": ["name": h.user?.name ?? "", "role": h.user?.role ?? ""], "addresses": ["lan": h.addresses.lan as Any, "remote": h.addresses.remote as Any, "plain": h.addresses.plain as Any, "here": h.addresses.here as Any]]
+                var o: [String: Any] = ["id": h.id, "name": h.name, "user": ["name": h.user?.name ?? "", "role": h.user?.role ?? ""], "addresses": ["lan": h.addresses.lan.map { $0 as Any } ?? NSNull(), "remote": h.addresses.remote.map { $0 as Any } ?? NSNull(), "plain": h.addresses.plain.map { $0 as Any } ?? NSNull(), "here": h.addresses.here.map { $0 as Any } ?? NSNull()]]
                 if let l = h.last { o["last"] = ISO8601DateFormatter().string(from: l) }
                 return o
             }
@@ -104,7 +116,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             guard fromShell else { throw Failure("Not allowed here.") }
             guard let id = a["id"] as? String, let name = a["name"] as? String, let token = a["token"] as? String, id.range(of: "^[A-Za-z0-9_-]{8,40}$", options: .regularExpression) != nil else { throw Failure("That sign-in didn't come back right.") }
             let ad = a["addresses"] as? [String: Any] ?? [:], u = a["user"] as? [String: Any] ?? [:]
-            let clean: (Any?) -> String? = { v in guard let s = v as? String, let url = URL(string: s), ["http", "https"].contains(url.scheme ?? ""), url.host != nil else { return nil }; return s }
+            let clean: (Any?) -> String? = { v in guard let s = v as? String, let url = URL(string: s), isAllowedAddress(url) else { return nil }; return s }
             let home = Home(id: id, name: String(name.prefix(60)), user: .init(name: u["name"] as? String, role: u["role"] as? String),
                             addresses: .init(lan: clean(ad["lan"]), remote: clean(ad["remote"]), plain: clean(ad["plain"]), here: clean(ad["here"])), last: Date())
             guard HomeStore.shared.upsert(home, token: token) else { throw Failure("This phone's secure storage didn't take the sign-in.") }

@@ -13,12 +13,63 @@ function el(tag, attrs = {}, ...kids) {
   for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
   return e;
 }
+/* Talking to CasaTorch. A blip (Wi-Fi, CasaTorch restarting) is tried again with a growing pause before anyone sees
+   an error; if CasaTorch restarted and wants the setup code again, it's asked for and the request carries on. */
+const wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
+function netNote(on) { const m = $('#navmsg'); if (!m) return; if (on) { m.dataset.net = '1'; m.textContent = T('Reconnecting to CasaTorch…'); } else if (m.dataset.net) { delete m.dataset.net; m.textContent = ''; } }
 const api = async (url, opts = {}) => {
-  const r = await fetch(url, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers: opts.body ? { 'Content-Type': 'application/json' } : {}, body: opts.body ? JSON.stringify(opts.body) : undefined });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok && !('ok' in j) && !j.type) throw new Error(j.error || `HTTP ${r.status}`);
-  return j;
+  for (let n = 0; ; n++) {
+    let r;
+    try { r = await fetch(url, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers: opts.body ? { 'Content-Type': 'application/json' } : {}, body: opts.body ? JSON.stringify(opts.body) : undefined }); }
+    catch {
+      if (opts.noRetry || n >= 3) { netNote(false); throw new Error(T('Can\'t reach CasaTorch right now - check this device\'s Wi-Fi, then try again. Your answers are kept.')); }
+      netNote(true); await wait([800, 2000, 4500][n]); continue;
+    }
+    netNote(false);
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 401 && j.needCode && n < 2) { await regate(); continue; }
+    if ([502, 503, 504].includes(r.status) && !opts.noRetry && n < 3) { await wait([800, 2000, 4500][n]); continue; }
+    if (!r.ok && !('ok' in j) && !j.type) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status, body: j });
+    return j;
+  }
 };
+/* CasaTorch restarted (a power cut, an update): the setup code is asked again, then setup carries on where it was. */
+function regate() { W.gate ||= (async () => { await setupCodeGate(); W.gate = null; if (W.ready) go(); })(); return W.gate; }
+
+/* ---------- progress: kept on CasaTorch as you go, so a refresh, a closed tab or a power cut picks up right here ---------- */
+let saveT = null, lastSaved = '';
+function progressBody() {
+  return { answers: W.a, i: W.i, max: W.max || 0, added: W.added, focus: W.focus || null,
+    ui: { hue: W.hue?.paired ? { host: W.hue.host, paired: true, msg: W.hue.msg } : W.hue?.host ? { host: W.hue.host } : null, ring: W.ring?.step === 'done' ? { step: 'done' } : null, ha: W.ha && !W.rerun ? W.ha : null } };
+}
+function saveProgress(now = false) {
+  if (!W.ready || W.done || W.demo || W.linked) return;   // opened from Connect for one item: a short visit of its own
+  clearTimeout(saveT);
+  const run = () => {
+    let body; try { body = JSON.stringify(progressBody()); } catch { return; }
+    if (body === lastSaved) return;
+    lastSaved = body;
+    fetch('/api/setup/progress', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body, keepalive: body.length < 60000 }).then((r) => { if (!r.ok) lastSaved = ''; }).catch(() => { lastSaved = ''; });
+  };
+  if (now) run(); else saveT = setTimeout(run, 700);
+}
+addEventListener('input', () => saveProgress()); addEventListener('change', () => saveProgress());
+addEventListener('pagehide', () => saveProgress(true)); document.addEventListener('visibilitychange', () => { if (document.hidden) saveProgress(true); });
+function resumeBar() {
+  let bar = $('#resume');
+  if (!bar) { bar = el('div', { id: 'resume', class: 'resume', role: 'status' }); $('#page').before(bar); }
+  if (!W.resumed || W.i === 0) { bar.replaceChildren(); return; }
+  const pw = !W.rerun && !W.a.account?.password ? ` ${T('For your safety, passwords aren\'t kept - you\'ll type your login password again before Finish.')}` : '';
+  bar.replaceChildren(el('span', {}, el('b', {}, T('Welcome back.')), ` ${T('You\'re right where you left off.')}${pw}`),
+    el('button', { type: 'button', class: 'small ghost', onclick: async () => { if (!confirm(T('Start setup again from the beginning? What you\'ve typed so far is cleared.'))) return; W.done = true; await api('/api/setup/progress', { method: 'DELETE' }).catch(() => {}); location.replace(location.pathname); } }, T('Start over')));
+}
+/* ---------- found on your network: filled in for you (still yours to change) ---------- */
+function prefillFound(store, find) {
+  const got = W.found?.[find?.from]; if (!find || !got?.length) return null;
+  store._found ||= {};
+  if (!(find.field in store._found) && !store[find.field]) store._found[find.field] = store[find.field] = find.join ? got.join(find.join) : got[0];
+  return store._found[find.field] && store[find.field] === store._found[find.field] ? el('div', { class: 'found' }, '✓ ', T('Found on your network and filled in - check it\'s right.')) : null;
+}
 const ans = (stepId) => (W.a[stepId] ||= {});
 const pretty = (s) => String(s).replace(/[_-]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
@@ -163,18 +214,22 @@ function haSigninEl(sub) {
   const msg = el('div', { class: 'note' });
   if (sub._signedIn && W.ha) { box.append(el('div', { class: 'ok' }, `✓ ${W.ha.message}`), el('p', { class: 'note' }, 'CasaTorch made its own access token in Home Assistant (named "CasaTorch"). You can see or remove it there under Profile > Security.'),
     el('button', { type: 'button', class: 'small', onclick: () => { sub._signedIn = false; W.ha = null; go(); } }, 'Use a different Home Assistant')); return box; }
+  if (!sub.url && !sub._looked && W.found?.homeassistant?.[0]) { sub.url = W.found.homeassistant[0]; sub._looked = true; msg.textContent = T('Found Home Assistant on your network at {url}.', { url: sub.url }); }
   const url = el('input', { type: 'url', placeholder: 'http://homeassistant.local:8123', value: sub.url || '', 'aria-label': 'Home Assistant address', oninput: (e) => { sub.url = e.target.value.trim(); } });
   const find = el('button', { type: 'button', class: 'small', onclick: async () => {
-    find.disabled = true; msg.textContent = 'Looking on your network…';
+    find.disabled = true; msg.textContent = T('Looking on your network…');
     const r = await api('/api/setup/ha/find').catch(() => ({}));
-    if (r.url) { sub.url = r.url; url.value = r.url; msg.textContent = `Found it at ${r.url}.`; } else msg.textContent = 'Couldn\'t find it by itself - type its address (the one you open Home Assistant with).';
-    find.disabled = false;
+    if (r.url) { sub.url = r.url; url.value = r.url; msg.textContent = (r.all || []).length > 1 ? T('Found {n}: {list}. The first is filled in.', { n: r.all.length, list: r.all.join(', ') }) : T('Found it at {url}.', { url: r.url }); } else msg.textContent = T('Couldn\'t find it by itself - type its address (the one you open Home Assistant with). Just the name or number is fine, like 192.168.1.20.');
+    find.disabled = false; saveProgress();
   } }, 'Find it');
+  if (!sub.url && !sub._looked) { sub._looked = true; setTimeout(() => { if (find.isConnected && !sub.url) find.click(); }, 50); }   // look once by itself
   const go2 = el('button', { type: 'button', class: 'primary', onclick: async () => {
     if (!sub.url) { msg.textContent = 'Type the address first, or press Find it.'; return; }
     const win = window.open('about:blank', 'ha-signin', 'width=520,height=720');
     try {
       const r = await api('/api/setup/ha/signin', { body: { url: sub.url } });
+      if (r.url && r.url !== sub.url) { sub.url = r.url; url.value = r.url; }
+      saveProgress(true);
       if (win) win.location = r.go; else location.href = r.go;
       msg.textContent = 'Sign in to Home Assistant in the window that opened…';
     } catch (e) { win?.close(); msg.textContent = e.message; }
@@ -198,6 +253,9 @@ function testEl(kind, store, label = T('Test connection')) {
   const out = el('div', { class: 'note' });
   const show = (r) => {
     out.replaceChildren(r.ok ? el('span', { class: 'ok' }, `✓ ${r.message || T('Connected')}`) : el('span', { class: 'err' }, `✗ ${r.error}`));
+    if (!r.ok && r.fix) out.append(el('div', { class: 'fix' }, el('b', {}, T('How to fix:')), ' ', T(r.fix)));
+    if (r.ok && r.warning) out.append(el('div', { class: 'warn' }, `⚠ ${T(r.warning)}`));
+    if (r.fixedNote) out.append(el('div', { class: 'note' }, r.fixedNote));
     // a device with its own certificate (Frigate's secure port): show its fingerprint and trust exactly that one
     if (!r.ok && r.needTrust && r.fingerprint) {
       out.append(el('div', { class: 'trust' }, el('div', { class: 'small' }, T('Certificate fingerprint (SHA-256):')), el('code', { class: 'fp' }, r.fingerprint),
@@ -213,8 +271,13 @@ function testEl(kind, store, label = T('Test connection')) {
     try {
       const body = Object.fromEntries(Object.entries(store).filter(([k]) => !k.startsWith('_')));
       const r = await api(`/api/setup/test/${kind}`, { body });
+      // the address as it should be written ("homeassistant.local" -> http://homeassistant.local:8123): put in the box
+      const fixes = Object.entries(r.fixed || {}).filter(([k, v]) => store[k] !== v);
+      for (const [k, v] of fixes) store[k] = v;
+      if (fixes.length) r.fixedNote = T('We tidied the address for you: {url}', { url: fixes.map(([, v]) => v).join(', ') });
       store._test = r;
       if (kind === 'homeassistant' && r.ok) { W.ha = r; W.haDomains = r.domains || []; }
+      if (fixes.length) { go(); return; }
       show(r);
     } catch (e) { show({ ok: false, error: e.message }); }
     btn.disabled = false;
@@ -317,6 +380,7 @@ function badge(o) {
 function hueEl(card) {
   const st = W.hue ||= { host: '', msg: null };
   if (st.paired) { card.append(el('div', { class: 'ok' }, `✓ ${st.msg}`)); return card; }
+  if (!st.host && !st.looked && W.found?.hue?.length) { st.host = W.found.hue[0]; st.looked = true; st.msg = T('Found your Hue bridge at {ip}.', { ip: st.host }); }
   const host = el('input', { type: 'text', placeholder: '192.168.1.20', value: st.host, oninput: (e) => { st.host = e.target.value.trim(); } });
   const out = el('div', { class: 'note' }, st.msg || '');
   card.append(el('p', { class: 'note' }, '1. Enter the bridge\'s address (or press Find). 2. Press the round button on top of the Hue bridge. 3. Within 30 seconds, press Pair.'),
@@ -372,6 +436,8 @@ function setupFor(stepId, opt) {
   }
   if (opt.method === 'direct') {
     const sub = store[opt.id] ||= {};
+    const found = prefillFound(sub, opt.find);
+    if (found) card.append(found);
     card.append(...fieldsEl(opt.fields, sub, go));
     if (opt.test) card.append(testEl(opt.test, sub));
     return card;
@@ -410,6 +476,7 @@ function welcome() {
   const step = (n, t, d) => el('div', { class: 'wstep' }, el('span', { class: 'wnum' }, n), el('div', {}, el('b', {}, T(t)), el('div', { class: 'note' }, T(d))));
   return [langRow(), el('h1', {}, T('Welcome to CasaTorch')), whereRow(),
     el('p', { class: 'intro' }, T('One screen for the smart home you already have: lights, cameras, sensors, calendars and more. CasaTorch runs here on your own hardware, and your settings stay here.')),
+    ...(window.CasaTour ? [window.CasaTour.card()] : []),   // "See what's possible" film (setup-tour.js)
     el('div', { class: 'wsteps' },
       step('1', 'The everyday things', 'Your town for the weather, calendars, sports teams, headlines and reminders.'),
       step('2', 'Your devices', 'Hue, Shelly, YoLink, Frigate, Reolink and Ring (Pro) connect directly. Thousands more come in through Home Assistant, if you use it.'),
@@ -473,6 +540,7 @@ function stepPage(step) {
       // Questions that follow a pick (alerts for people? a budget?) come after it.
       const late = !!(br.pick || br.provider);
       if (step.id === 'homeassistant' && store[q.id] === 'yes') out.push(haSigninEl(sub));
+      if (br.find) { const f = prefillFound(sub, br.find); if (f) out.push(f); }
       if (br.fields && !late && !(step.id === 'homeassistant' && sub._signedIn)) out.push(...fieldsEl(br.fields, sub, go));
       if (br.test && !(step.id === 'homeassistant' && sub._signedIn)) out.push(testEl(br.test, sub));
       if (br.provider) out.push(utilityEl(br.provider, store));
@@ -547,7 +615,7 @@ function review() {
   const sec = el('dd', {}, T('On by default - setting itself up'));   // 43-local-https.js starts it before setup
   dl.append(el('dt', {}, T('Secure address at home')), sec);
   fetch('/api/local-https/target').then((r) => r.json()).then((j) => { sec.textContent = j.url ? T('On · {url} · the easy way in at home: casatorch.com/home', { url: j.url }) : j.off ? T('Off (turn it on in Settings)') : location.protocol === 'https:' ? T('On') : T('On by default - setting itself up (needs the internet once). Turn it off in Settings if you like.'); }).catch(() => {});
-  return [el('h1', {}, T('All set?')), el('p', { class: 'intro' }, T('Check this over. Finish saves it and opens your dashboard; you can change anything later in Settings.')), dl, safeNote(true), el('div', { id: 'finishMsg' })];
+  return [el('h1', {}, T('All set?')), el('p', { class: 'intro' }, T('Check this over. Finish saves it and opens your dashboard; you can change anything later in Settings.')), dl, safeNote(true), ...(window.CasaTour ? [window.CasaTour.card(true)] : []), el('div', { id: 'finishMsg' })];
 }
 
 /* ---------- navigation ---------- */
@@ -587,13 +655,28 @@ function go() {
   $('#back').disabled = W.i === 0;
   $('#next').textContent = T(W.i === 0 ? 'Set up my home' : W.i > W.steps.length ? (W.focus ? 'Save' : 'Finish') : W.focus && W.steps[W.i - 1]?.id === W.focus.step ? 'Review & save' : 'Next');
   $('#back').textContent = T('Back');
+  resumeBar(); saveProgress();
 }
 $('#back').onclick = () => { if (W.i > 0) { W.i--; go(); scrollTo(0, 0); } };
+let finishing = false;
+const stepIndex = (id) => W.steps.findIndex((s) => s.id === id) + 1;
 $('#next').onclick = async () => {
   if (W.i > W.steps.length) {
-    const msg = $('#finishMsg'); msg.replaceChildren('Saving…');
-    try { const r = await api('/api/setup/finish', { body: { answers: { ...W.a, _added: W.added } } }); if (r.ok) { if (r.pair) return pairDone(r.pair); location.href = W.focus ? '/#connect' : W.rerun ? '/' : '/?tour'; return; } msg.replaceChildren(el('div', { class: 'err' }, r.error)); }
-    catch (e) { msg.replaceChildren(el('div', { class: 'err' }, e.message)); }
+    if (finishing) return;   // a double tap saves once
+    // Passwords are never kept between visits: ask for one that's missing now, not after a failed save.
+    const missing = !W.rerun && !W.a.account?.password ? 'account' : W.a.phone?.how === 'new' && !W.a.phone.password ? 'phone' : null;
+    if (missing) { W.i = stepIndex(missing); go(); scrollTo(0, 0); $('#navmsg').textContent = T('Type the password again - for your safety it isn\'t kept between visits.'); return; }
+    const msg = $('#finishMsg'), next = $('#next'), back = $('#back'), label = next.textContent;
+    finishing = true; next.disabled = back.disabled = true; next.textContent = T('Saving…'); msg.replaceChildren(el('div', { class: 'note' }, T('Saving your setup…')));
+    const done = (r) => { W.done = true; clearTimeout(saveT); if (r?.pair) return pairDone(r.pair); location.href = W.focus ? '/#connect' : W.rerun ? '/' : '/?tour'; };
+    try { const r = await api('/api/setup/finish', { body: { answers: { ...W.a, _added: W.added } }, noRetry: true }); if (r.ok) return done(r); msg.replaceChildren(el('div', { class: 'err' }, r.error)); }
+    catch (e) {
+      // The answer may have been lost on the way back (Wi-Fi, CasaTorch restarting): check whether it saved before saying it didn't.
+      await wait(1500);
+      const st = await api('/api/setup/state').catch(() => null);
+      if (st && !W.rerun && st.configured && !st.demo) return done(null);
+      msg.replaceChildren(el('div', { class: 'err' }, e.status === 409 ? T('Already saving - one moment.') : e.message), el('div', { class: 'note' }, T('Nothing is lost - press Finish again.')));
+    } finally { if (!W.done) { finishing = false; next.disabled = false; back.disabled = W.i === 0; next.textContent = label; } }
     return;
   }
   const p = problems(W.steps[W.i - 1]);
@@ -681,9 +764,22 @@ function watchAsks() {
   if (!st.open) { $('#page').replaceChildren(el('h1', {}, 'CasaTorch is already set up'), el('p', {}, el('a', { href: '/' }, 'Open the dashboard'))); document.querySelector('footer').hidden = true; return; }
   W.cat = await api('/api/setup/catalog');
   if (st.configured && !st.demo) { const cur = await api('/api/setup/current').catch(() => null); if (cur?.answers) { W.rerun = true; W.a = cur.answers; W.keeps = cur.keeps || {}; if (cur.ha) { W.ha = cur.ha; W.haDomains = cur.ha.domains || []; W.a.homeassistant._test = cur.ha; } } }
-  W.steps = W.cat.steps;
+  W.steps = W.cat.steps; W.demo = !!st.demo;
+  const linked = W.linked = new URLSearchParams(location.search).has('step');
+  // Picking up where you left off (not when Connect opened setup at one item - that's its own short visit).
+  const pr = linked || st.demo ? null : (await api('/api/setup/progress').catch(() => null))?.progress;
+  if (pr?.answers && !!pr.rerun === !!W.rerun) {
+    W.a = { ...W.a, ...pr.answers }; W.added = pr.added || []; W.max = Math.min(pr.max || 0, W.steps.length + 1); W.i = Math.min(pr.i || 0, W.steps.length + 1); W.resumed = pr.at;
+    if (pr.ui?.hue) W.hue = pr.ui.hue;
+    if (pr.ui?.ring) W.ring = pr.ui.ring;
+    if (pr.ui?.ha && pr.haOk) { W.ha = pr.ui.ha; W.haDomains = W.ha.domains || []; }
+    else if (!pr.haOk && !W.rerun && W.a.homeassistant) { const sub = W.a.homeassistant; delete sub._signedIn; delete sub._test; }   // CasaTorch restarted before it was proven: connect again
+  }
   focusFromLink();
+  W.ready = true;
   go();
+  // Look for gear on the network in the background; whatever turns up is filled in on its step.
+  if (!st.demo) api('/api/setup/discover').then((f) => { W.found = f; const busy = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName); const cur = W.steps[W.i - 1]?.id; if (!busy && ['homeassistant', 'cameras', 'controls', 'sensors', 'energy', 'network'].includes(cur)) go(); }).catch(() => {});
 })();
 /* Opened from Connect in the dashboard (/setup.html?step=controls&add=hue-local): go straight to that
    step with that item already picked, then straight to Review & save. */

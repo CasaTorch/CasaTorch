@@ -41,5 +41,8 @@
     /* homes */
     homes: () => call('homes'), saveHome: (h) => call('saveHome', h), openHome: (id) => fire('openHome', { id }), removeHome: (id) => call('removeHome', { id }),
     switchHome: () => fire('switchHome'), signOut: () => fire('signOut'), scanQR: () => call('scanQR'), deviceInfo: () => call('deviceInfo'), copy: (text) => call('copy', { text: String(text || '').slice(0, 4096) }),
+    /* finding a CasaTorch (the app's own screens only): "is there one at this address?" with the exact reason when not,
+       and the ones announcing themselves on this Wi-Fi (Bonjour, "_casatorch._tcp") as addresses to check */
+    probe: (o) => call('probe', o), discover: (o) => call('discover', o || {}),
   });
 })();

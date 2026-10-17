@@ -36,5 +36,5 @@ watch your home around the clock. The box does that; your devices are screens fo
 
 ## Also coming
 
-Smart alerts, a bill forecast, self-healing, the CasaTorch agent for watching NAS and
+The CasaTorch agent for watching NAS and
 Docker hosts (apps, drives, backups, UPS), Green Button energy import, multi-home.

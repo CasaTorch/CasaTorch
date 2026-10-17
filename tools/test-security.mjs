@@ -1,6 +1,6 @@
 // Security regression checks against a fresh install:  (cd app && CASATORCH_DATA_DIR=/tmp/sec-data PORT=18095 node server.js) &  then  node tools/test-security.mjs
 // Regression checks for the overnight security fixes, against a fresh install.
-const B = 'http://127.0.0.1:18095', H = { 'Content-Type': 'application/json', Origin: B };
+const B = process.env.SEC_BASE || 'http://127.0.0.1:18095', H = { 'Content-Type': 'application/json', Origin: B };
 let cookie = '';
 const req = async (m, p, body, c = cookie) => { const r = await fetch(B + p, { method: m, headers: { ...H, ...(c ? { Cookie: c } : {}) }, body: body ? JSON.stringify(body) : undefined, redirect: 'manual' }); const sc = r.headers.get('set-cookie'); return { s: r.status, j: await r.json().catch(() => null), sc }; };
 const fin = await req('POST', '/api/setup/finish', { answers: { house: { name: 'T' }, account: { username: 'owner1', password: 'Correct-horse-9', terms: true } } }, '');
@@ -18,3 +18,11 @@ const ai = await req('POST', '/API/settings/ai/models', { provider: 'openai', ur
 const lic = await req('GET', '/api/license', null, ''); console.log('license email visible signed out:', 'email' in (lic.j || {}));
 const push = await req('POST', '/api/push', { subscription: { endpoint: 'https://fcm.googleapis.com/x', keys: { p256dh: Buffer.alloc(65, 4).toString('base64url'), auth: Buffer.alloc(16, 1).toString('base64url') } }, level: 'constructor' }, mc);
 const list = await req('GET', '/api/push', null, mc); console.log('push level saved as:', list.j?.devices?.[0]?.level, '(want important)');
+// Encryption at rest and in transit (see docs: Security and encryption). Set SEC_DATA to the server's data folder.
+const fsS = await import('node:fs'), pathS = await import('node:path'), DATA = process.env.SEC_DATA || '/tmp/sec-data';
+console.log('session cookie flags:', (lg.sc || '').split(';').slice(1).map((x) => x.trim()).join('; '), '(want HttpOnly; SameSite=Lax, + Secure over https)');
+const hd = await fetch(`${B}/api/health`); for (const k of ['content-security-policy', 'x-content-type-options', 'referrer-policy', 'cross-origin-opener-policy', 'cache-control']) console.log('header', k, hd.headers.has(k) ? 'present' : 'MISSING');
+const modes = []; const walk = (d) => { for (const e of fsS.readdirSync(d, { withFileTypes: true })) { const p = pathS.join(d, e.name); if (e.name === 'bin') continue; const m = fsS.lstatSync(p).mode & 0o777; if (e.isDirectory()) { if (m & 0o077) modes.push(`${p} ${m.toString(8)}`); walk(p); } else if (e.isFile() && m & 0o077) modes.push(`${p} ${m.toString(8)}`); } };
+try { walk(DATA); console.log('data files readable by others:', modes.length ? modes.join(', ') : 'none (want none)'); } catch (e) { console.log('data folder not readable here:', e.message); }
+try { const users = fsS.readFileSync(pathS.join(DATA, 'users.json'), 'utf8'); console.log('users.json has plain passwords:', /Correct-horse-9|Member-pass-123/.test(users), '(want false)'); } catch { /* elsewhere */ }
+try { const pj = JSON.parse(fsS.readFileSync(pathS.join(DATA, 'push.json'), 'utf8')); console.log('push.json web-push keys sealed:', (pj.subs || []).length > 0 && pj.subs.every((x) => /^v1\./.test(x.keys?.p256dh) && /^v1\./.test(x.keys?.auth)), '(want true)'); } catch { /* elsewhere */ }

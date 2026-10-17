@@ -12,8 +12,8 @@ options:
   developmentLanguage: en
 settings:
   base:
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "0.7.0"
+    CURRENT_PROJECT_VERSION: "700"   # 0.7.0 -> 700; raise it for every upload
     SWIFT_VERSION: "5.9"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
@@ -53,6 +53,8 @@ targets:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: Default
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        UIRequiresFullScreen: false   # iPad: Split View, Slide Over and Stage Manager
+        UIApplicationSupportsIndirectInputEvents: true   # iPad pointer and trackpad
         UIBackgroundModes: [remote-notification]
         UIStatusBarStyle: UIStatusBarStyleDefault
         UIViewControllerBasedStatusBarAppearance: true
@@ -62,6 +64,7 @@ targets:
         NSCameraUsageDescription: CasaTorch uses the camera to scan the pairing code from your CasaTorch, and to scan rooms for your 3D home.
         NSFaceIDUsageDescription: CasaTorch uses Face ID to unlock the app and keep your home's sign-in safe.
         NSLocalNetworkUsageDescription: CasaTorch connects to your CasaTorch on your home network.
+        NSBonjourServices: [_casatorch._tcp]   # Find my CasaTorch: boxes announce themselves on the home Wi-Fi
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         FirebaseAppDelegateProxyEnabled: true

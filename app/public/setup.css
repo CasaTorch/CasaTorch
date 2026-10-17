@@ -86,3 +86,51 @@ textarea { font: inherit; padding: 11px 12px; border-radius: 12px; border: 1px s
 .pairbox .qr { width: 220px; max-width: 100%; background: #fff; padding: 10px; border-radius: 16px; }
 .pairbox .qr svg { width: 100%; height: auto; display: block; }
 .paircode { font: 600 28px/1.2 ui-monospace, Menlo, monospace; letter-spacing: .08em; margin: 6px 0; }
+/* picking up where you left off, gear found on the network, and the fix under an error */
+.resume:empty { display: none; }
+.resume { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 0 0 10px; padding: 10px 14px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--good) 40%, transparent); background: color-mix(in srgb, var(--good) 10%, transparent); font-size: 14px; line-height: 1.45; }
+.resume span { flex: 1 1 260px; } .resume button { flex: none; }
+.found { color: var(--good); font-size: 14px; margin: 6px 0 2px; }
+.fix { color: var(--text); font-size: 14px; margin-top: 4px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--warn) 10%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+footer button:disabled { cursor: progress; }
+
+/* tour - "See what's possible" card and full-screen player (setup-tour.js) */
+.tour-card { display: flex; align-items: center; gap: 14px; width: 100%; margin: 14px 0 6px; padding: 10px 14px 10px 10px; text-align: left; color: var(--text); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: 18px; background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, var(--accent2) 12%, transparent)); box-shadow: 0 16px 40px -28px color-mix(in srgb, var(--accent2) 80%, transparent); transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.tour-card:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--accent) 70%, transparent); box-shadow: 0 20px 44px -26px color-mix(in srgb, var(--accent2) 95%, transparent); }
+.tour-card:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); }
+.tour-thumb { position: relative; flex: 0 0 auto; width: 128px; aspect-ratio: 16 / 9; border-radius: 11px; overflow: hidden; background: #0b1120; box-shadow: 0 0 0 1px rgba(255, 255, 255, .08) inset; }
+.tour-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s ease; }
+.tour-card:hover .tour-thumb img { transform: scale(1.05); }
+.tour-play { position: absolute; inset: 0; margin: auto; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: #06101e; background: rgba(255, 255, 255, .92); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+.tour-play svg { width: 16px; height: 16px; margin-left: 2px; }
+.tour-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tour-text b { font-size: 16px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tour-len { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; color: var(--muted); border: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.tour-sub { color: var(--muted); font-size: 13.5px; line-height: 1.4; }
+@media (max-width: 480px) { .tour-thumb { width: 96px; } .tour-sub { font-size: 13px; } }
+html.tour-lock { overflow: hidden; }
+.tour-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(3, 6, 12, .78); backdrop-filter: blur(14px) saturate(1.2); opacity: 0; transition: opacity .18s ease; color-scheme: dark; }
+.tour-overlay.in { opacity: 1; } .tour-overlay.out { opacity: 0; }
+.tour-pop { width: min(1120px, 100%); max-height: 100%; display: flex; flex-direction: column; gap: 10px; transform: translateY(8px) scale(.985); transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
+.tour-overlay.in .tour-pop { transform: none; }
+.tour-top { display: flex; align-items: center; gap: 10px; color: #e8eef7; }
+.tour-kicker { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; background: linear-gradient(90deg, #7dd3fc, #8b7bff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tour-note { font-size: 13px; color: #8fa0ba; flex: 1; }
+.tour-close { width: 40px; height: 40px; padding: 0; border-radius: 50%; border: 1px solid rgba(148, 178, 230, .25); background: rgba(16, 23, 39, .8); color: #e8eef7; font-size: 24px; line-height: 1; display: grid; place-items: center; }
+.tour-close:hover { background: rgba(40, 52, 78, .9); }
+.tour-close:focus-visible, .tour-bigplay:focus-visible, .tour-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(56, 189, 248, .55); }
+.tour-frame { position: relative; aspect-ratio: 16 / 9; max-height: calc(100vh - 110px); max-height: calc(100dvh - 110px); margin: 0 auto; width: 100%; border-radius: 18px; overflow: hidden; background: #070a12; box-shadow: 0 0 0 1px rgba(148, 178, 230, .16), 0 40px 120px -30px rgba(0, 0, 0, .8), 0 0 120px -40px rgba(139, 123, 255, .5); }
+@supports (aspect-ratio: 16 / 9) { .tour-frame { width: min(100%, calc((100vh - 110px) * 16 / 9)); width: min(100%, calc((100dvh - 110px) * 16 / 9)); } }
+.tour-video { width: 100%; height: 100%; display: block; object-fit: contain; background: #070a12; cursor: pointer; }
+.tour-bigplay { position: absolute; inset: 0; margin: auto; width: 76px; height: 76px; padding: 0; border-radius: 50%; border: none; display: grid; place-items: center; color: #06101e; background: rgba(255, 255, 255, .94); box-shadow: 0 14px 40px rgba(0, 0, 0, .45); }
+.tour-bigplay svg { width: 30px; height: 30px; margin-left: 4px; }
+.tour-bigplay[hidden], .tour-end[hidden] { display: none; }
+.tour-end { position: absolute; inset: auto 0 0 0; padding: 18px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; background: linear-gradient(transparent, rgba(3, 6, 12, .88) 40%); color: #e8eef7; }
+.tour-end p { margin: 0; font-weight: 600; }
+.tour-endrow { display: flex; gap: 8px; }
+.tour-btn { font: inherit; border-radius: 12px; padding: 9px 16px; cursor: pointer; }
+.tour-btn.primary { border: none; color: #06101e; font-weight: 600; background: linear-gradient(90deg, #38bdf8, #8b7bff); }
+.tour-btn.ghost { background: rgba(16, 23, 39, .7); color: #e8eef7; border: 1px solid rgba(148, 178, 230, .25); }
+.tour-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 560px) { .tour-overlay { padding: 12px; } .tour-frame { border-radius: 12px; } .tour-bigplay { width: 60px; height: 60px; } .tour-end { padding: 10px 12px; font-size: 13px; } .tour-end p { display: none; } .tour-endrow { width: 100%; justify-content: center; } .tour-btn { padding: 8px 12px; font-size: 14px; } }
+@media (prefers-reduced-motion: reduce) { .tour-card, .tour-thumb img, .tour-overlay, .tour-pop { transition: none; } .tour-card:hover { transform: none; } .tour-card:hover .tour-thumb img { transform: none; } }

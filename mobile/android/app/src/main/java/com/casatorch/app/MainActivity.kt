@@ -1,9 +1,11 @@
 package com.casatorch.app
 
 import android.annotation.SuppressLint
-import androidx.appcompat.app.AlertDialog
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.Network
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -32,6 +34,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG
@@ -54,10 +57,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -87,6 +90,8 @@ class MainActivity : AppCompatActivity() {
     private var openingHome: Home? = null
     private var backgroundedAt = 0L
     private var unlocking = false
+    /** After the app's own screens hand over to a home, Back mustn't walk back into them. */
+    private var clearHistoryOnLoad = false
     var fullscreen = false
         set(v) { field = v; applyFullscreen() }
     /** Sign-ins read since the last unlock, in memory only (forgotten after a while in the background). */
@@ -97,9 +102,9 @@ class MainActivity : AppCompatActivity() {
     private val pickFiles = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         fileCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(r.resultCode, r.data)); fileCallback = null
     }
+    private val onShell get() = web.url?.startsWith(SHELL_ORIGIN) == true
 
     // MARK: - setting up
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -108,10 +113,11 @@ class MainActivity : AppCompatActivity() {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) { needsNewerWebView(); return }
 
         root = FrameLayout(this)
-        web = WebView(this)
+        web = buildWeb()
         swipe = SwipeRefreshLayout(this).apply {
             addView(web, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            setOnChildScrollUpCallback { _, _ -> web.canScrollVertically(-1) || fullscreen }
+            // pull to refresh is for your home; the app's own screens retry by themselves
+            setOnChildScrollUpCallback { _, _ -> web.canScrollVertically(-1) || fullscreen || onShell }
             setOnRefreshListener { web.evaluateJavascript("window.casatorchRefresh ? (Promise.resolve(window.casatorchRefresh()), 1) : (location.reload(), 1)") { postDelayed({ isRefreshing = false }, 400) } }
             setColorSchemeColors(getColor(R.color.accent))
         }
@@ -125,35 +131,61 @@ class MainActivity : AppCompatActivity() {
             if (fullscreen) v.setPadding(0, 0, 0, insets.getInsets(WindowInsetsCompat.Type.ime()).bottom) else v.setPadding(b.left, b.top, b.right, b.bottom)
             insets
         }
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)   // never in a release build
+        CookieManager.getInstance().setAcceptCookie(true)
+        bridge = Bridge(this)
+        attachWeb()
 
-        with(web.settings) {
+        // Back (and the predictive back gesture): the app's own screen's Back, then the page's history, then home screen
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when {
+                    fullscreen -> fullscreen = false
+                    onShell -> web.evaluateJavascript("window.__casaBack ? window.__casaBack() : false") { r -> if (r != "true") moveTaskToBack(true) }
+                    web.canGoBack() -> web.goBack()
+                    else -> moveTaskToBack(true)
+                }
+            }
+        })
+        if (HomeStore.biometricLock && !canLock()) HomeStore.lockLost()   // the phone's screen lock was removed
+        applyLockPrivacy()
+        if (HomeStore.biometricLock && HomeStore.current != null) { showLock(); openShell("homes"); unlock() } else start()
+        // a link the app was opened with - but not again when Android rebuilds the screen or it's reopened from Recents
+        val fromHistory = ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
+        if (savedInstanceState == null && !fromHistory) handleIntent(intent)
+        watchNetwork()
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun buildWeb(): WebView = WebView(this).apply {
+        with(settings) {
             javaScriptEnabled = true
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false
             allowFileAccess = false
             allowContentAccess = false
-            // the app's screens are served over https from inside the app; a box that only has a plain address yet is http
+            // the app's screens are served over https from inside the app; a box that only has a plain address yet is http (home network only)
             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             userAgentString = "$userAgentString CasaTorchApp/${BuildConfig.VERSION_NAME} (Android)"
             setSupportMultipleWindows(false)
             setGeolocationEnabled(false)
+            textZoom = textZoomFor(resources.configuration)
         }
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
-        CookieManager.getInstance().apply { setAcceptCookie(true); setAcceptThirdPartyCookies(web, false) }
-        web.setBackgroundColor(Color.TRANSPARENT)
-        web.webViewClient = Client()
-        web.webChromeClient = Chrome()
-        bridge = Bridge(this)
-        installListener()
-        installBridge()
-
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() { if (fullscreen) fullscreen = false else if (web.canGoBack()) web.goBack() else moveTaskToBack(true) }
-        })
-        if (HomeStore.biometricLock && !canLock()) HomeStore.lockLost()   // the phone's screen lock was removed
-        applyLockPrivacy()
-        if (HomeStore.biometricLock && HomeStore.current != null) { showLock(); openShell("homes"); unlock() } else start()
-        handleIntent(intent)
+        setBackgroundColor(Color.TRANSPARENT)
+        alpha = 0f   // shown once the first page has drawn: no white flash
+        webViewClient = Client()
+        webChromeClient = Chrome()
+        CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
+        postDelayed({ reveal() }, 2500)   // never a blank screen, even if a page hangs
+    }
+    /** The bridge listener and script, on the current web view. */
+    private fun attachWeb() { scriptHandler = null; bridgeOrigins = emptySet(); installListener(); installBridge() }
+    private fun reveal() { if (web.alpha < 1f) web.animate().alpha(1f).setDuration(200).start() }
+    /** The phone's font size, for the pages too (within reason, so the dashboard still fits). */
+    private fun textZoomFor(c: Configuration) = (c.fontScale * 100).toInt().coerceIn(85, 150)
+    override fun onConfigurationChanged(c: Configuration) {
+        super.onConfigurationChanged(c)
+        if (::web.isInitialized) web.settings.textZoom = textZoomFor(c)
     }
 
     private fun needsNewerWebView() {
@@ -190,7 +222,7 @@ class MainActivity : AppCompatActivity() {
     /**
      * window.CasaNative: the bridge script goes only into the app's own screens and the homes you signed in to, and
      * every call is checked again (address and main frame) before anything runs - frames inside a page never get in.
-     * The message listener is registered once: replacing it would leave an open page talking to nobody.
+     * The message listener is registered once per web view: replacing it would leave an open page talking to nobody.
      */
     private fun installListener() {
         WebViewCompat.addWebMessageListener(web, "CasaAndroid", setOf("*")) { _, message, origin, isMainFrame, _ ->
@@ -215,7 +247,8 @@ class MainActivity : AppCompatActivity() {
     // MARK: - what's on screen
     fun start() { HomeStore.current?.let { openHome(it.id) } ?: openShell("welcome") }
     private var openJob: Job? = null
-    fun openShell(hash: String) { openJob?.cancel(); openingHome = null; web.loadUrl("$SHELL#$hash") }
+    private var recheckJob: Job? = null
+    fun openShell(hash: String) { openJob?.cancel(); recheckJob?.cancel(); openingHome = null; web.loadUrl("$SHELL#$hash") }
 
     /** Opening a home: find an address that answers, hand the web view the sign-in, load it. */
     fun openHome(id: String, path: String? = null) {
@@ -230,8 +263,9 @@ class MainActivity : AppCompatActivity() {
             val (base, hello) = firstAnswering(home.candidates) ?: return@launch openShell("unreachable=$id")
             HomeStore.learn(id, hello)   // secure access turned on since pairing: remember the away-from-home address
             if (!isActive) return@launch
-            setSessionCookie(token, home)
+            setSessionCookie(token, home, base)
             HomeStore.touch(id, base)
+            if (onShell) clearHistoryOnLoad = true
             web.loadUrl(Home.originOf(base) + (path ?: "/"))
             refreshPushToken(home, base, token)
         }
@@ -239,8 +273,7 @@ class MainActivity : AppCompatActivity() {
     /** Back from the lock: hand the sign-in back and carry on where you were. */
     private fun resume() {
         val id = currentHomeId()
-        val onHome = web.url?.startsWith(SHELL_ORIGIN) == false
-        if (id == null || !onHome) {
+        if (id == null || onShell) {
             // the app's own screen behind the lock stays (pairing a phone, say), unless it was just the homes list
             val u = web.url
             if (u == null || u.endsWith("#homes")) HomeStore.current?.let { openHome(it.id) } ?: start()
@@ -249,16 +282,21 @@ class MainActivity : AppCompatActivity() {
         val home = HomeStore.home(id) ?: return start()
         val token = tokenCache[id] ?: runCatching { HomeStore.token(id) }.getOrNull() ?: return openShell("signedout=$id")
         tokenCache[id] = token
-        setSessionCookie(token, home)
+        setSessionCookie(token, home, web.url?.let(Uri::parse))
         web.evaluateJavascript("window.casatorchRefresh && window.casatorchRefresh(); 1", null)
+        recheckHome(200)
     }
 
-    /** The first address that answers - all tried at once (home Wi-Fi first, then away), with what the home says about itself. */
-    private suspend fun firstAnswering(list: List<Uri>): Pair<Uri, JSONObject>? = coroutineScope {
-        val tries = list.map { u ->
+    /**
+     * The first address that answers - all tried at once, with what the home says about itself. https addresses come
+     * first (the secure one at home, then from anywhere), so a plain-http address is used only when none of them answers.
+     */
+    private suspend fun firstAnswering(list: List<Uri>, timeoutMs: Int = 4000): Pair<Uri, JSONObject>? = coroutineScope {
+        val (secure, plain) = list.filter { Home.allowed(it) }.partition { it.scheme == "https" }
+        val tries = (secure + plain).map { u ->
             async(Dispatchers.IO) {
                 runCatching {
-                    val c = (URL(u.buildUpon().path("/api/app/hello").build().toString()).openConnection() as HttpURLConnection).apply { connectTimeout = 4000; readTimeout = 4000; useCaches = false; instanceFollowRedirects = false }
+                    val c = (URL(u.buildUpon().path("/api/app/hello").build().toString()).openConnection() as HttpURLConnection).apply { connectTimeout = timeoutMs; readTimeout = timeoutMs; useCaches = false; instanceFollowRedirects = false }
                     try { if (c.responseCode == 200) JSONObject(c.inputStream.bufferedReader().use { it.readText() }).takeIf { it.optBoolean("casatorch") }?.let { u to it } else null } finally { c.disconnect() }
                 }.getOrNull()
             }
@@ -269,13 +307,77 @@ class MainActivity : AppCompatActivity() {
         best
     }
 
-    /** The sign-in, as the cookie your CasaTorch expects, on each of the home's addresses. */
-    fun setSessionCookie(token: String, home: Home) {
+    // MARK: - the network changed (Wi-Fi ↔ mobile data, airplane mode), or the app is back
+    private var netCallback: ConnectivityManager.NetworkCallback? = null
+    private var lastNetwork: Network? = null
+    private fun watchNetwork() {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) { runOnUiThread { if (lastNetwork != null && lastNetwork != network) networkChanged(); lastNetwork = network } }
+            override fun onLost(network: Network) { runOnUiThread { if (lastNetwork == network) { lastNetwork = null; networkChanged() } } }
+        }
+        runCatching { cm.registerDefaultNetworkCallback(cb); netCallback = cb }
+    }
+    override fun onDestroy() {
+        netCallback?.let { cb -> runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) } }
+        netCallback = null
+        super.onDestroy()
+    }
+    private fun networkChanged() {
+        if (!::web.isInitialized) return
+        if (onShell) { web.evaluateJavascript("window.__casaEvent && window.__casaEvent('network', ${Net.json(this)}); 1", null); return }   // the app's own screens try again at once
+        recheckHome(1500)   // let the new connection settle
+    }
+    /**
+     * A home is on screen: still answering at this address? If not, the best address that does (from anywhere instead
+     * of the home Wi-Fi, say), on the same page. If none does, "can't reach", which keeps trying by itself.
+     */
+    private fun recheckHome(delayMs: Long) {
+        if (lockView.visibility == View.VISIBLE || onShell) return
+        val cur = web.url?.let(Uri::parse) ?: return
+        val id = currentHomeId() ?: return
+        val home = HomeStore.home(id) ?: return
+        val here = Home.originOf(cur)
+        recheckJob?.cancel()
+        recheckJob = lifecycleScope.launch {
+            delay(delayMs)
+            if (firstAnswering(listOf(Uri.parse(here)), 3000) != null) return@launch   // still fine where it is
+            var found = firstAnswering(home.candidates)
+            if (found == null) { delay(3000); found = firstAnswering(home.candidates) }
+            val now = web.url?.let(Uri::parse) ?: return@launch
+            if (Home.originOf(now) != here) return@launch   // you moved on meanwhile
+            if (found == null) return@launch openShell("unreachable=$id")
+            val base = Home.originOf(found.first)
+            if (base == here) return@launch
+            HomeStore.touch(id, found.first)
+            tokenCache[id]?.let { setSessionCookie(it, home, found.first) }
+            val tail = (now.encodedPath?.takeIf { it.isNotEmpty() } ?: "/") + (now.encodedQuery?.let { "?$it" } ?: "") + (now.encodedFragment?.let { "#$it" } ?: "")
+            web.loadUrl(base + tail)
+        }
+    }
+
+    /**
+     * The sign-in, as the cookie your CasaTorch expects. [at] is the address the home is (being) opened at. Open at an
+     * https address (the secure one at home, or from anywhere): only the https addresses get it, marked Secure, and a copy
+     * left on a plain-http address is taken back - so it's never sent unencrypted while an encrypted address answers.
+     * Open at its plain address (no https address answered): every address gets it, as before. Not known: as before too.
+     */
+    fun setSessionCookie(token: String, home: Home, at: Uri? = null) {
         val cm = CookieManager.getInstance()
-        val plainHosts = home.candidates.filter { it.scheme == "http" }.mapNotNull { it.host?.lowercase() }.toSet()
-        for (u in home.candidates) {
-            val secure = u.scheme == "https" && u.host?.lowercase() !in plainHosts
-            cm.setCookie(Home.originOf(u), "casatorch_session=$token; Path=/; HttpOnly; SameSite=Lax" + if (secure) "; Secure" else "")
+        val open = at ?: web.url?.takeUnless { it.startsWith(SHELL_ORIGIN) }?.let(Uri::parse) ?: home.here?.let(Uri::parse)
+        val (secure, plain) = home.candidates.partition { it.scheme == "https" }
+        val plainHosts = plain.mapNotNull { it.host?.lowercase() }.toSet()
+        if (open != null && open.scheme == "https") {
+            val secureHosts = secure.mapNotNull { it.host?.lowercase() }.toSet()
+            for (u in plain) if (u.host?.lowercase() !in secureHosts) cm.setCookie(Home.originOf(u), "casatorch_session=; Path=/; Max-Age=0")
+            for (u in secure) cm.setCookie(Home.originOf(u), "casatorch_session=$token; Path=/; HttpOnly; SameSite=Lax; Secure")
+        } else {
+            for (u in secure) {
+                val shared = u.host?.lowercase() in plainHosts   // the same name over http too: a Secure cookie there would block it
+                if (shared) cm.setCookie(Home.originOf(u), "casatorch_session=; Path=/; Max-Age=0; Secure")
+                cm.setCookie(Home.originOf(u), "casatorch_session=$token; Path=/; HttpOnly; SameSite=Lax" + if (shared) "" else "; Secure")
+            }
+            for (u in plain) cm.setCookie(Home.originOf(u), "casatorch_session=$token; Path=/; HttpOnly; SameSite=Lax")
         }
         cookiesDropped = false
         cm.flush()
@@ -313,6 +415,7 @@ class MainActivity : AppCompatActivity() {
     // MARK: - only your own CasaTorch in here
     private fun isTrusted(u: Uri): Boolean {
         if (Home.originOf(u) == SHELL_ORIGIN) return true
+        if (!Home.allowed(u)) return false   // plain http only on the home network
         val host = u.host?.lowercase() ?: return false
         return HomeStore.homes.any { host in it.hosts } || (openingHome?.hosts?.contains(host) ?: false)
     }
@@ -352,19 +455,37 @@ class MainActivity : AppCompatActivity() {
             return true
         }
         override fun onReceivedError(view: WebView, req: WebResourceRequest, err: WebResourceError) {
-            if (req.isForMainFrame && Home.originOf(req.url) != SHELL_ORIGIN) openingHome?.let { openShell("unreachable=${it.id}") }
+            if (!req.isForMainFrame || Home.originOf(req.url) == SHELL_ORIGIN) return
+            reveal()
+            (openingHome?.id ?: currentHomeId())?.let { openShell("unreachable=$it") }
         }
         override fun onPageFinished(view: WebView, url: String?) {
             swipe.isRefreshing = false
+            reveal()
+            if (clearHistoryOnLoad && url != null && !url.startsWith(SHELL_ORIGIN)) { clearHistoryOnLoad = false; view.clearHistory() }
             matchPageColor()
             // older WebViews without document-start scripts: the bridge goes in as soon as the page is there
             if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) && url != null && isTrustedOrigin(Home.originOf(Uri.parse(url))))
                 view.evaluateJavascript("window.__casaInfo = ${bridge.infoJson()};\n$bridgeJs", null)
         }
+        /** The page's process stopped (memory pressure, a crash): a fresh web view in its place, same page - never a blank screen. */
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-            openJob?.cancel(); (view.parent as? ViewGroup)?.removeView(view); view.destroy(); recreate(); return true
+            if (view !== web) { view.destroy(); return true }
+            openJob?.cancel(); recheckJob?.cancel()
+            val last = view.url
+            swipe.removeView(view); view.destroy()
+            web = buildWeb()
+            swipe.addView(web, 0, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            attachWeb()
+            when {
+                last == null -> start()
+                last.startsWith(SHELL_ORIGIN) -> web.loadUrl(last)
+                else -> currentHomeIdFor(last)?.let { id -> HomeStore.home(id)?.let { h -> tokenCache[id]?.let { setSessionCookie(it, h, Uri.parse(last)) } }; web.loadUrl(last) } ?: start()
+            }
+            return true
         }
     }
+    private fun currentHomeIdFor(url: String): String? { val host = Uri.parse(url).host?.lowercase() ?: return null; return HomeStore.homes.firstOrNull { host in it.hosts }?.id }
 
     private inner class Chrome : WebChromeClient() {
         override fun onShowFileChooser(view: WebView, cb: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
@@ -374,12 +495,15 @@ class MainActivity : AppCompatActivity() {
         // the dashboard never needs the camera or microphone inside the page
         override fun onPermissionRequest(request: PermissionRequest) { request.deny() }
         override fun onJsAlert(view: WebView, url: String?, message: String?, result: JsResult): Boolean {
+            if (isFinishing) { result.cancel(); return true }
             AlertDialog.Builder(this@MainActivity).setMessage(message).setPositiveButton(android.R.string.ok) { _, _ -> result.confirm() }.setOnCancelListener { result.cancel() }.show(); return true
         }
         override fun onJsConfirm(view: WebView, url: String?, message: String?, result: JsResult): Boolean {
+            if (isFinishing) { result.cancel(); return true }
             AlertDialog.Builder(this@MainActivity).setMessage(message).setPositiveButton(android.R.string.ok) { _, _ -> result.confirm() }.setNegativeButton(android.R.string.cancel) { _, _ -> result.cancel() }.setOnCancelListener { result.cancel() }.show(); return true
         }
         override fun onJsPrompt(view: WebView, url: String?, message: String?, def: String?, result: JsPromptResult): Boolean {
+            if (isFinishing) { result.cancel(); return true }
             val input = EditText(this@MainActivity).apply { setText(def) }
             AlertDialog.Builder(this@MainActivity).setMessage(message).setView(input).setPositiveButton(android.R.string.ok) { _, _ -> result.confirm(input.text.toString()) }.setNegativeButton(android.R.string.cancel) { _, _ -> result.cancel() }.setOnCancelListener { result.cancel() }.show(); return true
         }
@@ -389,7 +513,7 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); handleIntent(intent) }
     private fun handleIntent(i: Intent?) {
         i ?: return
-        i.data?.let { if (it.scheme == "casatorch") handlePairLink(it) }
+        i.data?.let { if (it.scheme == "casatorch") { handlePairLink(it); i.data = null } }
         i.getStringExtra(EXTRA_URL)?.let { openAlert(it, i.getStringExtra(EXTRA_HOME)); i.removeExtra(EXTRA_URL) }
     }
     fun handlePairLink(u: Uri) {
@@ -417,7 +541,7 @@ class MainActivity : AppCompatActivity() {
             override fun onAuthenticationError(code: Int, msg: CharSequence) { if (cont.isActive) cont.resume(false) }
         })
         val info = BiometricPrompt.PromptInfo.Builder().setTitle(title).setAllowedAuthenticators(lockAuthenticators)
-            .apply { if (Build.VERSION.SDK_INT < 30) setNegativeButtonText("Cancel") }.build()
+            .apply { if (Build.VERSION.SDK_INT < 30) setNegativeButtonText(getString(R.string.cancel)) }.build()
         prompt.authenticate(info)
     }
 
@@ -425,7 +549,7 @@ class MainActivity : AppCompatActivity() {
         if (unlocking) return
         unlocking = true
         lifecycleScope.launch {
-            val ok = authenticate("Unlock CasaTorch")
+            val ok = authenticate(getString(R.string.unlock_title))
             unlocking = false
             if (!ok) return@launch
             lockView.animate().alpha(0f).setDuration(220).withEndAction { lockView.visibility = View.GONE; lockView.alpha = 1f }.start()
@@ -436,9 +560,10 @@ class MainActivity : AppCompatActivity() {
     fun showLock() {
         if (!HomeStore.biometricLock) return
         lockView.visibility = View.VISIBLE; lockView.bringToFront()
+        lockView.announceForAccessibility(getString(R.string.locked))
         dropSessionCookies()
     }
-    /** With the lock on, the app's content is hidden from the recent-apps screen. */
+    /** With the lock on, the app's content is hidden from the recent-apps screen (and from screenshots below Android 13). */
     fun applyLockPrivacy() {
         if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!HomeStore.biometricLock)
         else if (HomeStore.biometricLock) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -452,13 +577,21 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onStart() {
         super.onStart()
-        if (!::lockView.isInitialized || lockView.visibility != View.VISIBLE || backgroundedAt == 0L) return
-        if (unlocking && SystemClock.elapsedRealtime() - backgroundedAt > 2000) unlocking = false   // a prompt that never showed
+        if (!::lockView.isInitialized || backgroundedAt == 0L) return
+        val away = SystemClock.elapsedRealtime() - backgroundedAt
+        web.evaluateJavascript("window.__casaEvent && window.__casaEvent('resume', {}); 1", null)
+        if (lockView.visibility != View.VISIBLE) { if (away > 20_000) recheckHome(300); return }
+        if (unlocking && away > 2000) unlocking = false   // a prompt that never showed
         if (unlocking) return
-        if (SystemClock.elapsedRealtime() - backgroundedAt < RELOCK_AFTER_MS) {
+        if (away < RELOCK_AFTER_MS) {
             // back within two minutes: no prompt, the sign-in comes back from memory
             val id = currentHomeId(); val t = id?.let { tokenCache[it] }; val h = id?.let { HomeStore.home(it) }
-            if (t != null && h != null) { setSessionCookie(t, h); lockView.visibility = View.GONE; pendingAlert?.let { (p, hid) -> pendingAlert = null; openAlert(p, hid) }; return }
+            if (t != null && h != null) {
+                setSessionCookie(t, h, web.url?.takeUnless { it.startsWith(SHELL_ORIGIN) }?.let(Uri::parse)); lockView.visibility = View.GONE
+                pendingAlert?.let { (p, hid) -> pendingAlert = null; openAlert(p, hid) }
+                if (away > 20_000) recheckHome(300)
+                return
+            }
         }
         tokenCache.clear(); unlock()
     }
@@ -466,10 +599,13 @@ class MainActivity : AppCompatActivity() {
     private fun buildLockView(): View = FrameLayout(this).apply {
         setBackgroundColor(getColor(R.color.launch_bg)); visibility = View.GONE; isClickable = true; isFocusable = true
         val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
-        col.addView(ImageView(context).apply { setImageResource(R.drawable.ic_launcher_foreground) }, LinearLayout.LayoutParams(dp(120), dp(120)))
-        col.addView(TextView(context).apply { setText(R.string.locked); setTextColor(Color.WHITE); textSize = 22f; gravity = Gravity.CENTER; setPadding(0, dp(8), 0, dp(24)) })
+        col.addView(ImageView(context).apply { setImageResource(R.drawable.ic_launcher_foreground); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(120), dp(120)))
+        col.addView(TextView(context).apply {
+            setText(R.string.locked); setTextColor(Color.WHITE); textSize = 22f; gravity = Gravity.CENTER; setPadding(dp(24), dp(8), dp(24), dp(24))
+            ViewCompat.setAccessibilityHeading(this, true)
+        })
         col.addView(Button(context).apply {
-            setText(R.string.unlock); isAllCaps = false; textSize = 17f; setTextColor(Color.parseColor("#05121C"))
+            setText(R.string.unlock); isAllCaps = false; textSize = 17f; setTextColor(Color.parseColor("#05121C")); minHeight = dp(48)
             background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(getColor(R.color.accent)) }
             setPadding(dp(36), dp(14), dp(36), dp(14)); setOnClickListener { unlock() }
         })

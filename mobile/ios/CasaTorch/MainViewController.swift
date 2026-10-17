@@ -6,12 +6,14 @@ import WebKit
 /// The whole app is one web view: the app's own screens (casatorch-app://app) until you're signed in, then your
 /// CasaTorch itself - the same dashboard you know, fitted to the phone, with the app's extras (Face ID, alerts,
 /// room scanning, haptics) through the bridge. It only ever shows your own CasaTorch: other links open in Safari.
-final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDelegate {
+final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, UIGestureRecognizerDelegate {
     private(set) var web: WKWebView!
     private var bridge: Bridge!
     private let refresh = UIRefreshControl()
     private var openingHome: Home?
     private var openTask: Task<Void, Never>?
+    private var recheckTask: Task<Void, Never>?
+    private var shown = false
     /// An alert tapped while the app was locked: opened once it's you.
     var pendingAlert: (path: String, home: String?)?
     var lock: LockOverlay?
@@ -21,6 +23,7 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
 
     override var prefersStatusBarHidden: Bool { fullscreen }
     override var prefersHomeIndicatorAutoHidden: Bool { fullscreen }
+    private var onShell: Bool { web.url?.scheme == ShellSchemeHandler.scheme }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -31,6 +34,7 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
         config.mediaTypesRequiringUserActionForPlayback = []
         config.applicationNameForUserAgent = "CasaTorchApp/\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1") (iOS)"
         config.limitsNavigationsToAppBoundDomains = false
+        config.dataDetectorTypes = []
         bridge = Bridge(controller: self)
         let ucc = config.userContentController
         ucc.add(WeakHandler(bridge), name: "casa")
@@ -45,14 +49,31 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
         web.uiDelegate = self
         web.isOpaque = false
         web.backgroundColor = view.backgroundColor
+        web.scrollView.backgroundColor = view.backgroundColor
         web.scrollView.contentInsetAdjustmentBehavior = .never
         web.allowsBackForwardNavigationGestures = false
+        web.alpha = 0   // shown once the first page has drawn: no white flash
+        #if DEBUG
+        if #available(iOS 16.4, *) { web.isInspectable = true }
+        #else
         if #available(iOS 16.4, *) { web.isInspectable = false }
+        #endif
         refresh.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
-        web.scrollView.refreshControl = refresh
         view.addSubview(web)
+        // the app's own screens: a swipe from the left edge goes back (as on any iPhone screen)
+        let edge = UIScreenEdgePanGestureRecognizer(target: self, action: #selector(edgeSwipe(_:)))
+        edge.edges = .left; edge.delegate = self
+        view.addGestureRecognizer(edge)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in self?.reveal() }   // never a blank screen, even if a page hangs
+        Net.shared.onChange = { [weak self] in self?.networkChanged() }
         // with the Face ID lock on, the lock screen opens the home once it's you (one prompt)
         if !HomeStore.shared.biometricLock || HomeStore.shared.current == nil { start() } else { openShell("homes") }
+    }
+
+    private func reveal() {
+        guard !shown else { return }
+        shown = true
+        UIView.animate(withDuration: 0.22) { self.web.alpha = 1 }
     }
 
     /// First screen: your home if you have one (after Face ID), else welcome.
@@ -61,6 +82,7 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
     }
     func openShell(_ hash: String) {
         openTask?.cancel(); openTask = nil
+        recheckTask?.cancel(); recheckTask = nil
         openingHome = nil
         web.load(URLRequest(url: URL(string: "\(ShellSchemeHandler.scheme)://app/index.html#\(hash)")!))
     }
@@ -80,10 +102,10 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
                 self.openShell("signedout=\(id)"); return
             }
             guard let found = await Self.firstAnswering(home.candidates) else { if !Task.isCancelled { self.openShell("unreachable=\(id)") }; return }
-            let (base, hello) = found
-            HomeStore.shared.learn(id, hello: hello)   // secure access turned on since pairing: remember the away-from-home address
+            let base = found.0
+            HomeStore.shared.learn(id, hello: found.1)   // secure access turned on since pairing: remember the away-from-home address
             guard !Task.isCancelled else { return }
-            await self.setSessionCookie(token: token, for: home)
+            await self.setSessionCookie(token: token, for: home, at: base)
             HomeStore.shared.touch(id, workingAddress: base)
             self.web.load(URLRequest(url: path.flatMap { URL(string: $0, relativeTo: base)?.absoluteURL } ?? base))
             Push.refreshIfNeeded(home: id, base: base, token: token)
@@ -97,8 +119,9 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
         Task { @MainActor in
             guard let token = await Task.detached(operation: { HomeStore.shared.token(id, context: context) }).value else { self.openShell("signedout=\(id)"); return }
             self.tokenCache[id] = token
-            await self.setSessionCookie(token: token, for: home)
+            await self.setSessionCookie(token: token, for: home, at: u)
             _ = try? await self.web.evaluateJavaScript("window.casatorchRefresh && window.casatorchRefresh(); 1")
+            self.recheckHome(after: 0.2)
         }
     }
     /// Back from a short trip away: put the sign-in back from memory, no prompt.
@@ -108,25 +131,45 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
     }
     /// The first address that answers - all tried at once (home Wi-Fi first, then away-from-home), so being away
     /// doesn't mean waiting for the home addresses to time out one by one. Also returns what the home says about itself.
-    static func firstAnswering(_ list: [URL]) async -> (URL, [String: Any])? {
-        await withTaskGroup(of: (Int, URL, [String: Any])?.self) { g in
-            for (i, u) in list.enumerated() {
+    /// https addresses come first, so a plain-http address is used only when none of them answers.
+    static func firstAnswering(_ list: [URL], timeout: TimeInterval = 4) async -> (URL, [String: Any])? {
+        let ok = list.filter(isAllowedAddress)
+        let allowed = ok.filter { $0.scheme?.lowercased() == "https" } + ok.filter { $0.scheme?.lowercased() != "https" }
+        return await withTaskGroup(of: (Int, URL, [String: Any])?.self) { g in
+            for (i, u) in allowed.enumerated() {
                 g.addTask {
-                    var r = URLRequest(url: u.appendingPathComponent("api/app/hello")); r.timeoutInterval = 4; r.cachePolicy = .reloadIgnoringLocalCacheData
-                    guard let (data, resp) = try? await URLSession.shared.data(for: r), (resp as? HTTPURLResponse)?.statusCode == 200,
-                          let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any], j["casatorch"] as? Bool == true else { return nil }
+                    var r = URLRequest(url: u.appendingPathComponent("api/app/hello")); r.timeoutInterval = timeout; r.cachePolicy = .reloadIgnoringLocalCacheData
+                    guard let res = try? await URLSession.shared.data(for: r), (res.1 as? HTTPURLResponse)?.statusCode == 200,
+                          let j = try? JSONSerialization.jsonObject(with: res.0) as? [String: Any], j["casatorch"] as? Bool == true else { return nil }
                     return (i, u, j)
                 }
             }
             var best: (Int, URL, [String: Any])?
-            for await r in g { if let r, best == nil || r.0 < best!.0 { best = r; if r.0 == 0 { g.cancelAll(); break } } }
+            for await r in g {
+                guard let r else { continue }
+                if best == nil || r.0 < (best?.0 ?? Int.max) { best = r }
+                if r.0 == 0 { g.cancelAll(); break }
+            }
             return best.map { ($0.1, $0.2) }
         }
     }
-    /// The sign-in, as the cookie your CasaTorch expects, for each of the home's addresses (in memory while the app is locked).
-    func setSessionCookie(token: String, for home: Home) async {
+    /// The sign-in, as the cookie your CasaTorch expects (in memory while the app is locked). `base` is the address the
+    /// home is (being) opened at. Open at an https address (the secure one at home, or from anywhere): only the https
+    /// addresses get it, as a Secure cookie, and a copy left on a plain-http address is taken back - so it's never sent
+    /// unencrypted while an encrypted address answers. Open at its plain address (no https address answered), or not
+    /// known: every address gets it, as before.
+    func setSessionCookie(token: String, for home: Home, at base: URL? = nil) async {
         let store = web.configuration.websiteDataStore.httpCookieStore
-        for u in home.candidates {
+        let open = base ?? web.url.flatMap { $0.scheme == ShellSchemeHandler.scheme ? nil : $0 } ?? HomeStore.shared.home(home.id)?.addresses.here.flatMap { URL(string: $0) }
+        let secure = home.candidates.filter { $0.scheme?.lowercased() == "https" }, plain = home.candidates.filter { $0.scheme?.lowercased() != "https" }
+        var list = secure + plain
+        if open?.scheme?.lowercased() == "https" {
+            list = secure
+            let secureHosts = Set(secure.compactMap { $0.host?.lowercased() })
+            let plainOnly = Set(plain.compactMap { $0.host?.lowercased() }).subtracting(secureHosts)
+            for c in await store.allCookies() where c.name == "casatorch_session" && plainOnly.contains(c.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))) { await store.deleteCookie(c) }
+        }
+        for u in list {
             guard let host = u.host else { continue }
             var props: [HTTPCookiePropertyKey: Any] = [.domain: host, .path: "/", .name: "casatorch_session", .value: token, HTTPCookiePropertyKey("HttpOnly"): "TRUE", .sameSitePolicy: HTTPCookieStringPolicy.sameSiteLax]
             if u.scheme == "https" { props[.secure] = "TRUE" }
@@ -139,23 +182,76 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
         for c in await store.allCookies() where c.name == "casatorch_session" { await store.deleteCookie(c) }
     }
 
+    // MARK: - the network changed, or the app is back: keep the home at an address that works from here
+    func networkChanged() {
+        if onShell {   // the app's own screens try again at once
+            let j = (try? JSONSerialization.data(withJSONObject: Net.shared.json)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+            web.evaluateJavaScript("window.__casaEvent && window.__casaEvent('network', \(j)); 1", completionHandler: nil)
+            return
+        }
+        recheckHome(after: 1.5)   // let the new connection settle (Wi-Fi to mobile data takes a moment)
+    }
+    /// Called by the scene when the app comes back to the screen.
+    func cameBack(after away: TimeInterval) {
+        web.evaluateJavaScript("window.__casaEvent && window.__casaEvent('resume', {}); 1", completionHandler: nil)
+        if away > 20 { recheckHome(after: 0.3) }
+    }
+    /// A home is on screen: still answering at this address? If not, the best address that does (say, from
+    /// anywhere instead of the home Wi-Fi), on the same page. If none does, "can't reach", which keeps trying.
+    func recheckHome(after delay: Double) {
+        guard lock?.isLocked != true, let cur = web.url, cur.scheme != ShellSchemeHandler.scheme, let id = currentHomeId(), let home = HomeStore.shared.home(id), let here = Home.originString(cur), let hereURL = URL(string: here) else { return }
+        recheckTask?.cancel()
+        recheckTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            if await Self.firstAnswering([hereURL], timeout: 3) != nil { return }   // still fine where it is
+            var found = await Self.firstAnswering(home.candidates)
+            if found == nil, !Task.isCancelled { try? await Task.sleep(nanoseconds: 3_000_000_000); found = await Self.firstAnswering(home.candidates) }
+            guard !Task.isCancelled, let now = self.web.url, Home.originString(now) == here else { return }   // you moved on meanwhile
+            guard let found else { self.openShell("unreachable=\(id)"); return }
+            guard let base = Home.originString(found.0), base != here else { return }
+            HomeStore.shared.touch(id, workingAddress: found.0)
+            if let token = self.tokenCache[id] { await self.setSessionCookie(token: token, for: home, at: found.0) }
+            let c = URLComponents(url: now, resolvingAgainstBaseURL: false)
+            let tail = (c?.percentEncodedPath.isEmpty == false ? c?.percentEncodedPath ?? "/" : "/") + (c?.percentEncodedQuery.map { "?\($0)" } ?? "") + (c?.percentEncodedFragment.map { "#\($0)" } ?? "")
+            self.web.load(URLRequest(url: URL(string: base + tail) ?? found.0))
+        }
+    }
+
     @objc private func pullToRefresh() {
         web.evaluateJavaScript("window.casatorchRefresh ? Promise.resolve(window.casatorchRefresh()).then(() => 1) : (location.reload(), 1)") { [weak self] _, _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self?.refresh.endRefreshing() }
         }
     }
+    @objc private func edgeSwipe(_ g: UIScreenEdgePanGestureRecognizer) {
+        guard g.state == .recognized || g.state == .ended, onShell else { return }
+        web.evaluateJavaScript("window.__casaBack ? window.__casaBack() : false", completionHandler: nil)
+    }
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+    func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool { !(g is UIScreenEdgePanGestureRecognizer) || onShell }
+
+    // MARK: - a keyboard on iPad: ⌘R reloads, ⌘[ goes back
+    override var keyCommands: [UIKeyCommand]? {
+        [UIKeyCommand(title: "Reload", action: #selector(reloadKey), input: "r", modifierFlags: .command),
+         UIKeyCommand(title: "Back", action: #selector(backKey), input: "[", modifierFlags: .command),
+         UIKeyCommand(title: "Your Homes", action: #selector(homesKey), input: "h", modifierFlags: [.command, .shift])]
+    }
+    @objc private func reloadKey() { if onShell { web.reload() } else { pullToRefresh() } }
+    @objc private func backKey() { if onShell { web.evaluateJavaScript("window.__casaBack && window.__casaBack()", completionHandler: nil) } else if web.canGoBack { web.goBack() } }
+    @objc private func homesKey() { if lock?.isLocked != true { openShell("homes") } }
 
     // MARK: - only your own CasaTorch in here
     private func isTrusted(_ url: URL?) -> Bool {
         guard let url else { return false }
         if url.scheme == ShellSchemeHandler.scheme { return true }
-        guard let host = url.host?.lowercased() else { return false }
+        guard isAllowedAddress(url), let host = url.host?.lowercased() else { return false }   // plain http only on the home network
         return HomeStore.shared.homes.contains { $0.hosts.contains(host) } || (openingHome?.hosts.contains(host) ?? false)
     }
+    /// A bridge call is answered only for the app's own screens and the exact addresses (scheme, host, port) of your homes.
     func isTrustedOrigin(_ origin: WKSecurityOrigin) -> Bool {
         if origin.protocol == ShellSchemeHandler.scheme { return true }
-        let host = origin.host.lowercased()
-        return HomeStore.shared.homes.contains { $0.hosts.contains(host) }
+        let key = Home.originKey(origin.protocol, origin.host, origin.port)
+        return HomeStore.shared.homes.contains { $0.originKeys.contains(key) }
     }
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = action.request.url else { decisionHandler(.cancel); return }
@@ -167,7 +263,7 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             // (while locked the cookies are out on purpose: that isn't a sign-out, so nothing is forgotten)
             if url.path.hasSuffix("/login.html"), lock?.isLocked == true { decisionHandler(.cancel); return }
             if url.path.hasSuffix("/login.html"), action.targetFrame?.isMainFrame ?? true, let h = currentHomeId() {
-                decisionHandler(.cancel); Task { await dropSessionCookies() }; Keychain.delete(service: Keychain.tokenService, account: h); openShell("signedout=\(h)"); return
+                decisionHandler(.cancel); Task { await dropSessionCookies() }; tokenCache[h] = nil; Keychain.delete(service: Keychain.tokenService, account: h); openShell("signedout=\(h)"); return
             }
             decisionHandler(.allow); return
         }
@@ -179,24 +275,38 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
         if let url = action.request.url { if isTrusted(url) { webView.load(action.request) } else if ["http", "https"].contains(url.scheme ?? "") { present(SFSafariViewController(url: url), animated: true) } }
         return nil
     }
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        // pull to refresh is for your home; the app's own screens retry by themselves
+        let want: UIRefreshControl? = onShell ? nil : refresh
+        if web.scrollView.refreshControl !== want { web.scrollView.refreshControl = want }
+    }
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { reveal() }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        reveal()
         if (error as NSError).code == NSURLErrorCancelled { return }
         if let h = openingHome { openShell("unreachable=\(h.id)") }
+        else if !onShell, let id = currentHomeId() { openShell("unreachable=\(id)") }
     }
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { webView.reload() }
+    /// The page's process stopped (memory pressure, a crash): bring the same page back, never a blank screen.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        if webView.url == nil { start() } else { webView.reload() }
+    }
     // confirm() and alert() from the page, as native alerts
     func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        guard presentedViewController == nil else { completionHandler(false); return }
         let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
         a.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
         present(a, animated: true)
     }
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        guard presentedViewController == nil else { completionHandler(); return }
         let a = UIAlertController(title: nil, message: message, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
         present(a, animated: true)
     }
     func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+        guard presentedViewController == nil else { completionHandler(nil); return }
         let a = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
         a.addTextField { $0.text = defaultText }
         a.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })

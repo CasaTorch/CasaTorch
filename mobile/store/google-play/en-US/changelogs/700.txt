@@ -1,0 +1,4 @@
+The first CasaTorch app for Android.
+- Sign in to your own CasaTorch, or pair by QR code
+- Clear help when your home can't be reached, and it reconnects by itself
+- Fingerprint lock and encrypted alerts

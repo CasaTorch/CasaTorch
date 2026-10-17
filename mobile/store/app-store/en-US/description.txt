@@ -1,0 +1,26 @@
+CasaTorch is a home dashboard that runs on your own hardware - a Raspberry Pi, a mini PC, a NAS or a Home Assistant add-on. This app puts that CasaTorch on your iPhone and iPad.
+
+YOUR HOME, NOT OUR CLOUD
+There's no CasaTorch account. You sign in to your own CasaTorch with the name and password you already use there, plus a two-step code. The app talks straight to your box on your home Wi-Fi.
+
+EVERYTHING YOU KNOW, FITTED TO YOUR PHONE
+- The same dashboard: lights, climate, energy, people, reminders and more
+- Your cameras
+- The 3D home
+- Settings, with the same people and roles as at home
+
+WHAT ONLY THE APP CAN DO
+- Face ID or Touch ID lock. Your sign-in stays in the iPhone's Keychain and only comes out when it's you. While locked, the app hides itself in the app switcher.
+- Encrypted alerts. Water, smoke, the doorbell, a device going offline: your CasaTorch encrypts each alert (AES-256-GCM) with a key only this phone has. Apple, Google and casatorch.com only carry sealed bytes.
+- Pair in seconds. Scan the one-time QR code from Settings › Phones & alerts › Add a phone on any screen that's already signed in.
+- Scan a room. On an iPhone Pro or iPad Pro with LiDAR, scan a room with Apple's RoomPlan and send it straight to your CasaTorch's 3D editor.
+- Built for iPad: Split View, Slide Over, rotation and keyboard shortcuts.
+
+COMING
+- Away from home: reaching your home from anywhere with Secure access (part of CasaTorch Pro).
+
+WHAT YOU NEED
+A CasaTorch on your home network (the Basic edition is free), version 0.6 or newer. The app finds it on your Wi-Fi, or you type its address.
+
+PRIVACY
+The app collects no data and has no analytics or tracking. It only connects to your own CasaTorch, plus casatorch.com to list CasaTorch boxes on your home internet connection when you tap Find my CasaTorch.

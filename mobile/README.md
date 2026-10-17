@@ -11,7 +11,11 @@ mobile/
   shell/     the app's own screens (welcome, find your CasaTorch, sign in, two-step, alerts...), shared by both apps
   ios/       iPhone + iPad (Swift, XcodeGen project), with the alerts extension that decrypts on the phone
   android/   Android phones + tablets (Kotlin)
+  store/     App Store and Google Play texts (English), review notes, data-safety answers
+  tools/     shell-strings.mjs (strings to translate), store-check.mjs (store text limits)
 ```
+
+Version **0.7.0** (build / versionCode **700**: raise it for every store upload).
 
 ## How it works
 
@@ -19,12 +23,43 @@ mobile/
 two-step sign-in (it sets it up on the spot if you haven't). Or, on a screen that's already signed in, open
 **Settings › Phones & alerts › Add a phone** and scan the one-time QR code (valid 10 minutes).
 
+**Finding your CasaTorch.** **Find my CasaTorch** sees boxes that announce themselves on the home Wi-Fi
+(Bonjour, `_casatorch._tcp`, CasaTorch 0.7 and newer), asks casatorch.com which boxes are on the same home internet
+connection, and also tries the names a box answers to on the home network (`casatorch.local`, and
+`homeassistant.local` for the add-on). Whatever it finds, it only trusts once that address answers as a CasaTorch. Or type its address: the app forgives a missing `http://`, a missing port
+(it tries 8090, then https, then plain), a path or slash at the end, capitals and spaces, IPv6 (`fd00::20`) and
+`.local` names. It then moves to the box's secure address by itself when the phone can reach it.
+
+**When something's wrong, it says what.** The phone itself checks the address (not the web view), so the app can
+tell apart: the phone is offline or on mobile data, iPhone's Local Network permission is off, no such name, nothing
+listening on that port, a certificate the phone doesn't trust, a Wi-Fi sign-in page (hotel, café), Home Assistant
+instead of CasaTorch, a CasaTorch that needs an update (older than 0.6.0) or an app that needs one (a box can ask for
+a minimum app version with `appMin` in `/api/app/hello`). Sign-in errors (wrong password, too many tries, a wrong or
+expired two-step code, a used or expired pairing code) come with what to do next; after two wrong codes it points
+at the phone's clock.
+
+**It reconnects by itself.** "Can't reach your home" is calm, says why, and keeps trying (after 2, 4, 8, 15, then
+every 30 seconds, and at once when the network changes or the app comes back); it opens your home as soon as it
+answers. With your home open, switching between Wi-Fi and mobile data (or coming back after a while) re-checks the
+address and moves to one that works from here, on the same page. If the phone closes the app mid-sign-in, it
+reopens at the same step (no password, code or ticket is kept). A pairing link opened while the app was closed goes
+straight to pairing (after the lock, if it's on), and is never tried twice.
+
 **The sign-in stays on the phone.** Each phone gets its own revocable sign-in (seen in Settings › Phones & alerts),
 kept in the iOS Keychain / Android Keystore. With the lock on, it only comes out after Face ID, Touch ID, a
 fingerprint or the screen lock, and the app hides itself in the app switcher.
 
 **The app only shows your CasaTorch.** Links anywhere else open in the browser. The bridge to the phone
-(`window.CasaNative`) only answers the app's own screens and the homes you signed in to.
+(`window.CasaNative`) only answers the main frame of the app's own screens and the exact addresses (scheme, host,
+port) of the homes you signed in to; saving a sign-in and checking addresses only work from the app's own screens.
+Plain http is used only to home-network addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x, fd00::/8, `*.local`, the
+100.64/10 range used by Tailscale); anything else must be https, and casatorch.com always is.
+
+**Kept on the phone, and only there.** Sign-ins: iOS Keychain (this device only, behind Face ID when the lock is
+on) / Android Keystore-sealed. No cloud or device-to-device backup of app data on Android (`allowBackup=false` and
+data-extraction rules); on iOS the web view's storage is excluded from backups. With the lock on, the app hides
+itself in the app switcher / Recents. A copied two-step setup key leaves the clipboard after 2 minutes (and isn't
+shown in Android's clipboard preview). Web view debugging is off in release builds.
 
 **Alerts are end-to-end encrypted.** When you turn alerts on, the phone makes a key for that home and gives it only
 to your CasaTorch. Each alert is encrypted (AES-256-GCM) by your box, signed with your box's own key, and handed to
@@ -33,6 +68,26 @@ no copy - only your box's public key (so nobody else can send as your home) and 
 
 **Room scans go home.** On a LiDAR iPhone or iPad, **3D home › Scan a room** runs Apple's RoomPlan and uploads
 the result to *your* CasaTorch's editor. It never touches casatorch.com.
+
+## Fitted to each device
+
+- **iPhone:** safe areas, Dynamic Type (the app's screens follow your text size), dark and light, VoiceOver labels
+  and headings, haptics for success, errors and choices.
+- **iPad:** a centered card instead of a stretched phone screen, every orientation, Split View, Slide Over and
+  Stage Manager, pointer support, keyboard shortcuts (⌘R reload, ⌘[ back, ⇧⌘H your homes), Escape goes back, and
+  a swipe from the left edge goes back on the app's own screens.
+- **Android:** edge to edge, the back gesture (predictive back) goes back step by step on the app's own screens and
+  never back into sign-in once your home is open, rotation and folding without reloading, tablets, the phone's font
+  size, TalkBack labels.
+- **Never a blank screen:** the web view appears only once a page has drawn; if its process is stopped (memory
+  pressure, a crash) the same page comes back.
+
+## Languages
+
+Every string on the app's own screens goes through `T('…')` in `shell/shell.js`. Translations go in
+`shell/i18n/words.js` (English key → translated text; the phone's language is used when it's there). The
+CasaTorch web app's languages are es, de, fr, pt, it, nl, ja, zh, ko, hi, pl, sv and tr; the app's own screens
+are English until those are added. `node mobile/tools/shell-strings.mjs` lists the strings and checks translations.
 
 ## Build it
 
@@ -91,6 +146,8 @@ The two Firebase app files are listed in `.gitignore`; keep them out of the repo
 - **Capabilities:** Push Notifications, Keychain Sharing, Time Sensitive Notifications.
 - **Before release:** set `aps-environment` to `production` in `ios/project.yml`.
 - **Privacy:** "Data Not Collected". `PrivacyInfo.xcprivacy` is included, and the app has no tracking and no analytics.
+- **Texts:** `store/app-store/en-US/` (name, subtitle, description, keywords, release notes, URLs) and
+  `store/app-store/review_notes.txt`. `node mobile/tools/store-check.mjs` checks the length limits.
 - **Export compliance:** the app uses only standard encryption (HTTPS, AES-GCM through the system), so
   `ITSAppUsesNonExemptEncryption` is `false`.
 - **App Review notes:** the app connects to the reviewer's own CasaTorch. Provide a demo box address and a demo
@@ -100,6 +157,8 @@ The two Firebase app files are listed in `.gitignore`; keep them out of the repo
 
 - **Release signing:** make an upload key with `keytool` and keep it in `houseos-private`, never in this repository.
   Then use Play App Signing.
-- **Data safety:** "No data collected" and "No data shared". Data is encrypted in transit.
+- **Data safety:** "No data collected" and "No data shared". Data is encrypted in transit (answers in
+  `store/google-play/data_safety.txt`).
+- **Texts:** `store/google-play/en-US/` (title, short and full description, changelog for versionCode 700).
 - **Notifications permission:** asked only when you tap **Turn on alerts**.
 - **Target API:** 35.

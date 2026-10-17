@@ -13,7 +13,11 @@ if ($Remove) {
 }
 $Data = Join-Path $env:ProgramData 'CasaTorch'
 New-Item -ItemType Directory -Force -Path $Data | Out-Null
-& icacls.exe $Data /grant '*S-1-5-20:(OI)(CI)M' | Out-Null   # Network Service may write its settings here
+# Settings hold password hashes and device keys: only SYSTEM, Administrators and the Network Service
+# account the task runs as (S-1-5-20, may write its settings here) can open them. Removing inherited
+# rights takes away the read access every user of the PC gets from C:\ProgramData; files already there
+# (from an older install) inherit the new rights, so re-running this fixes existing installs too.
+& icacls.exe $Data /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-20:(OI)(CI)M' | Out-Null
 $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument "/c `"`"$AppDir\casatorch-run.cmd`"`"" -WorkingDirectory "$AppDir\app"
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-20' -LogonType ServiceAccount -RunLevel Limited

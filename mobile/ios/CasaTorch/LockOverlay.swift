@@ -21,20 +21,28 @@ final class LockOverlay: UIView {
         autoresizingMask = [.flexibleWidth, .flexibleHeight]
         let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemThickMaterialDark))
         blur.frame = bounds; blur.autoresizingMask = [.flexibleWidth, .flexibleHeight]; addSubview(blur)
-        let logo = UIImageView(image: UIImage(named: "LaunchLogo")); logo.contentMode = .scaleAspectFit
-        let title = UILabel(); title.text = "CasaTorch is locked"; title.font = .systemFont(ofSize: 22, weight: .semibold); title.textColor = .white
+        let logo = UIImageView(image: UIImage(named: "LaunchLogo")); logo.contentMode = .scaleAspectFit; logo.isAccessibilityElement = false
+        let title = UILabel(); title.text = "CasaTorch is locked"; title.textColor = .white; title.textAlignment = .center; title.numberOfLines = 0
+        title.font = UIFontMetrics(forTextStyle: .title2).scaledFont(for: .systemFont(ofSize: 22, weight: .semibold)); title.adjustsFontForContentSizeCategory = true
+        title.accessibilityTraits = .header
         var cfg = UIButton.Configuration.filled(); cfg.cornerStyle = .large; cfg.baseBackgroundColor = UIColor(red: 0.37, green: 0.72, blue: 1, alpha: 1); cfg.baseForegroundColor = UIColor(red: 0.02, green: 0.07, blue: 0.11, alpha: 1)
         cfg.title = "Unlock with \(Self.biometryName)"; cfg.contentInsets = NSDirectionalEdgeInsets(top: 14, leading: 28, bottom: 14, trailing: 28)
         button.configuration = cfg; button.addTarget(self, action: #selector(unlock), for: .touchUpInside)
         let stack = UIStackView(arrangedSubviews: [logo, title, button]); stack.axis = .vertical; stack.alignment = .center; stack.spacing = 22
         stack.translatesAutoresizingMaskIntoConstraints = false; addSubview(stack)
-        NSLayoutConstraint.activate([stack.centerXAnchor.constraint(equalTo: centerXAnchor), stack.centerYAnchor.constraint(equalTo: centerYAnchor), logo.widthAnchor.constraint(equalToConstant: 84), logo.heightAnchor.constraint(equalToConstant: 84)])
+        NSLayoutConstraint.activate([stack.centerXAnchor.constraint(equalTo: centerXAnchor), stack.centerYAnchor.constraint(equalTo: centerYAnchor),
+                                     stack.leadingAnchor.constraint(greaterThanOrEqualTo: layoutMarginsGuide.leadingAnchor), stack.trailingAnchor.constraint(lessThanOrEqualTo: layoutMarginsGuide.trailingAnchor), logo.widthAnchor.constraint(equalToConstant: 84), logo.heightAnchor.constraint(equalToConstant: 84)])
         isHidden = true
     }
     required init?(coder: NSCoder) { fatalError() }
 
     var isLocked: Bool { !isHidden }
-    func show() { guard HomeStore.shared.biometricLock, let c = controller else { return }; c.view.bringSubviewToFront(self); isHidden = false; Task { await c.dropSessionCookies() } }
+    func show() {
+        guard HomeStore.shared.biometricLock, let c = controller else { return }
+        c.view.bringSubviewToFront(self); alpha = 1; isHidden = false
+        UIAccessibility.post(notification: .screenChanged, argument: button)
+        Task { await c.dropSessionCookies() }
+    }
     /// Ask now (on open and coming back), then open the home with the same unlocked context: one prompt, not two.
     @objc func unlock() {
         guard !busy else { return }

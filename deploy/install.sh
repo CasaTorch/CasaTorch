@@ -22,6 +22,13 @@ command -v systemctl >/dev/null || die "this installer needs systemd (use Docker
 . /etc/os-release 2>/dev/null || true
 case "${ID:-}${ID_LIKE:-}" in *debian*|*ubuntu*|*raspbian*) ;; *) die "this installer is for Debian, Ubuntu and Raspberry Pi OS - use Docker on other systems";; esac
 
+# Enough room to install (about 400 MB with Node.js), and the port free for CasaTorch.
+free_mb=$(df -Pm /opt 2>/dev/null | awk 'NR==2 {print $4}')
+[ -z "$free_mb" ] || [ "$free_mb" -ge 400 ] || die "only ${free_mb} MB free - CasaTorch needs about 400 MB. Free some space, then run this again."
+if command -v ss >/dev/null && ss -ltnH "sport = :$PORT" 2>/dev/null | grep -q . && ! systemctl is-active -q casatorch 2>/dev/null; then
+  die "port $PORT is already used by another program. Stop it, or pick another port: CASATORCH_PORT=8095 sudo ./install.sh"
+fi
+
 say "Checking packages"
 apt-get update -qq
 apt-get install -y -qq ca-certificates curl git traceroute >/dev/null
@@ -37,6 +44,16 @@ say "Node.js $(node -v)"
 
 id casatorch >/dev/null 2>&1 || useradd --system --home "$DATA_DIR" --shell /usr/sbin/nologin casatorch
 mkdir -p "$DATA_DIR" && chown casatorch:casatorch "$DATA_DIR" && chmod 700 "$DATA_DIR"
+
+# Before updating: a copy of the settings, sign-ins and key in CasaTorch's settings history
+# (Settings > Health can put it back with one tap).
+if [ -f "$DATA_DIR/config.json" ]; then
+  snap="$DATA_DIR/.settings-history/$(date -u +%Y%m%dT%H%M%SZ)-before-update"
+  mkdir -p "$snap" && chmod 700 "$DATA_DIR/.settings-history" "$snap"
+  for f in config.json users.json secret.key; do [ -f "$DATA_DIR/$f" ] && cp -p "$DATA_DIR/$f" "$snap/$f"; done
+  chown -R casatorch:casatorch "$DATA_DIR/.settings-history" 2>/dev/null || true
+  say "Saved a copy of your settings first"
+fi
 
 if [ -d "$APP_DIR/.git" ]; then
   say "Updating CasaTorch"
@@ -60,6 +77,8 @@ cat > /etc/systemd/system/casatorch.service <<UNIT
 Description=CasaTorch
 After=network-online.target
 Wants=network-online.target
+# Never give up restarting it (CasaTorch also restarts itself if it ever stops responding).
+StartLimitIntervalSec=0
 
 [Service]
 User=casatorch
@@ -68,6 +87,7 @@ Environment=NODE_ENV=production CASATORCH_DATA_DIR=$DATA_DIR PORT=$PORT
 ExecStart=$(command -v node) server.js
 Restart=always
 RestartSec=5
+TimeoutStopSec=20
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
@@ -80,8 +100,14 @@ UNIT
 systemctl daemon-reload
 systemctl enable -q casatorch
 systemctl restart casatorch
-sleep 2
-systemctl is-active -q casatorch || { journalctl -u casatorch -n 30 --no-pager; die "CasaTorch did not start - the log is above"; }
+# Wait until it answers (up to a minute on a slow Raspberry Pi), not just until the process exists.
+up=0
+for _ in $(seq 1 60); do
+  if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then up=1; break; fi
+  systemctl is-active -q casatorch || break
+  sleep 1
+done
+[ "$up" = 1 ] || { journalctl -u casatorch -n 30 --no-pager; die "CasaTorch did not start - the log is above"; }
 
 ip=$(hostname -I 2>/dev/null | awk '{print $1}')
 say "CasaTorch is running. Open http://${ip:-this-machine}:$PORT on any screen at home to set it up."

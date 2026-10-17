@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
@@ -15,10 +17,16 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -28,6 +36,7 @@ import kotlin.coroutines.resumeWithException
  */
 class Bridge(private val a: MainActivity) {
     class Failure(msg: String) : Exception(msg)
+    private companion object { const val CLIP_LABEL = "CasaTorch setup key" }
 
     private var askNotify: ((Boolean) -> Unit)? = null
     private val notifyPermission = a.registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> askNotify?.invoke(ok); askNotify = null }
@@ -50,6 +59,8 @@ class Bridge(private val a: MainActivity) {
                 "success" -> if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.VIRTUAL_KEY
                 "error" -> if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.REJECT else HapticFeedbackConstants.LONG_PRESS
                 "medium" -> HapticFeedbackConstants.VIRTUAL_KEY
+                "warning" -> HapticFeedbackConstants.LONG_PRESS
+                "light" -> HapticFeedbackConstants.KEYBOARD_TAP
                 else -> HapticFeedbackConstants.CLOCK_TICK
             }
             a.web.performHapticFeedback(k); null
@@ -62,10 +73,12 @@ class Bridge(private val a: MainActivity) {
         }
         "copy" -> {
             val cm = a.getSystemService(android.content.ClipboardManager::class.java)
-            val clip = android.content.ClipData.newPlainText("CasaTorch setup key", x.optString("text"))
-            // a setup key: marked sensitive so Android doesn't show it in the clipboard preview
+            val clip = android.content.ClipData.newPlainText(CLIP_LABEL, x.optString("text"))
+            // a setup key: marked sensitive so Android doesn't show it in the clipboard preview, and gone after 2 minutes
             if (Build.VERSION.SDK_INT >= 33) clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
-            cm.setPrimaryClip(clip); true
+            cm.setPrimaryClip(clip)
+            a.web.postDelayed({ runCatching { if (cm.primaryClipDescription?.label == CLIP_LABEL) cm.clearPrimaryClip() } }, 120_000)
+            true
         }
         "deviceInfo" -> JSONObject().put("name", deviceName()).put("platform", "android").put("model", Build.MODEL.take(40)).put("app", BuildConfig.VERSION_NAME)
         "biometrics" -> {
@@ -102,6 +115,18 @@ class Bridge(private val a: MainActivity) {
         }
         "lidar" -> JSONObject().put("available", false).put("why", "Scanning a room with LiDAR needs an iPhone Pro or iPad Pro. On Android, upload a room scan file made with another app instead.")
         "scanRoom" -> throw Failure("This phone has no LiDAR scanner.")
+        "probe" -> {
+            // the app's own screens asking "is there a CasaTorch at this address?" - with the exact reason when there isn't
+            if (!fromShell) throw Failure("Not allowed here.")
+            val u = Uri.parse(x.optString("url"))
+            if ((u.scheme != "http" && u.scheme != "https") || u.host.isNullOrEmpty()) throw Failure("Not allowed here.")
+            probe(u, x.optInt("timeout", 5000).coerceIn(1000, 15000))
+        }
+        "discover" -> {
+            // the app's own Find screen: CasaTorch boxes announcing themselves on this Wi-Fi (Bonjour, "_casatorch._tcp")
+            if (!fromShell) throw Failure("Not allowed here.")
+            JSONArray(discover(x.optLong("timeout", 3000).coerceIn(1000, 8000)))
+        }
         "scanQR" -> scanQR()
         "homes" -> JSONArray(HomeStore.homes.sortedByDescending { it.last }.map { it.toJson().apply { if (it.last > 0) put("last", java.time.Instant.ofEpochMilli(it.last).toString()) else remove("last") } })
         "saveHome" -> {
@@ -109,7 +134,7 @@ class Bridge(private val a: MainActivity) {
             val id = x.optString("id"); val name = x.optString("name"); val token = x.optString("token")
             if (!Regex("^[A-Za-z0-9_-]{8,40}$").matches(id) || name.isEmpty() || token.isEmpty()) throw Failure("That sign-in didn't come back right.")
             val ad = x.optJSONObject("addresses") ?: JSONObject(); val u = x.optJSONObject("user") ?: JSONObject()
-            fun clean(k: String) = if (ad.isNull(k)) null else ad.optString(k).takeIf { s -> Uri.parse(s).let { (it.scheme == "http" || it.scheme == "https") && !it.host.isNullOrEmpty() } }
+            fun clean(k: String) = if (ad.isNull(k)) null else ad.optString(k).takeIf { s -> Home.allowed(Uri.parse(s)) }
             val h = Home(id, name.take(60), u.optString("name").ifEmpty { null }, u.optString("role").ifEmpty { null }, clean("lan"), clean("remote"), clean("plain"), clean("here"), System.currentTimeMillis())
             // with the lock on, saving needs a fresh unlock (signing in took longer than the few seconds it lasts)
             val saved = try { HomeStore.upsert(h, token) } catch (_: NeedsUnlock) { a.authenticate("Save the sign-in to ${h.name}") && HomeStore.upsert(h, token) }
@@ -130,6 +155,70 @@ class Bridge(private val a: MainActivity) {
             a.openShell(if (HomeStore.homes.isEmpty()) "welcome" else "homes"); null
         }
         else -> throw Failure("The app doesn't know \"$cmd\" - update it from Google Play.")
+    }
+
+    /** { status, json?, net } for any answer; { error, net } when there was none: offline, dns, timeout, refused, tls, insecure. */
+    private suspend fun probe(u: Uri, ms: Int): JSONObject = withContext(Dispatchers.IO) {
+        val net = Net.json(a)
+        if (!Home.allowed(u)) return@withContext JSONObject().put("error", "insecure").put("net", net)
+        try {
+            val c = (URL(u.toString()).openConnection() as HttpURLConnection).apply {
+                connectTimeout = ms; readTimeout = ms; useCaches = false; instanceFollowRedirects = false   // a redirect is an answer: usually a Wi-Fi sign-in page
+                setRequestProperty("Accept", "application/json")
+            }
+            try {
+                val code = c.responseCode
+                val out = JSONObject().put("status", code).put("net", net)
+                if (code in 200..299) runCatching { out.put("json", JSONObject(c.inputStream.bufferedReader().use { it.readText() }.take(256_000))) }
+                out
+            } finally { c.disconnect() }
+        } catch (e: Exception) {
+            val online = net.optBoolean("online")
+            val kind = when (e) {
+                is java.net.UnknownHostException -> if (online) "dns" else "offline"
+                is java.net.SocketTimeoutException -> "timeout"
+                is java.net.ConnectException, is java.net.NoRouteToHostException -> if (online) "refused" else "offline"
+                is javax.net.ssl.SSLException -> "tls"
+                is java.net.UnknownServiceException -> "insecure"   // plain http refused by the network rules
+                else -> if (online) "other" else "offline"
+            }
+            JSONObject().put("error", kind).put("net", net)
+        }
+    }
+
+    /**
+     * CasaTorch boxes on this network that announce themselves (mDNS / DNS-SD), as "http://address:port" for the shell
+     * to check with probe - nothing here is trusted until that answers. Never throws: no Wi-Fi or no multicast, no list.
+     */
+    private suspend fun discover(ms: Long): List<String> {
+        val nsd = a.getSystemService(NsdManager::class.java) ?: return emptyList()
+        val found = java.util.Collections.synchronizedList(mutableListOf<NsdServiceInfo>())
+        val listener = object : NsdManager.DiscoveryListener {
+            override fun onDiscoveryStarted(serviceType: String) {}
+            override fun onDiscoveryStopped(serviceType: String) {}
+            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {}
+            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
+            override fun onServiceFound(info: NsdServiceInfo) { found.add(info) }
+            override fun onServiceLost(info: NsdServiceInfo) {}
+        }
+        if (runCatching { nsd.discoverServices("_casatorch._tcp", NsdManager.PROTOCOL_DNS_SD, listener) }.isFailure) return emptyList()
+        try { delay(ms) } finally { runCatching { nsd.stopServiceDiscovery(listener) } }
+        val out = mutableListOf<String>()
+        for (info in synchronized(found) { found.toList() }.distinctBy { it.serviceName }.take(8)) {   // one at a time: older Android resolves one service at a time
+            val r = withTimeoutOrNull(2500L) { resolve(nsd, info) } ?: continue
+            @Suppress("DEPRECATION") val ip = r.host?.hostAddress ?: continue
+            if (ip.contains('%') || r.port !in 1..65535) continue   // a scoped IPv6 address can't go in a web address
+            out.add(if (ip.contains(':')) "http://[$ip]:${r.port}" else "http://$ip:${r.port}")
+        }
+        return out.distinct().filter { Home.allowed(Uri.parse(it)) }
+    }
+    @Suppress("DEPRECATION")
+    private suspend fun resolve(nsd: NsdManager, info: NsdServiceInfo): NsdServiceInfo? = suspendCancellableCoroutine { c ->
+        val l = object : NsdManager.ResolveListener {
+            override fun onResolveFailed(i: NsdServiceInfo, errorCode: Int) { if (c.isActive) c.resume(null) }
+            override fun onServiceResolved(i: NsdServiceInfo) { if (c.isActive) c.resume(i) }
+        }
+        if (runCatching { nsd.resolveService(info, l) }.isFailure && c.isActive) c.resume(null)
     }
 
     private fun deviceName(): String =

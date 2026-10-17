@@ -15,11 +15,24 @@ struct Home: Codable, Equatable {
     var candidates: [URL] {
         var seen = Set<String>(), out: [URL] = []
         for s in [addresses.here, addresses.lan, addresses.remote, addresses.plain].compactMap({ $0 }) where !seen.contains(s) {
-            seen.insert(s); if let u = URL(string: s), u.scheme == "https" || u.scheme == "http" { out.append(u) }
+            seen.insert(s); if let u = URL(string: s), isAllowedAddress(u) { out.append(u) }   // plain http only on the home network
         }
         return out
     }
     var hosts: Set<String> { Set(candidates.compactMap { $0.host?.lowercased() }) }
+    /// scheme + host + port of each address, to check exactly where a page or a bridge call comes from.
+    var originKeys: Set<String> { Set(candidates.compactMap { u in u.scheme.flatMap { s in u.host.map { Home.originKey(s, $0, u.port) } } }) }
+
+    static func originKey(_ scheme: String, _ host: String, _ port: Int?) -> String {
+        let s = scheme.lowercased(), p = (port ?? 0) > 0 ? (port ?? 0) : (s == "https" ? 443 : 80)
+        return "\(s)|\(host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]")))|\(p)"
+    }
+    /// "https://host:port" of an address (IPv6 in brackets), for reloading the same page at another address.
+    static func originString(_ u: URL) -> String? {
+        guard let s = u.scheme, let h = u.host, !h.isEmpty else { return nil }
+        let host = h.contains(":") && !h.hasPrefix("[") ? "[\(h)]" : h
+        return "\(s)://\(host)\(u.port.map { ":\($0)" } ?? "")"
+    }
 }
 
 final class HomeStore {
@@ -54,7 +67,7 @@ final class HomeStore {
     func touch(_ id: String, workingAddress: URL?) {
         guard let i = homes.firstIndex(where: { $0.id == id }) else { return }
         homes[i].last = Date()
-        if let a = workingAddress { homes[i].addresses.here = "\(a.scheme ?? "https")://\(a.host ?? "")\(a.port.map { ":\($0)" } ?? "")" }
+        if let a = workingAddress, let o = Home.originString(a) { homes[i].addresses.here = o }
         currentId = id; save()
     }
     /// The home told us its addresses (only trusted when it's the same home): keep them current.

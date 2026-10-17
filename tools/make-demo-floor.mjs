@@ -75,7 +75,7 @@ if (!fs.existsSync(path.join(out, 'devices.json'))) fs.writeFileSync(path.join(o
   { id: 'hue:1', provider: 'hue', kind: 'light', name: 'Living room', on: true, brightness: 80, online: true },
   { id: 'hue:2', provider: 'hue', kind: 'light', name: 'Kitchen', on: false, online: true },
   { id: 'hue:3', provider: 'hue', kind: 'light', name: 'Bedroom 1', on: true, brightness: 30, online: true },
-  { id: 'ha:media_player.living_room', provider: 'ha', kind: 'media', name: 'Living room speaker', on: true, playing: true, title: 'Fleetwood Mac - Dreams', online: true },
+  { id: 'ha:media_player.living_room', provider: 'ha', kind: 'media', name: 'Living room speaker', on: true, playing: true, title: 'Evening jazz radio', online: true },
   { id: 'ha:media_player.bedroom', provider: 'ha', kind: 'media', name: 'Bedroom TV', on: false, playing: false, online: true },
   { id: 'shelly:fridge', provider: 'shelly', kind: 'plug', name: 'Fridge', on: true, powerW: 96, online: true },
   { id: 'shelly:office', provider: 'shelly', kind: 'plug', name: 'Office desk', on: true, powerW: 142, online: true },

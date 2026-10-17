@@ -1,0 +1,1 @@
+home,dashboard,smart home,home assistant,self-hosted,cameras,3D,floor plan,alerts,energy,privacy

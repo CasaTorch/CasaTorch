@@ -33,7 +33,7 @@ fails the privacy scan (`tools/scrub-check.mjs`).
 | 11-nas-agent.js | core | Becomes the generic "host agent" for any Docker host |
 | 12-live-tv-nas.js | drop | |
 | 12d-disk-history-nas.js | core | |
-| 12h-heal-update-nas.js | split | One-tap updates = core; self-healing = pro |
+| 12h-heal-update-nas.js | split | One-tap updates = core; self-healing = core (Health, free for everyone) |
 | 12l-hostlogs-nas.js | core | |
 | 12m-dvr-nas.js | drop | |
 | 12n-vpn-picker-nas.js | drop | |

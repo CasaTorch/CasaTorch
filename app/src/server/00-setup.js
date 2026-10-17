@@ -34,12 +34,36 @@ try { fs.chmodSync(DATA_DIR, 0o700); } catch { /* not ours to change (some NAS s
    so a copied config.json or users.json on its own is useless. */
 const KEY_FILE = path.join(DATA_DIR, 'secret.key');
 let secretKey = null;
-function keyOf() {
-  if (secretKey) return secretKey;
-  try { secretKey = Buffer.from(fs.readFileSync(KEY_FILE, 'utf8').trim(), 'base64'); if (secretKey.length !== 32) throw new Error('bad key'); }
-  catch { secretKey = crypto.randomBytes(32); fs.writeFileSync(KEY_FILE, secretKey.toString('base64'), { mode: 0o600 }); }
-  return secretKey;
+/* The key is never overwritten: a key file that can't be read stops CasaTorch with a clear message (so a
+   permissions slip can't quietly throw every saved secret away), and a damaged one is moved aside, kept,
+   before a new key is made. A new key is written atomically, owner-only, and only if no key file exists. */
+function loadKeyFile(file, tries = 0) {
+  let raw = null;
+  try { raw = fs.readFileSync(file, 'utf8'); }
+  catch (e) { if (e.code !== 'ENOENT') throw new Error(`CasaTorch can't read its key file (${file}: ${e.code}). Fix its permissions; nothing was changed.`); }
+  if (raw !== null) {
+    const k = Buffer.from(raw.trim(), 'base64');
+    if (k.length === 32) {
+      try { if (process.platform !== 'win32' && (fs.statSync(file).mode & 0o077)) fs.chmodSync(file, 0o600); } catch { /* not ours to change */ }
+      return k;
+    }
+    const aside = `${file}.damaged-${Date.now()}`;
+    try { fs.renameSync(file, aside); } catch { /* read-only: making the new key below fails too, and says so */ }
+    console.error(`${path.basename(file)} was damaged: kept as ${path.basename(aside)}; a new key was made, so saved passwords and tokens must be entered again.`);
+  }
+  if (tries > 2) throw new Error(`CasaTorch couldn't make its key file (${file}).`);
+  const k = crypto.randomBytes(32), tmp = `${file}.${process.pid}.tmp`;
+  const fd = fs.openSync(tmp, 'w', 0o600);
+  try { fs.writeFileSync(fd, k.toString('base64')); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  try { fs.linkSync(tmp, file); fs.rmSync(tmp, { force: true }); }   // only if there is still no key file
+  catch {
+    if (fs.existsSync(file)) { fs.rmSync(tmp, { force: true }); return loadKeyFile(file, tries + 1); }   // another copy of CasaTorch made one first: use that
+    fs.renameSync(tmp, file);   // no hard links on this file system (some NAS shares): a plain swap
+  }
+  try { const d = fs.openSync(path.dirname(file), 'r'); fs.fsyncSync(d); fs.closeSync(d); } catch { /* Windows can't fsync a folder */ }
+  return k;
 }
+const keyOf = () => secretKey || (secretKey = loadKeyFile(KEY_FILE));
 function seal(text) {
   const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', keyOf(), iv);
   const enc = Buffer.concat([c.update(String(text), 'utf8'), c.final()]);
@@ -83,16 +107,29 @@ let config = {};
    own token: nothing to paste, and that token is never written to disk. */
 const SUPERVISOR_HA = 'http://supervisor/core';
 const withAddonHa = (c) => (process.env.SUPERVISOR_TOKEN && (!c.homeAssistant?.url || c.homeAssistant.url === SUPERVISOR_HA) ? { ...c, homeAssistant: { ...(c.homeAssistant || {}), url: SUPERVISOR_HA, token: process.env.SUPERVISOR_TOKEN } } : c);
+/* No config.json means "not set up yet" (the setup wizard). A config.json that is there but damaged or can't be
+   read is NOT that: loading it as empty would reopen setup and let it write over the real settings. It's
+   recorded in configProblem; 00b-heal.js puts back the last good copy, and if there is none CasaTorch doesn't
+   start (a recovery page only, 00b-heal.js). saveConfig refuses to write over it. */
+let configProblem = null;
 const loadConfig = () => {
-  try {
-    const disk = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    plaintextOnDisk = JSON.stringify(sealConfig(disk)) !== JSON.stringify(disk);
-    config = withAddonHa(openConfig(disk));
-  } catch { config = withAddonHa({}); }
+  let raw;
+  try { raw = fs.readFileSync(CONFIG_FILE, 'utf8'); }
+  catch (e) {
+    configProblem = e.code === 'ENOENT' ? null : { kind: 'unreadable', detail: `CasaTorch can't read its settings file (${CONFIG_FILE}: ${e.code || e.message}).` };
+    config = withAddonHa({}); return;
+  }
+  let disk;
+  try { disk = JSON.parse(raw); if (!disk || typeof disk !== 'object' || Array.isArray(disk)) throw new Error('not a settings object'); }
+  catch (e) { configProblem = { kind: 'damaged', detail: `CasaTorch's settings file is damaged (${CONFIG_FILE}: ${String(e.message).slice(0, 120)}).` }; config = withAddonHa({}); return; }
+  configProblem = null;
+  plaintextOnDisk = JSON.stringify(sealConfig(disk)) !== JSON.stringify(disk);
+  config = withAddonHa(openConfig(disk));
 };
 loadConfig();
 /** Written owner-only: it holds tokens and API keys. */
 function saveConfig(next) {
+  if (configProblem) throw new Error('The settings file is damaged; CasaTorch won\'t write over it.');
   const disk = next.homeAssistant?.url === SUPERVISOR_HA ? { ...next, homeAssistant: { ...next.homeAssistant, token: undefined } } : next;
   writeFileSafe(CONFIG_FILE, JSON.stringify(sealConfig(disk), null, 2), 0o600);
   config = withAddonHa(next);
@@ -106,6 +143,25 @@ function writeFileSafe(file, data, mode = 0o600) {
   fs.renameSync(tmp, file);
   try { const d = fs.openSync(path.dirname(file), 'r'); fs.fsyncSync(d); fs.closeSync(d); } catch { /* Windows can't fsync a folder */ }
 }
+/* Owner-only, everywhere in the data folder: files 0600, folders 0700. Files from older versions (or written
+   by a helper that forgot the mode) are tightened at start and every hour. bin/ (the secure-access helper
+   program) is left alone, and links are never followed. Not on Windows (no such modes there). */
+function tightenDataModes(dir = DATA_DIR, depth = 0) {
+  if (process.platform === 'win32' || depth > 4) return 0;
+  let fixed = 0, list = [];
+  try { list = fs.readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
+  for (const e of list) {
+    if (depth === 0 && e.name === 'bin') continue;
+    const p = path.join(dir, e.name);
+    try {
+      if (e.isDirectory()) { if (fs.lstatSync(p).mode & 0o077) { fs.chmodSync(p, 0o700); fixed++; } fixed += tightenDataModes(p, depth + 1); }
+      else if (e.isFile() && fs.lstatSync(p).mode & 0o077) { fs.chmodSync(p, 0o600); fixed++; }
+    } catch { /* not ours to change (some NAS shares) */ }
+  }
+  return fixed;
+}
+{ const n = tightenDataModes(); if (n) console.log(`Data folder: ${n} file${n === 1 ? '' : 's'} made owner-only.`); }
+setInterval(() => tightenDataModes(), 3600_000).unref?.();
 /* Installs from before secrets were sealed: seal them now. */
 if (plaintextOnDisk && fs.existsSync(CONFIG_FILE)) { try { saveConfig(config); } catch { /* read-only data folder */ } }
 /* Set up = setup has saved its answers. Bookkeeping that can land in config.json before setup (an install id

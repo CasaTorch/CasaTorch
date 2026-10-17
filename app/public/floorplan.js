@@ -147,8 +147,8 @@ const flyTo = (target, pos, ms = 750) => { if (calm) ms = 1; tween = { t0: perfo
    flat Day look - no night sky, sun shadows or weather - with the near walls lowered, so walls, floors and pins are easy to
    see and click. Your own look comes back when you leave the editor. Nothing about your look is changed or saved. */
 function editLook() { return S.mode === 'edit' && S.tab !== 'colors' && prefs.editLook !== false; }   // (a function: the drawing loop asks before this line has run)
-const curTheme = () => (editLook() ? 'day' : baseTheme());
-const baseTheme = () => { const t = prefs.theme === 'blueprint' ? 'night' : prefs.theme; return THEMES[t] ? t : S.plan?.style?.theme in THEMES ? S.plan.style.theme : 'real'; };
+function curTheme() { return editLook() ? 'day' : baseTheme(); }   // functions, not consts: the drawing loop can ask before these lines run
+function baseTheme() { const t = prefs.theme === 'blueprint' ? 'night' : prefs.theme; return THEMES[t] ? t : S.plan?.style?.theme in THEMES ? S.plan.style.theme : 'real'; }
 function isReal() { return !!THEMES[curTheme()]?.real; }
 /* Real life always follows the sun and shows the yard and the weather; the drawings let you choose. */
 function sunOn() { return !editLook() && (prefs.sun || isReal()); }

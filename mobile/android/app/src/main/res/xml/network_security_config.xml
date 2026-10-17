@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Your CasaTorch's secure address is used whenever it answers. Plain http is allowed only because a box that was
-     just set up (or has no secure address yet) is reachable on the home network that way; the app only ever
-     opens addresses your own CasaTorch gave it. -->
+<!-- Your CasaTorch's secure address is used whenever it answers. Plain http exists only because a box that was just
+     set up (or has no secure address yet) is reached on the home network that way. Android can't express "home
+     network addresses" here, so the app enforces it itself: plain http goes only to private addresses (192.168.x.x,
+     10.x.x.x, 172.16-31.x.x, fd00::/8, *.local and the like) - see Net.isLocalHost and Home.allowed. casatorch.com is
+     always https. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors><certificates src="system" /></trust-anchors>
     </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">casatorch.com</domain>
+    </domain-config>
 </network-security-config>

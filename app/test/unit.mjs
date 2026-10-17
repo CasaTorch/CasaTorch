@@ -5,6 +5,9 @@ import { createRequire } from 'node:module';
 const req = createRequire(import.meta.url);
 const require_ = (m) => (m === 'fs' ? fsMod : req(m));
 process.env.CASATORCH_TEST = '1'; process.env.CASATORCH_DATA_DIR = '/tmp/casatorch-unit';
+/* push.json from an older version: web-push keys in plain text (sealed at start, 41-notify.js). */
+const OLD_SUB = { id: 'a1', user: 'local', endpoint: 'https://fcm.googleapis.com/fcm/send/x', keys: { p256dh: Buffer.alloc(65, 4).toString('base64url'), auth: Buffer.alloc(16, 1).toString('base64url') }, level: 'important' };
+fsMod.mkdirSync('/tmp/casatorch-unit', { recursive: true }); fsMod.writeFileSync('/tmp/casatorch-unit/push.json', JSON.stringify({ vapid: null, subs: [OLD_SUB] }));
 await import('../server.js');
 const H = globalThis.__casatorch;
 let n = 0; const t = (name, fn) => { const r = fn(); const ok = () => { n++; console.log('ok', name); }; return r?.then ? r.then(ok) : ok(); };
@@ -225,6 +228,14 @@ await t('network: Pi-hole v6 and v5, AdGuard, UniFi and Meraki are read correctl
 t('network: only home-network addresses may use their own certificate', () => {
   for (const h of ['192.168.1.1', '10.0.0.2', '172.16.5.1', 'unifi.local', 'pihole', 'router.home.arpa']) assert.ok(H.isLanHost(h), h);   // scrub-ok: example addresses
   for (const h of ['api.meraki.com', '8.8.8.8', '172.32.0.1', 'example.com']) assert.ok(!H.isLanHost(h), h);
+  for (const h of ['169.254.1.2', '[fd12:3456::1]', 'fe80::1', '[::1]', 'nas.lan', 'router.internal', 'NAS.LOCAL.']) assert.ok(H.isLanHost(h), h);   // scrub-ok: example addresses
+  for (const h of ['10.example.com', '192.168.1.1.example.com', 'fcbarcelona.com', 'fd.example.org', '2001:db8::1', '[2606:4700::1]', '100.64.0.1', '300.1.1.1', '', 'evil.com/x.local']) assert.ok(!H.isLanHost(h), h || '(empty)');
+});
+t('push: web-push keys from an older push.json are sealed on disk, and still open', () => {
+  const disk = JSON.parse(fsMod.readFileSync('/tmp/casatorch-unit/push.json', 'utf8')), k = disk.subs[0].keys;
+  assert.match(k.p256dh, /^v1\./); assert.match(k.auth, /^v1\./);
+  assert.equal(H.unseal(k.p256dh), OLD_SUB.keys.p256dh); assert.equal(H.unseal(k.auth), OLD_SUB.keys.auth);
+  assert.equal(disk.subs[0].endpoint, OLD_SUB.endpoint);
 });
 
 t('bill forecast: this month so far plus the recent average for the days left', () => {
@@ -356,6 +367,214 @@ t('3D: one device per real device; garage doors and locks keep their own pin', (
   const hall = g.list.filter((x) => x.dev === 'd2'); assert.equal(hall.length, 1); assert.equal(hall[0].name, 'Hall sensor'); assert.equal(hall[0].motion, true); assert.equal(hall[0].tempC, 21);
   assert.ok(g.list.some((x) => x.id === 'ha:cover.garage') && g.list.some((x) => x.id === 'ha:light.garage'), 'the garage door stands alone');
   assert.equal(g.list.length, 5);
+});
+
+/* ---- encryption at rest and in transit (security agent's block) ---- */
+{
+  const S = globalThis.__casatorchSec, nodeCrypto = req('node:crypto'), os = req('node:os'), pathM = req('node:path');
+  const tmpDir = () => fsMod.mkdtempSync(pathM.join(os.tmpdir(), 'ct-sec-'));
+  t('crypto: seal is AES-256-GCM with a fresh 96-bit nonce, and any change to a sealed value is refused', () => {
+    const a = H.seal('hunter2-token'), b = H.seal('hunter2-token'), [v, iv, enc, tag] = a.split('.');
+    assert.equal(v, 'v1'); assert.equal(Buffer.from(iv, 'base64url').length, 12); assert.equal(Buffer.from(tag, 'base64url').length, 16);
+    assert.notEqual(a, b, 'same text, different nonce'); assert.ok(!a.includes('hunter2'));
+    assert.equal(H.unseal(a), 'hunter2-token');
+    const flip = (s) => (s[0] === 'A' ? `B${s.slice(1)}` : `A${s.slice(1)}`);
+    assert.equal(H.unseal([v, iv, flip(enc), tag].join('.')), null, 'ciphertext changed'); assert.equal(H.unseal([v, flip(iv), enc, tag].join('.')), null, 'nonce changed');
+    assert.equal(H.unseal('v2.x.y.z'), null); assert.equal(H.unseal(''), null);
+  });
+  t('crypto: every secret in config.json is sealed on disk, nothing else is, and it opens back', () => {
+    const cfg = { house: { name: 'Home' }, homeAssistant: { url: 'http://homeassistant.local:8123', token: 'ha-long-lived' }, ring: { refreshToken: 'ring-rt' }, hue: { bridge: '192.168.1.30', username: 'hue-user' },   // scrub-ok: example
+      network: { meraki: { apiKey: 'mk' }, dns: { kind: 'pihole', url: 'http://192.168.1.2', key: 'dns-pw' } }, yolink: { uaid: 'yl-id', secret: 'yl-s' }, calendars: [{ name: 'Family', url: 'https://calendar.example/private/abc.ics' }],   // scrub-ok: example
+      cameras: [{ id: 'c1', name: 'Porch', username: 'admin', password: 'cam-pw', snapshotUrl: 'http://admin:cam-pw@192.168.1.40/snap.jpg' }], remote: { token: 'tunnel', secret: 'rs' }, license: 'payload.sig', ai: { apiKey: 'sk-x' } };   // scrub-ok: example
+    const disk = H.sealConfig(cfg), text = JSON.stringify(disk);
+    for (const s of ['ha-long-lived', 'ring-rt', 'hue-user', 'mk', 'dns-pw', 'yl-id', 'yl-s', 'private/abc', 'cam-pw', 'tunnel', 'payload.sig', 'sk-x']) assert.ok(!text.includes(s.length < 5 ? `"${s}"` : s), `${s} is sealed`);   // a short one can turn up by chance inside a sealed value
+    assert.equal(disk.house.name, 'Home'); assert.equal(disk.homeAssistant.url, 'http://homeassistant.local:8123'); assert.equal(disk.cameras[0].username, 'admin');
+    assert.deepEqual(H.openConfig(disk), cfg);
+    assert.deepEqual(H.sealConfig(disk), disk, 'sealing twice changes nothing');
+  });
+  t('crypto: the key file is made owner-only, is never overwritten, and a damaged one is kept aside', () => {
+    const d = tmpDir(), f = pathM.join(d, 'secret.key');
+    const k1 = S.loadKeyFile(f); assert.equal(k1.length, 32);
+    if (process.platform !== 'win32') assert.equal(fsMod.statSync(f).mode & 0o777, 0o600);
+    assert.ok(S.loadKeyFile(f).equals(k1), 'the same key comes back');
+    if (process.platform !== 'win32') { fsMod.chmodSync(f, 0o644); S.loadKeyFile(f); assert.equal(fsMod.statSync(f).mode & 0o777, 0o600, 'a loose key file is tightened'); }
+    fsMod.writeFileSync(f, 'not a key');
+    const k2 = S.loadKeyFile(f); assert.equal(k2.length, 32); assert.ok(!k2.equals(k1));
+    const aside = fsMod.readdirSync(d).filter((x) => x.startsWith('secret.key.damaged-'));
+    assert.equal(aside.length, 1); assert.equal(fsMod.readFileSync(pathM.join(d, aside[0]), 'utf8'), 'not a key', 'the damaged file is kept as it was');
+    assert.ok(!fsMod.readdirSync(d).some((x) => x.endsWith('.tmp')), 'no temp files left');
+    if (process.platform !== 'win32' && process.getuid?.() !== 0) { fsMod.chmodSync(f, 0o000); assert.throws(() => S.loadKeyFile(f), /can't read its key file/); fsMod.chmodSync(f, 0o600); assert.ok(S.loadKeyFile(f).equals(k2), 'unreadable is not replaced'); }
+    fsMod.rmSync(d, { recursive: true, force: true });
+  });
+  t('crypto: the data folder is tightened to owner-only (files 0600, folders 0700), bin/ and links left alone', () => {
+    if (process.platform === 'win32') return;
+    const d = tmpDir(); fsMod.mkdirSync(pathM.join(d, 'photos'), { mode: 0o755 }); fsMod.mkdirSync(pathM.join(d, 'bin'), { mode: 0o755 });
+    for (const [p, m] of [['power-baseline.json', 0o644], ['photos/a.jpg', 0o644], ['bin/cloudflared', 0o755], ['ok.json', 0o600]]) { fsMod.writeFileSync(pathM.join(d, p), 'x'); fsMod.chmodSync(pathM.join(d, p), m); }
+    fsMod.chmodSync(pathM.join(d, 'photos'), 0o755); fsMod.chmodSync(pathM.join(d, 'bin'), 0o755);
+    const outside = pathM.join(tmpDir(), 'elsewhere.txt'); fsMod.writeFileSync(outside, 'x'); fsMod.chmodSync(outside, 0o644); fsMod.symlinkSync(outside, pathM.join(d, 'link'));
+    assert.equal(S.tightenDataModes(d), 3);
+    const mode = (p) => fsMod.statSync(pathM.join(d, p)).mode & 0o777;
+    assert.equal(mode('power-baseline.json'), 0o600); assert.equal(mode('photos/a.jpg'), 0o600); assert.equal(mode('photos'), 0o700);
+    assert.equal(mode('bin/cloudflared'), 0o755, 'the helper program still runs'); assert.equal(fsMod.statSync(outside).mode & 0o777, 0o644, 'a link is not followed');
+    assert.equal(S.tightenDataModes(d), 0, 'nothing left to do');
+    fsMod.rmSync(d, { recursive: true, force: true });
+  });
+  t('logs: secrets are masked (tokens, passwords, sign-ins inside addresses, long keys); ordinary text is not', () => {
+    const m = S.logMask;
+    assert.equal(m('camera rtsp://admin:s3cret@192.168.1.40:554/stream failed'), 'camera rtsp://***:***@192.168.1.40:554/stream failed');   // scrub-ok: example
+    assert.ok(!m('Authorization: Bearer abc.def-123').includes('abc.def'));
+    assert.ok(!m('Basic YWRtaW46cGFzcw==').includes('YWRtaW46'));
+    assert.ok(!m('{"refreshToken":"rt-123","password":"pw-9"}').match(/rt-123|pw-9/));
+    assert.ok(!m('GET /x?api_key=k-77&token=t-88').match(/k-77|t-88/));
+    assert.ok(!m(`key ${'A'.repeat(48)}`).includes('A'.repeat(20)));
+    assert.equal(m('Secure address at home: name ready, getting the certificate'), 'Secure address at home: name ready, getting the certificate');
+  });
+  t('passwords: scrypt with a random salt, checked in constant time; a damaged hash is a wrong password, not a crash', () => {
+    const h = S.hashSecret('Correct-horse-9'), [kind, salt, hash] = h.split('$');
+    assert.equal(kind, 'scrypt'); assert.equal(salt.length, 32); assert.equal(hash.length, 64); assert.notEqual(S.hashSecret('Correct-horse-9'), h, 'salted');
+    assert.equal(S.verifySecret(h, 'Correct-horse-9'), true); assert.equal(S.verifySecret(h, 'correct-horse-9'), false);
+    assert.equal(S.verifySecret(`scrypt$${salt}$abcd`, 'Correct-horse-9'), false); assert.equal(S.verifySecret('plain-text', 'plain-text'), false);
+    const rc = S.rcHash('a1b2c-3d4e5'); assert.ok(rc.startsWith('rc1$') && !rc.includes('a1b2c')); assert.ok(S.rcMatch(rc, 'a1b2c-3d4e5')); assert.ok(!S.rcMatch(rc, 'a1b2c-3d4e6'));
+  });
+  t('cookies: HttpOnly and SameSite always, Secure over https', () => {
+    assert.equal(S.cookieFlags({ secure: true }), 'Path=/; HttpOnly; SameSite=Lax; Secure');
+    assert.equal(S.cookieFlags({ secure: false }), 'Path=/; HttpOnly; SameSite=Lax');
+  });
+  t('phone alerts: sealed for one phone (AES-256-GCM), signed with Ed25519, and the outside tag gives nothing away', () => {
+    const phoneKey = nodeCrypto.randomBytes(32), pd = { key: H.seal(phoneKey.toString('base64')) }, other = { key: H.seal(nodeCrypto.randomBytes(32).toString('base64')) };
+    const msg = { title: 'Water leak', body: 'Kitchen sensor is wet', tag: 'water:kitchen', sev: 'critical' };
+    const s = S.sealFor(pd, msg), all = Buffer.from(s.d, 'base64'), iv = Buffer.from(s.iv, 'base64');
+    assert.equal(iv.length, 12); assert.ok(!all.toString('latin1').includes('Water'));
+    const dc = nodeCrypto.createDecipheriv('aes-256-gcm', phoneKey, iv); dc.setAuthTag(all.subarray(-16));
+    const open = JSON.parse(Buffer.concat([dc.update(all.subarray(0, -16)), dc.final()]).toString('utf8')); assert.equal(open.title, 'Water leak'); assert.equal(open.tag, 'water:kitchen');
+    const tg = S.pushTagFor(pd, msg.tag);
+    assert.match(tg, /^[A-Za-z0-9_-]{22}$/); assert.ok(!/water|kitchen/i.test(tg));
+    assert.equal(S.pushTagFor(pd, msg.tag), tg, 'same alert, same tag (so it replaces the old one)'); assert.notEqual(S.pushTagFor(other, msg.tag), tg, 'another phone, another tag'); assert.equal(S.pushTagFor(pd, ''), '');
+    const k = S.relayKey(), body = '{"home":"x"}', sig = nodeCrypto.sign(null, Buffer.from(body), k.priv);
+    const pub = nodeCrypto.createPublicKey({ key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), Buffer.from(k.pub, 'base64')]), format: 'der', type: 'spki' });
+    assert.ok(nodeCrypto.verify(null, Buffer.from(body), pub, sig)); assert.ok(!nodeCrypto.verify(null, Buffer.from('{"home":"y"}'), pub, sig));
+  });
+  await t('headers: CSP, no sniffing, no framing by strangers, COOP, no-store on the API, no x-powered-by', async () => {
+    const srv = H.app.listen(0, '127.0.0.1'); await new Promise((ok) => srv.once('listening', ok));
+    try {
+      const r = await fetch(`http://127.0.0.1:${srv.address().port}/api/health`), h = (k) => r.headers.get(k) || '';
+      assert.match(h('content-security-policy'), /default-src 'self'/); assert.match(h('content-security-policy'), /object-src 'none'/); assert.match(h('content-security-policy'), /frame-ancestors 'self'/);
+      assert.equal(h('x-content-type-options'), 'nosniff'); assert.equal(h('referrer-policy'), 'same-origin'); assert.equal(h('cross-origin-opener-policy'), 'same-origin-allow-popups');   // Home Assistant's sign-in window reports back through window.opener
+      assert.equal(h('cache-control'), 'no-store'); assert.equal(r.headers.get('x-powered-by'), null); assert.equal(r.headers.get('strict-transport-security'), null, 'HSTS only over https');
+      const bad = await new Promise((ok, no) => req('node:http').get({ host: '127.0.0.1', port: srv.address().port, path: '/api/health', headers: { Host: 'evil.example.com' } }, (x) => { x.resume(); ok(x.statusCode); }).on('error', no));
+      assert.equal(bad, 421, 'a stranger name is refused');
+    } finally { srv.close(); }
+  });
+}
+
+/* ---- setup and self-healing (05b-setup-net.js, 00b-heal.js, 79-doctor.js) ---- */
+const SU = globalThis.__casatorchSetup;
+t('setup: addresses are tidied the way people type them', () => {
+  const ha = (x) => SU.normalizeAddress(x, { defaultPort: 8123 }).url;
+  assert.equal(ha('homeassistant.local'), 'http://homeassistant.local:8123');
+  assert.equal(ha('192.168.1.20'), 'http://192.168.1.20:8123');   // scrub-ok: example
+  assert.equal(ha(' http//192.168.1.20:8123/ '), 'http://192.168.1.20:8123');   // scrub-ok: example
+  assert.equal(ha('HTTP://HomeAssistant.local:8123/lovelace/0'), 'http://homeassistant.local:8123', 'a pasted dashboard link');
+  assert.equal(ha('https:\\\\ha.example.com'), 'https://ha.example.com', 'backslashes, no port added to https');
+  assert.equal(ha('htp://10.0.0.5'), 'http://10.0.0.5:8123');
+  assert.equal(ha('192.168.1.20:8443'), 'https://192.168.1.20:8443', 'a secure port means https');   // scrub-ok: example
+  assert.equal(ha('"http://ha:8123"'), 'http://ha:8123');
+  for (const bad of ['', 'ftp://x', 'hello world', 'http://user:pw@x', 'http://x:99999']) assert.ok(SU.normalizeAddress(bad).error, bad);
+  assert.equal(SU.normalizeAddress('webcal://cal.example.com/a/b.ics?x=1', { defaultScheme: 'https', keepPath: true }).url, 'https://cal.example.com/a/b.ics?x=1', 'calendar links keep their path');
+  assert.equal(SU.cleanHost('http://192.168.1.40/status'), '192.168.1.40');   // scrub-ok: example
+  assert.equal(SU.cleanToken(' Bearer abc.def\n'), 'abc.def');
+  const fx = SU.tidyTestBody('frigate', { url: '192.168.1.10' });   // scrub-ok: example
+  assert.equal(fx.body.url, 'http://192.168.1.10:5000'); assert.equal(fx.fixed.url, 'http://192.168.1.10:5000');   // scrub-ok: example
+  assert.equal(SU.tidyTestBody('shelly', { hosts: 'http://192.168.1.40/, 192.168.1.41' }).body.hosts, '192.168.1.40 192.168.1.41');   // scrub-ok: example
+  assert.ok(SU.tidyTestBody('unifi', { url: 'not an address' }).error);
+});
+t('setup: every network error becomes one plain sentence and a fix', () => {
+  const e = (code, extra = {}) => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error(code), { code }) }, extra);
+  const ha = { what: 'Home Assistant', url: 'http://homeassistant.local:8123' };
+  assert.equal(SU.friendlyError(e('ENOTFOUND'), ha).code, 'dns'); assert.match(SU.friendlyError(e('ENOTFOUND'), ha).fix, /number address/);
+  assert.match(SU.friendlyError(e('ECONNREFUSED'), { what: 'Home Assistant', url: 'http://192.168.1.20:8124' }).error, /port 8124/);   // scrub-ok: example
+  assert.equal(SU.friendlyError(e('DEPTH_ZERO_SELF_SIGNED_CERT'), ha).code, 'cert-self');
+  assert.equal(SU.friendlyError(e('CERT_NOT_YET_VALID'), ha).code, 'clock', 'a certificate "from the future" means our clock is wrong');
+  assert.equal(SU.friendlyError(e('CERT_HAS_EXPIRED'), ha).code, 'cert-expired');
+  assert.equal(SU.friendlyError(e('ERR_SSL_WRONG_VERSION_NUMBER'), ha).code, 'not-https');
+  assert.equal(SU.friendlyError(e('EHOSTUNREACH'), ha).code, 'unreachable');
+  assert.match(SU.friendlyError(Object.assign(new Error('HTTP 401'), { status: 401 }), ha).error, /token/);
+  assert.equal(SU.friendlyError(Object.assign(new Error('HTTP 404'), { status: 404 }), ha).code, 'wrong-thing');
+  assert.equal(SU.friendlyError(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }), ha).code, 'timeout');
+  for (const r of [e('ENOTFOUND'), e('ECONNREFUSED'), e('CERT_HAS_EXPIRED')].map((x) => SU.friendlyError(x, ha))) assert.ok(r.error && r.fix && !/[A-Z]{4,}_/.test(r.error + r.fix), 'no error codes shown to people');
+  assert.ok(SU.isTransient(e('ECONNRESET')) && SU.isTransient({ status: 503 }) && !SU.isTransient(e('ECONNREFUSED')) && !SU.isTransient({ status: 401 }));
+  const tok = `x.${Buffer.from(JSON.stringify({ exp: 1600000000 })).toString('base64url')}.y`;
+  assert.equal(SU.jwtInfo(tok).exp, 1600000000); assert.equal(SU.jwtInfo('nope'), null);
+  assert.equal(SU.clockSkewMs('Sat, 17 Oct 2026 10:00:00 GMT', Date.parse('2026-10-17T10:12:00Z')), 12 * 60_000);
+});
+await t('setup: a blip is tried again, a "no" is not', async () => {
+  let n = 0; assert.equal(await SU.withRetry(async () => { if (++n < 3) throw Object.assign(new Error('reset'), { code: 'ECONNRESET' }); return 'ok'; }, { base: 1 }), 'ok'); assert.equal(n, 3);
+  let m = 0; await assert.rejects(SU.withRetry(async () => { m++; throw Object.assign(new Error('no'), { status: 401 }); }, { base: 1 })); assert.equal(m, 1);
+});
+t('setup: mDNS questions and answers (with name compression)', () => {
+  const q = SU.mdnsQuery('_home-assistant._tcp.local'); assert.equal(q.readUInt16BE(4), 1); assert.ok(q.includes(Buffer.from('_home-assistant')));
+  const lab = (n) => Buffer.concat([...n.split('.').map((l) => Buffer.concat([Buffer.from([l.length]), Buffer.from(l)])), Buffer.from([0])]);
+  const rr = (name, type, data) => { const h = Buffer.alloc(10); h.writeUInt16BE(type, 0); h.writeUInt16BE(1, 2); h.writeUInt16BE(data.length, 8); return Buffer.concat([name, h, data]); };
+  const head = Buffer.alloc(12); head.writeUInt16BE(0x8400, 2); head.writeUInt16BE(4, 6);
+  const svc = lab('_home-assistant._tcp.local'), inst = Buffer.concat([Buffer.from([4]), Buffer.from('Home'), Buffer.from([0xc0, 12])]);   // "Home" + pointer to the service name
+  const srv = Buffer.alloc(6); srv.writeUInt16BE(8123, 4);
+  const pkt = Buffer.concat([head, rr(svc, 12, inst), rr(inst, 33, Buffer.concat([srv, lab('ha.local')])), rr(lab('ha.local'), 1, Buffer.from([192, 168, 1, 20])), rr(inst, 16, Buffer.concat([Buffer.from([25]), Buffer.from('base_url=http://ha:8123/x')]))]);   // scrub-ok: example
+  const r = SU.mdnsParse(pkt);
+  assert.equal(r.find((x) => x.type === 12).data, 'Home._home-assistant._tcp.local');
+  assert.deepEqual(r.find((x) => x.type === 33).data, { port: 8123, target: 'ha.local' });
+  assert.equal(r.find((x) => x.type === 1).data, '192.168.1.20');   // scrub-ok: example
+  assert.equal(r.find((x) => x.type === 16).data.base_url, 'http://ha:8123/x');
+  assert.deepEqual(SU.mdnsParse(Buffer.from([1, 2, 3])), [], 'a broken packet is ignored');
+});
+t('self-healing: settings history keeps the newest ten and one a day for two weeks', () => {
+  const now = Date.parse('2026-10-17T12:00:00Z'), ids = [];
+  for (let d = 0; d < 20; d++) for (let h = 0; h < 3; h++) { const t0 = new Date(now - d * 86400_000 - h * 3600_000); ids.push(`${t0.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z')}-auto`); }
+  const gone = new Set(SU.settingsPrune(ids, now)), kept = ids.filter((x) => !gone.has(x));
+  assert.ok(ids.slice(0, 10).every((x) => kept.includes(x)), 'the newest ten');
+  assert.equal(new Set(kept.map((x) => x.slice(0, 8))).size, 15, 'one per day for 14 days (plus today)');
+  assert.ok(kept.length < 30 && gone.size > 0);
+});
+t('self-healing: a damaged settings file is put aside and the last good copy used; a copy can be put back', () => {
+  const dir = '/tmp/casatorch-unit-heal', hist = `${dir}/hist`; fsMod.rmSync(dir, { recursive: true, force: true }); fsMod.mkdirSync(dir, { recursive: true });
+  const src = (f) => `${dir}/${f}`, opts = { dir: hist, source: src };
+  fsMod.writeFileSync(src('config.json'), JSON.stringify({ house: { name: 'One' } })); fsMod.writeFileSync(src('users.json'), '{"list":[]}');
+  const a = SU.settingsSnapshot('start', opts); assert.ok(a);
+  assert.equal(SU.settingsSnapshot('auto', opts), null, 'nothing changed: no new copy');
+  fsMod.writeFileSync(src('config.json'), '{"house": {"na');   // a save cut off half way
+  assert.equal(SU.settingsSnapshot('auto', opts), null, 'a broken file is never kept as good');
+  const r = SU.healFile('config.json', opts);
+  assert.equal(r.from, a); assert.equal(JSON.parse(fsMod.readFileSync(src('config.json'), 'utf8')).house.name, 'One');
+  assert.ok(fsMod.readdirSync(dir).some((f) => f.startsWith('config.json.damaged-')), 'the damaged file is kept');
+  assert.equal(SU.healFile('config.json', opts), null, 'a good file is left alone');
+  fsMod.writeFileSync(src('config.json'), JSON.stringify({ house: { name: 'Two' } }));
+  SU.settingsRestore(a, opts);
+  assert.equal(JSON.parse(fsMod.readFileSync(src('config.json'), 'utf8')).house.name, 'One');
+  assert.ok(SU.settingsHistory(hist).some((id) => id.endsWith('-before-putting-back')), 'what was there is saved first');
+  assert.throws(() => SU.settingsRestore('../../etc', opts));
+});
+
+/* A damaged config.json with no settings history: CasaTorch doesn't start (no setup wizard), shows a recovery
+   page, says why in the log, and leaves the file alone. A real start, in its own process (00b-heal.js). */
+await t('self-healing: a damaged settings file with no good copy stops CasaTorch with a recovery page, never setup', async () => {
+  const { spawn } = await import('node:child_process'), net = await import('node:net'), url = await import('node:url');
+  const dir = '/tmp/casatorch-unit-broken'; fsMod.rmSync(dir, { recursive: true, force: true }); fsMod.mkdirSync(dir, { recursive: true });
+  const broken = '{"house": {"name": "One", "time'; fsMod.writeFileSync(`${dir}/config.json`, broken);
+  const port = await new Promise((ok) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => ok(p)); }); });
+  const env = { ...process.env, CASATORCH_DATA_DIR: dir, PORT: String(port), HTTPS_PORT: '0', CASATORCH_MDNS: '0' }; delete env.CASATORCH_TEST; delete env.CASATORCH_DEMO;
+  const child = spawn(process.execPath, [url.fileURLToPath(new URL('../server.js', import.meta.url))], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  let log = ''; child.stdout.on('data', (c) => { log += c; }); child.stderr.on('data', (c) => { log += c; });
+  try {
+    let r = null;
+    for (let i = 0; i < 60 && !r; i++) { await new Promise((ok) => setTimeout(ok, 150)); r = await fetch(`http://127.0.0.1:${port}/`, { redirect: 'manual' }).catch(() => null); }
+    assert.ok(r, `it answers (log: ${log})`);
+    assert.equal(r.status, 503); const html = await r.text();
+    assert.match(html, /can't open its settings/); assert.doesNotMatch(html, /setup\.html/);
+    const s = await fetch(`http://127.0.0.1:${port}/setup.html`, { redirect: 'manual' }); assert.equal(s.status, 503, 'no setup wizard');
+    const api = await fetch(`http://127.0.0.1:${port}/api/setup/status`); assert.equal(api.status, 503); assert.equal((await api.json()).recovery, true);
+    assert.match(log, /settings file is damaged/); assert.match(log, /not starting/);
+    assert.equal(fsMod.readFileSync(`${dir}/config.json`, 'utf8'), broken, 'the damaged file is left as it was');
+    assert.ok(fsMod.readdirSync(dir).some((f) => f.startsWith('config.json.damaged-')), 'and a copy is kept');
+  } finally { child.kill(); }
 });
 
 console.log(`\n${n} passed`);

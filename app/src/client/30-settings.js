@@ -2,7 +2,7 @@
 const PRO_FEATURES = [   // [name, what, ships now?]
   ['3D Home', 'Your home as a live, tappable 3D plan - from a LiDAR scan, or drawn in the app.', true], ['Home AI Agent', 'Your Home AI Agent: ask questions about your home; it lines up switches for you to confirm with a tap.', true], ['Ring (Labs)', 'Ring doorbells and cameras without Home Assistant.', true],
   ['Network monitoring', 'UniFi and Cisco Meraki: every device online or offline and how many are connected; Pi-hole and AdGuard Home: what they block. Alerts when something drops off.', true], ['Server monitor', 'Your NAS, servers and self-hosted apps: up or down, response time and certificates, with an alert when one stops.', true], ['Weekly report', 'Every Monday: energy and what it cost, what stays on all night, alerts and the internet - with tips, written by your own AI if you connect one.', true], ['Away from home', 'Secure remote access and phone alerts - no port forwarding.'], ['Smart alerts', 'Doorbell and motion only when nobody\'s home, and critical alerts that repeat until someone taps "Got it".', true],
-  ['Energy history', '2 years of daily energy and cost instead of 7 days, and what each metered device used.', true], ['Self-healing', 'Restarts stuck integrations and tells you what it fixed.'], ['Multi-home, theme packs, cloud backup', ''],
+  ['Energy history', '2 years of daily energy and cost instead of 7 days, and what each metered device used.', true], ['Multi-home, theme packs, cloud backup', ''],
 ];
 const AI_PROVIDERS = [['none', 'Not connected'], ['anthropic', 'Anthropic (Claude)'], ['openai', 'OpenAI'], ['ollama', 'Ollama - runs on your own network'], ['compatible', 'Other OpenAI-compatible server (LM Studio, vLLM...)']];
 function aiCard(s) {
@@ -183,6 +183,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
   /* Sections, like a phone's Settings: a list on the left (the whole page on a phone), one section at a time, and search. */
   const SECTIONS = [
     ['general', 'General', 'home', 'Your home\'s name, language, energy price and this CasaTorch', async () => [acct, langCard(s), everyday]],
+    ['health', 'Health', 'checkc', 'Is everything working? Checks, one-tap fixes and saved copies of your settings', async () => healthCards(s, me), admin],
     ['appearance', 'Look & main bar', 'palette', 'Dark or light, colors, the main bar and the Home screen', async () => [lookCard(), barCard(), homeCard]],
     ['people', 'People & sign-in', 'user', 'Your account, two-step sign-in, people in the house and the security log', async () => securityCards()],
     ['safety', 'Safety', 'shield', 'What CasaTorch will never switch, and your exceptions', async () => [await safetyCard()], admin],
@@ -307,4 +308,71 @@ async function updatesCard() {
     u.canAuto ? sw('Install updates automatically overnight', u.auto, (e) => save({ auto: e.target.checked })) : null,
     f ? sw('Open this CasaTorch from casatorch.com/home', f.announce, async (e) => { try { await post('/api/find', { announce: e.target.checked }); toast('Saved'); } catch (err) { toast(err.message); } }, `Shares only its home-network address${f.address ? ` (${f.address})` : ''}, and only with browsers on your own internet connection.`) : null,
     el('div', { class: 'row wrap' }, checkBtn));
+}
+
+/* ---- Health (admins): CasaTorch checks itself - green, amber or red, with a Fix it button where it can fix it (79-doctor.js) ---- */
+const HEALTH_COLOR = { ok: 'var(--good)', warn: 'var(--warn)', bad: 'var(--bad)', off: 'var(--faint)' };
+const HEALTH_WORD = { ok: 'OK', warn: 'Needs a look', bad: 'Not working', off: 'Not checked' };
+const HEALTH_GROUPS = [['system', 'This device'], ['connections', 'Connections'], ['safety', 'Keeping safe']];
+const SNAP_REASON = (r) => ({ start: 'When CasaTorch started', auto: 'Automatic copy', 'before-setup-change': 'Before a setup change', 'after-setup': 'Right after setup', 'saved-by-you': 'Saved by you', 'before-putting-back': 'Before an older copy was put back' }[r] || (/^before-\d/.test(r) ? `Before version ${r.slice(7).replace(/-/g, '.')}` : r.replace(/-/g, ' ')));
+async function healthCards(s, me, fresh = false) {
+  const wrap = el('div', { style: 'display:contents' });
+  const draw = async (f) => {
+    let d; try { d = await api(`/api/doctor${f ? '?fresh=1' : ''}`); } catch (e) { wrap.replaceChildren(el('div', { class: 'card' }, el('p', { class: 'muted' }, e.message))); return; }
+    const owner = !me || me.signIn === false || me.user?.role === 'owner';
+    const bad = d.checks.filter((c) => c.status === 'bad'), warn = d.checks.filter((c) => c.status === 'warn');
+    const worst = bad.length ? 'bad' : warn.length ? 'warn' : 'ok';
+    const again = el('button', { class: 'btn small', onclick: async () => { again.disabled = true; again.textContent = T('Checking…'); await draw(true); } }, icon('reset', 14), T('Check again'));
+    const summary = el('div', { class: 'card', style: 'grid-column:1/-1' },
+      el('div', { class: 'row between wrap', style: 'gap:12px' },
+        el('div', { class: 'row', style: 'gap:12px' }, el('span', { 'aria-hidden': 'true', style: `width:14px;height:14px;border-radius:50%;flex:none;background:${HEALTH_COLOR[worst]};box-shadow:0 0 0 5px color-mix(in srgb, ${HEALTH_COLOR[worst]} 22%, transparent)` }),
+          el('div', {}, el('b', { style: 'font-size:18px' }, worst === 'ok' ? T('Everything is working') : bad.length + warn.length === 1 ? T('1 thing needs a look') : T('{n} things need a look', { n: bad.length + warn.length })),
+            el('div', { class: 'small muted' }, d.at ? T('Checked {when} · CasaTorch checks every 15 minutes and tells you if something breaks.', { when: ago(d.at) }) : ''))),
+        again));
+    const fixBtn = (c) => {
+      const f = c.fix; if (!f) return null;
+      const b = el('button', { class: `btn small${c.status === 'bad' ? ' primary' : ''}` }, T(f.label));
+      b.onclick = async () => {
+        if (f.action === 'link') { location.hash = f.href; return; }
+        if (f.action === 'history') { wrap.querySelector('#sethist')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+        if (f.action === 'reconnect') return reconnectModal(f.href, s);
+        if (f.action === 'restore' && !confirm(T('Put back this saved copy of your settings? Your current settings are saved first, so you can switch back.'))) return;
+        b.disabled = true; const label = b.textContent; b.textContent = T('Working…');
+        try { const r = await post('/api/doctor/fix', { action: f.action, id: f.id }); toast(T(r.message || 'Done'), 4500); if (r.restarting) { setTimeout(() => location.reload(), 9000); return; } await draw(false); }
+        catch (e) { toast(e.message, 5000); b.disabled = false; b.textContent = label; }
+      };
+      return b;
+    };
+    const row = (c) => el('div', { class: 'health-row', style: 'display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)' },
+      el('span', { title: T(HEALTH_WORD[c.status]), 'aria-label': T(HEALTH_WORD[c.status]), style: `width:10px;height:10px;border-radius:50%;flex:none;margin-top:6px;background:${HEALTH_COLOR[c.status]}` }),
+      el('div', { class: 'grow' }, el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap' }, el('b', {}, T(c.title)), c.status !== 'ok' ? el('span', { class: `pill ${c.status === 'bad' ? 'bad' : c.status === 'warn' ? 'warn' : ''}` }, T(HEALTH_WORD[c.status])) : null),
+        el('div', { class: 'small muted', style: 'margin-top:2px' }, T(c.detail)), c.why && c.status !== 'ok' ? el('div', { class: 'small', style: 'margin-top:4px' }, T(c.why)) : null),
+      c.status === 'ok' && c.fix?.action !== 'check-updates' ? null : fixBtn(c));
+    const cards = HEALTH_GROUPS.map(([g, title]) => { const list = d.checks.filter((c) => c.group === g); return list.length ? el('div', { class: 'card' }, el('h2', {}, T(title)), ...list.map(row)) : null; });
+    const healed = d.healed?.length ? el('div', { class: 'card' }, el('h2', {}, icon('checkc', 15), T('Fixed by itself')), el('p', { class: 'small muted', style: 'margin-top:0' }, T('What CasaTorch noticed and fixed on its own since it last started.')),
+      ...d.healed.map((h) => el('div', { style: 'padding:9px 0;border-top:1px solid var(--line)' }, el('div', { class: 'small' }, T(h.detail)), el('div', { class: 'tiny faint' }, fmtWhen(h.at))))) : null;
+    const save = el('button', { class: 'btn small' }, icon('plus', 14), T('Save a copy now'));
+    save.onclick = async () => { save.disabled = true; try { const r = await post('/api/doctor/fix', { action: 'snapshot' }); toast(T(r.message)); await draw(false); } catch (e) { toast(e.message, 4000); save.disabled = false; } };
+    const hist = el('div', { class: 'card', id: 'sethist' }, el('h2', {}, icon('reset', 15), T('Settings history')),
+      el('p', { class: 'small muted', style: 'margin-top:0' }, T('CasaTorch keeps copies of your settings and sign-ins on this device - when they change, before setup changes and before updates. If something goes wrong, put an earlier copy back.')),
+      ...(d.history.length ? d.history.map((h, k) => el('div', { class: 'row between', style: 'padding:9px 0;border-top:1px solid var(--line);gap:10px' },
+        el('div', { class: 'grow' }, el('div', { class: 'small' }, fmtWhen(h.at)), el('div', { class: 'tiny muted' }, T(SNAP_REASON(h.reason)), k === 0 ? ` · ${T('newest')}` : '')),
+        owner && k > 0 && !d.demo ? fixBtn({ status: 'warn', fix: { action: 'restore', id: h.id, label: 'Put back' } }) : null)) : [el('p', { class: 'small muted' }, T('No copies yet.'))]),
+      el('div', { class: 'row wrap', style: 'margin-top:10px' }, d.demo ? null : save));
+    wrap.replaceChildren(...[summary, ...cards, healed, hist].filter(Boolean));
+  };
+  await draw(fresh);
+  return [wrap];
+}
+/* "Sign in again" for a connection: the same password check as Run setup again, then setup opens at exactly that item. */
+function reconnectModal(href, s) {
+  const go = () => { location.href = sameOrigin(href, '/setup.html'); };
+  if (s?.demo) { toast(T('The demo doesn\'t change anything.')); return; }
+  const pw = el('input', { type: 'password', autocomplete: 'current-password', placeholder: T('Your CasaTorch password') });
+  const msg = el('p', { class: 'small', style: 'min-height:1.2em;color:var(--bad)' });
+  const okBtn = el('button', { class: 'btn primary' }, T('Continue'));
+  okBtn.onclick = async () => { okBtn.disabled = true; try { await post('/api/settings/rerun-setup', { password: pw.value }); go(); } catch (e) { msg.textContent = e.message; okBtn.disabled = false; } };
+  pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') okBtn.click(); });
+  modal(el('div', {}, el('p', { class: 'small muted', style: 'margin-top:0' }, T('To change a connection, type your CasaTorch password. Setup opens at just that step; everything else stays as it is.')), el('label', { class: 'field' }, el('span', {}, T('Your password')), pw), msg, el('div', { class: 'row', style: 'justify-content:flex-end' }, okBtn)), { title: T('Sign in again') });
+  setTimeout(() => pw.focus(), 50);
 }

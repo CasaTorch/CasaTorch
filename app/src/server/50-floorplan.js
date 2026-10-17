@@ -227,7 +227,7 @@ const PB_FILE = path.join(DATA_DIR, 'power-baseline.json');
 const PB = (() => { try { const j = JSON.parse(fs.readFileSync(PB_FILE, 'utf8')); return { b: j.b || {}, cur: j.cur || null }; } catch { return { b: {}, cur: null }; } })();
 let pbSavedAt = 0;
 const pbKey = (t = new Date()) => ({ wk: `${t.getDay()}-${t.getHours()}`, hr: `*-${t.getHours()}`, hour: Math.floor(t.getTime() / 3_600_000) });
-function pbSave(force) { if (!force && Date.now() - pbSavedAt < 600_000) return; pbSavedAt = Date.now(); try { fs.writeFileSync(`${PB_FILE}.tmp`, JSON.stringify(PB)); fs.renameSync(`${PB_FILE}.tmp`, PB_FILE); } catch { /* next time */ } }
+function pbSave(force) { if (!force && Date.now() - pbSavedAt < 600_000) return; pbSavedAt = Date.now(); try { writeFileSafe(PB_FILE, JSON.stringify(PB), 0o600); } catch { /* next time */ } }
 function pbRecord(w) {
   if (!Number.isFinite(w) || w < 0 || w > 200_000) return;
   const k = pbKey(), c = PB.cur;

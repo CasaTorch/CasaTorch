@@ -17,7 +17,10 @@
  * (AES-256-GCM) before it leaves. casatorch.com passes the sealed message to
  * Apple / Google (Firebase) to wake the phone; only the phone can read it.
  * casatorch.com never sees what an alert says, and keeps nothing.
- * The relay only accepts messages signed by this CasaTorch's own key.
+ * Outside the sealed part travel only: this home's random id and public key,
+ * each phone's push token and platform, "critical or not", and an opaque
+ * per-phone tag (pushTagFor) so a newer alert can replace an older one.
+ * The relay only accepts messages signed by this CasaTorch's own key (Ed25519).
  * ====================================================================== */
 const RELAY_URL = process.env.CASATORCH_PUSH_RELAY || 'https://casatorch.com/api/push/send';
 /* CORS for the app's built-in screens (sign-in, pairing): only those two origins, only these paths, never with cookies. */
@@ -35,7 +38,8 @@ function appAddresses(req) {
 const appHome = (req) => ({ id: installId(), name: config.house?.name || 'Home', version: VERSION, addresses: appAddresses(req), pro: !!proStatus().pro });
 const cleanDevice = (d) => ({ name: String(d?.name || 'Phone').replace(/[^\p{L}\p{N} '’._-]/gu, '').trim().slice(0, 40) || 'Phone', platform: ['ios', 'ipados', 'android'].includes(d?.platform) ? d.platform : 'phone', model: String(d?.model || '').slice(0, 40), app: String(d?.app || '').slice(0, 16) });
 /* Who's asking, before any sign-in: so the app can show the home's name and check it's a CasaTorch. */
-app.get('/api/app/hello', (req, res) => res.json({ casatorch: true, home: { id: installId(), name: config.house?.name || 'Home', version: VERSION }, signIn: signInOn(), configured: isConfigured(), demo: isDemo(), secure: LOCAL_TLS?.url || null, remote: config.remote?.hostname ? `https://${config.remote.hostname}` : null }));   // where to sign in encrypted
+const APP_MIN = '0.7.0';   // the oldest CasaTorch phone app that works with this server (the apps ask you to update below it)
+app.get('/api/app/hello', (req, res) => res.json({ casatorch: true, appMin: APP_MIN, home: { id: installId(), name: config.house?.name || 'Home', version: VERSION }, signIn: signInOn(), configured: isConfigured(), demo: isDemo(), secure: LOCAL_TLS?.url || null, remote: config.remote?.hostname ? `https://${config.remote.hostname}` : null }));   // where to sign in encrypted
 app.post('/api/app/hello', (req, res) => res.json({ casatorch: true }));
 
 /* ---- signing in on the phone ---- */
@@ -166,6 +170,13 @@ function sealFor(pd, msg) {
   const body = Buffer.concat([c.update(JSON.stringify({ ...msg, home: config.house?.name || 'Home', hid: installId() })), c.final(), c.getAuthTag()]);
   return { iv: iv.toString('base64'), d: body.toString('base64') };
 }
+/* The tag that lets a newer alert replace an older one on the lock screen travels outside the sealed part
+   (Apple and Google need it), so it never says what the alert is: an HMAC of the real tag with that phone's
+   key - the same alert always gets the same tag on that phone, and nobody else can tell what it was. */
+function pushTagFor(pd, tag) {
+  if (!tag) return '';
+  return crypto.createHmac('sha256', Buffer.from(unseal(pd.key) || '', 'base64')).update(`tag:${String(tag).slice(0, 64)}`).digest('base64url').slice(0, 22);
+}
 async function appPushSend(list, msg) {
   if (!list.length) return { ok: true };
   const live = new Set(Object.values(sessions).map((s) => s.id));
@@ -173,7 +184,7 @@ async function appPushSend(list, msg) {
   if (keep.length !== list.length) { const gone = new Set(list.filter((pd) => !live.has(pd.session)).map((pd) => pd.id)); push.apps = push.apps.filter((x) => !gone.has(x.id)); savePush(); }
   if (!keep.length) return { ok: false, error: 'This phone is signed out.' };
   const k = relayKey();
-  const body = JSON.stringify({ home: installId(), pub: k.pub, ts: Date.now(), msgs: keep.map((pd) => ({ p: pd.platform, t: pd.token, ...sealFor(pd, msg), crit: msg.sev === 'critical', tag: String(msg.tag || '').slice(0, 64) })) });
+  const body = JSON.stringify({ home: installId(), pub: k.pub, ts: Date.now(), msgs: keep.map((pd) => ({ p: pd.platform, t: pd.token, ...sealFor(pd, msg), crit: msg.sev === 'critical', tag: pushTagFor(pd, msg.tag) })) });
   const sig = crypto.sign(null, Buffer.from(body), k.priv).toString('base64');
   try {
     const r = await fetch(RELAY_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CT-Sig': sig }, body, signal: AbortSignal.timeout(15_000) });
@@ -189,3 +200,5 @@ async function appPushAll(msg) {
   const list = (push.apps || []).filter((pd) => (Object.hasOwn(LEVELS, pd.level) ? LEVELS[pd.level] : LEVELS.important).includes(msg.sev));
   if (list.length && !isDemo()) await appPushSend(list, msg);
 }
+/* For the unit tests (test/unit.mjs): the encryption, key and redaction helpers. */
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchSec = { keyOf, KEY_FILE, loadKeyFile, tightenDataModes, logMask, verifySecret, hashSecret, sealFor, pushTagFor, relayKey, cookieFlags, rcHash, rcMatch };

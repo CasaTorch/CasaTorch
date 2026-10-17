@@ -16,7 +16,11 @@ enum Push {
         r.setValue("application/json", forHTTPHeaderField: "Content-Type"); r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         r.httpBody = try? JSONSerialization.data(withJSONObject: ["token": now])
         let req = r
-        Task.detached { if let (_, resp) = try? await URLSession.shared.data(for: req), (resp as? HTTPURLResponse)?.statusCode == 200 { UserDefaults.standard.set(now, forKey: homeKey(id)) } }
+        let key = homeKey(id)
+        Task.detached {
+            guard let res = try? await URLSession.shared.data(for: req), (res.1 as? HTTPURLResponse)?.statusCode == 200 else { return }
+            UserDefaults.standard.set(now, forKey: key)
+        }
     }
     static var configured: Bool { Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil }
     @MainActor static func enable() async throws -> String {
@@ -42,7 +46,19 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             Messaging.messaging().isAutoInitEnabled = true
         }
         UNUserNotificationCenter.current().delegate = self
+        Self.keepOutOfBackups()
         return true
+    }
+    /// What the web view keeps on disk (its cache and page storage) stays on this phone: not in iCloud or computer
+    /// backups. Sign-ins are in the Keychain, "this device only", so they never travel either.
+    static func keepOutOfBackups() {
+        guard let lib = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+        for name in ["WebKit", "Cookies", "Caches"] {
+            var dir = lib.appendingPathComponent(name, isDirectory: true)
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+            var v = URLResourceValues(); v.isExcludedFromBackup = true
+            try? dir.setResourceValues(v)
+        }
     }
     func application(_ application: UIApplication, configurationForConnecting session: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
         UISceneConfiguration(name: "Default", sessionRole: session.role)

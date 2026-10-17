@@ -63,10 +63,8 @@ Object.assign(TESTS, {
 });
 
 /* Philips Hue without Home Assistant: find the bridge, press its button, pair. */
-app.get('/api/setup/hue/discover', async (_req, res) => {
-  try { const j = await getJSON('https://discovery.meethue.com/', { timeout: 6000 }); res.json({ bridges: (j || []).map((b) => b.internalipaddress).filter(Boolean) }); }
-  catch { res.json({ bridges: [] }); }
-});
+/* The bridge announces itself on the network (mDNS) - that works without the internet; Philips' own list is asked too. */
+app.get('/api/setup/hue/discover', async (_req, res) => res.json({ bridges: await DISCOVERERS.hue().catch(() => []) }));
 app.post('/api/setup/hue/pair', async (req, res) => {
   const host = String(req.body?.host || '').trim();
   if (!hostOk(host)) return res.status(400).json({ ok: false, error: 'enter the bridge\'s IP address' });

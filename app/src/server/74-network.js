@@ -21,7 +21,27 @@ const NET_KINDS = { pihole: 'Pi-hole', adguard: 'AdGuard Home', unifi: 'UniFi', 
 const MERAKI_BASES = { us: 'https://api.meraki.com/api/v1', ca: 'https://api.meraki.ca/api/v1', in: 'https://api.meraki.in/api/v1', cn: 'https://api.meraki.cn/api/v1' };
 const netState = {};   // id -> { at, ok, error, fails, summary, devices }
 const netSources = () => (Array.isArray(config.network?.sources) ? config.network.sources : []);
-const isLanHost = (h) => /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/.test(h) || /\.(local|lan|home|internal|home\.arpa)$/i.test(h) || /^[a-z0-9-]+$/i.test(h) || /^\[?(fd|fc|fe80)/i.test(h);
+/** True only for addresses on the home network: private, link-local or loopback IPs (RFC 1918, 169.254/16,
+ *  IPv6 ULA fc00::/7 and fe80::/10), names that can't exist on the internet (.local, .lan, .home, .internal,
+ *  .home.arpa, .localdomain) and plain one-word host names. Used to decide where a self-made certificate is
+ *  accepted (here, and in the setup tests in 05-setup.js); everything else must have a real certificate. */
+function isLanHost(host) {
+  let h = String(host || '').trim().toLowerCase().replace(/\.$/, '');
+  if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1);
+  if (!h) return false;
+  const m4 = h.match(/^(?:::ffff:)?(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m4) {
+    const [a, b, c, d] = m4.slice(1).map(Number); if ([a, b, c, d].some((n) => n > 255)) return false;
+    return a === 10 || a === 127 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254);
+  }
+  if (h.includes(':')) {   // IPv6 literal
+    if (!/^[0-9a-f:.%a-z]+$/.test(h)) return false;
+    if (h === '::1') return true;
+    return /^f[cd][0-9a-f]{0,2}:/.test(h) || /^fe[89ab][0-9a-f]?:/.test(h);
+  }
+  if (!/^[a-z0-9.-]+$/.test(h) || /^[\d.]+$/.test(h)) return false;
+  return /\.(local|lan|home|internal|localdomain|home\.arpa)$/.test(h) || /^[a-z0-9-]+$/.test(h);
+}
 
 /* JSON over http(s). Home-network addresses may use their own certificate; nothing else may. */
 function netRequest(url, { method = 'GET', headers = {}, body, timeout = 10000 } = {}) {

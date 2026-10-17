@@ -507,7 +507,11 @@
                 ],
                 "test": "frigate",
                 "badge": "direct",
-                "hint": "Port 5000 is Frigate's open port (http, no sign-in). Port 8971 is its secure port: use https:// plus your Frigate username and password. CasaTorch will ask you to trust Frigate's own certificate once."
+                "hint": "Port 5000 is Frigate's open port (http, no sign-in). Port 8971 is its secure port: use https:// plus your Frigate username and password. CasaTorch will ask you to trust Frigate's own certificate once.",
+                "find": {
+                  "from": "frigate",
+                  "field": "url"
+                }
               },
               {
                 "id": "unifiprotect",
@@ -731,7 +735,12 @@
                     "help": "Find them in the Shelly app (device > Settings > Device information) or your router's client list. Give them fixed addresses in your router."
                   }
                 ],
-                "test": "shelly"
+                "test": "shelly",
+                "find": {
+                  "from": "shelly",
+                  "field": "hosts",
+                  "join": " "
+                }
               },
               {
                 "id": "ecobee",
@@ -874,7 +883,12 @@
                     "help": "Find them in the Shelly app (device > Settings > Device information) or your router's client list. Give them fixed addresses in your router."
                   }
                 ],
-                "test": "shelly"
+                "test": "shelly",
+                "find": {
+                  "from": "shelly",
+                  "field": "hosts",
+                  "join": " "
+                }
               },
               {
                 "id": "switchbot",
@@ -1036,7 +1050,11 @@
               "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers."
             }
           ],
-          "test": "unifi"
+          "test": "unifi",
+          "find": {
+            "from": "unifi",
+            "field": "url"
+          }
         },
         "meraki": {
           "note": "Paste a Meraki Dashboard API key (read-only is enough) and pick your network. CasaTorch shows every Meraki device's status, with alerts, plus Meraki cameras and sensors. Part of Pro - included in your 14-day trial.",
@@ -1170,7 +1188,12 @@
                     "help": "Find them in the Shelly app (device > Settings > Device information) or your router's client list. Give them fixed addresses in your router."
                   }
                 ],
-                "test": "shelly"
+                "test": "shelly",
+                "find": {
+                  "from": "shelly",
+                  "field": "hosts",
+                  "join": " "
+                }
               },
               {
                 "id": "sense",

@@ -3,6 +3,8 @@ Description=CasaTorch - one screen for your whole house
 Documentation=https://casatorch.com
 After=network-online.target
 Wants=network-online.target
+# Never give up restarting it (CasaTorch also restarts itself if it ever stops responding).
+StartLimitIntervalSec=0
 
 [Service]
 User=casatorch
@@ -12,6 +14,7 @@ WorkingDirectory=/opt/casatorch/app
 ExecStart=/opt/casatorch/node/node /opt/casatorch/app/server.js
 Restart=always
 RestartSec=5
+TimeoutStopSec=20
 StateDirectory=casatorch
 StateDirectoryMode=0700
 NoNewPrivileges=true

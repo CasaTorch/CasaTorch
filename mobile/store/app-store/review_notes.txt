@@ -1,0 +1,4 @@
+CasaTorch connects only to the reviewer's own CasaTorch (a self-hosted home dashboard); there is no cloud account.
+To review: provide a demo CasaTorch address and a demo user with two-step sign-in (or a video of pairing by QR code).
+Encryption: standard only (HTTPS, AES-GCM through Apple CryptoKit) - ITSAppUsesNonExemptEncryption is false.
+Data: Data Not Collected. No tracking, no analytics.

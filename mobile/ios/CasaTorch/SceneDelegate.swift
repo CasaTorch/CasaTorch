@@ -15,7 +15,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         _ = vc.view   // loads the web view
         let lock = LockOverlay(controller: vc); vc.view.addSubview(lock); vc.lock = lock
         if HomeStore.shared.biometricLock, HomeStore.shared.current != nil { lock.show(); lock.unlock() }
-        if let u = options.urlContexts.first?.url { DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { vc.handlePairLink(u) } }
+        // opened by a pairing link while the app was closed: straight to pairing (behind the lock, if it's on)
+        if let u = options.urlContexts.first?.url { vc.handlePairLink(u) }
     }
     func scene(_ scene: UIScene, openURLContexts contexts: Set<UIOpenURLContext>) {
         if let u = contexts.first?.url { SceneDelegate.main?.handlePairLink(u) }
@@ -26,8 +27,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if HomeStore.shared.biometricLock { SceneDelegate.main?.lock?.show() }
     }
     func sceneWillEnterForeground(_ scene: UIScene) {
-        guard let vc = SceneDelegate.main, let lock = vc.lock, HomeStore.shared.biometricLock, lock.isLocked else { return }
-        if let at = backgroundedAt, Date().timeIntervalSince(at) < relockAfter {
+        guard let vc = SceneDelegate.main else { return }
+        let away = backgroundedAt.map { Date().timeIntervalSince($0) } ?? 0
+        defer { vc.cameBack(after: away) }   // the network may have changed while away (left home, back on Wi-Fi)
+        guard let lock = vc.lock, HomeStore.shared.biometricLock, lock.isLocked else { return }
+        if backgroundedAt != nil, away < relockAfter {
             // back within two minutes: no prompt, the sign-in comes back quietly (it's still in memory in the web view's page)
             lock.isHidden = true
             if let id = vc.currentHomeId() { vc.openHomeQuietly(id) }

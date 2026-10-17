@@ -7,4 +7,6 @@
     <string name="ch_urgent_desc">Smoke, water, alarms and anything else marked urgent</string>
     <string name="locked">CasaTorch is locked</string>
     <string name="unlock">Unlock</string>
+    <string name="unlock_title">Unlock CasaTorch</string>
+    <string name="cancel">Cancel</string>
 </resources>

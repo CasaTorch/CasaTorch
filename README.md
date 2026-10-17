@@ -123,7 +123,8 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 
 ## Free and Pro
 
-**Free** is open source (AGPL-3.0) and everything above - the whole dashboard, for good.
+**Free** is open source (AGPL-3.0) and everything above - the whole dashboard, for good, including Health
+(CasaTorch checks itself, repairs what it can and tells you what it fixed).
 
 **Pro** - $5/month or $49/year, with a 14-day trial on every new install:
 
@@ -138,7 +139,7 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 | **Smart alerts** - doorbell/motion only when nobody's home; critical alerts repeat until someone taps "Got it" | |
 | **Cisco Meraki** MV cameras and MT sensors | |
 | **Network monitoring** - UniFi and Cisco Meraki (every device online/offline, clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), with alerts | |
-| | Self-healing, multi-home |
+| | Multi-home |
 
 **Phone apps** for iPhone, iPad and Android - Face ID or fingerprint lock, end-to-end encrypted alerts,
 LiDAR room scans into the 3D Home - are built and coming to the App Store and Google Play, free in every

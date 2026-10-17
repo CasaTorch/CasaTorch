@@ -17,8 +17,22 @@ import webpush from 'web-push';
 
 const PUSH_FILE = path.join(DATA_DIR, 'push.json');
 const push = { vapid: null, subs: [] };
-try { Object.assign(push, JSON.parse(fs.readFileSync(PUSH_FILE, 'utf8'))); } catch { /* first run */ }
-const savePush = () => { try { writeFileSafe(PUSH_FILE, JSON.stringify(push), 0o600); } catch { /* next time */ } };
+/* Each browser's web-push secrets (keys.p256dh, keys.auth) are sealed on disk (AES-256-GCM, like every other
+   secret) and open in memory. A value that won't open (a different key file) stays sealed, so a save never
+   loses it; a file from an older version, with plain keys, is sealed the first time CasaTorch starts. */
+const PUSH_SUB_KEYS = ['p256dh', 'auth'];
+const pushSubKeys = (s, fn) => (s && s.keys && typeof s.keys === 'object' ? { ...s, keys: { ...s.keys, ...Object.fromEntries(PUSH_SUB_KEYS.filter((k) => typeof s.keys[k] === 'string' && s.keys[k]).map((k) => [k, fn(s.keys[k])])) } } : s);
+const openPushSub = (s) => pushSubKeys(s, (v) => (SEALED.test(v) ? (unseal(v) ?? v) : v));
+const sealPushSub = (s) => pushSubKeys(s, (v) => (SEALED.test(v) ? v : seal(v)));
+let pushPlainOnDisk = false;
+try {
+  Object.assign(push, JSON.parse(fs.readFileSync(PUSH_FILE, 'utf8')));
+  if (!Array.isArray(push.subs)) push.subs = [];
+  pushPlainOnDisk = push.subs.some((s) => PUSH_SUB_KEYS.some((k) => typeof s?.keys?.[k] === 'string' && s.keys[k] && !SEALED.test(s.keys[k])));
+  push.subs = push.subs.map(openPushSub);
+} catch { /* first run */ }
+const savePush = () => { try { writeFileSafe(PUSH_FILE, JSON.stringify({ ...push, subs: push.subs.map(sealPushSub) }), 0o600); } catch { /* next time */ } };
+if (pushPlainOnDisk) savePush();
 function vapid() {
   if (!push.vapid) { const k = webpush.generateVAPIDKeys(); push.vapid = { publicKey: k.publicKey, privateKey: seal(k.privateKey) }; savePush(); }
   return { publicKey: push.vapid.publicKey, privateKey: unseal(push.vapid.privateKey) };
