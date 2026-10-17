@@ -121,10 +121,11 @@ async function localHttpsCard() {
     const add = (...k) => body.append(...k.filter(Boolean));
     if (!r.on) {
       const ip = el('input', { type: 'text', value: r.detected || '', placeholder: '192.168.1.20', inputmode: 'decimal', style: 'max-width:180px' });
-      add(el('p', { class: 'small muted', style: 'margin-top:0' }, 'Use CasaTorch over https at home, so sign-ins and everything else are encrypted on your Wi-Fi. Browsers in the house connect straight to this CasaTorch - nothing goes out to the internet - and the plain address sends them to the secure one automatically.'),
-        el('p', { class: 'small muted' }, 'CasaTorch gets a free certificate from Let\'s Encrypt for its own name, which points at its address on your network. That address (like 192.168.1.20) is listed in public DNS under a random name; it can\'t be reached from the internet.'),
+      add(r.auto ? el('p', { style: 'margin-top:0' }, el('b', {}, 'Setting itself up…'), ' ', el('span', { class: 'small muted' }, 'This is on by default and starts by itself. It needs the internet once to get its certificate.'))
+          : el('p', { class: 'small muted', style: 'margin-top:0' }, 'Off. Turn it on to use CasaTorch over https at home, so sign-ins and everything else are encrypted on your Wi-Fi.'),
+        el('p', { class: 'small muted' }, 'Browsers in the house connect straight to this CasaTorch - nothing goes out to the internet - and the plain address sends them to the secure one automatically. CasaTorch gets a free certificate from Let\'s Encrypt for its own name, which points at its address on your network. That address (like 192.168.1.20) is listed in public DNS under a random name; it can\'t be reached from the internet.'),
         r.demo ? el('p', { class: 'small muted' }, 'Not in the demo.') : el('div', { class: 'row wrap', style: 'gap:8px;align-items:center' }, el('span', { class: 'small muted' }, 'This CasaTorch\'s address on your network'), ip,
-          el('button', { class: 'btn primary', onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Setting up… (about a minute)'; try { await post('/api/local-https/on', { ip: ip.value.trim() === r.detected ? undefined : ip.value.trim() }); } catch (err) { toast(err.message, 5000); } draw(); } }, 'Turn on')));
+          el('button', { class: `btn ${r.auto ? '' : 'primary'}`, onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Setting up… (about a minute)'; try { await post('/api/local-https/on', { ip: ip.value.trim() === r.detected ? undefined : ip.value.trim() }); } catch (err) { toast(err.message, 5000); } draw(); } }, r.auto ? 'Set up now' : 'Turn on')));
       if (r.why) add(el('p', { class: 'small bad' }, r.why));
       return;
     }
@@ -138,8 +139,8 @@ async function localHttpsCard() {
         el('p', { class: 'small muted' }, 'Some routers block names that point into the home network ("DNS rebinding protection"). Those devices keep using the plain address. To fix it, allow casatorch.com in that router setting, or set your router\'s DNS to 1.1.1.1.')),
       el('div', { class: 'row wrap', style: 'gap:8px' },
         el('button', { class: 'btn small', onclick: async () => { const v = prompt('This CasaTorch\'s address on your network', r.ip || ''); if (!v) return; try { await post('/api/local-https/ip', { ip: v.trim() }); toast('Address updated'); } catch (err) { toast(err.message, 5000); } draw(); } }, 'Change address'),
-        el('button', { class: 'btn small ghost', onclick: async () => { if (!confirm('Turn off the secure address at home? Browsers go back to the plain address.')) return; await post('/api/local-https/off', {}).catch((err) => toast(err.message)); draw(); } }, 'Turn off')));
-    if (r.state === 'certificate') setTimeout(() => { if (card.isConnected) draw(); }, 5000);
+        el('button', { class: 'btn small ghost', onclick: async () => { if (!confirm('Turn off the secure address at home? Browsers go back to the plain, unencrypted address, and it stays off until you turn it on again here.')) return; await post('/api/local-https/off', {}).catch((err) => toast(err.message)); draw(); } }, 'Turn off')));
+    if (r.state === 'certificate' || (r.auto && !r.why)) setTimeout(() => { if (card.isConnected) draw(); }, 5000);
   };
   draw(); return card;
 }
