@@ -272,7 +272,7 @@ tab({ id: 'house3d', label: '3D Home', short: '3D', icon: 'cube', pro: true, asy
       el('div', { class: 'row', style: 'justify-content:center' }, el('a', { class: 'btn primary', href: '#settings' }, 'Unlock with Pro'), el('a', { class: 'btn', href: '/floorplan.html' }, 'Preview'))));
     return null;
   }
-  setTop('3D Home', 'Your LiDAR scan, live', [el('a', { class: 'btn', href: '/floorplan.html#guide' }, 'Add floors'), el('a', { class: 'btn primary', href: '/floorplan.html' }, icon('expand'), 'Full screen')]);
+  setTop(T('3D Home'), 'Your LiDAR scan, live', [el('a', { class: 'btn', href: '/floorplan.html#guide' }, 'Add floors'), el('a', { class: 'btn primary', href: '/floorplan.html' }, icon('expand'), 'Full screen')]);
   main.replaceChildren(el('iframe', { class: 'plan', src: '/floorplan.html?embed=1', title: '3D floor plan' }));
   return null;
 } });

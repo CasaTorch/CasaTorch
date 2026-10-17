@@ -39,7 +39,7 @@ function fieldEl(f, store, onChange) {
     input = el('select', { id, onchange: (e) => set(e.target.value) }, ...f.options.map(([v, l]) => el('option', { value: v, selected: store[f.id] === v }, l)));
   } else if (f.type === 'multi') {
     const cur = new Set(store[f.id] || []);
-    return el('div', { class: 'field' }, el('label', {}, f.label), el('div', { class: 'opts' }, ...f.options.map(([v, l]) => {
+    return el('div', { class: 'field' }, el('label', {}, T(f.label)), el('div', { class: 'opts' }, ...f.options.map(([v, l]) => {
       const b = el('button', { type: 'button', class: `opt${cur.has(v) ? ' on' : ''}`, onclick: () => { cur.has(v) ? cur.delete(v) : cur.add(v); store[f.id] = [...cur]; b.classList.toggle('on'); } }, l);
       return b;
     })));
@@ -55,7 +55,7 @@ function fieldEl(f, store, onChange) {
     const type = f.type === 'password' || f.type === 'pin' ? 'password' : f.type === 'number' ? 'number' : f.type === 'url' ? 'url' : 'text';
     input = el('input', { id, type, value: store[f.id] ?? '', placeholder: f.placeholder || null, step: f.step || null, inputmode: f.type === 'pin' ? 'numeric' : null, autocomplete: type === 'password' ? 'new-password' : 'off', oninput: (e) => set(e.target.value) });
   }
-  return el('div', { class: 'field' }, el('label', { for: id }, f.label, f.required || ['choice', 'multi', 'timezone'].includes(f.type) || /optional/i.test(f.label) ? '' : ' (optional)'), input, f.help ? el('div', { class: 'help' }, f.help) : null);
+  return el('div', { class: 'field' }, el('label', { for: id }, T(f.label), f.required || ['choice', 'multi', 'timezone'].includes(f.type) || /optional/i.test(f.label) ? '' : ` ${T('(optional)')}`), input, f.help ? el('div', { class: 'help' }, f.help) : null);
 }
 /* A field that others depend on (showIf) redraws the page when it changes. */
 function fieldsEl(fields, store, rerender) {
@@ -356,19 +356,27 @@ function setupFor(stepId, opt) {
 
 /* ---------- pages ---------- */
 function welcome() {
-  if (W.rerun) { const k = Object.entries(W.keeps).filter(([, v]) => v).map(([n]) => n); return [el('h1', {}, 'Change your setup'), el('p', { class: 'intro' }, `Your current answers are filled in. Anything you don't change is kept${k.length ? `, including what's already connected (${k.join(', ')})` : ''}.`)]; }
-  const step = (n, t, d) => el('div', { class: 'wstep' }, el('span', { class: 'wnum' }, n), el('div', {}, el('b', {}, t), el('div', { class: 'note' }, d)));
-  return [el('h1', {}, 'Welcome to CasaTorch'),
-    el('p', { class: 'intro' }, 'One screen for the smart home you already have: lights, cameras, sensors, calendars and more. CasaTorch runs here on your own hardware, and your settings stay here.'),
+  if (W.rerun) { const k = Object.entries(W.keeps).filter(([, v]) => v).map(([n]) => n); return [langRow(), el('h1', {}, 'Change your setup'), el('p', { class: 'intro' }, `Your current answers are filled in. Anything you don't change is kept${k.length ? `, including what's already connected (${k.join(', ')})` : ''}.`)]; }
+  const step = (n, t, d) => el('div', { class: 'wstep' }, el('span', { class: 'wnum' }, n), el('div', {}, el('b', {}, T(t)), el('div', { class: 'note' }, T(d))));
+  return [langRow(), el('h1', {}, T('Welcome to CasaTorch')),
+    el('p', { class: 'intro' }, T('One screen for the smart home you already have: lights, cameras, sensors, calendars and more. CasaTorch runs here on your own hardware, and your settings stay here.')),
     el('div', { class: 'wsteps' },
       step('1', 'The everyday things', 'Your town for the weather, calendars, sports teams, headlines and reminders.'),
       step('2', 'Your devices', 'Hue, Shelly, YoLink, Frigate, Reolink and Ring (Pro) connect directly. Thousands more come in through Home Assistant, if you use it.'),
       step('3', 'Your dashboard', 'Then a one-minute tour of where everything is. Change anything later in Settings.')),
-    el('p', { class: 'note' }, 'About 10 to 20 minutes. Every step can be skipped and added later.'),
-    el('p', { class: 'note' }, 'Stuck at any point? E-mail ', el('a', { href: 'mailto:support@casatorch.com' }, 'support@casatorch.com'), ' - a real person answers.'),   // scrub-ok: public support address
-    el('div', { class: 'card' }, el('h3', {}, 'Just looking?'), el('p', { class: 'note' }, 'See CasaTorch with a sample house, including the 3D floor plan. No setup needed.'),
-      el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/?tour'; } }, 'Try the demo')),
+    el('p', { class: 'note' }, T('About 10 to 20 minutes. Every step can be skipped and added later.')),
+    el('p', { class: 'note' }, `${T('Stuck at any point? E-mail')} `, el('a', { href: 'mailto:support@casatorch.com' }, 'support@casatorch.com'), T(' - a real person answers.')),   // scrub-ok: public support address
+    el('div', { class: 'card' }, el('h3', {}, T('Just looking?')), el('p', { class: 'note' }, T('See CasaTorch with a sample house, including the 3D floor plan. No setup needed.')),
+      el('button', { type: 'button', class: 'small', onclick: async () => { await api('/api/setup/demo', { body: {} }); location.href = '/?tour'; } }, T('Try the demo'))),
     restoreBox()];
+}
+/* The first question: which language CasaTorch speaks in this home (English unless you pick another). */
+function langRow() {
+  const cur = W.a.house?.lang || CasaI18n.lang || 'en';
+  if (!W.a.house?.lang) W.a.house = { ...(W.a.house || {}), lang: cur };
+  const sel = el('select', { 'aria-label': T('Language'), onchange: async (e) => { W.a.house = { ...(W.a.house || {}), lang: e.target.value }; await CasaI18n.use(e.target.value); go(); } },
+    ...Object.entries(CasaI18n.LANGS).map(([k, n]) => el('option', { value: k, selected: k === cur ? true : null }, n)));
+  return el('div', { class: 'langrow' }, el('label', {}, `${T('Choose your language')}:`), sel);
 }
 /* Moving from another CasaTorch: restore its backup instead of setting up again. */
 function restoreBox() {
@@ -383,8 +391,8 @@ function restoreBox() {
       msg.textContent = j.restart === 'manual' ? 'Restored. Start CasaTorch again, then sign in with the accounts from the backup.' : 'Restored. CasaTorch is restarting - this page reloads in a few seconds.';
       if (j.restart !== 'manual') setTimeout(() => { location.href = '/'; }, 8000);
     } catch (e) { msg.textContent = e.message; go.disabled = false; }
-  } }, 'Restore');
-  return el('details', { class: 'card' }, el('summary', {}, el('b', {}, 'Moving from another CasaTorch?'), ' Restore its backup'),
+  } }, T('Restore'));
+  return el('details', { class: 'card' }, el('summary', {}, el('b', {}, T('Moving from another CasaTorch?')), ' ', T('Restore its backup')),
     el('p', { class: 'note' }, 'Use a backup file from Settings › Backup on your old CasaTorch. Everything comes across: settings, connections, sign-ins, floor plans and history.'),
     el('label', {}, 'Backup file (.ctbk) ', file), el('label', {}, 'Passphrase ', pass), go, msg);
 }
@@ -392,9 +400,9 @@ function restoreBox() {
 const branchStore = (step, store) => (step.id === 'network' && step.branches?.[store.kind]?.fields ? (store[store.kind] ||= {}) : store);
 function stepPage(step) {
   const store = ans(step.id);
-  const out = [el('h1', {}, step.title)];
+  const out = [el('h1', {}, T(step.title))];
   if (W.focus?.step === step.id) out.push(el('div', { class: 'focus-note' }, el('b', {}, W.focus.label ? `Adding ${W.focus.label}` : 'Picking up where you left off'), el('span', {}, ' - follow the card below. When you see a green check, press "Review & save". Everything else in your setup stays as it is.')));
-  if (step.intro) out.push(el('p', { class: 'intro' }, step.intro));
+  if (step.intro) out.push(el('p', { class: 'intro' }, T(step.intro)));
   if (step.question) {
     const q = step.question;
     out.push(el('div', { class: 'q' }, q.label), el('div', { class: 'opts' }, ...q.options.map(([v, l]) => el('button', { type: 'button', class: `opt${store[q.id] === v ? ' on' : ''}`, onclick: () => { store[q.id] = v; go(); } }, l))));
@@ -475,7 +483,7 @@ function review() {
   add('Sensors', a.sensors?.has === 'yes' ? labelsOf('sensors', a.sensors.kinds) : 'none');
   add('Network', `${W.steps.find((s) => s.id === 'network')?.question.options.find(([v]) => v === a.network?.kind)?.[1] || '-'}${a.network?.dns && a.network.dns !== 'none' ? ` · ${a.network.dns}` : ''}`);
   add('Energy', a.energy?.track === 'yes' ? `${a.energy.utility === 'other' || !a.energy.utility ? `${a.energy.rate || '?'} per kWh` : a.energy.utility}${a.energy.budget ? ` · budget ${a.energy.budget}/month` : ''}${a.energy.kinds?.length ? ` · ${labelsOf('energy', a.energy.kinds)}` : ''}` : 'off');
-  return [el('h1', {}, 'All set?'), el('p', { class: 'intro' }, 'Check this over. Finish saves it and opens your dashboard; you can change anything later in Settings.'), dl, el('div', { id: 'finishMsg' })];
+  return [el('h1', {}, T('All set?')), el('p', { class: 'intro' }, T('Check this over. Finish saves it and opens your dashboard; you can change anything later in Settings.')), dl, el('div', { id: 'finishMsg' })];
 }
 
 /* ---------- navigation ---------- */
@@ -503,11 +511,12 @@ function problems(step) {
 }
 function go() {
   $('#navmsg').textContent = '';
-  const pages = ['Welcome', ...W.steps.map((s) => s.title), 'Review'];
+  const pages = [T('Welcome'), ...W.steps.map((s) => T(s.title)), T('Review')];
   $('#progress').replaceChildren(...pages.map((t, k) => el('li', { class: k === W.i ? 'on' : k < W.i ? 'done' : '' }, t)));
   $('#page').replaceChildren(...(W.i === 0 ? welcome() : W.i > W.steps.length ? review() : stepPage(W.steps[W.i - 1])));
   $('#back').disabled = W.i === 0;
-  $('#next').textContent = W.i === 0 ? 'Set up my home' : W.i > W.steps.length ? (W.focus ? 'Save' : 'Finish') : W.focus && W.steps[W.i - 1]?.id === W.focus.step ? 'Review & save' : 'Next';
+  $('#next').textContent = T(W.i === 0 ? 'Set up my home' : W.i > W.steps.length ? (W.focus ? 'Save' : 'Finish') : W.focus && W.steps[W.i - 1]?.id === W.focus.step ? 'Review & save' : 'Next');
+  $('#back').textContent = T('Back');
 }
 $('#back').onclick = () => { if (W.i > 0) { W.i--; go(); scrollTo(0, 0); } };
 $('#next').onclick = async () => {

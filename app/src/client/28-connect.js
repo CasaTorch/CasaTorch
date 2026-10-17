@@ -142,7 +142,7 @@ async function haAnyModal(conn, after) {
   q.oninput = draw; draw(); setTimeout(() => q.focus(), 50);
 }
 tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
-  setTop('Connect', 'Everything CasaTorch works with - add anything in a few clicks');
+  setTop(T('Connect'), 'Everything CasaTorch works with - add anything in a few clicks');
   const [cat, conn, reg] = await Promise.all([api('/api/catalog'), api('/api/connections').catch(() => ({ ha: {}, domains: [], direct: [], counts: {} })), api('/api/integrations').catch(() => ({ integrations: [] }))]);
   // Integrations registered in the app (integration() on the server) show up here by themselves, standing in
   // for any catalog card they replace.

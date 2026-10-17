@@ -170,7 +170,7 @@ function proceed(req, res, t, { redirect = false } = {}) {
 }
 
 /* ---- gate: who may load what ---- */
-const OPEN = [/^\/login\.(html|css|js)$/, /^\/(manifest\.webmanifest|sw\.js|apple-touch-icon\.png)$/, /^\/(terms|privacy)\.html$/, /^\/legal\.css$/, /^\/api\/auth\/(login|mfa|enroll|terms|state|invite|panel|google\/start|google\/callback)$/, /^\/api\/health$/, /^\/icons\//, /^\/favicon/, /^\/setup\.css$/];
+const OPEN = [/^\/login\.(html|css|js)$/, /^\/(manifest\.webmanifest|sw\.js|apple-touch-icon\.png)$/, /^\/(terms|privacy)\.html$/, /^\/legal\.css$/, /^\/api\/auth\/(login|mfa|enroll|terms|state|invite|panel|google\/start|google\/callback)$/, /^\/api\/health$/, /^\/api\/lang$/, /^\/i18n(\.js|\/[a-z]{2}\.json)$/, /^\/icons\//, /^\/favicon/, /^\/setup\.css$/];
 const SETUP_PATHS = [/^\/setup\.(html|js)$/, /^\/setup-ha-done\.(html|js)$/, /^\/api\/setup\//];
 /* Changes must come from this site: a page elsewhere can't make your browser switch your lights. */
 app.use('/api', (req, res, next) => {

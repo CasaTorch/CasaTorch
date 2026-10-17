@@ -58,11 +58,11 @@ tab({ id: 'home', label: 'Home', icon: 'home', async render(main) {
   const tiles = (saved || DEFAULT_LAYOUT).filter((t) => WIDGETS[t.id.split(':')[0]]).map((t) => ({ ...t }));
   let saveT = null;
   const save = () => { clearTimeout(saveT); saveT = setTimeout(() => post('/api/layout', { tiles }, 'PUT').catch((e) => toast(`Layout not saved: ${e.message}`)), 400); };
-  const editBtn = el('button', { class: 'btn' }, icon('edit'), 'Edit layout');
-  const addBtn = el('button', { class: 'btn primary' }, icon('plus'), 'Add widget');
-  const setEdit = (on) => { document.body.classList.toggle('editing-on', on); grid.classList.toggle('editing', on); editBtn.replaceChildren(icon(on ? 'check' : 'edit'), on ? 'Done' : 'Edit layout'); editBtn.classList.toggle('primary', on); };
+  const editBtn = el('button', { class: 'btn' }, icon('edit'), T('Edit layout'));
+  const addBtn = el('button', { class: 'btn primary' }, icon('plus'), T('Add widget'));
+  const setEdit = (on) => { document.body.classList.toggle('editing-on', on); grid.classList.toggle('editing', on); editBtn.replaceChildren(icon(on ? 'check' : 'edit'), on ? T('Done') : T('Edit layout')); editBtn.classList.toggle('primary', on); };
   editBtn.onclick = () => setEdit(!grid.classList.contains('editing'));
-  const panelBtn = el('button', { class: 'btn', title: 'Wall-screen mode for this screen', onclick: () => setPanel(true) }, icon('expand'), 'Panel mode');
+  const panelBtn = el('button', { class: 'btn', title: 'Wall-screen mode for this screen', onclick: () => setPanel(true) }, icon('expand'), T('Panel mode'));
   setTop(tabLabel({ id: 'home', label: 'Home' }), fmt(new Date().toISOString(), { weekday: 'long', month: 'long', day: 'numeric' }), [addBtn, editBtn, panelBtn]);
   const bar = el('div', { class: 'editbar' }, icon('grip', 18), el('span', { class: 'grow' }, 'Drag a tile by its handle to move it. Drag the corner to resize - tiles show more as they grow.'),
     el('button', { class: 'btn small', onclick: async () => { await post('/api/layout', { reset: true }, 'PUT'); show('home'); } }, icon('reset'), 'Reset'));

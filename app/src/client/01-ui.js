@@ -7,7 +7,7 @@ S.ui = { theme: 'dark', accent: '#5eb8ff', accent2: '#8b7bff', nav: 'left', stat
 const PALETTES = [['Ocean', '#5eb8ff', '#8b7bff'], ['Sunset', '#fb923c', '#f43f5e'], ['Forest', '#34d399', '#22d3ee'], ['Grape', '#a78bfa', '#ec4899'], ['Gold', '#fbbf24', '#f97316'], ['Rose', '#fb7185', '#c084fc'], ['Mint', '#2dd4bf', '#a3e635'], ['Slate', '#94a3b8', '#64748b']];
 const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const luminance = (h) => { const [r, g, b] = hexRgb(h).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
-const tabLabel = (t) => S.ui.tabs?.[t.id]?.label || t.label;
+const tabLabel = (t) => S.ui.tabs?.[t.id]?.label || T(t.label);   // the household's own name, else the label in the home's language
 const isPanel = () => { try { return new URLSearchParams(location.search).has('panel') || localStorage.getItem('casatorch-panel') === '1'; } catch { return false; } };
 const darkNow = () => S.ui.theme === 'dark' || (S.ui.theme === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
 function applyUi() {

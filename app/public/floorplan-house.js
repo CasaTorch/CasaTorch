@@ -5,9 +5,9 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 /* ---------- roof: a gable over the top floor's footprint, with a little overhang ---------- */
-const ROOF = { neon: ['#1e2b4f', '#38bdf8', 0.92], blueprint: ['#1d4a8f', '#e8f1ff', 0.35], day: ['#8a5a44', '#5c3a2c', 1] };
+const ROOF = { real: ['#55595f', '#3c3f45', 1], night: ['#1e2b4f', '#38bdf8', 0.92], blueprint: ['#1d4a8f', '#e8f1ff', 0.35], day: ['#8a5a44', '#5c3a2c', 1] };
 export function buildRoof(box, theme, custom) {
-  const [themeColor, edge, opacity] = ROOF[theme] || ROOF.neon, color = custom || themeColor;
+  const [themeColor, edge, opacity] = ROOF[theme] || ROOF.real, color = custom || themeColor;
   const over = 0.35, x0 = box.min.x - over, x1 = box.max.x + over, z0 = box.min.z - over, z1 = box.max.z + over, y = box.max.y + 0.02;
   const alongX = x1 - x0 >= z1 - z0, span = alongX ? z1 - z0 : x1 - x0, rise = Math.min(2.4, span * 0.3);
   const P = [];

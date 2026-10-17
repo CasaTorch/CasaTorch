@@ -47,7 +47,7 @@ tab({ id: 'calendar', label: 'Calendar', icon: 'calendar', async render(main) {
     }
     const title = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(first);
     const step = (n) => { const d = new Date(Date.UTC(y, m - 1 + n, 1)); ym = d.toISOString().slice(0, 7); draw(); };
-    setTop('Calendar', 'Your linked calendars plus the CasaTorch calendar', [el('button', { class: 'btn primary', onclick: () => eventEditor(null, draw) }, icon('plus'), 'New event')]);
+    setTop(T('Calendar'), 'Your linked calendars plus the CasaTorch calendar', [el('button', { class: 'btn primary', onclick: () => eventEditor(null, draw) }, icon('plus'), T('New event'))]);
     main.replaceChildren(el('div', { class: 'card' },
       el('div', { class: 'row', style: 'margin-bottom:14px' }, el('button', { class: 'btn small', 'aria-label': 'Previous month', onclick: () => step(-1) }, icon('chevl')), el('b', { style: 'font-size:18px;min-width:170px;text-align:center' }, title), el('button', { class: 'btn small', 'aria-label': 'Next month', onclick: () => step(1) }, icon('chevr')), el('button', { class: 'btn small ghost', onclick: () => { ym = today.slice(0, 7); draw(); } }, 'Today')),
       el('div', { class: 'month' }, ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => el('div', { class: 'dow' }, d)), cells),
@@ -70,7 +70,7 @@ tab({ id: 'photos', label: 'Photos', icon: 'camera', async render(main) {
     status.textContent = ''; if (ok) toast(`Added ${ok} photo${ok === 1 ? '' : 's'}`); draw();
   }
   input.onchange = () => upload(input.files);
-  setTop('Photos', 'For the Photo reel on your Home screen', [el('button', { class: 'btn primary', onclick: () => input.click() }, icon('plus'), 'Upload photos')]);
+  setTop(T('Photos'), 'For the Photo reel on your Home screen', [el('button', { class: 'btn primary', onclick: () => input.click() }, icon('plus'), T('Upload photos'))]);
   const draw = async () => {
     const { photos = [] } = await api('/api/photos');
     const drop = el('div', { class: 'card', style: 'border-style:dashed;text-align:center;padding:30px;cursor:pointer', onclick: () => input.click() }, el('div', { style: 'font-weight:600;margin-bottom:4px' }, 'Drop photos here, or tap to choose'), el('div', { class: 'small muted' }, 'JPEG, PNG, WebP, GIF or HEIC, up to 30 MB each. They stay on your CasaTorch box.'), status);

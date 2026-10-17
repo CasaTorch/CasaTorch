@@ -113,14 +113,40 @@ function devMeta(d, compact) {
     d.open != null ? (d.open ? 'Open' : 'Closed') : null, d.water != null ? (d.water ? 'WATER!' : 'Dry') : null, d.motion != null ? (d.motion ? 'Motion' : 'Clear') : null, d.smoke != null ? (d.smoke ? 'SMOKE!' : 'Clear') : null,
     d.locked != null ? (d.locked ? 'Locked' : 'Unlocked') : null, d.battery != null && !compact ? `battery ${d.battery}%` : null, d.online === false ? 'offline' : null].filter(Boolean).join(' · ');
 }
+/* Devices with more than on/off (dimming, colour, speed, volume, thermostats, blinds, locks, alarms...)
+   open a sheet with every control (public/device-controls.js, shared with the 3D Home). */
+const C = () => window.CasaControls;
+const hasSheet = (d) => !!C() && d.online !== false && (['climate', 'cover', 'lock', 'alarm', 'vacuum'].includes(d.kind)
+  || (d.kind === 'light' && ['brightness', 'color', 'kelvin'].some((x) => C().can(d, x))) || (d.kind === 'fan' && C().can(d, 'percent')) || (d.kind === 'media' && ['volume', 'next'].some((x) => C().can(d, x))));
+function deviceSheet(d, onChange) {
+  const body = el('div', { class: 'dsheet' });
+  let timer = null;
+  const draw = () => body.replaceChildren(...C().build(d, { units: S.units, act: send }));
+  async function sync() {
+    try { const n = (await api('/api/devices')).devices?.find((x) => x.id === d.id); if (n) Object.assign(d, n); } catch { /* keep what we have */ }
+    if (body.isConnected) draw(); onChange?.();
+  }
+  async function send(action, value) {
+    draw();
+    try { await post(`/api/devices/${encodeURIComponent(d.id)}/${action}`, value != null ? { value } : {}); } catch (err) { toast(err.message, 4000); }
+    clearTimeout(timer); timer = setTimeout(sync, 900);
+  }
+  draw();
+  modal(el('div', {}, el('div', { class: 'small muted', style: 'margin:-6px 0 10px' }, [d.area, d.provider === 'ha' ? 'Home Assistant' : pretty(d.provider)].filter(Boolean).join(' · ')), body), { title: d.name });
+}
 function devButton(d, compact) {
   const cls = ['dev', d.online === false && 'offline', (d.water || d.smoke || d.triggered) && 'alarm', d.playing && 'playing', !d.playing && (d.on || (d.kind === 'presence' && d.home) || (d.kind === 'cover' && d.open)) && !['sensor'].includes(d.kind) && 'on'].filter(Boolean).join(' ');
+  const sheet = hasSheet(d), toggles = TOGGLES.has(d.kind) && d.online !== false;
   const act = async (action, label) => { try { await post(`/api/devices/${encodeURIComponent(d.id)}/${action}`); toast(`${d.name}: ${label}`); } catch (err) { toast(err.message, 4000); } };
   const mini = (label, action) => el('button', { class: 'btn small', style: 'padding:3px 9px', onclick: (e) => { e.stopPropagation(); act(action, label); } }, label);
-  const extra = d.kind === 'cover' ? (d.risky ? [mini('Close', 'close')] : [mini('Open', 'open'), mini('Close', 'close')]) : d.kind === 'vacuum' ? [mini('Start', 'start'), mini('Dock', 'dock')] : d.kind === 'action' ? [mini('Run', 'run')] : null;
+  const extra = sheet ? null : d.kind === 'cover' ? (d.risky ? [mini('Close', 'close')] : [mini('Open', 'open'), mini('Close', 'close')]) : d.kind === 'vacuum' ? [mini('Start', 'start'), mini('Dock', 'dock')] : d.kind === 'action' ? [mini('Run', 'run')] : null;
   const b = el(extra ? 'div' : 'button', { class: cls, role: extra ? 'group' : null, title: d.name }, el('span', { class: 'ic' }, icon(devIconName(d))), el('div', { style: 'min-width:0;flex:1' }, el('div', { class: 'ellipsis' }, d.name), el('div', { class: 'meta ellipsis' }, devMeta(d, compact))), extra ? el('div', { class: 'row', style: 'gap:4px;flex:none' }, extra) : null);
-  if (TOGGLES.has(d.kind) && d.online !== false) b.onclick = async () => { try { await toggleDevice(d); b.replaceWith(devButton(d, compact)); } catch (err) { toast(err.message); } };
-  return b;
+  const root = sheet ? el('div', { class: 'dev-wrap' }, b) : b;
+  const redraw = () => { if (root.isConnected) root.replaceWith(devButton(d, compact)); };
+  if (toggles) b.onclick = async () => { try { await toggleDevice(d); redraw(); } catch (err) { toast(err.message); } };
+  else if (sheet) b.onclick = () => deviceSheet(d, redraw);
+  if (sheet && toggles) root.append(el('button', { class: 'dev-more', title: T('More controls'), 'aria-label': `${T('More controls')}: ${d.name}`, onclick: () => deviceSheet(d, redraw) }, icon('sliders', 16)));
+  return root;
 }
 /* Pinned devices: any devices you pick - including anything from Home Assistant. You can add several of these tiles. */
 function pickDevices(selected, done) {
@@ -174,6 +200,7 @@ function deviceCard(d, { w, h }) {
   if (d.kind === 'cover') { if (!d.risky) controls.push(el('button', { class: 'btn small', onclick: () => act('open', 'opening') }, 'Open')); controls.push(el('button', { class: 'btn small', onclick: () => act('close', 'closing') }, 'Close')); }
   if (d.kind === 'action') controls.push(el('button', { class: 'btn small primary', onclick: () => act('run', 'done') }, 'Run'));
   if (d.kind === 'vacuum') controls.push(el('button', { class: 'btn small', onclick: () => act('start', 'starting') }, 'Start'), el('button', { class: 'btn small', onclick: () => act('dock', 'going home') }, 'Dock'));
+  if (hasSheet(d)) controls.push(el('button', { class: 'btn small', title: 'Every control for this device', onclick: () => deviceSheet(d) }, icon('sliders', 14), T('More')));
   const dim = d.kind === 'light' && d.on && h >= 3 ? el('input', { type: 'range', min: 1, max: 100, value: d.brightness || 100, 'aria-label': `${d.name} brightness`, style: 'margin-top:10px', onchange: (e) => { d.brightness = Number(e.target.value); act('brightness', `${d.brightness}%`, d.brightness); } }) : null;
   return el('div', { class: `devcard${lit ? ' on' : ''}${d.water || d.smoke || d.triggered ? ' alarm' : ''}${d.online === false ? ' offline' : ''}` },
     el('div', { class: 'row', style: 'gap:12px;align-items:center' }, el('span', { class: 'ic' }, icon(devIconName(d), 22)),

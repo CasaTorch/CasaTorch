@@ -68,6 +68,18 @@ viewer leaves), and `every` (how often tiles ask).
 
 Every device also has `name`, `online`, and optionally `area` (its room) and `source`.
 
+### Controls (`act`) and `can`
+
+`act(device, action, value)` receives one of: `on`, `off`, `toggle`, `brightness` (1-100), `color` (`#rrggbb`),
+`kelvin`, `percent` (fan speed 0-100), `play`, `pause`, `next`, `prev`, `volume` (0-100), `target` (°C),
+`mode` (one of the device's `modes`), `open`, `close`, `stop`, `position` (0-100), `lock`, `arm_home`,
+`arm_away`, `arm_night`, `start`, `dock`, `run`. Throw for anything your brand can't do.
+
+Set `can` to the extra controls a device really has (`['brightness', 'color', 'kelvin']`, `['percent']`,
+`['volume', 'next', 'prev']`, `['target', 'mode']`, `['position']`, `['arm_home', 'arm_away']`), so the
+dashboard and the 3D home show exactly those. Without `can`, CasaTorch guesses from the fields you report.
+The safety rule in `30-devices.js` still decides: there is no unlock, disarm or open-a-garage action.
+
 ## What you get for free
 
 - **Alerts**: `water: true`, `smoke: true`, `battery <= 15`, `online: false` (cameras, locks,
@@ -78,7 +90,7 @@ Every device also has `name`, `online`, and optionally `area` (its room) and `so
 
 ## Checklist
 
-- Secrets go in `config.json` under names the sealer recognises (`token`, `apiKey`, `secret`,
+- Secrets go in `config.json` under names the sealer recognizes (`token`, `apiKey`, `secret`,
   `password`...), so they're encrypted at rest; never send them back to the browser.
 - Time out every network call (6 s for `list()`; the dashboard never waits longer).
 - Add a unit test in `app/test/unit.mjs` with a small mock of the brand's API.

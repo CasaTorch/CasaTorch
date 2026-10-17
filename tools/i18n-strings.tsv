@@ -1,0 +1,218 @@
+en	es	de	fr	pt	it	nl
+Home	Inicio	Start	Accueil	Início	Home	Home
+Alerts	Alertas	Meldungen	Alertes	Alertas	Avvisi	Meldingen
+Controls	Controles	Steuerung	Commandes	Controles	Comandi	Bediening
+Cameras	Cámaras	Kameras	Caméras	Câmeras	Telecamere	Camera's
+Calendar	Calendario	Kalender	Calendrier	Calendário	Calendario	Agenda
+Photos	Fotos	Fotos	Photos	Fotos	Foto	Foto's
+Energy	Energía	Energie	Énergie	Energia	Energia	Energie
+Network	Red	Netzwerk	Réseau	Rede	Rete	Netwerk
+3D Home	Casa 3D	3D-Haus	Maison 3D	Casa 3D	Casa 3D	3D-huis
+Ask	Preguntar	Fragen	Demander	Perguntar	Chiedi	Vragen
+Ask the house	Pregúntale a la casa	Frag dein Haus	Demandez à la maison	Pergunte à casa	Chiedi alla casa	Vraag het huis
+Connect	Conectar	Verbinden	Connecter	Conectar	Collega	Verbinden
+Settings	Ajustes	Einstellungen	Réglages	Ajustes	Impostazioni	Instellingen
+Add widget	Añadir widget	Widget hinzufügen	Ajouter un widget	Adicionar widget	Aggiungi widget	Widget toevoegen
+Edit layout	Editar diseño	Layout bearbeiten	Modifier la disposition	Editar layout	Modifica layout	Indeling bewerken
+Done	Listo	Fertig	Terminé	Pronto	Fatto	Klaar
+Panel mode	Modo panel	Panelmodus	Mode panneau	Modo painel	Modalità pannello	Paneelmodus
+Rename devices	Renombrar dispositivos	Geräte umbenennen	Renommer les appareils	Renomear dispositivos	Rinomina dispositivi	Apparaten hernoemen
+New event	Nuevo evento	Neuer Termin	Nouvel événement	Novo evento	Nuovo evento	Nieuwe afspraak
+Upload photos	Subir fotos	Fotos hochladen	Importer des photos	Enviar fotos	Carica foto	Foto's uploaden
+Demo mode - sample data, no real house connected.	Modo demo: datos de ejemplo, sin una casa real conectada.	Demomodus – Beispieldaten, kein echtes Haus verbunden.	Mode démo – données d'exemple, aucune vraie maison connectée.	Modo demo – dados de exemplo, nenhuma casa real conectada.	Modalità demo: dati di esempio, nessuna casa reale collegata.	Demomodus – voorbeeldgegevens, geen echt huis verbonden.
+Set up my house	Configurar mi casa	Mein Haus einrichten	Configurer ma maison	Configurar minha casa	Configura la mia casa	Mijn huis instellen
+CasaTorch Free.	CasaTorch Free.	CasaTorch Free.	CasaTorch Free.	CasaTorch Free.	CasaTorch Free.	CasaTorch Free.
+See what Pro adds	Ver qué añade Pro	Was Pro dazu bringt	Ce qu'ajoute Pro	Veja o que o Pro oferece	Scopri cosa aggiunge Pro	Bekijk wat Pro toevoegt
+Welcome to the CasaTorch demo	Te damos la bienvenida a la demo de CasaTorch	Willkommen in der CasaTorch-Demo	Bienvenue dans la démo de CasaTorch	Boas-vindas à demo do CasaTorch	Benvenuto nella demo di CasaTorch	Welkom bij de CasaTorch-demo
+Welcome to CasaTorch	Te damos la bienvenida a CasaTorch	Willkommen bei CasaTorch	Bienvenue dans CasaTorch	Boas-vindas ao CasaTorch	Benvenuto in CasaTorch	Welkom bij CasaTorch
+Welcome to {house}	Bienvenido a {house}	Willkommen in {house}	Bienvenue à {house}	Boas-vindas a {house}	Benvenuto a {house}	Welkom in {house}
+This is a sample house, so you can try everything. Want a one-minute look around first?	Es una casa de ejemplo para que lo pruebes todo. ¿Quieres un recorrido de un minuto primero?	Das ist ein Beispielhaus – probier ruhig alles aus. Möchtest du zuerst eine einminütige Tour?	C'est une maison d'exemple, vous pouvez tout essayer. Une visite d'une minute pour commencer ?	Esta é uma casa de exemplo para você testar tudo. Quer um tour de um minuto primeiro?	Questa è una casa di esempio, puoi provare tutto. Vuoi prima un giro di un minuto?	Dit is een voorbeeldhuis, dus je kunt alles uitproberen. Eerst een rondleiding van een minuut?
+Your dashboard is ready. Want a one-minute look around, so you know where everything is?	Tu panel está listo. ¿Quieres un recorrido de un minuto para saber dónde está todo?	Dein Dashboard ist bereit. Möchtest du eine einminütige Tour, damit du weißt, wo alles ist?	Votre tableau de bord est prêt. Une visite d'une minute pour savoir où tout se trouve ?	Seu painel está pronto. Quer um tour de um minuto para saber onde fica tudo?	La tua dashboard è pronta. Vuoi un giro di un minuto per sapere dove si trova tutto?	Je dashboard is klaar. Een rondleiding van een minuut, zodat je weet waar alles staat?
+Maybe later	Quizás después	Vielleicht später	Plus tard	Talvez depois	Magari dopo	Misschien later
+Show me around	Muéstramelo	Zeig's mir	Faites-moi visiter	Mostre para mim	Fammi fare un giro	Laat maar zien
+You can take the tour any time from Settings.	Puedes hacer el recorrido cuando quieras desde Ajustes.	Die Tour findest du jederzeit in den Einstellungen.	Vous pouvez faire la visite à tout moment depuis les Réglages.	Você pode fazer o tour quando quiser em Ajustes.	Puoi fare il giro quando vuoi dalle Impostazioni.	Je kunt de rondleiding altijd starten via Instellingen.
+A quick look around	Un recorrido rápido	Ein kurzer Rundgang	Petit tour du propriétaire	Um tour rápido	Un giro veloce	Een korte rondleiding
+Each part of CasaTorch has its own place in the menu. Use Next or the arrow keys; Esc ends the tour.	Cada parte de CasaTorch tiene su lugar en el menú. Usa Siguiente o las flechas; Esc termina el recorrido.	Jeder Bereich von CasaTorch hat seinen Platz im Menü. Weiter mit „Weiter" oder den Pfeiltasten; Esc beendet die Tour.	Chaque partie de CasaTorch a sa place dans le menu. Utilisez Suivant ou les flèches ; Échap termine la visite.	Cada parte do CasaTorch tem seu lugar no menu. Use Avançar ou as setas; Esc encerra o tour.	Ogni parte di CasaTorch ha il suo posto nel menu. Usa Avanti o le frecce; Esc termina il giro.	Elk onderdeel van CasaTorch heeft een eigen plek in het menu. Gebruik Volgende of de pijltjestoetsen; Esc stopt de rondleiding.
+You're all set	Todo listo	Alles bereit	Tout est prêt	Tudo pronto	Tutto pronto	Je bent er klaar voor
+When you're ready, set up your own house from the bar at the top.	Cuando quieras, configura tu propia casa desde la barra superior.	Wenn du so weit bist, richte dein eigenes Haus über die Leiste oben ein.	Quand vous êtes prêt, configurez votre maison depuis la barre en haut.	Quando quiser, configure sua própria casa pela barra no topo.	Quando sei pronto, configura la tua casa dalla barra in alto.	Als je zover bent, stel je je eigen huis in via de balk bovenaan.
+Start by connecting the things you own - the Connect page shows what works and how.	Empieza conectando lo que tienes: la página Conectar muestra qué funciona y cómo.	Verbinde zuerst deine Geräte – die Seite „Verbinden" zeigt, was funktioniert und wie.	Commencez par connecter vos appareils : la page Connecter montre ce qui marche et comment.	Comece conectando o que você tem – a página Conectar mostra o que funciona e como.	Inizia collegando ciò che hai: la pagina Collega mostra cosa funziona e come.	Begin met het verbinden van je apparaten – de pagina Verbinden laat zien wat werkt en hoe.
+Back	Atrás	Zurück	Retour	Voltar	Indietro	Terug
+Next	Siguiente	Weiter	Suivant	Avançar	Avanti	Volgende
+Start	Empezar	Los geht's	Commencer	Começar	Inizia	Start
+Go to Connect	Ir a Conectar	Zu „Verbinden"	Aller à Connecter	Ir para Conectar	Vai a Collega	Naar Verbinden
+{n} of {total}	{n} de {total}	{n} von {total}	{n} sur {total}	{n} de {total}	{n} di {total}	{n} van {total}
+End the tour	Terminar el recorrido	Tour beenden	Terminer la visite	Encerrar o tour	Termina il giro	Rondleiding stoppen
+Take the tour	Hacer el recorrido	Tour starten	Faire la visite	Fazer o tour	Fai il giro	Rondleiding starten
+Your day at a glance: weather, calendar, reminders and the devices you care about. "Edit layout" moves and resizes tiles; "Add widget" adds more.	Tu día de un vistazo: tiempo, calendario, recordatorios y tus dispositivos favoritos. «Editar diseño» mueve y cambia el tamaño de los mosaicos; «Añadir widget» añade más.	Dein Tag auf einen Blick: Wetter, Kalender, Erinnerungen und deine wichtigsten Geräte. „Layout bearbeiten" verschiebt und vergrößert Kacheln; „Widget hinzufügen" fügt weitere hinzu.	Votre journée d'un coup d'œil : météo, agenda, rappels et vos appareils. « Modifier la disposition » déplace et redimensionne les tuiles ; « Ajouter un widget » en ajoute.	Seu dia num relance: clima, agenda, lembretes e os dispositivos que importam. "Editar layout" move e redimensiona os blocos; "Adicionar widget" adiciona mais.	La tua giornata in un colpo d'occhio: meteo, calendario, promemoria e i dispositivi che ti interessano. "Modifica layout" sposta e ridimensiona i riquadri; "Aggiungi widget" ne aggiunge altri.	Je dag in één oogopslag: weer, agenda, herinneringen en je belangrijkste apparaten. "Indeling bewerken" verplaatst tegels en past de grootte aan; "Widget toevoegen" voegt er meer toe.
+Leaks, smoke, low batteries, devices that stop answering, and the doorbell. Turn on phone alerts in Settings so they reach you away from this screen.	Fugas, humo, baterías bajas, dispositivos que dejan de responder y el timbre. Activa las alertas en el móvil en Ajustes para recibirlas fuera de esta pantalla.	Wasser, Rauch, schwache Batterien, Geräte, die nicht mehr antworten, und die Türklingel. Schalte in den Einstellungen Handy-Meldungen ein, damit sie dich auch unterwegs erreichen.	Fuites, fumée, piles faibles, appareils qui ne répondent plus et la sonnette. Activez les alertes sur téléphone dans les Réglages pour les recevoir partout.	Vazamentos, fumaça, baterias fracas, dispositivos que param de responder e a campainha. Ative os alertas no celular em Ajustes para recebê-los longe desta tela.	Perdite, fumo, batterie scariche, dispositivi che non rispondono e il campanello. Attiva gli avvisi sul telefono nelle Impostazioni per riceverli ovunque.	Lekkages, rook, lege batterijen, apparaten die niet meer reageren en de deurbel. Zet telefoonmeldingen aan in Instellingen, zodat ze je ook elders bereiken.
+Lights, plugs, fans, thermostats, blinds and scenes in one place. For safety, CasaTorch never unlocks doors, opens garage doors or gates, or disarms alarms.	Luces, enchufes, ventiladores, termostatos, persianas y escenas en un solo lugar. Por seguridad, CasaTorch nunca abre cerraduras, puertas de garaje ni portones, ni desactiva alarmas.	Licht, Steckdosen, Ventilatoren, Thermostate, Rollos und Szenen an einem Ort. Aus Sicherheitsgründen entriegelt CasaTorch nie Türen, öffnet nie Garagentore oder Tore und schärft nie Alarmanlagen ab.	Lumières, prises, ventilateurs, thermostats, stores et scènes au même endroit. Par sécurité, CasaTorch ne déverrouille jamais de porte, n'ouvre jamais de garage ni de portail et ne désarme jamais d'alarme.	Luzes, tomadas, ventiladores, termostatos, persianas e cenas num só lugar. Por segurança, o CasaTorch nunca destranca portas, abre portões de garagem ou portões, nem desarma alarmes.	Luci, prese, ventilatori, termostati, tapparelle e scene in un unico posto. Per sicurezza, CasaTorch non sblocca mai porte, non apre garage o cancelli e non disattiva mai gli allarmi.	Lampen, stekkers, ventilatoren, thermostaten, zonwering en scènes op één plek. Voor de veiligheid ontgrendelt CasaTorch nooit deuren, opent het nooit garagedeuren of poorten en schakelt het nooit alarmen uit.
+A fresh picture from every camera. Tap one to watch it live.	Una imagen reciente de cada cámara. Toca una para verla en directo.	Ein aktuelles Bild von jeder Kamera. Tippe auf eine für das Livebild.	Une image récente de chaque caméra. Touchez-en une pour la voir en direct.	Uma imagem recente de cada câmera. Toque em uma para ver ao vivo.	Un'immagine aggiornata da ogni telecamera. Toccane una per vederla dal vivo.	Een actueel beeld van elke camera. Tik erop om live te kijken.
+Your linked calendars side by side, plus a household calendar everyone here can add to.	Tus calendarios vinculados juntos, más un calendario de casa al que todos pueden añadir.	Deine verknüpften Kalender nebeneinander, plus ein Haushaltskalender für alle.	Vos agendas liés côte à côte, plus un agenda familial que tout le monde peut compléter.	Seus calendários vinculados lado a lado, mais um calendário da casa para todos.	I tuoi calendari collegati affiancati, più un calendario di casa per tutti.	Je gekoppelde agenda's naast elkaar, plus een gezinsagenda waar iedereen iets aan kan toevoegen.
+Upload photos for the photo reel on your Home screen.	Sube fotos para el carrusel de tu pantalla de inicio.	Lade Fotos für die Diashow auf deinem Startbildschirm hoch.	Importez des photos pour le diaporama de votre écran d'accueil.	Envie fotos para o carrossel da sua tela inicial.	Carica foto per lo slideshow della schermata Home.	Upload foto's voor de diavoorstelling op je startscherm.
+What the house is using right now, from any plug or meter that reports power.	Lo que consume la casa ahora mismo, según los enchufes y medidores que informan potencia.	Was das Haus gerade verbraucht – von jeder Steckdose oder jedem Zähler, der Leistung meldet.	Ce que la maison consomme en ce moment, d'après les prises et compteurs qui mesurent la puissance.	O que a casa está usando agora, de qualquer tomada ou medidor que informa potência.	Cosa sta consumando la casa adesso, da prese e contatori che misurano la potenza.	Wat het huis nu verbruikt, van elke stekker of meter die vermogen meet.
+Is the internet up, and how fast? Connect your router or ad blocker to see more.	¿Hay internet y a qué velocidad? Conecta tu router o bloqueador de anuncios para ver más.	Läuft das Internet, und wie schnell? Verbinde Router oder Werbeblocker für mehr.	Internet fonctionne-t-il, et à quelle vitesse ? Connectez votre routeur ou bloqueur de pubs pour en voir plus.	A internet está funcionando, e com que velocidade? Conecte seu roteador ou bloqueador de anúncios para ver mais.	Internet funziona, e quanto è veloce? Collega router o ad blocker per vedere di più.	Werkt internet, en hoe snel? Verbind je router of advertentieblokker voor meer.
+Your home in 3D - draw it or import a phone scan - with devices shown live where they are.	Tu casa en 3D (dibújala o importa un escaneo del móvil) con los dispositivos en directo donde están.	Dein Zuhause in 3D – gezeichnet oder per Handy-Scan – mit Geräten live an ihrem Platz.	Votre maison en 3D (dessinée ou scannée au téléphone), avec les appareils en direct là où ils sont.	Sua casa em 3D – desenhada ou escaneada pelo celular – com os dispositivos ao vivo onde estão.	La tua casa in 3D (disegnata o scansionata col telefono) con i dispositivi dal vivo dove si trovano.	Je huis in 3D – getekend of met je telefoon gescand – met apparaten live op hun plek.
+Ask questions in plain words, like "is anything left on?" or "when is trash day?"	Haz preguntas con tus palabras, como «¿quedó algo encendido?» o «¿cuándo pasa la basura?»	Stell Fragen in normalen Worten, z. B. „Ist noch etwas an?" oder „Wann ist Müllabfuhr?"	Posez vos questions simplement, comme « reste-t-il quelque chose d'allumé ? » ou « quand passent les poubelles ? »	Faça perguntas com suas palavras, como "ficou algo ligado?" ou "quando passa o lixo?"	Fai domande a parole tue, come "è rimasto qualcosa acceso?" o "quando passa la spazzatura?"	Stel vragen in gewone taal, zoals "staat er nog iets aan?" of "wanneer is de vuilnisophaal?"
+Add the brands you own. Anything Home Assistant supports shows up here too once Home Assistant is connected.	Añade las marcas que tienes. Todo lo que admite Home Assistant aparece aquí cuando lo conectas.	Füge deine Marken hinzu. Alles, was Home Assistant unterstützt, erscheint hier, sobald es verbunden ist.	Ajoutez vos marques. Tout ce que gère Home Assistant apparaît aussi ici une fois connecté.	Adicione as marcas que você tem. Tudo o que o Home Assistant suporta aparece aqui depois de conectado.	Aggiungi le marche che possiedi. Tutto ciò che Home Assistant supporta appare qui una volta collegato.	Voeg je merken toe. Alles wat Home Assistant ondersteunt verschijnt hier zodra het verbonden is.
+Colors and layout, people and sign-in, phone alerts, backups - and this tour, any time.	Colores y diseño, personas e inicio de sesión, alertas al móvil, copias de seguridad... y este recorrido cuando quieras.	Farben und Layout, Personen und Anmeldung, Handy-Meldungen, Backups – und diese Tour jederzeit.	Couleurs et disposition, personnes et connexion, alertes, sauvegardes – et cette visite à tout moment.	Cores e layout, pessoas e login, alertas no celular, backups – e este tour quando quiser.	Colori e layout, persone e accesso, avvisi sul telefono, backup e questo giro quando vuoi.	Kleuren en indeling, personen en inloggen, telefoonmeldingen, back-ups – en deze rondleiding wanneer je wilt.
+Security	Seguridad	Sicherheit	Sécurité	Segurança	Sicurezza	Beveiliging
+Safety	Protección	Schutz	Protection	Proteção	Protezione	Veiligheid
+Secure access	Acceso seguro	Sicherer Zugriff	Accès sécurisé	Acesso seguro	Accesso sicuro	Veilige toegang
+Phone app & alerts	App móvil y alertas	Handy-App & Meldungen	App mobile et alertes	App do celular e alertas	App e avvisi	Telefoon-app & meldingen
+CasaTorch Pro	CasaTorch Pro	CasaTorch Pro	CasaTorch Pro	CasaTorch Pro	CasaTorch Pro	CasaTorch Pro
+Updates	Actualizaciones	Updates	Mises à jour	Atualizações	Aggiornamenti	Updates
+Backup	Copia de seguridad	Backup	Sauvegarde	Backup	Backup	Back-up
+Look & feel	Apariencia	Aussehen	Apparence	Aparência	Aspetto	Uiterlijk
+Menu	Menú	Menü	Menu	Menu	Menu	Menu
+Help & services	Ayuda y servicios	Hilfe & Services	Aide et services	Ajuda e serviços	Aiuto e servizi	Hulp & diensten
+Everyday	Día a día	Alltag	Au quotidien	Dia a dia	Ogni giorno	Dagelijks
+Connected	Conectado	Verbunden	Connecté	Conectado	Collegato	Verbonden
+This CasaTorch	Este CasaTorch	Dieses CasaTorch	Ce CasaTorch	Este CasaTorch	Questo CasaTorch	Deze CasaTorch
+Your account & security	Tu cuenta y seguridad	Dein Konto & Sicherheit	Votre compte et sécurité	Sua conta e segurança	Account e sicurezza	Je account & beveiliging
+People	Personas	Personen	Personnes	Pessoas	Persone	Personen
+Sign-in & security log	Registro de inicios de sesión y seguridad	Anmelde- & Sicherheitsprotokoll	Journal de connexion et de sécurité	Registro de login e segurança	Registro accessi e sicurezza	Inlog- & beveiligingslogboek
+Language	Idioma	Sprache	Langue	Idioma	Lingua	Taal
+The language CasaTorch uses in this home. Everyone here sees it.	El idioma que usa CasaTorch en esta casa. Todos lo verán.	Die Sprache, die CasaTorch in diesem Zuhause verwendet. Alle hier sehen sie.	La langue de CasaTorch dans cette maison. Tout le monde la voit.	O idioma que o CasaTorch usa nesta casa. Todos aqui o veem.	La lingua usata da CasaTorch in questa casa. La vedono tutti.	De taal die CasaTorch in dit huis gebruikt. Iedereen hier ziet die.
+A few screens are still in English while their translations are finished.	Algunas pantallas siguen en inglés mientras terminamos su traducción.	Einige Bildschirme sind noch auf Englisch, bis ihre Übersetzung fertig ist.	Quelques écrans sont encore en anglais, le temps de finir leur traduction.	Algumas telas ainda estão em inglês enquanto terminamos a tradução.	Alcune schermate sono ancora in inglese finché la traduzione non è completa.	Een paar schermen zijn nog in het Engels tot hun vertaling klaar is.
+Mode	Modo	Modus	Mode	Modo	Modalità	Modus
+Dark	Oscuro	Dunkel	Sombre	Escuro	Scuro	Donker
+Light	Claro	Hell	Clair	Claro	Chiaro	Licht
+Match device	Igual que el dispositivo	Wie das Gerät	Comme l'appareil	Igual ao dispositivo	Come il dispositivo	Zoals het apparaat
+Choose your language	Elige tu idioma	Wähle deine Sprache	Choisissez votre langue	Escolha seu idioma	Scegli la lingua	Kies je taal
+One screen for the smart home you already have: lights, cameras, sensors, calendars and more. CasaTorch runs here on your own hardware, and your settings stay here.	Una sola pantalla para la casa inteligente que ya tienes: luces, cámaras, sensores, calendarios y más. CasaTorch funciona aquí, en tu propio equipo, y tus ajustes se quedan aquí.	Ein Bildschirm für das Smart Home, das du schon hast: Licht, Kameras, Sensoren, Kalender und mehr. CasaTorch läuft hier auf deiner eigenen Hardware, und deine Einstellungen bleiben hier.	Un seul écran pour la maison connectée que vous avez déjà : lumières, caméras, capteurs, agendas et plus. CasaTorch tourne ici, sur votre propre matériel, et vos réglages restent ici.	Uma só tela para a casa inteligente que você já tem: luzes, câmeras, sensores, calendários e mais. O CasaTorch roda aqui, no seu próprio equipamento, e suas configurações ficam aqui.	Un'unica schermata per la casa smart che hai già: luci, telecamere, sensori, calendari e altro. CasaTorch funziona qui, sul tuo hardware, e le tue impostazioni restano qui.	Eén scherm voor het slimme huis dat je al hebt: lampen, camera's, sensoren, agenda's en meer. CasaTorch draait hier op je eigen hardware, en je instellingen blijven hier.
+The everyday things	Lo de cada día	Der Alltag	Le quotidien	O dia a dia	Le cose di tutti i giorni	De dagelijkse dingen
+Your town for the weather, calendars, sports teams, headlines and reminders.	Tu ciudad para el tiempo, calendarios, equipos, noticias y recordatorios.	Dein Ort fürs Wetter, Kalender, Sportteams, Schlagzeilen und Erinnerungen.	Votre ville pour la météo, agendas, équipes, actualités et rappels.	Sua cidade para o clima, calendários, times, notícias e lembretes.	La tua città per il meteo, calendari, squadre, notizie e promemoria.	Je woonplaats voor het weer, agenda's, sportteams, nieuws en herinneringen.
+Your devices	Tus dispositivos	Deine Geräte	Vos appareils	Seus dispositivos	I tuoi dispositivi	Je apparaten
+Hue, Shelly, YoLink, Frigate, Reolink and Ring (Pro) connect directly. Thousands more come in through Home Assistant, if you use it.	Hue, Shelly, YoLink, Frigate, Reolink y Ring (Pro) se conectan directamente. Miles más llegan a través de Home Assistant, si lo usas.	Hue, Shelly, YoLink, Frigate, Reolink und Ring (Pro) verbinden sich direkt. Tausende weitere kommen über Home Assistant dazu, falls du es nutzt.	Hue, Shelly, YoLink, Frigate, Reolink et Ring (Pro) se connectent directement. Des milliers d'autres via Home Assistant, si vous l'utilisez.	Hue, Shelly, YoLink, Frigate, Reolink e Ring (Pro) se conectam diretamente. Milhares de outros vêm pelo Home Assistant, se você usa.	Hue, Shelly, YoLink, Frigate, Reolink e Ring (Pro) si collegano direttamente. Migliaia di altri arrivano tramite Home Assistant, se lo usi.	Hue, Shelly, YoLink, Frigate, Reolink en Ring (Pro) maken direct verbinding. Duizenden andere komen via Home Assistant binnen, als je dat gebruikt.
+Your dashboard	Tu panel	Dein Dashboard	Votre tableau de bord	Seu painel	La tua dashboard	Je dashboard
+Then a one-minute tour of where everything is. Change anything later in Settings.	Luego, un recorrido de un minuto para saber dónde está todo. Cambia lo que quieras después en Ajustes.	Dann eine einminütige Tour, wo alles ist. Alles lässt sich später in den Einstellungen ändern.	Puis une visite d'une minute pour tout situer. Tout se modifie ensuite dans les Réglages.	Depois, um tour de um minuto por tudo. Mude o que quiser mais tarde em Ajustes.	Poi un giro di un minuto per sapere dov'è tutto. Puoi cambiare tutto dopo nelle Impostazioni.	Daarna een rondleiding van een minuut. Alles is later te wijzigen in Instellingen.
+About 10 to 20 minutes. Every step can be skipped and added later.	Unos 10 a 20 minutos. Puedes saltar cualquier paso y añadirlo después.	Etwa 10 bis 20 Minuten. Jeder Schritt lässt sich überspringen und später nachholen.	Environ 10 à 20 minutes. Chaque étape peut être passée et ajoutée plus tard.	Cerca de 10 a 20 minutos. Dá para pular qualquer etapa e adicionar depois.	Circa 10–20 minuti. Ogni passaggio si può saltare e aggiungere dopo.	Ongeveer 10 tot 20 minuten. Elke stap kun je overslaan en later toevoegen.
+Stuck at any point? E-mail	¿Te atascas? Escribe a	Irgendwo hängen geblieben? Schreib an	Bloqué ? Écrivez à	Travou em algum ponto? Escreva para	Bloccato? Scrivi a	Ergens vast? Mail naar
+ - a real person answers.	: te responde una persona.	 – ein Mensch antwortet.	 : une vraie personne vous répond.	 – uma pessoa de verdade responde.	: risponde una persona vera.	 – er antwoordt een echt persoon.
+Just looking?	¿Solo estás mirando?	Nur mal schauen?	Juste pour voir ?	Só olhando?	Solo un'occhiata?	Even rondkijken?
+See CasaTorch with a sample house, including the 3D floor plan. No setup needed.	Mira CasaTorch con una casa de ejemplo, incluido el plano 3D. Sin configurar nada.	Sieh dir CasaTorch mit einem Beispielhaus an, inklusive 3D-Grundriss. Ganz ohne Einrichtung.	Découvrez CasaTorch avec une maison d'exemple, plan 3D compris. Sans configuration.	Veja o CasaTorch com uma casa de exemplo, incluindo a planta 3D. Sem configurar nada.	Guarda CasaTorch con una casa di esempio, pianta 3D inclusa. Senza configurare nulla.	Bekijk CasaTorch met een voorbeeldhuis, inclusief 3D-plattegrond. Zonder instellen.
+Try the demo	Probar la demo	Demo ausprobieren	Essayer la démo	Testar a demo	Prova la demo	Probeer de demo
+Moving from another CasaTorch?	¿Vienes de otro CasaTorch?	Umzug von einem anderen CasaTorch?	Vous venez d'un autre CasaTorch ?	Vindo de outro CasaTorch?	Arrivi da un altro CasaTorch?	Overstappen van een andere CasaTorch?
+Restore its backup	Restaura su copia de seguridad	Backup wiederherstellen	Restaurez sa sauvegarde	Restaure o backup	Ripristina il backup	Zet de back-up terug
+Restore	Restaurar	Wiederherstellen	Restaurer	Restaurar	Ripristina	Terugzetten
+Set up my home	Configurar mi casa	Mein Zuhause einrichten	Configurer ma maison	Configurar minha casa	Configura la mia casa	Mijn huis instellen
+Finish	Terminar	Fertigstellen	Terminer	Concluir	Fine	Afronden
+Save	Guardar	Speichern	Enregistrer	Salvar	Salva	Opslaan
+Review	Revisión	Überprüfen	Vérification	Revisão	Riepilogo	Controleren
+Welcome	Bienvenida	Willkommen	Bienvenue	Boas-vindas	Benvenuto	Welkom
+All set?	¿Todo listo?	Alles startklar?	Tout est prêt ?	Tudo certo?	Tutto pronto?	Alles klaar?
+Check this over. Finish saves it and opens your dashboard; you can change anything later in Settings.	Revísalo. Terminar lo guarda y abre tu panel; puedes cambiar todo después en Ajustes.	Prüfe alles. „Fertigstellen" speichert und öffnet dein Dashboard; alles lässt sich später in den Einstellungen ändern.	Vérifiez. Terminer enregistre et ouvre votre tableau de bord ; tout reste modifiable dans les Réglages.	Confira. Concluir salva e abre seu painel; dá para mudar tudo depois em Ajustes.	Controlla. Fine salva e apre la dashboard; puoi cambiare tutto dopo nelle Impostazioni.	Kijk het na. Afronden slaat op en opent je dashboard; je kunt alles later wijzigen in Instellingen.
+Your home	Tu casa	Dein Zuhause	Votre maison	Sua casa	La tua casa	Je huis
+A few basics so times, temperatures, costs and the weather show the way you expect.	Unos datos básicos para que horas, temperaturas, costes y el tiempo se vean como esperas.	Ein paar Grundlagen, damit Uhrzeiten, Temperaturen, Kosten und das Wetter so angezeigt werden, wie du es erwartest.	Quelques bases pour que l'heure, les températures, les coûts et la météo s'affichent comme prévu.	Algumas informações básicas para que horários, temperaturas, custos e o clima apareçam do jeito certo.	Qualche informazione di base perché orari, temperature, costi e meteo appaiano come ti aspetti.	Een paar basisgegevens, zodat tijden, temperaturen, kosten en het weer kloppen.
+What should we call your home?	¿Cómo llamamos a tu casa?	Wie soll dein Zuhause heißen?	Quel nom donner à votre maison ?	Como devemos chamar sua casa?	Come chiamiamo la tua casa?	Hoe zullen we je huis noemen?
+Time zone	Zona horaria	Zeitzone	Fuseau horaire	Fuso horário	Fuso orario	Tijdzone
+Your town (for the weather)	Tu ciudad (para el tiempo)	Dein Ort (fürs Wetter)	Votre ville (pour la météo)	Sua cidade (para o clima)	La tua città (per il meteo)	Je woonplaats (voor het weer)
+Temperature	Temperatura	Temperatur	Température	Temperatura	Temperatura	Temperatuur
+Real life	Realista	Realistisch	Réaliste	Realista	Realistico	Realistisch
+Blueprint	Plano	Bauplan	Plan	Planta	Progetto	Bouwtekening
+Drafting	Delineación	Zeichnung	Dessin	Desenho	Disegno	Schets
+Day	Día	Tag	Jour	Dia	Giorno	Dag
+Help	Ayuda	Hilfe	Aide	Ajuda	Aiuto	Help
+Editor	Editor	Editor	Éditeur	Editor	Editor	Editor
+Dollhouse	Casa de muñecas	Puppenhaus	Maison de poupée	Casa de bonecas	Casa delle bambole	Poppenhuis
+Tall	Altas	Hoch	Hauts	Altas	Alte	Hoog
+Cut	Corte	Schnitt	Coupe	Corte	Sezione	Doorsnede
+Rooms	Habitaciones	Räume	Pièces	Cômodos	Stanze	Kamers
+Temp	Temp.	Temp.	Temp.	Temp.	Temp.	Temp.
+Humidity	Humedad	Feuchte	Humidité	Umidade	Umidità	Vochtigheid
+Air	Aire	Luft	Air	Ar	Aria	Lucht
+Lights	Luces	Licht	Lumières	Luzes	Luci	Lampen
+Motion	Movimiento	Bewegung	Mouvement	Movimento	Movimento	Beweging
+Tour	Recorrido	Rundflug	Visite	Tour	Giro	Rondvlucht
+Stop	Detener	Stopp	Arrêter	Parar	Stop	Stop
+View	Vista	Ansicht	Affichage	Exibir	Vista	Weergave
+Labels	Etiquetas	Beschriftung	Étiquettes	Rótulos	Etichette	Labels
+None	Ninguna	Keine	Aucune	Nenhum	Nessuna	Geen
+Key	Clave	Wichtige	Essentielles	Principais	Principali	Belangrijke
+All	Todas	Alle	Toutes	Todos	Tutte	Alle
+Activity trail	Rastro de actividad	Bewegungsspur	Parcours d'activité	Rastro de atividade	Traccia attività	Activiteitenspoor
+Spin	Girar	Drehen	Rotation	Girar	Ruota	Draaien
+Roof	Tejado	Dach	Toit	Telhado	Tetto	Dak
+Power lines	Cables eléctricos	Stromleitungen	Lignes électriques	Fiação	Linee elettriche	Stroomkabels
+Stacked	Apilado	Gestapelt	Empilé	Empilhado	Impilato	Gestapeld
+Apart	Separado	Auseinander	Éclaté	Separado	Separato	Uit elkaar
+Alone	Solo	Einzeln	Seul	Sozinho	Singolo	Alleen
+All floors	Todas las plantas	Alle Etagen	Tous les étages	Todos os andares	Tutti i piani	Alle verdiepingen
+Whole home	Toda la casa	Ganzes Haus	Toute la maison	Casa toda	Tutta la casa	Hele huis
+Using now	Consumo actual	Verbrauch jetzt	Consommation	Usando agora	Consumo ora	Verbruik nu
+Lights on	Luces encendidas	Licht an	Lumières allumées	Luzes acesas	Luci accese	Lampen aan
+All lights	Todas las luces	Alle Lichter	Toutes les lumières	Todas as luzes	Tutte le luci	Alle lampen
+On	Encendido	An	Allumé	Ligado	Acceso	Aan
+Off	Apagado	Aus	Éteint	Desligado	Spento	Uit
+Layers	Capas	Ebenen	Calques	Camadas	Livelli	Lagen
+Sunlight	Luz solar	Sonnenlicht	Soleil	Luz do sol	Luce solare	Zonlicht
+Now	Ahora	Jetzt	Maintenant	Agora	Ora	Nu
+Energy now	Energía ahora	Energie jetzt	Énergie actuelle	Energia agora	Energia ora	Energie nu
+Solar	Solar	Solar	Solaire	Solar	Solare	Zon
+Battery	Batería	Batterie	Batterie	Bateria	Batteria	Batterij
+Grid	Red eléctrica	Netz	Réseau	Rede	Rete	Net
+Brightness	Brillo	Helligkeit	Luminosité	Brilho	Luminosità	Helderheid
+Warmth	Calidez	Farbtemperatur	Chaleur	Tom	Temperatura colore	Warmte
+Warm	Cálida	Warm	Chaude	Quente	Calda	Warm
+Neutral	Neutra	Neutral	Neutre	Neutra	Neutra	Neutraal
+Cool	Fría	Kalt	Froide	Fria	Fredda	Koel
+Color	Color	Farbe	Couleur	Cor	Colore	Kleur
+Any color	Cualquier color	Beliebige Farbe	Toute couleur	Qualquer cor	Qualsiasi colore	Elke kleur
+Speed	Velocidad	Geschwindigkeit	Vitesse	Velocidade	Velocità	Snelheid
+Volume	Volumen	Lautstärke	Volume	Volume	Volume	Volume
+Play	Reproducir	Abspielen	Lecture	Tocar	Riproduci	Afspelen
+Pause	Pausa	Pause	Pause	Pausar	Pausa	Pauze
+Paused	En pausa	Pausiert	En pause	Pausado	In pausa	Gepauzeerd
+Playing	Reproduciendo	Läuft	En lecture	Tocando	In riproduzione	Speelt af
+Set to	Ajustado a	Soll	Réglé sur	Definido para	Impostato a	Ingesteld op
+Open	Abrir	Öffnen	Ouvrir	Abrir	Apri	Openen
+Close	Cerrar	Schließen	Fermer	Fechar	Chiudi	Sluiten
+Position	Posición	Position	Position	Posição	Posizione	Positie
+Closed	Cerrado	Geschlossen	Fermé	Fechado	Chiuso	Dicht
+Locked	Cerrado con llave	Verriegelt	Verrouillé	Trancado	Chiuso a chiave	Op slot
+Unlocked	Sin llave	Entriegelt	Déverrouillé	Destrancado	Sbloccato	Niet op slot
+Lock	Cerrar con llave	Verriegeln	Verrouiller	Trancar	Blocca	Op slot doen
+Arm home	Activar en casa	Scharf (zu Hause)	Activer (présent)	Armar em casa	Attiva in casa	Inschakelen (thuis)
+Arm away	Activar fuera	Scharf (abwesend)	Activer (absent)	Armar fora	Attiva fuori casa	Inschakelen (weg)
+Arm night	Activar noche	Scharf (Nacht)	Activer (nuit)	Armar noite	Attiva notte	Inschakelen (nacht)
+Disarmed	Desactivada	Unscharf	Désactivée	Desarmado	Disattivato	Uitgeschakeld
+Triggered!	¡Activada!	Ausgelöst!	Déclenchée !	Disparado!	Scattato!	Afgegaan!
+Send home	Enviar a la base	Zur Station	Retour à la base	Voltar à base	Torna alla base	Naar de basis
+Run	Ejecutar	Ausführen	Lancer	Executar	Esegui	Uitvoeren
+Turn on scene	Activar escena	Szene aktivieren	Activer la scène	Ativar cena	Attiva scena	Scène aanzetten
+Away	Fuera	Abwesend	Absent	Fora	Fuori	Weg
+Not answering right now.	No responde ahora mismo.	Antwortet gerade nicht.	Ne répond pas pour le moment.	Não está respondendo agora.	Non risponde al momento.	Reageert nu niet.
+using now	consumo actual	Verbrauch jetzt	en ce moment	usando agora	consumo ora	verbruik nu
+today	hoy	heute	aujourd'hui	hoje	oggi	vandaag
+Heat	Calor	Heizen	Chauffage	Aquecer	Caldo	Verwarmen
+Auto	Auto	Auto	Auto	Auto	Auto	Auto
+Heat/Cool	Calor/Frío	Heizen/Kühlen	Chaud/Froid	Aquecer/Resfriar	Caldo/Freddo	Verwarmen/Koelen
+Dry	Seco	Entfeuchten	Déshumidifier	Secar	Deumidifica	Drogen
+Fan	Ventilador	Lüfter	Ventilation	Ventilar	Ventola	Ventilator
+Power	Potencia	Leistung	Puissance	Potência	Potenza	Vermogen
+Water detected!	¡Agua detectada!	Wasser erkannt!	Eau détectée !	Água detectada!	Acqua rilevata!	Water gedetecteerd!
+Smoke!	¡Humo!	Rauch!	Fumée !	Fumaça!	Fumo!	Rook!
+Clear	Despejado	Frei	RAS	Livre	Libero	Vrij
+More controls	Más controles	Weitere Regler	Plus de commandes	Mais controles	Altri comandi	Meer bediening
+More	Más	Mehr	Plus	Mais	Altro	Meer
+CasaTorch can lock, never unlock. Unlock with the lock's own app or keypad.	CasaTorch puede cerrar con llave, nunca abrir. Abre con la app o el teclado de la cerradura.	CasaTorch kann verriegeln, nie entriegeln. Entriegle mit der App oder dem Tastenfeld des Schlosses.	CasaTorch peut verrouiller, jamais déverrouiller. Déverrouillez avec l'app ou le clavier de la serrure.	O CasaTorch pode trancar, nunca destrancar. Destranque pelo app ou teclado da fechadura.	CasaTorch può bloccare, mai sbloccare. Sblocca con l'app o il tastierino della serratura.	CasaTorch kan op slot doen, nooit openen. Open met de app of het toetsenbord van het slot.
+CasaTorch can arm the alarm, never disarm it. Disarm with your keypad or the alarm's app.	CasaTorch puede activar la alarma, nunca desactivarla. Desactívala con tu teclado o su app.	CasaTorch kann die Alarmanlage scharf schalten, nie unscharf. Schalte sie per Tastenfeld oder App unscharf.	CasaTorch peut activer l'alarme, jamais la désactiver. Désactivez-la avec le clavier ou son app.	O CasaTorch pode armar o alarme, nunca desarmar. Desarme pelo teclado ou app do alarme.	CasaTorch può attivare l'allarme, mai disattivarlo. Disattivalo dal tastierino o dall'app.	CasaTorch kan het alarm inschakelen, nooit uitschakelen. Schakel uit met je bedieningspaneel of de app.
+Garage doors, gates and doors only close from CasaTorch. Open them in their own app or Home Assistant.	Las puertas de garaje, portones y puertas solo se cierran desde CasaTorch. Ábrelas en su app o en Home Assistant.	Garagentore, Tore und Türen lassen sich mit CasaTorch nur schließen. Öffne sie in ihrer App oder in Home Assistant.	Garages, portails et portes ne font que se fermer depuis CasaTorch. Ouvrez-les dans leur app ou Home Assistant.	Portões de garagem, portões e portas só fecham pelo CasaTorch. Abra-os no app deles ou no Home Assistant.	Garage, cancelli e porte si possono solo chiudere da CasaTorch. Aprili dalla loro app o da Home Assistant.	Garagedeuren, poorten en deuren gaan via CasaTorch alleen dicht. Open ze in hun eigen app of Home Assistant.
+Open|state	Abierto	Offen	Ouvert	Aberto	Aperto	Open
+Home|house	Casa	Haus	Maison	Casa	Casa	Huis
+Cool|mode	Frío	Kühlen	Froid	Resfriar	Raffredda	Koelen
+Off|mode	Apagado	Aus	Arrêt	Desligado	Spento	Uit
+House	Casa	Haus	Maison	Casa	Casa	Huis
+Some screens are still in English.	Algunas pantallas siguen en inglés.	Einige Bildschirme sind noch auf Englisch.	Certains écrans sont encore en anglais.	Algumas telas ainda estão em inglês.	Alcune schermate sono ancora in inglese.	Sommige schermen zijn nog in het Engels.
+Your CasaTorch login	Tu inicio de sesión de CasaTorch	Deine CasaTorch-Anmeldung	Votre connexion CasaTorch	Seu login do CasaTorch	Il tuo accesso a CasaTorch	Je CasaTorch-login
+Calendars	Calendarios	Kalender	Agendas	Calendários	Calendari	Agenda's
+Your teams	Tus equipos	Deine Teams	Vos équipes	Seus times	Le tue squadre	Je teams
+Headlines	Titulares	Schlagzeilen	Actualités	Manchetes	Notizie	Nieuws
+Reminders	Recordatorios	Erinnerungen	Rappels	Lembretes	Promemoria	Herinneringen
+Home Assistant	Home Assistant	Home Assistant	Home Assistant	Home Assistant	Home Assistant	Home Assistant
+Lights, locks and climate	Luces, cerraduras y clima	Licht, Schlösser und Klima	Lumières, serrures et climat	Luzes, fechaduras e clima	Luci, serrature e clima	Lampen, sloten en klimaat
+Sensors	Sensores	Sensoren	Capteurs	Sensores	Sensori	Sensoren
+Review & save	Revisar y guardar	Prüfen & speichern	Vérifier et enregistrer	Revisar e salvar	Controlla e salva	Controleren & opslaan
+(optional)	(opcional)	(optional)	(facultatif)	(opcional)	(facoltativo)	(optioneel)
+CasaTorch leaves this one alone for safety.	Por seguridad, CasaTorch no controla este.	Aus Sicherheitsgründen lässt CasaTorch dieses Gerät in Ruhe.	Par sécurité, CasaTorch ne touche pas à celui-ci.	Por segurança, o CasaTorch não mexe neste.	Per sicurezza, CasaTorch non tocca questo.	Voor de veiligheid laat CasaTorch deze met rust.
+This looks like a door, gate, lock or alarm control, so CasaTorch leaves it alone. An owner can allow it in Settings › Security.	Parece el control de una puerta, portón, cerradura o alarma, así que CasaTorch no lo toca. Un propietario puede permitirlo en Ajustes › Seguridad.	Das sieht nach einer Tür-, Tor-, Schloss- oder Alarmsteuerung aus, deshalb lässt CasaTorch es in Ruhe. Ein Eigentümer kann es unter Einstellungen › Sicherheit erlauben.	Cela ressemble à une commande de porte, portail, serrure ou alarme : CasaTorch n'y touche pas. Un propriétaire peut l'autoriser dans Réglages › Sécurité.	Parece o controle de uma porta, portão, fechadura ou alarme, então o CasaTorch não mexe. Um proprietário pode liberar em Ajustes › Segurança.	Sembra il comando di una porta, cancello, serratura o allarme, quindi CasaTorch non lo tocca. Un proprietario può consentirlo in Impostazioni › Sicurezza.	Dit lijkt op de bediening van een deur, poort, slot of alarm, dus CasaTorch laat het met rust. Een eigenaar kan het toestaan in Instellingen › Beveiliging.

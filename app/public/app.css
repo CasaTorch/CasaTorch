@@ -359,3 +359,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 .tour-offer { text-align: center; padding: 6px 4px 0; } .tour-offer h3 { margin: 10px 0 6px !important; font-size: 20px !important; } .tour-offer p { line-height: 1.5; margin: 0; }
 .tour-offer .row { justify-content: center !important; }
 .tour-mark { width: 56px; height: 56px; margin: 0 auto; border-radius: 18px; display: grid; place-items: center; color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+/* A device with more controls: the tile toggles, the slider button opens every control. */
+.dev-wrap { position: relative; min-width: 0; } .dev-wrap > .dev { padding-right: 52px; }
+.dev-more { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.dev-more:hover { color: var(--text); background: var(--surface-3); }
+.dsheet { min-width: min(360px, 80vw); }

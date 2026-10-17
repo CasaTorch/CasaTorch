@@ -158,7 +158,7 @@ Two ways to get your floors in - mix and match per floor:
 glowing where they are, devices showing watts, temperatures and what's playing. Tap a room (or its
 button) to fly to it and open its controls - lights with dimmers, plugs, speakers, sensors and camera
 pictures. Switch floors, **Tall walls / Cut** walls, **Stacked / Apart / Alone** floors, room names,
-values and cameras, and pick a look: **Neon**, **Blueprint** or **Day**.
+values and cameras, and pick a look: **Real life** (real sun, sky, yard, weather and wind), **Blueprint**, **Drafting** or **Day**.
 
 **The Editor** is where you make it yours: **Devices** (pick one, click where it is, rename it, set a
 light's glow colour), **Rooms** (rename, recolour, move, add your own, or use the rooms from the scan),

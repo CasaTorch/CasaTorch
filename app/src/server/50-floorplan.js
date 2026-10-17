@@ -23,7 +23,9 @@ const fpRead = () => { try { return JSON.parse(fs.readFileSync(FP_FILE, 'utf8'))
 let demoFp = null;   // the demo can be edited, but only in memory
 const fpWrite = (d) => { if (isDemo()) { demoFp = d; return; } writeFileSafe(FP_FILE, JSON.stringify(d, null, 2), 0o600); };
 const DEMO_FP = path.join(APP_DIR, '..', 'demo', 'floorplan');
-const fpData = () => (isDemo() ? (demoFp ||= JSON.parse(fs.readFileSync(path.join(DEMO_FP, 'floorplan.json'), 'utf8'))) : fpRead());
+/* The dark look was once called "neon"; plans saved then are read as "night". */
+const fpTheme = (d) => { if (d?.style?.theme === 'neon') d.style.theme = 'night'; if (d?.style?.colors?.neon) { d.style.colors.night ||= d.style.colors.neon; delete d.style.colors.neon; } if (d?.view?.theme === 'neon') d.view.theme = 'night'; return d; };
+const fpData = () => fpTheme(isDemo() ? (demoFp ||= JSON.parse(fs.readFileSync(path.join(DEMO_FP, 'floorplan.json'), 'utf8'))) : fpRead());
 /* three.js: compressed (Brotli/gzip, kept in memory) and cached for a week - 2.7 MB becomes about 0.6 MB. */
 app.use((req, res, next) => (req.path.startsWith('/vendor/three/') ? staticPacked(req, res, next) : next()));
 app.use('/vendor/three', express.static(path.join(APP_DIR, 'node_modules', 'three'), { maxAge: '7d' }));
@@ -95,13 +97,13 @@ app.get('/api/floorplan/floors/:id/background', (req, res) => {
   if (!f?.plan?.bg || !/^[\w-]+\.(png|jpg|webp)$/.test(f.plan.bg)) return res.status(404).end();
   res.setHeader('X-Content-Type-Options', 'nosniff'); res.sendFile(path.join(FP_DIR, f.plan.bg));
 });
-/* How the 3D home looks for everyone: theme (neon/blueprint/day) and any colours changed per theme. */
+/* How the 3D home looks for everyone: theme (real/night/blueprint/day) and any colors changed per theme. */
 app.put('/api/floorplan/style', requirePro, express.json(), (req, res) => {
   const d = fpData(), b = req.body || {}, KEYS = ['bg', 'wall', 'floor', 'furniture', 'edge', 'door', 'window'];
   const colors = {};
-  for (const t of ['neon', 'blueprint', 'day']) { const c = b.colors?.[t]; if (c && typeof c === 'object') { const ok = Object.fromEntries(KEYS.filter((k) => FP_HEX.test(c[k])).map((k) => [k, c[k]])); if (Object.keys(ok).length) colors[t] = ok; } }
+  for (const t of ['real', 'night', 'blueprint', 'day']) { const c = b.colors?.[t] ?? (t === 'night' ? b.colors?.neon : null); if (c && typeof c === 'object') { const ok = Object.fromEntries(KEYS.filter((k) => FP_HEX.test(c[k])).map((k) => [k, c[k]])); if (Object.keys(ok).length) colors[t] = ok; } }
   const ex = b.extras || {}, extras = { ...(FP_HEX.test(ex.roof) ? { roof: ex.roof } : {}), ...(FP_HEX.test(ex.flow) ? { flow: ex.flow } : {}), ...(fin(ex.glow, 0.3, 2.5) ? { glow: +ex.glow } : {}) };
-  d.style = { theme: ['neon', 'blueprint', 'day'].includes(b.theme) ? b.theme : 'neon', colors, extras };
+  d.style = { theme: ['real', 'night', 'blueprint', 'day'].includes(b.theme) ? b.theme : 'real', colors, extras };
   fpWrite(d); res.json({ ok: true, style: d.style });
 });
 app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req, res) => {
@@ -114,8 +116,8 @@ app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req,
 });
 /* The 3D view's own choices (walls, which floors are hidden, labels, overlays...): kept with the plan so
    every screen and every restart sees the same view. Only known keys, only simple values. */
-const VIEW_KEYS = { walls: ['auto', 'tall', 'cut'], stack: ['stacked', 'apart', 'alone'], overlay: ['rooms', 'temp', 'energy', 'lights', 'presence', 'motion'], theme: [null, 'neon', 'blueprint', 'day'] };
-const VIEW_BOOLS = ['names', 'values', 'cameras', 'roof', 'power', 'sun', 'weatherFx', 'spin', 'yard'];
+const VIEW_KEYS = { walls: ['auto', 'tall', 'cut'], stack: ['stacked', 'apart', 'alone'], overlay: ['rooms', 'temp', 'humidity', 'air', 'energy', 'lights', 'presence', 'motion'], labels: ['none', 'key', 'all'], theme: [null, 'real', 'night', 'blueprint', 'day'] };
+const VIEW_BOOLS = ['names', 'values', 'cameras', 'roof', 'power', 'sun', 'weatherFx', 'spin', 'yard', 'trail'];
 app.put('/api/floorplan/view', requirePro, express.json({ limit: '64kb' }), (req, res) => {
   const d = fpData(), v = req.body?.view || {}, out = {};
   for (const [k, ok] of Object.entries(VIEW_KEYS)) if (ok.includes(v[k] ?? null) && k in v) out[k] = v[k];
@@ -157,7 +159,8 @@ async function fpWeather() {
     if (!w?.now) return null;
     const d0 = w.days?.[0];
     const loc = isDemo() ? { lat: 37.77, lon: -122.42 } : config.location || {};
-    return { temp: w.now.temp, words: w.now.words, kind: fpKind(w.now.symbol), place: w.place || null, hi: d0?.hi ?? null, lo: d0?.lo ?? null, tz: houseTz(), lat: loc.lat ?? null, lon: loc.lon ?? null,
+    const n = w.now, windMs = n.windMs ?? (n.wind != null ? n.wind / (config.house?.units === 'C' ? 3.6 : 2.237) : null);   // older weather (and the demo) has only the display speed
+    return { temp: w.now.temp, words: w.now.words, kind: fpKind(w.now.symbol), windMs, gustMs: n.gustMs ?? null, windDir: n.windDir ?? (isDemo() ? 245 : null), place: w.place || null, hi: d0?.hi ?? null, lo: d0?.lo ?? null, tz: houseTz(), lat: loc.lat ?? null, lon: loc.lon ?? null,
       days: (w.days || []).slice(0, 5).map((x) => ({ label: new Date(`${x.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' }), hi: x.hi, lo: x.lo, kind: fpKind(x.symbol) })) };
   } catch { return null; }
 }
@@ -166,14 +169,16 @@ app.get('/api/floorplan/live', async (_req, res) => {
   const d = fpData();
   const [{ devices }, weather] = await Promise.all([houseDevices(), fpWeather()]);
   const byId = new Map(devices.map((x) => [x.id, x]));
+  for (const x of devices) { const r = riskOf(x); if (r) x.guarded = r.only; }   // which controls the safety rule allows
   const powerW = housePower(devices).watts;
   res.json({
     pins: d.pins.map((p) => ({ ...p, device: byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })), weather,
-    devices: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),
+    devices: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.area ? { area: x.area } : {}), ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),
     cars: Object.fromEntries((d.yard?.items || []).filter((it) => it.kind === 'car').map((it) => {
       const g = (k) => byId.get(it.bind?.[k]), h = g('home'), p = g('plugged'), w = g('power'), bt = g('battery'), n = (v) => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
       return [it.id, { home: h ? (h.home ?? h.on ?? null) : null, plugged: p ? !!(p.on ?? p.plugged) : null, powerW: w ? w.powerW ?? null : null, battery: bt ? n(bt.battery ?? bt.value) : null }];
     })),
+    energy: energyFlows(devices, Math.round(powerW)),
     totals: { powerW: Math.round(powerW), lightsOn: devices.filter((x) => x.kind === 'light' && x.on).length, playing: devices.filter((x) => x.playing).map((x) => ({ name: x.name, title: x.title })), openDoors: devices.filter((x) => x.open).length, leaks: devices.filter((x) => x.water).length },
   });
 });

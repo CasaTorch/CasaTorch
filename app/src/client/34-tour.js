@@ -34,11 +34,11 @@ function tourOffer() {
   const house = S.settings?.house?.name;
   const m = modal(el('div', { class: 'tour-offer' },
     el('div', { class: 'tour-mark', 'aria-hidden': 'true' }, icon('spark', 28)),
-    el('h3', { id: 'tourOfferTitle' }, S.status?.demo ? 'Welcome to the CasaTorch demo' : house ? `Welcome to ${house}` : 'Welcome to CasaTorch'),
-    el('p', { class: 'muted' }, S.status?.demo ? 'This is a sample house, so you can try everything. Want a one-minute look around first?' : 'Your dashboard is ready. Want a one-minute look around, so you know where everything is?'),
+    el('h3', { id: 'tourOfferTitle' }, S.status?.demo ? T('Welcome to the CasaTorch demo') : house ? T('Welcome to {house}', { house }) : T('Welcome to CasaTorch')),
+    el('p', { class: 'muted' }, S.status?.demo ? T('This is a sample house, so you can try everything. Want a one-minute look around first?') : T('Your dashboard is ready. Want a one-minute look around, so you know where everything is?')),
     el('div', { class: 'row', style: 'justify-content:flex-end;margin-top:16px' },
-      el('button', { class: 'btn ghost', onclick: () => { m.remove(); toast('You can take the tour any time from Settings.', 3500); } }, 'Maybe later'),
-      el('button', { class: 'btn primary', id: 'tourStart', onclick: () => { m.remove(); tour(); } }, 'Show me around'))));
+      el('button', { class: 'btn ghost', onclick: () => { m.remove(); toast(T('You can take the tour any time from Settings.'), 3500); } }, T('Maybe later')),
+      el('button', { class: 'btn primary', id: 'tourStart', onclick: () => { m.remove(); tour(); } }, T('Show me around')))));
   m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-labelledby', 'tourOfferTitle');
   setTimeout(() => $('#tourStart')?.focus(), 50);
 }
@@ -49,17 +49,17 @@ function tour() {
   const startTab = current;
   const navLinks = [...document.querySelectorAll('.nav a[data-tab]')].filter((a) => TOUR_TEXT[a.dataset.tab]);
   const steps = [
-    { title: 'A quick look around', text: 'Each part of CasaTorch has its own place in the menu. Use Next or the arrow keys; Esc ends the tour.' },
-    ...navLinks.map((a) => { const t = TABS.find((x) => x.id === a.dataset.tab); return { tab: t.id, target: a, title: tabLabel(t) + (t.pro && !isPro() ? ' (Pro)' : ''), text: TOUR_TEXT[t.id] }; }),
-    { title: 'You\'re all set', text: S.status?.demo ? 'When you\'re ready, set up your own house from the bar at the top.' : 'Start by connecting the things you own - the Connect page shows what works and how.', end: true },
+    { title: T('A quick look around'), text: T('Each part of CasaTorch has its own place in the menu. Use Next or the arrow keys; Esc ends the tour.') },
+    ...navLinks.map((a) => { const t = TABS.find((x) => x.id === a.dataset.tab); return { tab: t.id, target: a, title: tabLabel(t) + (t.pro && !isPro() ? ' (Pro)' : ''), text: T(TOUR_TEXT[t.id]) }; }),
+    { title: T('You\'re all set'), text: S.status?.demo ? T('When you\'re ready, set up your own house from the bar at the top.') : T('Start by connecting the things you own - the Connect page shows what works and how.'), end: true },
   ];
   let i = 0;
   const spot = el('div', { class: 'tour-spot' });
   const title = el('h3', { id: 'tourTitle' }), text = el('p'), count = el('span', { class: 'small muted' });
-  const back = el('button', { class: 'btn ghost small', onclick: () => go(i - 1) }, 'Back');
+  const back = el('button', { class: 'btn ghost small', onclick: () => go(i - 1) }, T('Back'));
   const next = el('button', { class: 'btn primary small', onclick: () => (steps[i].end ? finish(true) : go(i + 1)) });
   const card = el('div', { class: 'tour-card', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'tourTitle', 'aria-live': 'polite' },
-    el('div', { class: 'row between' }, count, el('button', { class: 'btn ghost small', 'aria-label': 'End the tour', onclick: () => finish(false) }, icon('x'))),
+    el('div', { class: 'row between' }, count, el('button', { class: 'btn ghost small', 'aria-label': T('End the tour'), onclick: () => finish(false) }, icon('x'))),
     title, text, el('div', { class: 'row', style: 'justify-content:flex-end;gap:8px' }, back, next));
   const root = el('div', { id: 'tour' }, spot, card);
   document.body.append(root);
@@ -84,8 +84,8 @@ function tour() {
     i = n; const s = steps[i];
     if (s.tab && s.tab !== current) location.hash = s.tab;   // open the section behind the tour
     s.target?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
-    count.textContent = `${i + 1} of ${steps.length}`; title.textContent = s.title; text.textContent = s.text;
-    back.style.display = i === 0 ? 'none' : ''; next.textContent = s.end ? (S.status?.demo ? 'Done' : 'Go to Connect') : i === 0 ? 'Start' : 'Next';
+    count.textContent = T('{n} of {total}', { n: i + 1, total: steps.length }); title.textContent = s.title; text.textContent = s.text;
+    back.style.display = i === 0 ? 'none' : ''; next.textContent = s.end ? (S.status?.demo ? T('Done') : T('Go to Connect')) : i === 0 ? T('Start') : T('Next');
     requestAnimationFrame(place); next.focus({ preventScroll: true });
   }
   function finish(toConnect) {

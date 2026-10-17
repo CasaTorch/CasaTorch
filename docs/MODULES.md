@@ -140,4 +140,4 @@ fails the privacy scan (`tools/scrub-check.mjs`).
 | 41-home-now.js | core | |
 
 New in CasaTorch (no homedash file): `providers/unifi` (network), `demo/` fixtures and demo mode,
-`pro/floorplan3d` (LiDAR .glb → NeonPlan-style 3D view with live devices), license-key loader.
+`pro/floorplan3d` (LiDAR .glb or a drawn plan → 3D view with live devices), license-key loader.
