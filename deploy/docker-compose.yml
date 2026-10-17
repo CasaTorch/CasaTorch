@@ -10,7 +10,7 @@ services:
     # Linux hosts: "host" networking lets CasaTorch see your whole network (device count, Hue/Shelly on the LAN).
     # Docker Desktop (Mac/Windows): remove network_mode and use the ports mapping below instead.
     network_mode: host
-    # ports: ["8090:8090"]
+    # ports: ["8090:8090", "8443:8443"]
     environment:
       - TZ=America/New_York   # your time zone
     volumes:

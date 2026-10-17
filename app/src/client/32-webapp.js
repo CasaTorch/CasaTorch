@@ -110,3 +110,36 @@ async function remoteCard() {
   };
   draw(); return card;
 }
+/* Settings > Secure address at home: https straight to this box on the home network (43-local-https.js). */
+async function localHttpsCard() {
+  const card = el('div', { class: 'card' }, el('h2', {}, icon('lock', 15), 'Secure address at home'));
+  const body = el('div'); card.append(body);
+  const draw = async () => {
+    const r = await api('/api/local-https').catch(() => null);
+    body.replaceChildren();
+    if (!r) { card.remove(); return; }   // admins only
+    const add = (...k) => body.append(...k.filter(Boolean));
+    if (!r.on) {
+      const ip = el('input', { type: 'text', value: r.detected || '', placeholder: '192.168.1.20', inputmode: 'decimal', style: 'max-width:180px' });
+      add(el('p', { class: 'small muted', style: 'margin-top:0' }, 'Use CasaTorch over https at home, so sign-ins and everything else are encrypted on your Wi-Fi. Browsers in the house connect straight to this CasaTorch - nothing goes out to the internet - and the plain address sends them to the secure one automatically.'),
+        el('p', { class: 'small muted' }, 'CasaTorch gets a free certificate from Let\'s Encrypt for its own name, which points at its address on your network. That address (like 192.168.1.20) is listed in public DNS under a random name; it can\'t be reached from the internet.'),
+        r.demo ? el('p', { class: 'small muted' }, 'Not in the demo.') : el('div', { class: 'row wrap', style: 'gap:8px;align-items:center' }, el('span', { class: 'small muted' }, 'This CasaTorch\'s address on your network'), ip,
+          el('button', { class: 'btn primary', onclick: async (e) => { e.target.disabled = true; e.target.textContent = 'Setting up… (about a minute)'; try { await post('/api/local-https/on', { ip: ip.value.trim() === r.detected ? undefined : ip.value.trim() }); } catch (err) { toast(err.message, 5000); } draw(); } }, 'Turn on')));
+      if (r.why) add(el('p', { class: 'small bad' }, r.why));
+      return;
+    }
+    const st = { ready: ['good', 'Working'], certificate: ['warn', 'Getting the certificate… (about a minute)'], error: ['bad', 'Not working'], off: ['warn', 'Starting…'] }[r.state] || ['warn', r.state];
+    add(el('div', { class: 'row', style: 'gap:8px;align-items:center' }, el('span', { class: `dot ${st[0]}` }), el('b', {}, st[1])),
+      el('p', {}, el('a', { href: r.url }, r.url)),
+      el('p', { class: 'small muted' }, `Points at ${r.ip}${r.expires ? ` · certificate renews itself before ${fmt(r.expires, { dateStyle: 'medium' })}` : ''}. Bookmark this address on your computers and wall tablets.`),
+      r.why ? el('p', { class: 'small bad' }, r.why) : null,
+      r.state === 'ready' && location.protocol === 'http:' ? el('p', { class: 'small' }, 'You\'re on the plain address. ', el('a', { href: r.url + location.pathname + location.hash }, 'Switch to the secure one')) : null,
+      el('details', {}, el('summary', { class: 'small muted' }, 'Doesn\'t open on some devices?'),
+        el('p', { class: 'small muted' }, 'Some routers block names that point into the home network ("DNS rebinding protection"). Those devices keep using the plain address. To fix it, allow casatorch.com in that router setting, or set your router\'s DNS to 1.1.1.1.')),
+      el('div', { class: 'row wrap', style: 'gap:8px' },
+        el('button', { class: 'btn small', onclick: async () => { const v = prompt('This CasaTorch\'s address on your network', r.ip || ''); if (!v) return; try { await post('/api/local-https/ip', { ip: v.trim() }); toast('Address updated'); } catch (err) { toast(err.message, 5000); } draw(); } }, 'Change address'),
+        el('button', { class: 'btn small ghost', onclick: async () => { if (!confirm('Turn off the secure address at home? Browsers go back to the plain address.')) return; await post('/api/local-https/off', {}).catch((err) => toast(err.message)); draw(); } }, 'Turn off')));
+    if (r.state === 'certificate') setTimeout(() => { if (card.isConnected) draw(); }, 5000);
+  };
+  draw(); return card;
+}

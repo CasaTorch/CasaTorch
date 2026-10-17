@@ -1,5 +1,5 @@
 name: CasaTorch
-version: "0.3.8"
+version: "0.3.9"
 slug: casatorch
 description: One screen for your whole house - dashboard, wall panel, 3D home and AI assistant, with everything from Home Assistant.
 url: https://github.com/casatorch/casatorch
@@ -14,8 +14,10 @@ host_network: true
 webui: "http://[HOST]:[PORT:8090]"
 ports:
   8090/tcp: 8090
+  8443/tcp: 8443
 ports_description:
   8090/tcp: CasaTorch (dashboard, wall panel, 3D home)
+  8443/tcp: CasaTorch over https at home (Settings > Secure address at home)
 # Talk to Home Assistant through the Supervisor - no long-lived token to create or paste.
 homeassistant_api: true
 environment:

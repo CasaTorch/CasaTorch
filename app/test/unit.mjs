@@ -281,5 +281,20 @@ t('energy card: solar, battery and grid come only from sensors that exist', () =
   assert.equal(e.solarW, 1500, 'today/energy totals are not power right now'); assert.equal(e.battery.pct, 64); assert.equal(e.gridW, 420); assert.equal(e.selfPct, 88);
 });
 
+t('secure address at home: only home-network addresses, and the plain address hands browsers over', () => {
+  for (const ip of ['192.168.1.20', '10.0.0.5', '172.16.4.2', '172.31.255.1']) assert.ok(H.ltPrivate(ip), ip);   // scrub-ok: example private addresses
+  for (const ip of ['8.8.8.8', '172.32.0.1', '127.0.0.1', '192.168.1.300', 'lan', '']) assert.ok(!H.ltPrivate(ip), ip);   // scrub-ok: examples
+  const req = (o = {}) => ({ method: 'GET', path: '/', secure: false, socket: { remoteAddress: '192.168.1.30' }, headers: { 'sec-fetch-dest': 'document', ...(o.headers || {}) }, ...o });   // scrub-ok
+  H.LOCAL_TLS.url = null; assert.ok(!H.wantsSecure(req()), 'not until it is ready');
+  H.LOCAL_TLS.url = 'https://lan-abc.casatorch.com:8443';
+  assert.ok(H.wantsSecure(req()), 'a page opened over http goes to https');
+  assert.ok(!H.wantsSecure(req({ secure: true })), 'already https');
+  assert.ok(!H.wantsSecure(req({ socket: { remoteAddress: '127.0.0.1' } })), 'this computer itself is left alone');
+  assert.ok(!H.wantsSecure(req({ path: '/api/status' })), 'API calls are not redirected');
+  assert.ok(!H.wantsSecure(req({ headers: { 'sec-fetch-dest': 'image' } })), 'only pages');
+  assert.ok(!H.wantsSecure(req({ headers: { cookie: 'a=1; ct_plain=1' } })), 'a browser that could not reach it stays on http');
+  H.LOCAL_TLS.url = null;
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);
