@@ -339,5 +339,24 @@ t('nudges: once, daily, days of the week, monthly (short months too) and yearly'
   assert.ok(!H.nudgeOnDay(n({ repeat: 'daily', on: false }), h('2026-03-22', 0)), 'off is off');
 });
 
+t('3D: one device per real device; garage doors and locks keep their own pin', () => {
+  const g = H.fpGroup([
+    { id: 'ha:switch.dishwasher', dev: 'd1', kind: 'plug', name: 'Dishwasher', on: true },
+    { id: 'ha:switch.dishwasher_led', dev: 'd1', kind: 'switch', name: 'Dishwasher LED', on: true },
+    { id: 'ha:sensor.dishwasher_power', dev: 'd1', kind: 'sensor', name: 'Dishwasher power', powerW: 1180 },
+    { id: 'ha:sensor.hall_temp', dev: 'd2', kind: 'sensor', name: 'Hall sensor temperature', tempC: 21 },
+    { id: 'ha:binary_sensor.hall_motion', dev: 'd2', kind: 'sensor', name: 'Hall sensor motion', motion: true },
+    { id: 'ha:cover.garage', dev: 'd3', kind: 'cover', name: 'Garage door', open: false },
+    { id: 'ha:light.garage', dev: 'd3', kind: 'light', name: 'Garage light', on: false },
+    { id: 'ha:light.lamp', kind: 'light', name: 'Lamp' },
+  ]);
+  const dw = g.list.find((x) => x.id === 'ha:switch.dishwasher');
+  assert.equal(g.list.filter((x) => /dishwasher/.test(x.id)).length, 1); assert.equal(dw.name, 'Dishwasher'); assert.equal(dw.powerW, 1180);
+  assert.equal(g.alias.get('ha:switch.dishwasher_led'), 'ha:switch.dishwasher', 'a pin on the LED moves to the dishwasher');
+  const hall = g.list.filter((x) => x.dev === 'd2'); assert.equal(hall.length, 1); assert.equal(hall[0].name, 'Hall sensor'); assert.equal(hall[0].motion, true); assert.equal(hall[0].tempC, 21);
+  assert.ok(g.list.some((x) => x.id === 'ha:cover.garage') && g.list.some((x) => x.id === 'ha:light.garage'), 'the garage door stands alone');
+  assert.equal(g.list.length, 5);
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);

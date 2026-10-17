@@ -127,7 +127,7 @@ app.put('/api/floorplan/pins', requirePro, express.json({ limit: '1mb' }), (req,
 });
 /* The 3D view's own choices (walls, which floors are hidden, labels, overlays...): kept with the plan so
    every screen and every restart sees the same view. Only known keys, only simple values. */
-const VIEW_KEYS = { walls: ['auto', 'tall', 'cut'], stack: ['stacked', 'apart', 'alone'], overlay: ['rooms', 'temp', 'humidity', 'air', 'energy', 'lights', 'presence', 'motion'], labels: ['none', 'key', 'all'], theme: [null, 'real', 'night', 'blueprint', 'day'] };
+const VIEW_KEYS = { lines: ['off', 'energy', 'always'], walls: ['auto', 'tall', 'cut'], stack: ['stacked', 'apart', 'alone'], overlay: ['rooms', 'temp', 'humidity', 'air', 'energy', 'lights', 'presence', 'motion'], labels: ['none', 'key', 'all'], theme: [null, 'real', 'night', 'blueprint', 'day'] };
 const VIEW_BOOLS = ['names', 'values', 'cameras', 'roof', 'power', 'sun', 'weatherFx', 'spin', 'yard', 'trail'];
 app.put('/api/floorplan/view', requirePro, express.json({ limit: '64kb' }), (req, res) => {
   const d = fpData(), v = req.body?.view || {}, out = {};
@@ -176,16 +176,52 @@ async function fpWeather() {
       days: (w.days || []).slice(0, 5).map((x) => ({ label: new Date(`${x.date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' }), hi: x.hi, lo: x.lo, kind: fpKind(x.symbol) })) };
   } catch { return null; }
 }
+/* One device on the 3D home per real device. Home Assistant splits a dishwasher into its switch, its LED, its power and
+   energy readings, a plug into its switch and power sensor, a multi-sensor into motion, temperature and light level. On the
+   plan they are one device: switched through its main part, showing every reading of the others. Pins saved on any part
+   move to the device (the next save stores them that way). */
+const FP_RANK = ['camera', 'climate', 'light', 'media', 'plug', 'switch', 'fan', 'vacuum'];
+const FP_ALONE = new Set(['cover', 'lock', 'alarm', 'presence']);   // garage doors, gates, locks and alarms always keep their own pin and their safe controls
+const FP_MINOR = /\b(led|leds|indicator|ring light|status light|night light|child lock|lock ?out|beep|buzzer|sound|display|backlight|auto ?off|power[- ]on (behaviou?r|state)|restart|reboot|identify|firmware|update|overheat|overload|overpower|signal|rssi|wifi|linkquality|uptime)\b/i;
+const FP_READ = ['powerW', 'energyKWh', 'tempC', 'humidity', 'battery', 'co2', 'lux'];
+const FP_ANY = ['motion', 'open', 'water', 'smoke'];
+function fpWords(names) {   // the words every part's name starts with: "Dishwasher LED" + "Dishwasher power" -> "Dishwasher"
+  const ws = names.map((n) => String(n || '').trim().split(/\s+/)); let k = 0;
+  while (ws.every((w) => w[k] && w[k].toLowerCase() === ws[0][k].toLowerCase())) k++;
+  return ws[0].slice(0, k).join(' ');
+}
+function fpGroup(list) {
+  const groups = new Map(), alias = new Map(), out = [];
+  for (const x of list) { if (!x.dev || FP_ALONE.has(x.kind)) { out.push(x); continue; } if (!groups.has(x.dev)) groups.set(x.dev, []); groups.get(x.dev).push(x); }
+  for (const parts of groups.values()) {
+    if (parts.length === 1) { out.push(parts[0]); continue; }
+    const score = (x) => { const r = FP_RANK.indexOf(x.kind); return (r < 0 ? 50 : r) + (FP_MINOR.test(x.name || '') ? 100 : 0); };
+    const main = [...parts].sort((a, b) => score(a) - score(b))[0];
+    const g = { ...main, name: main.dname || fpWords(parts.map((x) => x.name)) || main.name, parts: parts.map((x) => x.id) };
+    for (const x of parts) {
+      if (x === main) continue;
+      alias.set(x.id, main.id);
+      for (const k of FP_READ) if (g[k] == null && x[k] != null) g[k] = x[k];
+      for (const k of FP_ANY) if (x[k] === true) g[k] = true; else if (g[k] == null && x[k] != null) g[k] = x[k];
+    }
+    if (['plug', 'switch'].includes(g.kind) && g.on === false && g.powerW != null) g.powerW = 0;   // off draws nothing, whatever a slow sensor last said
+    out.push(g);
+  }
+  return { list: out, alias };
+}
 /* Live: every placed device's state + the house totals shown on top of the plan. */
 app.get('/api/floorplan/live', async (_req, res) => {
   const d = fpData();
   const [{ devices }, weather] = await Promise.all([houseDevices(), fpWeather()]);
   const byId = new Map(devices.map((x) => [x.id, x]));
   for (const x of devices) { const r = riskOf(x); if (r) x.guarded = r.only; }   // which controls the safety rule allows
+  const G = fpGroup(devices), gById = new Map(G.list.map((x) => [x.id, x])), main = (id) => G.alias.get(id) || id, seenPin = new Set();
   const powerW = housePower(devices).watts;
   res.json({
-    pins: d.pins.map((p) => ({ ...p, device: byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })), weather,
-    devices: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.area ? { area: x.area } : {}), ...(x.dev ? { dev: x.dev } : {}), ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),
+    pins: d.pins.map((p) => ({ ...p, deviceId: main(p.deviceId) })).filter((p) => !seenPin.has(p.deviceId) && seenPin.add(p.deviceId))   // one pin per device, even if two of its parts were placed
+      .map((p) => ({ ...p, device: gById.get(p.deviceId) || byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })), weather,
+    devices: G.list.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.area ? { area: x.area } : {}), ...(x.dev ? { dev: x.dev } : {}), ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),
+    parts: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.area ? { area: x.area } : {}), ...(x.dev ? { dev: x.dev } : {}), ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),   // every part, for linking a car's sensors
     cars: Object.fromEntries((d.yard?.items || []).filter((it) => it.kind === 'car').map((it) => {
       const g = (k) => byId.get(it.bind?.[k]), h = g('home'), p = g('plugged'), w = g('power'), bt = g('battery'), n = (v) => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
       return [it.id, { home: h ? (h.home ?? h.on ?? null) : null, plugged: p ? !!(p.on ?? p.plugged) : null, powerW: w ? w.powerW ?? null : null, battery: bt ? n(bt.battery ?? bt.value) : null }];
