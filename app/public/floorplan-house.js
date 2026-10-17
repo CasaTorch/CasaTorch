@@ -120,33 +120,126 @@ export function kelvinToHex(k) {
 }
 
 /* ---------- weather outside: rain, snow, and the odd lightning flash ---------- */
+/* Rain falls as streaks leaning with the wind, heavier when the forecast says so; snow drifts; a storm flashes. */
 export class WeatherFx {
-  constructor(scene) { this.scene = scene; this.points = null; this.kind = null; this.flash = 0; }
-  set(kind, box) {
+  constructor(scene) { this.scene = scene; this.points = null; this.kind = null; this.flash = 0; this.slant = new THREE.Vector3(); }
+  set(kind, box, amount = 1) {
     const want = ['rain', 'snow', 'storm'].includes(kind) ? kind : null;
-    const key = want && box ? `${want}|${box.min.x.toFixed(0)}|${box.max.x.toFixed(0)}|${box.min.z.toFixed(0)}` : null;
+    const dens = Math.max(0.35, Math.min(1.6, amount || 1));
+    const key = want && box ? `${want}|${dens.toFixed(1)}|${box.min.x.toFixed(0)}|${box.max.x.toFixed(0)}|${box.min.z.toFixed(0)}` : null;
     if (key === this.key) return; this.key = key;
     if (this.points) { this.scene.remove(this.points); this.points.geometry.dispose(); this.points.material.dispose(); this.points = null; }
     this.kind = want; if (!want) return;
-    const snow = want === 'snow', n = snow ? 1600 : 2600, pad = 6;
-    this.lo = new THREE.Vector3(box.min.x - pad, box.min.y, box.min.z - pad); this.hi = new THREE.Vector3(box.max.x + pad, box.max.y + 10, box.max.z + pad);
-    const pos = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { pos[i * 3] = THREE.MathUtils.lerp(this.lo.x, this.hi.x, Math.random()); pos[i * 3 + 1] = THREE.MathUtils.lerp(this.lo.y, this.hi.y, Math.random()); pos[i * 3 + 2] = THREE.MathUtils.lerp(this.lo.z, this.hi.z, Math.random()); }
+    const snow = want === 'snow', n = Math.round((snow ? 1600 : 2400) * dens), pad = 8;
+    this.lo = new THREE.Vector3(box.min.x - pad, box.min.y, box.min.z - pad); this.hi = new THREE.Vector3(box.max.x + pad, box.max.y + 12, box.max.z + pad);
+    const per = snow ? 1 : 2, pos = new Float32Array(n * 3 * per);
+    for (let i = 0; i < n; i++) {
+      const x = THREE.MathUtils.lerp(this.lo.x, this.hi.x, Math.random()), y = THREE.MathUtils.lerp(this.lo.y, this.hi.y, Math.random()), z = THREE.MathUtils.lerp(this.lo.z, this.hi.z, Math.random());
+      for (let k = 0; k < per; k++) { pos[(i * per + k) * 3] = x; pos[(i * per + k) * 3 + 1] = y + k * 0.32; pos[(i * per + k) * 3 + 2] = z; }
+    }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.points = new THREE.Points(g, new THREE.PointsMaterial({ color: snow ? '#ffffff' : '#9fd3ff', size: snow ? 0.09 : 0.045, transparent: true, opacity: snow ? 0.9 : 0.55, depthWrite: false }));
-    this.points.raycast = () => {}; this.scene.add(this.points);
+    this.points = snow ? new THREE.Points(g, new THREE.PointsMaterial({ color: '#ffffff', size: 0.09, transparent: true, opacity: 0.9, depthWrite: false }))
+      : new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#c3dcf5', transparent: true, opacity: want === 'storm' ? 0.5 : 0.38, depthWrite: false }));
+    this.points.raycast = () => {}; this.points.frustumCulled = false; this.scene.add(this.points);
   }
   set visible(v) { if (this.points) this.points.visible = v; }
-  /* returns a 0..1 lightning flash for the lights to add */
-  tick(dt, t) {
+  /* wind: a world vector the rain leans along (metres a second). Returns a 0..1 lightning flash for the lights to add. */
+  tick(dt, t, wind) {
     if (!this.points || !this.points.visible) return 0;
-    const p = this.points.geometry.attributes.position, a = p.array, snow = this.kind === 'snow', fall = snow ? 0.9 : 9;
-    for (let i = 0; i < a.length; i += 3) {
-      a[i + 1] -= fall * dt; if (snow) { a[i] += Math.sin(t * 0.8 + i) * 0.004; a[i + 2] += Math.cos(t * 0.6 + i) * 0.004; }
-      if (a[i + 1] < this.lo.y) a[i + 1] = this.hi.y;
+    const p = this.points.geometry.attributes.position, a = p.array, snow = this.kind === 'snow', fall = snow ? 0.9 : 13;
+    const wx = (wind?.x || 0) * (snow ? 0.12 : 0.06), wz = (wind?.z || 0) * (snow ? 0.12 : 0.06);
+    if (snow) {
+      for (let i = 0; i < a.length; i += 3) {
+        a[i + 1] -= fall * dt; a[i] += Math.sin(t * 0.8 + i) * 0.004 + wx * dt; a[i + 2] += Math.cos(t * 0.6 + i) * 0.004 + wz * dt;
+        if (a[i + 1] < this.lo.y) { a[i + 1] = this.hi.y; a[i] = THREE.MathUtils.lerp(this.lo.x, this.hi.x, Math.random()); a[i + 2] = THREE.MathUtils.lerp(this.lo.z, this.hi.z, Math.random()); }
+      }
+    } else {
+      const sx = wx * 0.32 / Math.max(1, fall * 0.06), sz = wz * 0.32 / Math.max(1, fall * 0.06);   // the streak leans with the wind
+      for (let i = 0; i < a.length; i += 6) {
+        let x = a[i] + wx * fall * dt * 0.06, y = a[i + 1] - fall * dt, z = a[i + 2] + wz * fall * dt * 0.06;
+        if (y < this.lo.y) { y = this.hi.y; x = THREE.MathUtils.lerp(this.lo.x, this.hi.x, Math.random()); z = THREE.MathUtils.lerp(this.lo.z, this.hi.z, Math.random()); }
+        a[i] = x; a[i + 1] = y; a[i + 2] = z; a[i + 3] = x - sx; a[i + 4] = y + 0.32; a[i + 5] = z - sz;
+      }
     }
     p.needsUpdate = true;
     if (this.kind === 'storm') { if (this.flash <= 0 && Math.random() < dt * 0.08) this.flash = 1; this.flash = Math.max(0, this.flash - dt * 3); return this.flash > 0.5 || (this.flash > 0.2 && this.flash < 0.35) ? this.flash : 0; }
     return 0;
   }
+}
+
+/* ---------- the sky: a dome around the view with the real sun and moon in it, clouds that drift with the wind and thicken
+   with the forecast (dark and low when it rains), and stars on a clear night. One small shader - drawn a few times a second
+   when nothing else moves, so the clouds creep along without keeping a tablet busy. ---------- */
+export function moonPhase(date) { const syn = 29.530588853, f = ((((date.getTime() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000) % syn) + syn) % syn / syn; return f; }
+/* A tileable cloud-noise picture, made once (about 20 ms) - the sky reads it instead of working noise out per pixel,
+   so it costs next to nothing even on a wall tablet. */
+function cloudNoise(size = 256) {
+  const N = size, rnd = new Float32Array(64 * 64); for (let i = 0; i < rnd.length; i++) rnd[i] = Math.random();
+  const vn = (x, y, f) => { const g = 64 / f | 0 || 1; const xs = (x / N) * f, ys = (y / N) * f, xi = Math.floor(xs), yi = Math.floor(ys), tx = xs - xi, ty = ys - yi;
+    const at = (a, b) => rnd[((((b % f) + f) % f) * 64 + (((a % f) + f) % f)) % rnd.length]; const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    return (at(xi, yi) * (1 - sx) + at(xi + 1, yi) * sx) * (1 - sy) + (at(xi, yi + 1) * (1 - sx) + at(xi + 1, yi + 1) * sx) * sy; };
+  const data = new Uint8Array(N * N * 4);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { let v = 0, a = 0.5, f = 4; for (let o = 0; o < 5; o++) { v += a * vn(x, y, f); a *= 0.5; f *= 2; } const i = (y * N + x) * 4; data[i] = data[i + 1] = data[i + 2] = Math.round(Math.min(1, v) * 255); data[i + 3] = 255; }
+  const t = new THREE.DataTexture(data, N, N); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t;
+}
+export class SkyDome {
+  constructor(scene) {
+    this.u = {
+      uNoise: { value: cloudNoise() },
+      uTop: { value: new THREE.Color('#3f78c8') }, uHorizon: { value: new THREE.Color('#cfe3f3') }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color('#fff4e0') },
+      uSunVis: { value: 1 }, uMoonDir: { value: new THREE.Vector3(0, -1, 0) }, uMoonPhase: { value: 0.5 }, uMoonVis: { value: 0 }, uCover: { value: 0.3 }, uDark: { value: 0 },
+      uTime: { value: 0 }, uWind: { value: new THREE.Vector2(1, 0.3) }, uNight: { value: 0 },
+    };
+    const mat = new THREE.ShaderMaterial({
+      uniforms: this.u, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false,
+      vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = vec4(p.xy, p.w * 0.99995, p.w); }',
+      fragmentShader: `
+        uniform sampler2D uNoise;
+        uniform vec3 uTop, uHorizon, uSunDir, uSunCol, uMoonDir; uniform float uSunVis, uMoonPhase, uMoonVis, uCover, uDark, uTime, uNight; uniform vec2 uWind;
+        varying vec3 vDir;
+        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        void main() {
+          vec3 d = normalize(vDir); float h = clamp(d.y, 0.0, 1.0);
+          vec3 sky = mix(uHorizon, uTop, pow(h, 0.32));
+          vec3 grey = mix(vec3(0.62, 0.66, 0.71), vec3(0.08, 0.09, 0.12), uNight);
+          sky = mix(sky, grey * (1.0 - 0.35 * uDark), smoothstep(0.25, 1.0, uCover) * 0.8);
+          float sd = max(dot(d, uSunDir), 0.0), clear = 1.0 - uCover * 0.85;
+          sky += uSunCol * (pow(sd, 900.0) * 6.0 * uSunVis * clear + pow(sd, 60.0) * 0.35 * uSunVis * clear + pow(sd, 6.0) * 0.12 * uSunVis);
+          // the moon: a small disc, lit on the side the sun is on
+          float md = dot(d, uMoonDir);
+          if (md > 0.99965 && uMoonVis > 0.0) { vec3 side = normalize(cross(uMoonDir, vec3(0.0, 1.0, 0.0)) + 1e-4); float x = dot(d - uMoonDir * md, side) / 0.0265;
+            float lit = smoothstep(-0.15, 0.15, x * (uMoonPhase < 0.5 ? 1.0 : -1.0) + cos(uMoonPhase * 6.2832));
+            sky = mix(sky, vec3(0.92, 0.93, 0.88) * (0.12 + 0.88 * lit), uMoonVis * clear * smoothstep(0.99965, 0.9998, md)); }
+          // stars on a clear night
+          vec2 sp = floor(d.xz / (d.y + 0.25) * 220.0); float st = step(0.9965, hash(sp)) * hash(sp + 3.1);
+          sky += vec3(st) * uNight * (1.0 - uCover) * smoothstep(0.05, 0.3, d.y) * 0.9;
+          // clouds on a layer above the house, drifting with the wind
+          if (d.y > 0.0 && uCover > 0.02) {
+            vec2 uv = d.xz / (d.y + 0.05) * 0.5 + uWind * uTime * 0.004;
+            float n = texture2D(uNoise, uv * 0.42).r * 0.72 + texture2D(uNoise, uv * 1.37 + vec2(0.37, 0.71) - uWind * uTime * 0.002).r * 0.28;
+            float c = smoothstep(1.02 - uCover * 0.95, 1.22 - uCover * 0.7, n + 0.18) * smoothstep(0.0, 0.035, d.y);
+            float lit = 0.6 + 0.4 * pow(sd, 3.0);
+            vec3 day = mix(vec3(1.0), uSunCol, 0.25) * lit, wet = vec3(0.36, 0.39, 0.44), night = vec3(0.07, 0.08, 0.11);
+            vec3 cc = mix(mix(day, wet, uDark), night, uNight);
+            sky = mix(sky, cc, c * (0.55 + 0.45 * uCover));
+          }
+          gl_FragColor = vec4(sky, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    this.mesh = new THREE.Mesh(new THREE.SphereGeometry(500, 48, 24), mat);
+    this.mesh.renderOrder = -10; this.mesh.frustumCulled = false; this.mesh.raycast = () => {}; this.mesh.visible = false;
+    scene.add(this.mesh);
+  }
+  set visible(v) { this.mesh.visible = v; }
+  get visible() { return this.mesh.visible; }
+  /* o: { top, horizon (Colors), sunDir, moonDir (unit world vectors), sunEl, night (0..1), cover (0..1), dark (0..1 rain), phase, wind (V3) } */
+  update(o) {
+    const u = this.u; u.uTop.value.copy(o.top); u.uHorizon.value.copy(o.horizon); u.uSunDir.value.copy(o.sunDir); u.uMoonDir.value.copy(o.moonDir);
+    u.uSunVis.value = Math.max(0, Math.min(1, (o.sunEl + 0.04) / 0.08)); u.uMoonVis.value = o.moonDir.y > 0 ? Math.min(1, o.moonDir.y * 8) : 0; u.uMoonPhase.value = o.phase;
+    u.uNight.value = o.night; u.uCover.value = o.cover; u.uDark.value = o.dark; u.uSunCol.value.set(o.sunEl < 0.12 ? '#ffb36b' : '#fff4e0');
+    if (o.wind) { const w = new THREE.Vector2(o.wind.x, o.wind.z); if (w.lengthSq() > 1e-6) u.uWind.value.copy(w.normalize().multiplyScalar(0.6 + Math.min(3, o.windMs || 2) * 0.5)); }
+  }
+  tick(t, cam) { this.u.uTime.value = t; if (cam) { this.mesh.position.copy(cam.position); this.mesh.updateMatrixWorld(); } }
 }
