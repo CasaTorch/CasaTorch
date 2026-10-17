@@ -13,6 +13,7 @@ const toGlb = async (...a) => (await import('./floorplan-import.js')).toGlb(...a
 const mergeGlb = async (...a) => (await import('./floorplan-import.js')).mergeGlb(...a);
 import { Yard, AREA_KINDS, ITEM_KINDS } from './floorplan-yard.js';
 import { buildRoof, PowerNet, weatherIcon, sunPosition, nightness, kelvinToHex, WeatherFx } from './floorplan-house.js';
+import { createDock, createImmersive } from './floorplan-dock.js';
 import { THEMES, COLOR_KEYS, ROOM_COLORS, lookOf, classify, guessCats, itemOf, prettyItem, sectionRooms, makeFx, fxMaterial, MAX_GLOW, MAX_ROOMS } from './floorplan-look.js';
 
 const S = { plan: null, live: null, mode: 'view', floorView: 'all', room: null, tool: null, sel: null, F: {}, pins: [], pinObjs: [], q: '', tab: 'devices' };
@@ -56,7 +57,7 @@ function disposeTree(root, keep) {
 }
 
 /* ---------- icons (simple line icons, our own) ---------- */
-const PATHS = { light: 'M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z', plug: 'M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4', media: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
+const PATHS = { clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 2', sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4', grip: 'M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01', grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z', expand: 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7', shrink: 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7', bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0', note: 'M4 4h16v12l-4 4H4zM16 20v-4h4', calendar: 'M4 6h16v15H4zM4 10h16M8 3v4M16 3v4', light: 'M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z', plug: 'M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4', media: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
   thermo: 'M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z', camera: 'M23 7l-7 5 7 5zM1 5h15v14H1z', door: 'M3 21h18M6 21V3h12v18M14 12h.01', drop: 'M12 2.7l5.7 5.6a8 8 0 1 1-11.4 0z', lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
   fan: 'M12 10V3M14 12h7M12 14v7M10 12H3M12 12m-2 0a2 2 0 1 0 4 0 2 2 0 1 0-4 0', cover: 'M4 3h16M5 3v14M19 3v14M5 7h14M5 11h14M5 15h14M12 17v4', sensor: 'M12 12m-3 0a3 3 0 1 0 6 0 3 3 0 1 0-6 0M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14',
   bolt: 'M13 2L4 14h7l-1 8 9-12h-7z', shield: 'M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z', car: 'M5 17h14M3 13l2-5h14l2 5v4H3zM7 17v2M17 17v2M7 13h.01M17 13h.01', home: 'M3 11l9-8 9 8M5 10v10h14V10M10 20v-6h4v6', walk: 'M13 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM9 21l2-6 3 3v3M7 12l3-5 4 2 2 4M10 7l-2 6',
@@ -525,14 +526,10 @@ function tiles() {
   if (Fs.length) t('home', 'home', 'Your home', `${sum(Fs.map((F) => F.rooms.length)) || Fs.length} ${sum(Fs.map((F) => F.rooms.length)) ? 'rooms' : Fs.length === 1 ? 'floor' : 'floors'}`, `${H.pins.length} devices · about ${areaText(sum(Fs.map(areaOf)))}`);
   return out;
 }
-function drawTiles() {
-  let box = document.getElementById('tiles');
-  if (!box) { box = el('div', { id: 'tiles', role: 'region', 'aria-label': 'Your home at a glance' }); document.body.append(box); }
-  box.hidden = S.mode !== 'view' || !S.live || !Object.keys(S.F).length;
-  if (box.hidden) return;
-  fill(box, ...tiles().map((x) => el('button', { type: 'button', class: `tile ${x.tone || ''}${S.info?.kind === x.kind ? ' on' : ''}`, onclick: () => openInfo(x.kind) },
-    el('span', { class: 'tl' }, ic(x.icon), x.label), el('b', {}, x.value), x.sub ? el('small', {}, x.sub) : null)),
-    document.body.classList.contains('panelmode') ? el('button', { type: 'button', class: 'tile exit', onclick: () => setPanelMode(false) }, el('small', {}, 'Leave wall panel mode')) : null);
+function drawTiles() { dock.draw(); }
+function tileCard(x) {
+  return el('button', { type: 'button', class: `tile ${x.tone || ''}${S.info?.kind === x.kind ? ' on' : ''}`, onclick: () => { if (!dock.arranging()) openInfo(x.kind); } },
+    el('span', { class: 'tl' }, ic(x.icon), x.label), el('b', {}, x.value), x.sub ? el('small', {}, x.sub) : null);
 }
 function openInfo(kind) { S.info = S.info?.kind === kind ? null : { kind }; closeCard(); drawInfo(); drawTiles(); }
 function closeInfo() { S.info = null; const side = $('#side'); if (side.dataset.kind === 'info') { side.hidden = true; side.dataset.kind = ''; } document.body.classList.remove('drawer'); drawTiles(); }
@@ -834,7 +831,7 @@ function clockText() {
   try { return [now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz() }), now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric', timeZone: tz() })]; }
   catch { return [now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })]; }
 }
-setInterval(() => { const c = document.querySelector('#left .clock'); if (c) { const [t, d] = clockText(); c.firstChild.textContent = t; c.lastChild.textContent = d; } }, 10000);
+setInterval(() => { const [t, d] = clockText(); for (const c of document.querySelectorAll('.dcard .clock')) { c.firstChild.textContent = t; c.lastChild.textContent = d; } }, 10000);
 const wIcon = (kind) => { const s = el('span', { class: 'wi' }); s.innerHTML = weatherIcon(kind); return s; };
 function weatherBlock() {
   const w = S.live?.weather; if (!w || w.temp == null) return null;
@@ -863,11 +860,77 @@ function drawLeft() {
   const box = $('#left');
   if (S.mode !== 'view') return;
   if (!S.live && !Object.keys(S.F).length) { box.hidden = true; return; }
-  if (box.contains(document.activeElement) && (document.activeElement.type === 'range' || (document.activeElement.type === 'search' && !S.findForce))) return;   // don't redraw under a dragging slider or someone typing
-  const [t, d] = clockText();
-  box.hidden = false; box.classList.toggle('roomopen', !!S.room);
-  fill(box, el('div', { class: 'clock' }, el('b', {}, t), el('small', {}, d)), weatherBlock(), sunBlock(), S.room ? roomBlock() : homeBlock());
+  box.classList.toggle('roomopen', !!S.room);
+  dock.draw();
 }
+/* Everything around the model is a card you can move, size, hide or add (floorplan-dock.js). */
+const leftBusy = () => { const a = document.activeElement, box = $('#left'); return !!(box?.contains(a) && (a.type === 'range' || (a.type === 'search' && !S.findForce) || a.tagName === 'TEXTAREA')); };
+function dockCards() {
+  const out = [], H = S.live ? houseNow() : null, card = (c) => out.push(c);
+  card({ id: 'clock', title: T('Clock'), icon: 'clock', side: 'left', render: () => { const [t, d] = clockText(); return el('div', { class: 'clock' }, el('b', {}, t), el('small', {}, d)); } });
+  card({ id: 'weather', title: T('Weather'), icon: 'sun', side: 'left', render: () => weatherBlock() });
+  card({ id: 'sun', title: T('Sunlight'), icon: 'sun', side: 'left', blurb: 'Scrub through the day to see where the sun falls', render: () => sunBlock() });
+  card({ id: 'control', title: T('House panel'), icon: 'home', side: 'left', blurb: 'Using now, find a device, what\'s on, floors and rooms', render: () => (S.room ? roomBlock() : homeBlock()) });
+  for (const x of S.live && Object.keys(S.F).length ? tiles() : []) card({ id: `tile:${x.kind}`, title: x.label, icon: x.icon, kind: 'tile', side: 'right', render: () => tileCard(x) });
+  card({ id: 'cams', title: T('Cameras'), icon: 'camera', extra: true, blurb: 'Live pictures from your cameras, taking turns', render: (size) => camsCard(H, size) });
+  card({ id: 'needs', title: T('What needs you'), icon: 'bell', extra: true, blurb: 'Water, smoke, open doors, unlocked locks, low batteries', render: () => needsCard(H) });
+  card({ id: 'media', title: T('Now playing'), icon: 'media', extra: true, blurb: 'What\'s playing, with play and pause', render: () => mediaCard(H) });
+  card({ id: 'agenda', title: T('Coming up'), icon: 'calendar', extra: true, blurb: 'The next things on your calendars', render: (size) => agendaCard(size) });
+  card({ id: 'note', title: T('Note'), icon: 'note', extra: true, blurb: 'A note for everyone who looks at this screen', render: () => noteCard() });
+  return out;
+}
+/* Extra cards */
+const DCAMS = new Map();
+function dcam(d) {
+  let c = DCAMS.get(d.id);
+  if (!c) { const img = el('img', { alt: d.name, decoding: 'async' }); c = { d, img, wrap: el('button', { type: 'button', class: 'dcam', onclick: () => { if (!dock.arranging()) cameraModal(c.d); } }, img, el('span', { class: 'dcap' }, d.name)), last: 0, busy: false, url: null }; DCAMS.set(d.id, c); }
+  c.d = d; return c;
+}
+setInterval(async () => {
+  for (const [id, c] of DCAMS) {
+    if (!c.wrap.isConnected) { if (Date.now() - c.last > 60_000) { if (c.url) URL.revokeObjectURL(c.url); DCAMS.delete(id); } continue; }
+    if (c.busy || document.hidden || Date.now() - c.last < 2000) continue;
+    c.busy = true; c.last = Date.now();
+    try { const r = await fetch(snapUrl(c.d), { cache: 'no-store' }); if (r.ok) { const u = URL.createObjectURL(await r.blob()), t = new Image(); t.src = u; await t.decode().catch(() => {}); const old = c.url; c.img.src = u; c.url = u; if (old) setTimeout(() => URL.revokeObjectURL(old), 1000); } } catch { /* next time */ }
+    finally { c.busy = false; }
+  }
+}, 500);
+function camsCard(H, size) {
+  const cams = (H?.cams || []).map((p) => p.device); if (!cams.length) return el('div', { class: 'note' }, T('No cameras on the map yet.'));
+  const n = size === 'l' ? Math.min(2, cams.length) : 1, turn = Math.floor(Date.now() / 12_000) % cams.length;
+  return el('div', { class: `dcams n${n}` }, ...Array.from({ length: n }, (_, i) => dcam(cams[(turn + i) % cams.length]).wrap));
+}
+function needsCard(H) {
+  if (!H) return null;
+  const low = H.pins.filter((p) => typeof p.device.battery === 'number' && p.device.battery <= 20);
+  const rows = [...H.alarms.map((p) => [p, p.device.water ? 'Water!' : 'Smoke!', 'bad']), ...H.unlocked.map((p) => [p, 'Unlocked', 'warn']), ...H.openDoors.map((p) => [p, 'Open', 'warn']), ...H.openCovers.map((p) => [p, 'Open', 'warn']), ...low.map((p) => [p, `Battery ${p.device.battery}%`, ''])];
+  return el('div', {}, el('div', { class: 'eyebrow' }, T('What needs you')), rows.length ? el('div', { class: 'needs' }, ...rows.slice(0, 8).map(([p, why, tone]) => el('button', { type: 'button', class: `nrow ${tone}`, onclick: () => goToPin(p) }, ic(iconOf(p.device)), el('span', { class: 'dn' }, pinName(p)), el('small', {}, why)))) : el('p', { class: 'note good' }, T('All good - nothing needs you.')));
+}
+function mediaCard(H) {
+  const ms = (H?.pins || []).filter((p) => p.device.kind === 'media' && (p.device.playing || p.device.on));
+  if (!ms.length) return el('div', {}, el('div', { class: 'eyebrow' }, T('Now playing')), el('p', { class: 'note' }, T('Nothing is playing.')));
+  return el('div', {}, el('div', { class: 'eyebrow' }, T('Now playing')), ...ms.slice(0, 4).map((p) => { const d = p.device; return el('div', { class: 'drow act' }, el('div', { class: 'dtop' }, el('button', { type: 'button', class: 'dopen', onclick: () => goToPin(p) }, ic('media'), el('span', { class: 'dn' }, d.playing ? d.title || pinName(p) : pinName(p)), el('small', {}, d.playing ? pinName(p) : T('Paused'))), el('button', { type: 'button', class: 'mini', onclick: () => { d.playing = !d.playing; act(d, 'toggle'); drawLeft(); } }, d.playing ? '❚❚' : '▶'))); }));
+}
+let agenda = { at: 0, list: null };
+function agendaCard(size) {
+  if (Date.now() - agenda.at > 5 * 60_000) { agenda.at = Date.now(); api('/api/home').then((h) => { agenda.list = (h?.calendar?.events || []).filter((e) => Date.parse(e.end || e.start) > Date.now()); dock.draw(); }).catch(() => { agenda.list = agenda.list || []; }); }
+  const ev = (agenda.list || []).slice(0, size === 's' ? 2 : size === 'l' ? 6 : 4);
+  const when = (e) => { try { return new Date(e.start).toLocaleString([], e.allDay ? { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' } : { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: tz() }); } catch { return ''; } };
+  return el('div', {}, el('div', { class: 'eyebrow' }, T('Coming up')), ev.length ? el('div', { class: 'agenda' }, ...ev.map((e) => el('div', { class: 'arow' }, el('i', { class: 'swatch', style: `--rc:${/^#[0-9a-f]{3,8}$/i.test(e.color || '') ? e.color : 'var(--hl)'}` }), el('span', { class: 'dn' }, e.title), el('small', {}, when(e))))) : el('p', { class: 'note' }, agenda.list ? T('Nothing coming up.') : '…'));
+}
+function noteCard() {
+  if (dock.arranging()) return el('textarea', { class: 'dnote-edit', rows: 3, maxlength: 300, placeholder: T('Write a note for this screen…'), oninput: (e) => { prefs.dockNote = e.target.value; savePrefs(); } }, prefs.dockNote || '');
+  return prefs.dockNote ? el('div', { class: 'dnote' }, prefs.dockNote) : null;
+}
+const dock = createDock({ el, ic, prefs, savePrefs, T, cards: dockCards, isView: () => S.mode === 'view' && !!(S.live || Object.keys(S.F).length), leftReady: () => !leftBusy(), drawerOpen: () => document.body.classList.contains('drawer'),
+  extraRight: () => (document.body.classList.contains('panelmode') ? [el('button', { type: 'button', class: 'tile exit', onclick: () => setPanelMode(false) }, el('small', {}, 'Leave wall panel mode'))] : []),
+  onArrange: (on) => { if (on) { closeCard(); closeInfo(); } const b = $('#arrangeBtn'); if (b) b.classList.toggle('on', on); } });
+const FS_CARDS = [['all', 'All cards'], ['tiles', 'Numbers only'], ['none', 'Just the house']];
+const immersive = createImmersive({ el, ic, T,
+  cycleCards: () => { const i = FS_CARDS.findIndex(([k]) => k === (prefs.fsCards || 'all')); prefs.fsCards = FS_CARDS[(i + 1) % FS_CARDS.length][0]; savePrefs(); fsCardsApply(); },
+  spin: () => { prefs.spin = !prefs.spin; savePrefs(); layout(false); },
+  onChange: (on) => { fsCardsApply(); if (on && dock.arranging()) dock.setArrange(false); setTimeout(() => { resize(); kick(); }, 60); const b = $('#fsBtn'); if (b) b.classList.toggle('on', on); } });
+function fsCardsApply() { const k = prefs.fsCards || 'all'; document.body.classList.toggle('fs-tiles', k === 'tiles'); document.body.classList.toggle('fs-none', k === 'none'); immersive.label(T(FS_CARDS.find(([x]) => x === k)[1])); }
 /* Where the power is coming from, when the house has the sensors for it (solar, a home battery, the grid). */
 function energyCard(E) {
   if (!E || (E.solarW == null && !E.battery && E.gridW == null)) return null;
@@ -1755,6 +1818,11 @@ async function start() {
   try { const { lang } = await api('/api/lang'); if (lang) await CasaI18n.use(lang); } catch { /* keep this browser's choice */ }
   for (const b of document.querySelectorAll('#modeSeg button')) b.textContent = T(b.dataset.mode === 'edit' ? 'Editor' : '3D');
   $('#guideBtn').textContent = T('Help');
+  if (!$('#fsBtn')) {   // Arrange and Full screen, next to Help
+    const arr = el('button', { type: 'button', id: 'arrangeBtn', class: 'tog', title: T('Move, size, hide and add the cards around the house'), onclick: () => { if (S.mode !== 'view') setMode('view'); dock.setArrange(!dock.arranging()); } }, ic('grid'), el('span', { class: 'btxt' }, T('Arrange')));
+    const fs = el('button', { type: 'button', id: 'fsBtn', class: 'tog', title: `${T('Full screen')} (F)`, 'aria-label': T('Full screen'), onclick: () => immersive.toggle() }, ic('expand'), el('span', { class: 'btxt' }, T('Full screen')));
+    $('#guideBtn').before(arr, fs);
+  }
   S.plan = await api('/api/floorplan'); adoptServerView(S.plan.view);
   units = S.plan.units || 'F';
   if (!S.plan.units) try { units = (await api('/api/status')).units || 'F'; } catch { /* default */ }
