@@ -71,17 +71,17 @@ async function show(id) {
   catch (err) { main.append(el('div', { class: 'card empty' }, `Could not load this: ${err.message}`)); }
 }
 function drawNav() {
-  $('.nav').replaceChildren(...TABS.filter((t) => !S.ui.tabs?.[t.id]?.hidden).map((t) => el('a', { href: `#${t.id}`, 'data-tab': t.id, class: t.id === current ? 'on' : null, title: tabLabel(t) }, icon(t.icon), S.ui.tabs?.[t.id]?.label || t.short || t.label,
+  $('.nav').replaceChildren(...TABS.filter((t) => !S.ui.tabs?.[t.id]?.hidden).map((t) => el('a', { href: `#${t.id}`, 'data-tab': t.id, class: t.id === current ? 'on' : null, title: tabLabel(t) }, icon(t.icon), S.ui.tabs?.[t.id]?.label || T(t.short || t.label),
     t.pro && !isPro() ? el('span', { class: 'pro' }, 'PRO') : null, t.id === 'alerts' && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : null)));
 }
 function drawBanner() {
   const b = $('#banner'), s = S.status; if (!s) return;
   const p = s.pro || {}; b.className = ''; b.replaceChildren();
-  if (s.demo) b.append('Demo mode - sample data, no real house connected.', el('a', { href: '/setup.html' }, 'Set up my house'));
+  if (s.demo) b.append(T('Demo mode - sample data, no real house connected.'), el('a', { href: '/setup.html' }, T('Set up my house')));
   else if (S.updates?.available) b.append(icon('spark', 16), `CasaTorch ${S.updates.latest} is available${S.updates.auto ? ' - it installs itself overnight.' : '.'}`, el('a', { href: '#settings' }, S.updates.auto ? 'Details' : 'How to update'));
   else if (p.plan === 'trial') b.append(icon('spark', 16), `Pro trial: ${p.trialDaysLeft} day${p.trialDaysLeft === 1 ? '' : 's'} left - 3D Home, Ask the house and Ring are unlocked.`, el('a', { href: '#settings' }, 'Enter a license key'));
   else if (p.grace) b.append('Your Pro subscription has ended - Pro keeps working for a few more days.', el('a', { href: '#settings' }, 'Renew'));
-  else if (!p.pro) { b.className = 'free'; b.append('CasaTorch Free.', el('a', { href: '#settings' }, 'See what Pro adds')); }
+  else if (!p.pro) { b.className = 'free'; b.append(T('CasaTorch Free.'), el('a', { href: '#settings' }, T('See what Pro adds'))); }
   b.hidden = !b.textContent;
 }
 function tick() { $('#clock').textContent = fmt(new Date().toISOString(), { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
@@ -92,6 +92,7 @@ async function loadStatus() {
 }
 async function boot() {
   try { S.settings = await api('/api/settings'); S.tz = S.settings.house?.timezone || undefined; } catch { /* default zone */ }
+  if (S.settings && !S.settings.demo) await CasaI18n.use(S.settings.house?.lang || 'en');   // the demo keeps whatever this browser picked
   try { S.ui = { ...S.ui, ...(await api('/api/ui')) }; } catch { /* defaults */ }
   applyUi();
   await loadStatus();

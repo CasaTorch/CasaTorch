@@ -93,6 +93,20 @@ function housePower(devices) {
   }
   return { watts: Math.round(sum), from: null };
 }
+/* Where the power comes from, for the 3D Home's energy card: solar, a home battery and the grid, from
+   whatever sensors the house has (Home Assistant's own names: solar/pv/inverter, battery/powerwall, grid).
+   Anything not found stays null and isn't shown - nothing is made up. */
+const SOLAR = /solar|\bpv\b|pv_|_pv|photovoltaic|inverter|production|generation/i, NOT_NOW = /forecast|today|daily|total|energy|yield|kwh/i;
+function energyFlows(devices, useW) {
+  const withW = devices.filter((d) => Number.isFinite(d.powerW) && !d.pairedTo), words = (d) => `${d.id} ${d.name}`;
+  const solar = withW.filter((d) => SOLAR.test(words(d)) && !NOT_NOW.test(words(d)) && !/battery/i.test(words(d)));
+  const solarW = solar.length ? Math.max(0, Math.round(solar.reduce((a, d) => a + d.powerW, 0))) : null;
+  const batt = devices.find((d) => d.battery != null && /powerwall|home.?battery|battery.?storage|storage.?battery|\bess\b|encharge|sonnen|enphase.?battery/i.test(words(d)));
+  const battW = withW.find((d) => /powerwall|battery.?(power|charg|discharg)|storage.?power/i.test(words(d)));
+  const grid = withW.find((d) => /\bgrid\b|_grid|grid_|net.?(power|meter)|mains|utility/i.test(words(d)) && !SOLAR.test(words(d)));
+  return { useW, solarW, gridW: grid ? Math.round(grid.powerW) : null, battery: batt || battW ? { pct: batt ? Math.round(batt.battery) : null, w: battW ? Math.round(battW.powerW) : null } : null,
+    selfPct: solarW != null && useW > 0 ? Math.min(100, Math.round((solarW / useW) * 100)) : null };
+}
 /* ---- The safety rule: CasaTorch never unlocks, opens a garage door or gate, or disarms an alarm. ----
    Home Assistant doesn't always label things, so this also looks at what a device is called:
    a relay named "garage", a "gate" button, an "unlock" script or a "disarm" scene is treated the same way.
@@ -105,7 +119,7 @@ function riskOf(d) {
   if ((config.safety?.allow || []).includes(d.id)) return null;
   const words = `${d.id} ${d.originalName || d.name || ''}`;
   if (d.kind === 'lock') return { only: ['lock'], why: 'unlocking isn\'t available from CasaTorch - use your lock\'s own app' };
-  if (d.kind === 'alarm') return { only: [], why: 'arm and disarm the alarm in its own app or Home Assistant' };
+  if (d.kind === 'alarm') return { only: ['arm_home', 'arm_away', 'arm_night'], why: 'disarming isn\'t available from CasaTorch - use the alarm\'s own app or keypad' };
   if (d.kind === 'cover' && (d.risky || !SAFE_COVERS.has(d.haClass) || RISKY_NAME.test(words))) return { only: ['close', 'stop'], why: 'opening garage doors, gates and doors stays in their own app or Home Assistant' };
   if (d.domain === 'siren' || /siren/.test(d.id)) return { only: ['on'], why: 'sirens can be set off from CasaTorch, but only turned off where they were set' };
   if (['switch', 'plug', 'action', 'fan'].includes(d.kind) && RISKY_NAME.test(words)) return { only: [], why: `"${d.name}" looks like a door, gate, lock or alarm control, so CasaTorch won't switch it. An owner can allow it in Settings › Security.` };

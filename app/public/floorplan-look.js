@@ -3,14 +3,18 @@
    lights glow on the floor and walls around them (all in one shader, no extra lights). */
 import * as THREE from 'three';
 
+/* Looks. "Real life" is the house as it is outside right now: the sun where it really is, real shadows,
+   the yard, the weather and the wind. The others are drawings: Blueprint (dark, glowing lines), Drafting
+   (blue paper) and Day (light). The ids stay as they were saved (night = Blueprint, blueprint = Drafting). */
 export const THEMES = {
-  neon: { label: 'Neon', bg: '#070b16', grid: ['#13304d', '#0b1a2b'], wall: '#1b2644', wallOpacity: 1, floor: '#121a30', furniture: '#2a3760', edge: '#38bdf8', door: '#f59e0b', window: '#38bdf8', furnEdge: '#5b78c0', hemi: ['#a9c8ff', '#0b1220', 1.1], sun: 0.7, tint: 0.45, glow: 1.8, flow: '#38bdf8', idleLine: '#1e3a5f' },
-  blueprint: { label: 'Blueprint', bg: '#0b2a5b', grid: ['#2f5da0', '#1b4280'], wall: '#1d4a8f', wallOpacity: 0.45, floor: '#123a75', furniture: '#2a5aa5', edge: '#e8f1ff', door: '#ffd166', window: '#a5d8ff', furnEdge: '#cfe0ff', hemi: ['#ffffff', '#0b2a5b', 1.2], sun: 0.3, tint: 0.25, glow: 0.8, flow: '#ffffff', idleLine: '#5b86c5' },
+  real: { label: 'Real life', real: true, bg: '#9cc3e6', ground: '#8fb06a', grid: ['#8fb06a', '#8fb06a'], wall: '#efe9de', wallOpacity: 1, floor: '#b88d62', furniture: '#8e9098', edge: '#c9bfae', door: '#7a4e33', window: '#cfe8f5', furnEdge: '#6b6e75', hemi: ['#dfeeff', '#4f5f37', 0.95], sun: 1.55, tint: 0.16, glow: 0.75, flow: '#f59e0b', idleLine: '#9aa3ae' },
+  night: { label: 'Blueprint', bg: '#070b16', grid: ['#13304d', '#0b1a2b'], wall: '#1b2644', wallOpacity: 1, floor: '#121a30', furniture: '#2a3760', edge: '#38bdf8', door: '#f59e0b', window: '#38bdf8', furnEdge: '#5b78c0', hemi: ['#a9c8ff', '#0b1220', 1.1], sun: 0.7, tint: 0.45, glow: 1.8, flow: '#38bdf8', idleLine: '#1e3a5f' },
+  blueprint: { label: 'Drafting', bg: '#0b2a5b', grid: ['#2f5da0', '#1b4280'], wall: '#1d4a8f', wallOpacity: 0.45, floor: '#123a75', furniture: '#2a5aa5', edge: '#e8f1ff', door: '#ffd166', window: '#a5d8ff', furnEdge: '#cfe0ff', hemi: ['#ffffff', '#0b2a5b', 1.2], sun: 0.3, tint: 0.25, glow: 0.8, flow: '#ffffff', idleLine: '#5b86c5' },
   day: { label: 'Day', bg: '#dfe6ee', grid: ['#c3ccd8', '#cfd7e2'], wall: '#f3f0e9', wallOpacity: 1, floor: '#d9c8ac', furniture: '#97a3bb', edge: '#8a99b0', door: '#b7791f', window: '#7dd3fc', furnEdge: '#6b7280', hemi: ['#ffffff', '#aab4c4', 1.25], sun: 1.3, tint: 0.3, glow: 0.55, flow: '#0ea5e9', idleLine: '#94a3b8' },
 };
 export const COLOR_KEYS = [['bg', 'Background'], ['wall', 'Walls'], ['floor', 'Floors'], ['furniture', 'Furniture'], ['edge', 'Wall lines'], ['door', 'Doors'], ['window', 'Windows']];
 export const ROOM_COLORS = ['#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#fbbf24', '#fb7185', '#22d3ee', '#c084fc', '#4ade80', '#f97316', '#60a5fa', '#e879f9'];
-export const lookOf = (theme, custom) => ({ ...THEMES[theme] || THEMES.neon, ...(custom?.[theme] || {}) });
+export const lookOf = (theme, custom) => ({ ...THEMES[theme] || THEMES.real, ...(custom?.[theme] || {}) });
 
 /* Apple RoomPlan (and most apps built on it) name every part: Wall3, Door1, Window0, Floor0, Sofa2, Storage7... */
 const CATS = [[/^(wall|partition)/i, 'wall'], [/^door/i, 'door'], [/^window/i, 'window'], [/^(opening|arch)/i, 'opening'], [/^floor/i, 'floor'],
@@ -20,7 +24,7 @@ export function classify(mesh) {
   return null;
 }
 /* Anything a scan app didn't name: guess from its shape. Returns false when the model is one
-   photo-textured mesh (Polycam/Scaniverse style), which looks best in its own colours. */
+   photo-textured mesh (Polycam/Scaniverse style), which looks best in its own colors. */
 export function guessCats(meshes, root) {
   const all = new THREE.Box3().setFromObject(root), H = Math.max(0.5, all.max.y - all.min.y);
   const unknown = meshes.filter((m) => !m.userData.cat);
@@ -38,7 +42,7 @@ export function itemOf(mesh) {
 }
 export const prettyItem = (n) => String(n || 'Object').replace(/[_.]/g, ' ').replace(/([a-z])([A-Z0-9])/g, '$1 $2').replace(/\s+/g, ' ').trim();
 
-/* RoomPlan adds a "Section" marker in the middle of each room it recognised. */
+/* RoomPlan adds a "Section" marker in the middle of each room it recognized. */
 const ROOM_NAMES = { livingroom: 'Living room', bedroom: 'Bedroom', bathroom: 'Bathroom', kitchen: 'Kitchen', diningroom: 'Dining room', unidentified: 'Room' };
 export function sectionRooms(root, toLocal) {
   const found = [];
@@ -56,7 +60,7 @@ export function sectionRooms(root, toLocal) {
   });
 }
 
-/* Shared per-floor shader inputs. Rooms are matched by nearest centre; lights glow within ~4 m,
+/* Shared per-floor shader inputs. Rooms are matched by nearest center; lights glow within ~4 m,
    mostly inside their own room. */
 export const MAX_GLOW = 16, MAX_ROOMS = 24;
 export function makeFx() {

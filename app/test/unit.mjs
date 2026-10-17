@@ -259,5 +259,27 @@ await t('integrations: one integration() call gives a camera cached pictures, ET
   } finally { srv.close(); }
 });
 
+t('device controls: values are checked before they reach Home Assistant, and the safety rule holds', () => {
+  const light = H.haDevice({ entity_id: 'light.lamp', state: 'on', attributes: { brightness: 128, supported_color_modes: ['color_temp', 'hs'], min_color_temp_kelvin: 2200, max_color_temp_kelvin: 6500 } });
+  assert.deepEqual(light.can, ['brightness', 'color', 'kelvin']);
+  assert.deepEqual(H.haServiceData(light, 'color', '#ff8000'), { rgb_color: [255, 128, 0] });
+  assert.throws(() => H.haServiceData(light, 'color', 'red; drop'), /colour|color/);
+  assert.deepEqual(H.haServiceData(light, 'brightness', 500), { brightness_pct: 100 });
+  const th = H.haDevice({ entity_id: 'climate.hall', state: 'heat', attributes: { current_temperature: 20, temperature: 21, hvac_modes: ['off', 'heat'] } });
+  assert.deepEqual(th.can, ['target', 'mode']);
+  assert.throws(() => H.haServiceData(th, 'mode', 'rocket'), /mode/);
+  assert.ok(H.riskOf({ kind: 'alarm', id: 'ha:alarm_control_panel.home' }).only.includes('arm_away'));
+  assert.ok(!H.riskOf({ kind: 'alarm', id: 'ha:alarm_control_panel.home' }).only.includes('disarm'), 'never disarm');
+  assert.deepEqual(H.riskOf({ kind: 'lock', id: 'ha:lock.front' }).only, ['lock'], 'never unlock');
+});
+
+t('energy card: solar, battery and grid come only from sensors that exist', () => {
+  const none = H.energyFlows([{ id: 'ha:sensor.fridge_power', name: 'Fridge', kind: 'sensor', powerW: 90 }], 900);
+  assert.equal(none.solarW, null); assert.equal(none.battery, null); assert.equal(none.gridW, null);
+  const e = H.energyFlows([{ id: 'ha:sensor.solar_power', name: 'Solar power', kind: 'sensor', powerW: 1500 }, { id: 'ha:sensor.solar_energy_today', name: 'Solar today', kind: 'sensor', powerW: 9 },
+    { id: 'ha:sensor.powerwall_charge', name: 'Powerwall', kind: 'sensor', battery: 64 }, { id: 'ha:sensor.grid_power', name: 'Grid power', kind: 'sensor', powerW: 420 }], 1700);
+  assert.equal(e.solarW, 1500, 'today/energy totals are not power right now'); assert.equal(e.battery.pct, 64); assert.equal(e.gridW, 420); assert.equal(e.selfPct, 88);
+});
+
 console.log(`\n${n} passed`);
 process.exit(0);

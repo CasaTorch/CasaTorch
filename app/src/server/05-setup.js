@@ -290,7 +290,7 @@ app.post('/api/setup/finish', (req, res) => {
   const usesHa = a.homeassistant?.uses === 'yes';
   const next = {
     ...prev, version: 2, demo: undefined, setupAt: prev.setupAt || nowIso(), port: PORT,
-    house: { name: a.house?.name || 'My House', timezone: a.house?.timezone || 'UTC', units: a.house?.units || 'F', currency: a.house?.currency || 'USD' },
+    house: { name: a.house?.name || 'My House', timezone: a.house?.timezone || 'UTC', units: a.house?.units || 'F', currency: a.house?.currency || 'USD', lang: ['en', 'es', 'de', 'fr', 'pt', 'it', 'nl'].includes(a.house?.lang) ? a.house.lang : 'en' },
     location: a.house?.location?.lat != null ? { name: a.house.location.name || null, lat: Number(a.house.location.lat), lon: Number(a.house.location.lon) } : prev.location || null,
     signIn: { enabled: true },
     license: acct.license || prev.license || undefined,

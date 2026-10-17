@@ -10,7 +10,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 export const AREA_KINDS = { grass: ['Grass', '#4f7d3a'], driveway: ['Driveway', '#5f6670'], patio: ['Patio / deck', '#9c8b78'], path: ['Path', '#c9c2b8'], garden: ['Garden bed', '#5a3c2a'], pool: ['Pool', '#2fa4d6'] };
 export const ITEM_KINDS = { tree: 'Tree', pine: 'Pine', bush: 'Bush', car: 'Car', charger: 'EV charger' };
 const LIFT = { grass: 0.004, garden: 0.012, driveway: 0.008, patio: 0.016, path: 0.02, pool: 0.024 };
-const PAINT = { neon: 0.5, blueprint: 0.42, day: 1 };
+const PAINT = { night: 0.5, blueprint: 0.42, day: 1, real: 1 };
 
 /* ---- shared, cached geometry (one tree shape for every tree) ---- */
 const G = {};
@@ -46,16 +46,16 @@ function makeCar(it, mats) {
   const g = new THREE.Group(), suv = it.body === 'suv';
   const paint = new THREE.MeshStandardMaterial({ color: it.color || '#cfd6df', roughness: .35, metalness: .4, transparent: true });
   const body = new THREE.Mesh(geo(suv ? 'suvBody' : 'carBody', () => carBody(suv)), paint);
-  const glass = new THREE.Mesh(geo(suv ? 'suvGlass' : 'carGlass', () => carGlass(suv)), mats.glass.clone()), tyre = mats.tyre.clone();
+  const glass = new THREE.Mesh(geo(suv ? 'suvGlass' : 'carGlass', () => carGlass(suv)), mats.glass.clone()), tire = mats.tire.clone();
   g.add(body, glass);
-  for (const [x, z] of [[1.45, .86], [1.45, -.86], [-1.45, .86], [-1.45, -.86]]) { const w = new THREE.Mesh(geo('wheel', () => new THREE.CylinderGeometry(.34, .34, .24, 16).rotateX(Math.PI / 2)), tyre); w.position.set(x, .34, z); g.add(w); }
+  for (const [x, z] of [[1.45, .86], [1.45, -.86], [-1.45, .86], [-1.45, -.86]]) { const w = new THREE.Mesh(geo('wheel', () => new THREE.CylinderGeometry(.34, .34, .24, 16).rotateX(Math.PI / 2)), tire); w.position.set(x, .34, z); g.add(w); }
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   g.userData.paint = paint; g.userData.port = new THREE.Vector3(-2.2, .82, .95);   // rear left, where most EVs (Tesla included) plug in
   return g;
 }
 function makeCharger(mats) {
   const g = new THREE.Group();
-  const post = new THREE.Mesh(geo('cpost', () => new THREE.BoxGeometry(.12, 1.1, .12).translate(0, .55, 0)), mats.tyre);
+  const post = new THREE.Mesh(geo('cpost', () => new THREE.BoxGeometry(.12, 1.1, .12).translate(0, .55, 0)), mats.tire);
   const box = new THREE.Mesh(geo('cbox', () => new THREE.BoxGeometry(.32, .42, .14).translate(0, 1.15, 0)), mats.charger);
   g.add(post, box); g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   g.userData.plug = new THREE.Vector3(0, 1.05, .1);
@@ -63,10 +63,10 @@ function makeCharger(mats) {
 }
 
 export class Yard {
-  constructor(scene) { this.scene = scene; this.group = new THREE.Group(); this.group.name = 'yard'; scene.add(this.group); this.cars = []; this.labels = []; this.y = 0; }
+  constructor(scene) { this.scene = scene; this.group = new THREE.Group(); this.group.name = 'yard'; scene.add(this.group); this.cars = []; this.labels = []; this.trees = []; this.y = 0; }
   clear() {
     for (const l of this.labels) { l.parent?.remove(l); l.element.remove(); }
-    this.labels = []; this.cars = [];
+    this.labels = []; this.cars = []; this.trees = [];
     for (const o of [...this.group.children]) { this.group.remove(o); o.traverse((x) => { if (x.isMesh && !Object.values(G).includes(x.geometry)) x.geometry.dispose(); }); }
   }
   /* yard: { areas: [{ kind, pts: [[x, z]...] }], items: [{ id, kind, pos: [x, z], rot, scale, ... }] }; y: ground height (world) */
@@ -76,7 +76,7 @@ export class Yard {
     const mats = {
       bark: new THREE.MeshStandardMaterial({ color: tint('#6b4a32'), roughness: .95 }), leaf: new THREE.MeshStandardMaterial({ color: tint('#3f7f3a'), roughness: .9, flatShading: true }),
       pine: new THREE.MeshStandardMaterial({ color: tint('#2f5d3a'), roughness: .9, flatShading: true }), glass: new THREE.MeshStandardMaterial({ color: '#0d1420', roughness: .15, metalness: .6, transparent: true }),
-      tyre: new THREE.MeshStandardMaterial({ color: '#16181c', roughness: .8, transparent: true }), charger: new THREE.MeshStandardMaterial({ color: '#e8ecf2', roughness: .4, emissive: '#38bdf8', emissiveIntensity: .25 }),
+      tire: new THREE.MeshStandardMaterial({ color: '#16181c', roughness: .8, transparent: true }), charger: new THREE.MeshStandardMaterial({ color: '#e8ecf2', roughness: .4, emissive: '#38bdf8', emissiveIntensity: .25 }),
     };
     this.mats = mats;
     for (const a of yard?.areas || []) {
@@ -88,7 +88,8 @@ export class Yard {
     }
     for (const it of yard?.items || []) {
       if (!ITEM_KINDS[it.kind]) continue;
-      const o = it.kind === 'car' ? makeCar(it, mats) : it.kind === 'charger' ? makeCharger(mats) : makeTree(it.kind, mats);
+      let o = it.kind === 'car' ? makeCar(it, mats) : it.kind === 'charger' ? makeCharger(mats) : makeTree(it.kind, mats);
+      if (!['car', 'charger'].includes(it.kind)) { const inner = o; o = new THREE.Group(); o.add(inner); this.trees.push({ o, inner, kind: it.kind, ph: Math.random() * 6.283, ph2: Math.random() * 6.283, f: 0.55 + Math.random() * 0.35, leaves: inner.children.slice(1) }); }
       o.position.set(it.pos[0], y, it.pos[1]); o.rotation.y = THREE.MathUtils.degToRad(it.rot || 0); if (it.kind !== 'car' && it.kind !== 'charger') o.scale.setScalar(it.scale || 1);
       o.userData.yard = { item: it.id }; this.group.add(o); o.updateMatrixWorld(true);
       if (it.kind === 'car') {
@@ -98,6 +99,20 @@ export class Yard {
       if (it.kind === 'charger') this.charger = o;
     }
     return this;
+  }
+  /* Wind: every tree leans with the real wind and sways, harder in gusts; pines are stiffer, bushes barely move.
+     windMs: metres per second; toward: the direction the wind blows TO, as a world-space unit vector. */
+  wind(t, windMs, toward) {
+    if (!this.trees.length) return;
+    const w = Math.max(0, Math.min(30, windMs || 0)), base = Math.min(0.16, w * 0.0085), gust = 0.65 + 0.35 * Math.sin(t * 0.37) * Math.sin(t * 0.91 + 1.3);
+    for (const tr of this.trees) {
+      const stiff = tr.kind === 'pine' ? 0.55 : tr.kind === 'bush' ? 0.35 : 1, a = base * stiff;
+      const sway = a * (0.55 + 0.45 * gust) + a * 0.35 * Math.sin(t * tr.f * (1 + w / 12) + tr.ph) + a * 0.12 * Math.sin(t * tr.f * 2.7 + tr.ph2);
+      const ang = Math.atan2(toward.x, toward.z) - tr.o.rotation.y;   // the wind in this tree's own frame
+      tr.inner.rotation.x = sway * Math.cos(ang); tr.inner.rotation.z = -sway * Math.sin(ang);
+      const flutter = Math.min(0.06, w * 0.004);   // leaves shiver on top of the lean
+      tr.leaves.forEach((m, i) => { m.rotation.x = flutter * Math.sin(t * (3.1 + i) + tr.ph + i); m.rotation.z = flutter * Math.sin(t * (2.6 + i * 0.7) + tr.ph2); });
+    }
   }
   get box() { return new THREE.Box3().setFromObject(this.group); }
   set visible(v) { this.group.visible = v; for (const l of this.labels) l.visible = v; }

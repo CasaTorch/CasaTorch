@@ -62,6 +62,6 @@ assistant never does any of them.
 ## 3D home
 
 Scan your floors with any Apple RoomPlan app (LiDarPlan, KIRI Engine Room Scan, Lagarsoft) and upload
-the GLB/USDZ, or draw them in CasaTorch. Walls, furniture and rooms are recognised from the scan. Place
+the GLB/USDZ, or draw them in CasaTorch. Walls, furniture and rooms are recognized from the scan. Place
 your Home Assistant devices on it in **3D > Editor**; lights glow where they are, and tapping a room
 opens its controls.

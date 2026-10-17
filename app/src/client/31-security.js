@@ -52,7 +52,7 @@ function accountCard(me) {
     const sess = el('div', { class: 'sessions' }, (me.sessions || []).sort((a, b) => (b.current ? 1 : 0) - (a.current ? 1 : 0) || b.seen.localeCompare(a.seen)).map((s) => el('div', { class: 'sess' },
       icon(s.kind === 'panel' ? 'home' : 'lock'), el('div', {}, el('b', {}, browserOf(s.agent)), el('div', { class: 'small muted' }, `${s.ip || '-'} · last used ${secAgo(s.seen)}${s.current ? ' · this screen' : ''}`)),
       s.current ? pill('This screen', 'good') : el('button', { class: 'btn ghost sm', onclick: async () => { try { await api(`/api/auth/sessions/${s.id}`, { method: 'DELETE' }); me.sessions = me.sessions.filter((x) => x !== s); draw(); } catch (x) { toast(x.message); } } }, 'Sign out'))));
-    fillCard(box, el('h2', {}, icon('lock'), 'Your account & security'),
+    fillCard(box, el('h2', {}, icon('lock'), T('Your account & security')),
       el('div', { class: 'acct' }, el('div', { class: 'avatar' }, (u.name || u.username || '?').slice(0, 1).toUpperCase()), el('div', {}, el('b', {}, u.name || u.username), el('div', { class: 'small muted' }, `${u.username} · ${u.role}${u.email ? ` · ${u.email}` : ''}${me.google?.linked ? ' · Google linked' : ''}`))),
       el('h3', {}, 'Two-step sign-in'), tsa,
       el('h3', {}, 'Password'), el('div', { class: 'row wrap' }, el('label', { class: 'field grow' }, el('span', {}, 'Current'), cur), el('label', { class: 'field grow' }, el('span', {}, 'New (10+ characters)'), nw)), pwBtn,
@@ -81,7 +81,7 @@ function peopleCard(data, me) {
     const panels = (data.panels || []).map((p) => el('div', { class: 'person' }, icon('home'), el('div', { class: 'grow' }, el('b', {}, p.name), el('div', { class: 'small muted' }, `${p.role === 'member' ? 'can switch things' : 'view only'} · last used ${secAgo(p.lastUsed)}`)),
       el('button', { class: 'btn ghost sm danger', onclick: async () => { if (!confirm(`Revoke ${p.name}? That screen is signed out.`)) return; await api(`/api/auth/admin/panels/${p.id}`, { method: 'DELETE' }); data.panels = data.panels.filter((x) => x !== p); draw(); } }, 'Revoke')));
     const pname = el('input', { type: 'text', placeholder: 'Kitchen panel' }), prole = el('select', {}, el('option', { value: 'viewer' }, 'View only'), el('option', { value: 'member' }, 'Can switch things'));
-    fillCard(box, el('h2', {}, icon('home'), 'People'),
+    fillCard(box, el('h2', {}, icon('home'), T('People')),
       el('p', { class: 'small muted', style: 'margin-top:0' }, 'Everyone gets their own sign-in. Nobody can sign up on their own: add them here and send them their link.'),
       ...rows, extra || null,
       el('h3', {}, 'Add someone'), el('div', { class: 'row wrap' }, name, email), el('div', { class: 'row wrap' }, rs,
@@ -100,7 +100,7 @@ async function securityAdminCard(data, me) {
   const req2 = el('input', { type: 'checkbox', checked: data.policy?.require2fa ? true : null, onchange: async (e) => { try { await post('/api/auth/admin/policy', { require2fa: e.target.checked }, 'PUT'); toast(e.target.checked ? 'Everyone now needs two-step sign-in' : 'Two-step sign-in is optional'); } catch (x) { e.target.checked = !e.target.checked; toast(x.message, 5000); } } });
   const cid = el('input', { type: 'text', placeholder: '1234-abc.apps.googleusercontent.com', value: data.google?.clientId || '' }), csec = el('input', { type: 'password', placeholder: data.google?.hasSecret ? 'Saved - leave empty to keep' : 'Client secret', autocomplete: 'off' });
   const redirect = `${location.origin}/api/auth/google/callback`;
-  fillCard(box, el('h2', {}, icon('lock'), 'Sign-in & security log'),
+  fillCard(box, el('h2', {}, icon('lock'), T('Sign-in & security log')),
     el('label', { class: 'check' }, req2, el('span', {}, el('b', {}, 'Require two-step sign-in for everyone'), el('div', { class: 'small muted' }, 'People without it set it up the next time they sign in.'))),
     el('h3', {}, 'Sign in with Google'),
     el('p', { class: 'small muted' }, 'Lets the people you added sign in with their Google account (matched by e-mail). In Google Cloud Console > APIs & Services > Credentials, create an OAuth client ID (Web application) and add this redirect URI. Google only accepts https addresses or localhost - use your secure remote-access address if you have one.'),
@@ -116,7 +116,7 @@ async function securityAdminCard(data, me) {
 
 async function securityCards() {
   let me; try { me = await api('/api/auth/me'); } catch { return []; }
-  if (!me.signIn) return [el('div', { class: 'card' }, el('h2', {}, icon('lock'), 'Security'), el('p', { class: 'small muted' }, 'Sign-in, two-step sign-in and people are set up on a real install (the demo has no accounts).'))];
+  if (!me.signIn) return [el('div', { class: 'card' }, el('h2', {}, icon('lock'), T('Security')), el('p', { class: 'small muted' }, 'Sign-in, two-step sign-in and people are set up on a real install (the demo has no accounts).'))];
   if (me.user.panel) return [];
   const cards = [accountCard(me)];
   if (['admin', 'owner'].includes(me.user.role)) { const d = await api('/api/users').catch(() => null); if (d) cards.push(peopleCard(d, me), await securityAdminCard(d, me)); }
