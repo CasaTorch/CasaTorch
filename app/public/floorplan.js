@@ -124,12 +124,17 @@ const flyTo = (target, pos, ms = 750) => { if (calm) ms = 1; tween = { t0: perfo
 })(0);
 
 /* ---------- look ---------- */
-const curTheme = () => { const t = prefs.theme === 'blueprint' ? 'night' : prefs.theme; return THEMES[t] ? t : S.plan?.style?.theme in THEMES ? S.plan.style.theme : 'real'; };
+/* The editing look: in the editor (except the Colors tab, where you're choosing colors) the house switches to the bright,
+   flat Day look - no night sky, sun shadows or weather - with the near walls lowered, so walls, floors and pins are easy to
+   see and click. Your own look comes back when you leave the editor. Nothing about your look is changed or saved. */
+function editLook() { return S.mode === 'edit' && S.tab !== 'colors' && prefs.editLook !== false; }   // (a function: the drawing loop asks before this line has run)
+const curTheme = () => (editLook() ? 'day' : baseTheme());
+const baseTheme = () => { const t = prefs.theme === 'blueprint' ? 'night' : prefs.theme; return THEMES[t] ? t : S.plan?.style?.theme in THEMES ? S.plan.style.theme : 'real'; };
 function isReal() { return !!THEMES[curTheme()]?.real; }
 /* Real life always follows the sun and shows the yard and the weather; the drawings let you choose. */
-function sunOn() { return prefs.sun || isReal(); }
+function sunOn() { return !editLook() && (prefs.sun || isReal()); }
 function yardOn() { return prefs.yard || isReal(); }
-function wxOn() { return prefs.weatherFx || isReal(); }
+function wxOn() { return !editLook() && (prefs.weatherFx || isReal()); }
 const look = () => { const L = lookOf(curTheme(), S.plan?.style?.colors), ex = S.plan?.style?.extras || {}; return { ...L, ...(ex.flow ? { flow: ex.flow } : {}), glow: L.glow * (ex.glow || 1) * (S.glowBoost || 1) }; };
 /* ---------- sun, sky and night: the house lit as it is outside right now (or at the time you pick) ---------- */
 /* Real life: a sky that fades from the zenith to the horizon and follows the sun (blue by day, warm at
@@ -229,7 +234,7 @@ function styleFloor(F) {
 const WALLISH = new Set(['wall', 'door', 'window', 'opening']);
 function applyWalls(F) {
   if (F.original || !F.wallMeshes) return;
-  const mode = prefs.walls, dir = camera.position.clone().sub(controls.target).setY(0);
+  const mode = editLook() ? 'auto' : prefs.walls, dir = camera.position.clone().sub(controls.target).setY(0);
   if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1); dir.normalize();
   for (const m of F.wallMeshes) {
     const full = m.userData.full; if (!full) continue;
@@ -1346,7 +1351,8 @@ const saveStyleSoon = debounce(saveStyle, 500);
 /* ---------- editor ---------- */
 function setMode(m) {
   if (m === 'edit' && !S.plan.pro?.pro) { toast('The editor is part of CasaTorch Pro.'); return; }
-  S.mode = m; S.tool = null; clearSel(); S.room = null; closeCard();
+  const looked = editLook(); S.mode = m; S.tool = null; clearSel(); S.room = null; closeCard(); if (m === 'edit') { if (S.tour) stopTour(); controls.autoRotate = false; }
+  if (looked !== editLook()) { skyAt = 0; applyLook(); drawThemeSeg(); }
   document.body.classList.toggle('editing', m === 'edit');
   $('#side').hidden = true; $('#side').dataset.kind = '';
   for (const b of document.querySelectorAll('#modeSeg button')) b.classList.toggle('on', b.dataset.mode === m);
@@ -1354,7 +1360,20 @@ function setMode(m) {
   drawPins();
 }
 const edFloor = () => curF() || Object.values(S.F)[0];
+/* The editor panel is drawn again whenever something is saved. Someone typing (a room's name, a device's name) keeps typing:
+   the field they were in gets the focus and the cursor back, wherever it is in the new panel. */
 function editor() {
+  const box = $('#left'), a = document.activeElement;
+  const typing = a && box.contains(a) && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['range', 'checkbox', 'color', 'file', 'button'].includes(a.type)));
+  if (!typing) { editorDraw(); return; }
+  const all = [...box.querySelectorAll('input, textarea')], at = { i: all.indexOf(a), room: a.dataset.room, ph: a.placeholder, type: a.type, s0: a.selectionStart, s1: a.selectionEnd, top: box.scrollTop };
+  editorDraw();
+  const now = [...box.querySelectorAll('input, textarea')];
+  const n = (at.room != null && box.querySelector(`input[data-room="${at.room}"]`)) || (at.ph && now.find((x) => x.placeholder === at.ph && x.type === at.type)) || now[at.i];
+  if (n) { n.focus({ preventScroll: true }); try { n.setSelectionRange(at.s0, at.s1); } catch { /* not a text field */ } }
+  box.scrollTop = at.top;
+}
+function editorDraw() {
   if (S.mode !== 'edit') { clearRouteHandles(); return; }
   if (S.tool?.type !== 'route-edit') clearRouteHandles();
   const box = $('#left'); box.hidden = false;
@@ -1389,7 +1408,7 @@ function editor() {
       el('button', { type: 'button', class: 'mini', disabled: ya.pts.length ? null : true, onclick: () => { ya.pts.pop(); yardPreview(); editor(); } }, 'Undo last corner'),
       el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; yardPreview(); editor(); } }, 'Cancel'))));
   const hint = S.tool?.type === 'yard-place' ? `Click on the ground where the ${ITEM_KINDS[S.tool.kind].toLowerCase()} goes.` : S.tool?.type === 'yard-move' ? 'Click on the ground where it should go.' : S.tool?.type === 'aim' ? `Click the ground where "${S.tool.dev.name}" shines.` : S.tool?.type === 'panel' ? 'Click where the electrical panel is (a wall or the floor next to it).' : S.tool?.type === 'device' ? `Click on the house where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
-  fill(box, el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { S.tab = k; S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
+  fill(box, el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { const looked = editLook(); S.tab = k; if (looked !== editLook()) { skyAt = 0; applyLook(); } S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
     hint ? el('div', { class: 'hint' }, hint, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; editor(); drawPins(); } }, 'Cancel')) : null, body);
 }
 function floorPicker() {
@@ -1487,6 +1506,7 @@ function edColors() {
   style.colors ||= {};
   const F = S.sel && S.F[S.sel.floor], selName = S.sel ? prettyItem(S.sel.key) : null;
   return el('div', {},
+    el('label', { class: 'chk', title: 'A bright, flat look while you place devices and draw - your own look stays for viewing' }, el('input', { type: 'checkbox', checked: prefs.editLook !== false ? true : null, onchange: (e) => { prefs.editLook = e.target.checked; savePrefs(); } }), 'Use the bright editing look on the other tabs'),
     el('h3', {}, 'Look'), seg(Object.entries(THEMES).map(([k, t]) => [k, t.label]), theme, (v) => { prefs.theme = v; savePrefs(); style.theme = v; saveStyleSoon(); applyLook(); editor(); }),
     el('p', { class: 'note' }, 'Everyone sees this look unless they pick another one at the top of the 3D view.'),
     el('h3', {}, `${THEMES[theme].label} colors`),
