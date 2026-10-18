@@ -303,6 +303,7 @@ body #left.dock .dcard .dbar .dsz button.on { background: var(--hl); color: var(
   body:not(.editing) #left.dock:not(.roomopen), #floats { display: none !important; }
   body.cards-open:not(.editing) #left.dock:not(.roomopen) { display: flex !important; position: fixed; left: 10px; right: 10px; width: auto; top: auto; bottom: calc(104px + env(safe-area-inset-bottom, 0px)); max-height: 58vh; overflow-y: auto; z-index: 7; padding: 6px; border-radius: 22px; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); backdrop-filter: var(--blur); }
   body.immersive #cardsBtn { bottom: max(14px, env(safe-area-inset-bottom, 0px)); }
+  body.editing #cardsBtn, body.walking #cardsBtn { display: none; }   /* integration: not over the editor panel or the walk controls */
   body.immersive.fsidle #cardsBtn { opacity: 0; pointer-events: none; transition: opacity .45s; }
 }
 @media (max-width: 760px) {

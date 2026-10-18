@@ -23,7 +23,7 @@ const WALL_KINDS = ['door', 'double', 'slider', 'bifold', 'garage', 'window'];
 let cssOnce = false;
 const ensureCss = () => { if (cssOnce || document.querySelector('link[data-dz]')) return; cssOnce = true; const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'floorplan-draw.css'; l.dataset.dz = '1'; document.head.append(l); };
 
-export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], outlines = () => [] }) {
+export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], outlines = () => [], devices = () => [] }) {
   ensureCss();
   document.getElementById('drawer')?.remove();
   let plan = G.normalizePlan(floor.plan || { rooms: [], walls: [] });
@@ -441,7 +441,32 @@ export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], o
     if (win) out.push(row('Sill height', ...numField(o.sill ?? 0.9, (v) => { o.sill = v; }, { min: 0, max: 3 })));
     if (hinged) out.push(row('Hinge', seg([['left', 'Left'], ['right', 'Right']], o.swing === 'right' ? 'right' : 'left', (v) => change(() => { o.swing = v; }))), row('Opens', seg([['in', 'In'], ['out', 'Out']], o.opens === 'out' ? 'out' : 'in', (v) => change(() => { o.opens = v; }))));
     if (sky) out.push(row('Turn', seg([[0, '0°'], [90, '90°']], (o.rot || 0) % 180 ? 90 : 0, (v) => change(() => { o.rot = v; }))), el('p', {}, T('Sits in the roof (or the ceiling, under a flat roof).')));
+    out.push(...linkRows(o));
     out.push(el('div', { class: 'dz-acts' }, el('button', { type: 'button', onclick: () => duplicate() }, T('Duplicate')), el('button', { type: 'button', class: 'danger', onclick: () => removeSel() }, T('Delete'))));
+    return out;
+  }
+  /* In the 3D home it moves with the real thing: its contact sensor opens the leaf, a blind lowers (a curtain parts sideways),
+     and an open window while it rains is flagged - unless "No rain warning". Only shows state; nothing here controls a device. */
+  const CONTACT = /door|window|opening|garage|gate|contact|vent|sash|skylight|velux/i;
+  function linkRows(o) {
+    const all = (devices() || []).filter((d) => d && d.id), byId = new Map(all.map((d) => [d.id, d]));
+    const NOT = /temperature|humidity|power|energy|battery|motion|leak|moisture|smoke|lux|illuminance|charge/i;
+    const contacts = all.filter((d) => (d.kind === 'sensor' && (CONTACT.test(d.haClass || '') || ((d.bin || /binary_sensor\./.test(d.id) || !d.haClass) && CONTACT.test(`${d.name} ${d.id}`) && !NOT.test(`${d.haClass || ''} ${d.name} ${d.id}`))))
+      || (o.kind === 'garage' && d.kind === 'cover' && /garage|gate/i.test(`${d.haClass || ''} ${d.name} ${d.id}`)));
+    const covers = all.filter((d) => d.kind === 'cover' && !/valve\.|garage|gate/i.test(`${d.haClass || ''} ${d.id} ${d.name}`));
+    const pick = (list, value, set, none) => {
+      const opts = [...list]; if (value && !opts.some((d) => d.id === value)) opts.unshift(byId.get(value) || { id: value, name: value });
+      return el('select', { class: 'dz-sel', onchange: (e) => change(() => set(e.target.value || null)) }, el('option', { value: '' }, T(none)),
+        ...opts.sort((a, b) => String(a.name).localeCompare(String(b.name))).map((d) => el('option', { value: d.id, selected: d.id === value ? true : null }, d.name || d.id)));
+    };
+    const setKey = (k) => (v) => { if (v) o[k] = v; else delete o[k]; };
+    const coverable = ['window', 'slider', 'skylight'].includes(o.kind), rainy = coverable;
+    const out = [el('h4', {}, T('In the live 3D view'))];
+    out.push(row(o.kind === 'garage' ? 'Opens with' : 'Linked sensor', pick(contacts, o.deviceId, setKey('deviceId'), 'None')));
+    if (coverable) out.push(row('Blind, curtain or shade', pick(covers, o.coverId, setKey('coverId'), 'None')));
+    if (rainy) out.push(el('label', { class: 'dz-row dz-chk' }, el('input', { type: 'checkbox', checked: o.noRainAlert ? true : null, onchange: (e) => change(() => { if (e.target.checked) o.noRainAlert = true; else delete o.noRainAlert; }) }), el('span', {}, T('No rain warning'))));
+    if (!all.length) out.push(el('p', {}, T('Devices show up here once CasaTorch can see them.')));
+    else if (o.coverId && /curtain|drape/i.test(`${byId.get(o.coverId)?.haClass || ''} ${byId.get(o.coverId)?.name || ''}`)) out.push(el('p', {}, T('A curtain: it parts to the sides as it opens.')));
     return out;
   }
   function stairsPanel(s) {

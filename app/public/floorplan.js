@@ -503,7 +503,7 @@ for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) addEventListen
 /* Lost? Double-click (or double-tap) empty space, press Home or R, or the ⟲ button: back to the whole house. */
 function resetView() { S.room = null; if (card) closeCard(); layout(true); }
 renderer.domElement.addEventListener('dblclick', (e) => { if (S.mode !== 'view' || S.tool) return; if (rayAt(e.clientX, e.clientY).intersectObjects(Object.values(S.F).filter((F) => F.G.visible).map((F) => F.G), true).some((h) => h.object.isMesh && h.object.visible)) return; resetView(); });   // on the house, a double-click is two taps on a room
-addEventListener('keydown', (e) => { if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || e.ctrlKey || e.metaKey || e.altKey) return; if (e.key === 'Home' || e.key === 'r' || e.key === 'R') { e.preventDefault(); resetView(); } });
+addEventListener('keydown', (e) => { if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented || live.walking() || (S.mode === 'edit' && outdoor.selection.length)) return; if (e.key === 'Home' || e.key === 'r' || e.key === 'R') { e.preventDefault(); resetView(); } });
 /* An open menu closes when you go back to the map (or anywhere else); a tap on the map closes a drawer too. */
 document.addEventListener('pointerdown', (e) => {
   if (S.moreOpen && !e.target.closest?.('.morepop, #tools')) { S.moreOpen = false; drawTools(); }
@@ -1854,8 +1854,9 @@ function edFloors() {
     el('p', { class: 'note' }, 'Scanned room by room? Pick all the room files together, or upload each one as "A room of" its floor. You drag each room into place and join them into one floor.'),
     el('p', { class: 'note' }, 'Floors stack by Level × Height. If a floor sits crooked or off to the side, adjust Turn and Shift until the walls line up.'));
 }
-/* EDITOR hook: the drawer also gets the other floors (to line up with the one below, and for the whole house) and their outlines. */
-const drawOpts = () => ({ el, api, toast, onSave: reload, floors: () => S.plan.floors, outlines: () => Object.values(S.F).map((F) => ({ id: F.f.id, level: F.f.level || 0, box: [F.box.min.x, F.box.min.z, F.box.max.x, F.box.max.z] })) });
+/* EDITOR hook: the drawer also gets the other floors (to line up with the one below, and for the whole house) and their outlines,
+   and the devices (a door's or window's contact sensor, a blind or curtain - linked in its inspector for the live view). */
+const drawOpts = () => ({ el, api, toast, onSave: reload, devices: () => S.live?.devices || [], floors: () => S.plan.floors, outlines: () => Object.values(S.F).map((F) => ({ id: F.f.id, level: F.f.level || 0, box: [F.box.min.x, F.box.min.z, F.box.max.x, F.box.max.z] })) });
 async function newDrawnFloor(withPicture) {
   try {
     const r = await send('/api/floorplan/floors/drawn', 'POST', { name: S.plan.floors.length ? `Floor ${S.plan.floors.length + 1}` : 'Ground floor' });
@@ -1952,7 +1953,7 @@ let liveAt = 0, liveT = null;
 })();
 /* Esc: close the device card, then leave the room, then stop a tool. */
 addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape' || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+  if (e.key !== 'Escape' || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || live.walking() || live.replaying()) return;   // walking and replaying leave with their own Esc
   if (card) closeCard(); else if (S.info) closeInfo(); else if (S.room) { S.room = null; layout(true); } else if (S.tool) { S.tool = null; editor(); drawPins(); }
 });
 /* Network on the plan, plan backups and restore points, the vacuum's map to trace, and voice "Show me": floorplan-net.js. */

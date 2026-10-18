@@ -99,6 +99,7 @@ let page, shot, camServer;
 
   await nextTo('Sensors'); await btn('No').click();
   await nextTo('Network'); await btn('My internet provider\'s router').click();
+  await nextTo('App tests'); await btn('Not now').click();
   await nextTo('Energy'); await btn('Yes').click();
   check('energy explains Home Assistant was skipped', await p.locator('main .warn', { hasText: 'Needs Home Assistant' }).count() === 1);
   await field('Price per kWh, if your company isn\'t listed').fill('0.17');

@@ -36,6 +36,23 @@ export default async function planNetTests(t) {
     assert.equal(tp.floors[0].rooms[0].name, 'Kitchen', 'rooms stay');
     assert.equal(PB.pzParse(PB.pzExport(plan(), true)).summary.template, true);
   });
+  t('3D plan: photo-real scans travel in the .zip and in restore points; household links leave a template', () => {
+    const p = plan(1); p.floors[1].scans = [{ id: 'sabc123', name: 'Study', file: 'sabc123-full.glb', low: 'sabc123-low-x1.glb', pos: [0, 0, 0] }, { id: 'sgone99', file: 'sgone99-full.glb', pos: [0, 0, 0] }];
+    p.items = [{ id: 'b1', kind: 'bin', binId: 'trash' }, { id: 'p1', kind: 'pot', plantId: 'fern' }, { id: 'w1', kind: 'washer', laundryId: 'washer' }, { id: 'm1', kind: 'mailbox', mail: true }];
+    p.live3d = { noRain: ['ha:cover.x'], wedges: { 'cam:1': { yaw: 0, motionId: 'ha:binary_sensor.m' } }, chips: ['weather'], views: { 'f1:0': { p: [1, 1, 1], t: [0, 0, 0] } } };
+    setup(p); fs.writeFileSync(file('sabc123-full.glb'), glb('scan')); fs.writeFileSync(file('sabc123-low-x1.glb'), glb('low'));
+    const zip = PB.pzExport(p), r = PB.pzParse(zip);
+    assert.ok(r.files.get('sabc123-full.glb')?.equals(glb('scan')) && r.files.has('sabc123-low-x1.glb'), 'both copies of the scan are in the .zip');
+    assert.deepEqual(r.plan.floors[1].scans.map((s) => s.id), ['sabc123'], 'a scan whose file is missing is left out'); assert.ok(r.summary.warnings.some((w) => /scan/.test(w)));
+    const tp = PB.pzTemplate(p);
+    assert.ok(tp.items.every((x) => x.binId == null && x.plantId == null && x.laundryId == null && x.mail == null), 'bins, plants, laundry and mail links go');
+    assert.equal(tp.live3d.noRain, undefined); assert.equal(tp.live3d.wedges, undefined); assert.ok(tp.live3d.views, 'saved room views stay');
+    fs.rmSync(PB.RP_DIR, { recursive: true, force: true });
+    const id = PB.rpSnapshot('auto', { now: new Date('2026-10-17T09:00:00Z') }); assert.ok(id);
+    fs.rmSync(file('sabc123-full.glb')); PB.rpPut(JSON.parse(PB.rpRead(id)), null);
+    assert.ok(fs.readFileSync(file('sabc123-full.glb')).equals(glb('scan')), 'a restore point brings a deleted scan back');
+    fs.rmSync(file('sabc123-full.glb')); fs.rmSync(file('sabc123-low-x1.glb')); fs.rmSync(PB.RP_DIR, { recursive: true, force: true });
+  });
   t('3D plan: odd, damaged or unsafe .zip files are refused or cleaned', () => {
     assert.throws(() => PB.pzRead(Buffer.from('hello world, not a zip at all')), /not a \.zip/);
     const zip = PB.pzExport(plan()), bad = Buffer.from(zip); bad[60] ^= 0xff;

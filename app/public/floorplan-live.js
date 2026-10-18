@@ -7,7 +7,8 @@
    Everything moves smoothly and only while it moves: the picture rests (no drawing) the moment nothing changes.
    floorplan.js calls in here through a few small hooks; the rules themselves are in floorplan-live-core.js. */
 import * as THREE from 'three';
-import { approach, openAmount, coverAmount, leafMotion, clipToBox, liveGlow, lampColor as lampColorOf, fanTurns, isTv, wedgePoints, happeningOf } from './floorplan-live-core.js';
+import { approach, openAmount, coverAmount, leafMotion, clipToBox, liveGlow, lampColor as lampColorOf, fanTurns, isTv, wedgePoints, happeningOf, doorLinks, petRoute, reachable } from './floorplan-live-core.js';
+import { normalizePlan, pointInPoly } from './floorplan-geom.js';
 import { createReplay } from './floorplan-replay.js';
 import { createQuality } from './floorplan-quality.js';
 import { createWalk } from './floorplan-walk.js';
@@ -85,6 +86,22 @@ export function createLive(ctx) {
     for (const c of scene.children) if (c !== root && c.children?.length && !Object.values(S.F).some((F) => F.G === c)) c.traverse(visit);   // the yard and things placed outside
     for (const k of [...A.open.keys()]) if (!seen.has(k)) A.open.delete(k);
   }
+  /* A curtain (Home Assistant's "curtain" class, or "curtain"/"drape" in its name) is two panels that part sideways; anything else is a blind that lowers. */
+  const isCurtain = (d) => !!d && (d.haClass === 'curtain' || /curtain|drape/i.test(d.name || ''));
+  function curtainize(a, on) {
+    const slab = a.cover.children.find((m) => m.isMesh && !m.userData.curtain);
+    if (a.curtain) { for (const p of a.curtain) { a.cover.remove(p); p.traverse((m) => m.geometry?.dispose()); } a.curtain = null; }
+    if (slab) slab.visible = !on;
+    if (on && slab?.geometry?.parameters) {
+      const { width: W, height: H, depth: D } = slab.geometry.parameters, half = W / 2;
+      a.curtain = [-1, 1].map((s) => {
+        const p = new THREE.Group(); p.name = 'curtain'; p.position.set(slab.position.x + s * half, 0, slab.position.z);   // the pivot at the window's side
+        const m = new THREE.Mesh(new THREE.BoxGeometry(half, H, D * 1.6), fabric()); m.position.set(-s * half / 2, slab.position.y, 0); m.userData.curtain = true; m.userData.full = m.material; m.castShadow = false; m.raycast = () => {};
+        p.add(m); a.cover.add(p); return p;
+      });
+    }
+    a.reposed = true; a.curtainFor = on;
+  }
   const fabric = () => mats.fabric || (mats.fabric = Object.assign(new THREE.MeshStandardMaterial({ color: '#b8c4d2', roughness: 0.95, side: THREE.DoubleSide, transparent: true, opacity: 0.94 }), { userData: { shared: true } }));
   function poseLeaves(a, k, dev) {
     const L = a.leaf; if (!L) return;
@@ -111,8 +128,13 @@ export function createLive(ctx) {
       a.k = a.k == null ? want : approach(a.k, want, dt, a.kind === 'garage' ? 1.4 : a.kind === 'awning' ? 1.2 : 3.2);
       if (wantC != null) a.kc = a.kc == null ? wantC : approach(a.kc, wantC, dt, 1.8);
       if (a.k !== k0 || !a.applied) { if (a.kind === 'awning') { if (cov || dev) setAwning(a.o, a.k); } else poseLeaves(a, a.k, dev); }
-      if (wantC != null && (a.kc !== kc0 || !a.applied)) { a.cover.scale.y = Math.max(0.02, a.kc); a.cover.visible = a.kc > 0.03; }
-      if (a.cover && a.kind !== 'awning') a.cover.traverse((m) => { if (m.isMesh && m.material !== fabric()) { m.material = fabric(); m.userData.full = m.material; m.castShadow = false; } });   // a blind looks like fabric, not like the wall
+      if (a.cover && a.kind !== 'awning' && !a.fabric) { a.fabric = true; a.cover.traverse((m) => { if (m.isMesh) { m.material = fabric(); m.userData.full = m.material; m.castShadow = false; } }); }   // a blind looks like fabric, not like the wall (once)
+      if (wantC != null && a.kind !== 'skylight' && isCurtain(cov) !== (a.curtainFor ?? false)) curtainize(a, isCurtain(cov));
+      if (wantC != null && (a.kc !== kc0 || !a.applied || a.reposed)) {
+        a.reposed = false;
+        if (a.curtain) { for (const p of a.curtain) p.scale.x = Math.max(0.12, a.kc); a.cover.scale.y = 1; a.cover.visible = true; }   // a curtain parts to the sides (bunched, never quite gone)
+        else { a.cover.scale.y = Math.max(0.02, a.kc); a.cover.visible = a.kc > 0.03; }   // a blind or shade lowers from the top
+      }
       a.applied = true;
       if (a.k !== want || (wantC != null && a.kc !== wantC)) moving = true;
       if (a.k !== k0 || a.kc !== kc0) A.shadowDue = true;
@@ -258,8 +280,18 @@ export function createLive(ctx) {
     if (i >= 0 && F.rooms[i]) { ctx.focusRoom(p.floor, i); return; }
     const w = F.G.localToWorld(new V3(...p.pos)); ctx.flyTo(w, w.clone().add(new V3(dist * 0.4, dist, dist * 0.6)));
   }
+  /* A window's sensor linked in the drawing editor but not placed itself: "Show me" goes to the window. */
+  function linkedPin(id) {
+    for (const a of A.open.values()) {
+      if (a.devId !== id || a.item) continue;
+      const F = S.F[a.floorId] || Object.values(S.F).find((x) => { let i = false; a.o.traverseAncestors((p) => { if (p === x.G) i = true; }); return i; }); if (!F) continue;
+      const w = F.G.worldToLocal(a.o.getWorldPosition(new V3())), st = S.live?.live3d?.states?.[id] || {};
+      return { deviceId: id, floor: F.f.id, pos: [w.x, w.y, w.z], label: st.name, device: { ...st, id } };
+    }
+    return null;
+  }
   function drawBanner() {
-    const alarms = pins().filter((p) => alarmOf(p.device)), rain = (S.live?.live3d?.rainOpen || []).map((id) => pins().find((p) => p.deviceId === id)).filter(Boolean);
+    const alarms = pins().filter((p) => alarmOf(p.device)), rain = (S.live?.live3d?.rainOpen || []).map((id) => pins().find((p) => p.deviceId === id) || linkedPin(id)).filter(Boolean);
     let b = document.getElementById('l3banner');
     if (!alarms.length && !rain.length) { b?.remove(); return; }
     if (!b) { b = el('div', { id: 'l3banner', role: 'alert' }); document.body.append(b); }
@@ -434,18 +466,57 @@ export function createLive(ctx) {
       const r = F.rooms[0]; g.position.set(r.pos[0], F.floorY, r.pos[1]);
     }
   }
+  /* Where the pet may go: the rooms joined by doors (the drawn doors, or a scan's door parts). Without any door, it stays in its room.
+     Drawn floors know their rooms' outlines; scanned ones go by the nearest room center. Everything in the floor's own frame. */
+  const DOORISH = new Set(['door', 'double', 'slider', 'bifold']);
+  function petPlan(F) {
+    const G = F.G, rooms = F.rooms;
+    let polys = null;
+    if (F.f.kind === 'drawn' && F.inner) {
+      const pr = normalizePlan(F.f.plan || {}).rooms;
+      if (pr.length === rooms.length) { F.inner.updateMatrixWorld(true); polys = pr.map((r) => r.pts.map(([x, y]) => { const w = G.worldToLocal(F.inner.localToWorld(new V3(x, 0, y))); return [w.x, w.z]; })); }
+    }
+    const roomAt = polys ? (x, z) => polys.findIndex((p) => pointInPoly([x, z], p)) : (x, z) => ctx.roomAt(F, x, z);
+    const inF = (o) => { let y = false; o.traverseAncestors((p) => { if (p === G) y = true; }); return y; };
+    const doors = [];
+    for (const a of A.open.values()) {
+      if (a.item || !DOORISH.has(a.kind) || !inF(a.o)) continue;
+      const p = G.worldToLocal(a.o.getWorldPosition(new V3())), n = new V3(0, 0, 1).transformDirection(a.o.matrixWorld);
+      doors.push({ p: [p.x, p.z], n: [n.x, n.z] });
+    }
+    if (!doors.length) for (const m of F.wallMeshes || []) if (m.userData.cat === 'door' && m.userData.wc) doors.push({ p: [m.userData.wc.x - G.position.x, m.userData.wc.z - G.position.z], n: null });
+    return { links: doorLinks(rooms, doors, roomAt), roomAt };
+  }
+  const near = (r, spread = 1.2) => [r.pos[0] + (Math.random() - 0.5) * spread, r.pos[1] + (Math.random() - 0.5) * spread];
+  function petGo(P, x, z, y, next) {
+    const g = P.g, from = P.plan.roomAt(g.position.x, g.position.z), to = P.plan.roomAt(x, z);
+    if (to < 0 && from >= 0) return false;   // a spot outside every room: not from inside one (it would cross a wall)
+    const way = from < 0 || to < 0 ? [] : petRoute(P.plan.links, from, to);
+    if (way == null) return false;   // no door leads there
+    P.path = [...way.map(([a, b]) => new V3(a, P.F.floorY, b)), new V3(x, y ?? P.F.floorY, z)]; P.to = P.path.shift(); P.next = next;
+    return true;
+  }
+  const petV = new V3();
   function petTick(dt) {
     const P = A.pet; if (!P || !P.F.G.visible) return false;
     const now = A.t, g = P.g;
     if (P.state !== 'walk' && now > P.until) {
-      if (P.state === 'idle' && P.sofas.length && Math.random() < 0.35) {   // a nap on the sofa
+      P.plan ||= petPlan(P.F);
+      const here = P.plan.roomAt(g.position.x, g.position.z), can = here < 0 ? [] : reachable(P.plan.links, here);
+      let going = false;
+      if (P.state === 'idle' && P.sofas.length && Math.random() < 0.35) {   // a nap on the sofa (one it can walk to)
         const b = P.sofas[Math.floor(Math.random() * P.sofas.length)], c = P.F.G.worldToLocal(b.getCenter(new V3()));
-        P.to = new V3(c.x, P.F.G.worldToLocal(new V3(0, b.max.y, 0)).y, c.z); P.next = 'nap';
-      } else { const r = P.F.rooms[Math.floor(Math.random() * P.F.rooms.length)]; P.to = new V3(r.pos[0] + (Math.random() - 0.5) * 1.2, P.F.floorY, r.pos[1] + (Math.random() - 0.5) * 1.2); P.next = 'idle'; }
-      P.state = 'walk'; g.scale.set(1, 1, 1);
+        if (can.includes(P.plan.roomAt(c.x, c.z))) going = petGo(P, c.x, c.z, P.F.G.worldToLocal(new V3(0, b.max.y, 0)).y, 'nap');
+      }
+      if (!going) {
+        const i = can.length ? can[Math.floor(Math.random() * can.length)] : Math.max(0, ctx.roomAt(P.F, g.position.x, g.position.z)), r = P.F.rooms[i];
+        if (r) { const [x, z] = near(r); going = petGo(P, x, z, null, 'idle') || petGo(P, ...near(P.F.rooms[Math.max(0, here)], 0.8), null, 'idle'); }
+      }
+      if (going) { P.state = 'walk'; g.scale.set(1, 1, 1); } else P.until = now + 5;
     }
     if (P.state === 'walk') {
-      const d = P.to.clone().sub(g.position), flat = Math.hypot(d.x, d.z), step = (P.kind === 'dog' ? 0.75 : 0.55) * dt;
+      const d = petV.copy(P.to).sub(g.position), flat = Math.hypot(d.x, d.z), step = (P.kind === 'dog' ? 0.75 : 0.55) * dt;
+      if (flat < 0.05 && P.path?.length) { P.to = P.path.shift(); return true; }   // through the door, on to the next step
       if (flat < 0.05) { g.position.copy(P.to); P.state = P.next; P.until = now + (P.state === 'nap' ? 40 + Math.random() * 40 : 6 + Math.random() * 10); if (P.state === 'nap') g.scale.set(1, 0.72, 1.05); for (const l of g.userData.legs) l.rotation.z = 0; ctx.reshadow(); return true; }
       g.rotation.y = -Math.atan2(d.z, d.x); g.position.x += (d.x / flat) * Math.min(step, flat); g.position.z += (d.z / flat) * Math.min(step, flat);
       g.position.y += (P.to.y - g.position.y) * Math.min(1, dt * 3);
@@ -574,7 +645,7 @@ export function createLive(ctx) {
     lowerAllowed: () => quality.autoAllowed(),
     frameMs: (moving) => quality.frameMs(moving),
     /* the drawing loop: is something animating? (then it keeps drawing, at the quality level's pace) */
-    busy() { return A.ready && !quality.hidden() && (A.anim || walk.on() || replay.playing()); },
+    busy() { return A.ready && !quality.hidden() && (A.anim || walk.moving() || replay.playing()); },
     tick(now, dt) {
       if (!A.ready) return;
       const t0 = performance.now();

@@ -109,19 +109,25 @@ function waitTextures(scene) {
   if (!imgs.length) return Promise.resolve();
   return new Promise((ok) => { const t0 = Date.now(), tick = () => (imgs.every((t) => t.image) || Date.now() - t0 > 20_000 ? ok() : setTimeout(tick, 100)); tick(); });
 }
-/* Compressed scans: Draco (decoded by the plain JavaScript decoder, which every browser runs); meshopt and KTX2 when the browser may. */
-let gltfBase = null;
-export async function gltfLoader(manager) {
+/* Compressed scans: Draco (decoded by the plain JavaScript decoder, which every browser runs); meshopt and KTX2 (Basis)
+   pictures through WebAssembly - the page's security policy allows WebAssembly ('wasm-unsafe-eval'), never eval.
+   KTX2 needs to know what the screen's graphics chip can show: the 3D page hands its renderer over (useRenderer). */
+let gltfBase = null, ktxRenderer = null;
+export const useRenderer = (r) => { ktxRenderer = r || ktxRenderer; };
+export async function gltfLoader(manager, renderer = ktxRenderer) {
   const l = new GLTFLoader(manager);
   gltfBase ||= (async () => {
     const out = {};
     try { const { DRACOLoader } = await import('three/addons/loaders/DRACOLoader.js'); out.draco = new DRACOLoader().setDecoderPath('/vendor/three/examples/jsm/libs/draco/'); out.draco.decoderConfig = { type: 'js' }; } catch { /* without */ }
     try { const { MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js'); await MeshoptDecoder.ready; out.meshopt = MeshoptDecoder; } catch { /* this page may not run WebAssembly */ }
+    try { out.KTX2 = (await import('three/addons/loaders/KTX2Loader.js')).KTX2Loader; } catch { /* without */ }
     return out;
   })();
   const b = await gltfBase;
   if (b.draco) l.setDRACOLoader(b.draco);
   if (b.meshopt) l.setMeshoptDecoder(b.meshopt);
+  if (b.KTX2 && renderer && !b.ktx2) { try { b.ktx2 = new b.KTX2().setTranscoderPath('/vendor/three/examples/jsm/libs/basis/').detectSupport(renderer); } catch { /* no KTX2 on this screen */ } }
+  if (b.ktx2) l.setKTX2Loader(b.ktx2);
   return l;
 }
 export async function toGlb(fileList) {

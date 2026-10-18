@@ -65,10 +65,12 @@ app.put('/api/floorplan/floors/:id', requirePro, express.json(), (req, res) => {
   fpWrite(d); res.json({ ok: true, floor: f });
 });
 app.delete('/api/floorplan/floors/:id', requirePro, (req, res) => {
+  if (fpData().floors.find((x) => x.id === req.params.id)?.scans?.length) rpSnapshot('before-delete', { force: true });   // its photo-real scans stay restorable (50b-plan-backup.js keeps them as hard links)
   const d = fpData(), gone = d.floors.find((x) => x.id === req.params.id); d.floors = d.floors.filter((x) => x !== gone); d.pins = d.pins.filter((p) => p.floor !== req.params.id);
   // The demo's edits live only in memory, so its uploads go with them (the sample floors are in demo/, never touched).
   if (isDemo() && /^f[0-9a-z]+(-[0-9a-z]+)?\.glb$/.test(gone?.file || '')) fs.rm(path.join(FP_DIR, gone.file), { force: true }, () => {});
   fpWrite(d); res.json({ ok: true });   // the .glb stays on disk until a cleanup; nothing is lost by a mis-tap
+  if (gone?.scans?.length) scanSweep();   // its photo-real scan files go now (50s-scan.js); a restore point still has them
 });
 /* Replace a floor's model: rooms scanned one at a time and joined in the editor come back as one .glb.
    The parts' turns and sizes are baked into it, so the floor's own turn and size start again from zero. */
@@ -255,7 +257,7 @@ app.get('/api/floorplan/live', async (_req, res) => {
   res.json(fpLiveExtra({   // + the live view's extras (50l-live3d.js)
     pins: d.pins.map((p) => ({ ...p, deviceId: main(p.deviceId) })).filter((p) => !seenPin.has(p.deviceId) && seenPin.add(p.deviceId))   // one pin per device, even if two of its parts were placed
       .map((p) => ({ ...p, device: gById.get(p.deviceId) || byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })), weather,
-    devices: G.list.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.area ? { area: x.area } : {}), ...(x.dev ? { dev: x.dev } : {}), ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),
+    devices: G.list.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.area ? { area: x.area } : {}), ...(x.dev ? { dev: x.dev } : {}), ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}), ...(x.haClass && (x.kind === 'sensor' || x.kind === 'cover') ? { haClass: x.haClass } : {}) })),   // haClass: a door's contact or a curtain, for the drawing editor's links
     parts: devices.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.area ? { area: x.area } : {}), ...(x.dev ? { dev: x.dev } : {}), ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),   // every part, for linking a car's sensors
     cars: Object.fromEntries((d.yard?.items || []).filter((it) => it.kind === 'car').map((it) => {
       const g = (k) => byId.get(it.bind?.[k]), h = g('home'), p = g('plugged'), w = g('power'), bt = g('battery'), n = (v) => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v));

@@ -116,6 +116,7 @@ let page, shot;
 
   await nextTo('Sensors'); await btn('No').click();
   await nextTo('Network'); await btn('My internet provider\'s router').click();
+  await nextTo('App tests'); await btn('Not now').click();
 
   // Energy: the power company's sign-in, wrong password first, then the verification code
   await nextTo('Energy'); await btn('Yes').click();

@@ -25,6 +25,18 @@ export default async function live3dTests(t) {
     assert.equal(C.openAmount(null), 0);
     assert.equal(C.coverAmount({ position: 25 }), 0.75);   // a blind 25% open covers three quarters of the window
   });
+  t('live3d: a pet walks through doors, never through walls', () => {
+    // three rooms in a row (0 | 1 | 2) with one door between 0 and 1; room 2 has no door
+    const rooms = [{ pos: [1, 1] }, { pos: [3, 1] }, { pos: [5, 1] }], roomAt = (x) => (x < 0 || x > 6 ? -1 : Math.floor(x / 2));
+    const links = C.doorLinks(rooms, [{ p: [2, 1], n: [1, 0] }, { p: [6, 1], n: [1, 0] }], roomAt);   // the second one leads outside
+    assert.deepEqual(links.map((l) => [l.a, l.b]), [[0, 1]]);
+    const way = C.petRoute(links, 0, 1); assert.equal(way.length, 3); assert.deepEqual(way[1], [2, 1]); assert.ok(way[0][0] < 2 && way[2][0] > 2, 'before, in and after the door');
+    assert.equal(C.petRoute(links, 0, 2), null, 'no door to room 2'); assert.deepEqual(C.petRoute(links, 1, 1), []);
+    assert.deepEqual(C.reachable(links, 0).sort(), [0, 1]); assert.deepEqual(C.reachable([], 2), [2], 'no doors at all: stays in its room');
+    // a scanned floor's door (no direction): only when it sits between the two nearest rooms
+    assert.deepEqual(C.doorLinks(rooms, [{ p: [4, 1.2], n: null }], roomAt).map((l) => [l.a, l.b].sort()), [[1, 2]]);
+    assert.equal(C.doorLinks(rooms, [{ p: [9, 1], n: null }], roomAt).length, 0);
+  });
   t('live3d: leaf motion follows the drawn opening (pivot, openDir, slide, lift)', () => {
     const door = C.leafMotion('door', 1, { openDir: -1 });
     assert.ok(Math.abs(door.ry + 1.4) < 1e-9 && door.ry2 === 1.4 && door.dx === 0);

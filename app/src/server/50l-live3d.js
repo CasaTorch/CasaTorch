@@ -268,7 +268,7 @@ function fpLiveExtra(out, d, devices = []) {
     if (isDemo() && L3_SIM.weather && out.weather) Object.assign(out.weather, L3_SIM.weather, { words: L3_SIM.weather.kind === 'rain' ? 'Rain' : out.weather.words });
     const raining = l3Raining(out.weather);
     const evs = isDemo() ? L3_SIM.events : (alerts.events || []).filter((e) => Date.now() - Date.parse(e.at) < 120_000 && e.severity !== 'ok').slice(0, 5).map((e) => ({ id: e.id, title: e.title, severity: e.severity, at: e.at, device: e.device || null }));
-    out.live3d = { ...(d.live3d || {}), states: linkedStates, raining, rainOpen: raining ? rainWindowRule((out.pins || []).map((p) => p.device).filter(Boolean), true, d).map((a) => a.device) : [], events: evs };
+    out.live3d = { ...(d.live3d || {}), states: linkedStates, raining, rainOpen: raining ? rainWindowRule([...(out.pins || []).map((p) => p.device).filter(Boolean), ...Object.entries(linkedStates).map(([id, x]) => ({ ...x, id }))], true, d).map((a) => a.device) : [], events: evs };   // rainOpen: placed devices, and windows' sensors linked in the drawing editor
   } catch { /* the live view still works without the extras */ }
   return out;
 }

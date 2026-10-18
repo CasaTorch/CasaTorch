@@ -74,5 +74,7 @@ body.l3-dimmed #l3veil { opacity: .62; }
 .srow.l3views { gap: 6px; }
 .l3sky { margin-top: 8px; display: flex; } .l3sky button { flex: 1; }
 .morepop .l3sky { margin-top: 0; }
+/* integration: on a wide screen the replay bar sits between the left panel and the cards on the right, not over them */
+@media (min-width: 901px) { #l3replay { left: calc(var(--dock-l, 300px) + 28px); right: calc(var(--dock-r, 200px) + 28px); width: auto; max-width: 760px; margin-inline: auto; transform: none; } body.immersive #l3replay { left: 14px; right: 14px; } }
 @media (max-width: 760px) { #l3legend { bottom: 66px; } #l3replay { bottom: 64px; } #l3banner { top: 96px; } #l3saver .scap b { font-size: 44px; } }
 #l3legend .ticks span:first-child { transform: none; } #l3legend .ticks span:last-child { transform: translateX(-100%); }

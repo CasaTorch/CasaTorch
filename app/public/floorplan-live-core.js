@@ -190,3 +190,51 @@ export function clipToBox(poly, [x0, z0, x1, z1]) {
   }
   return out;
 }
+
+/* ---------- a pet walks through doors, not walls ----------
+   rooms: [{ pos: [x, z] }]; doors: [{ p: [x, z], n: [nx, nz] | null }] (n: across the wall, when known);
+   roomAt(x, z): the room a point is in (-1 outside). A door with a known direction links the rooms on its two sides;
+   one without (a scanned floor's door) links the two nearest rooms when it sits between them.
+   Returns [{ a, b, p, pa, pb }]: rooms a and b, the door, and a step inside each room. */
+export function doorLinks(rooms, doors, roomAt) {
+  const out = [];
+  for (const d of doors || []) {
+    let a = -1, b = -1, pa, pb;
+    if (d.n) {
+      const s = 0.55; pa = [d.p[0] - d.n[0] * s, d.p[1] - d.n[1] * s]; pb = [d.p[0] + d.n[0] * s, d.p[1] + d.n[1] * s];
+      a = roomAt(pa[0], pa[1]); b = roomAt(pb[0], pb[1]);
+    } else {
+      const by = rooms.map((r, i) => [i, Math.hypot(r.pos[0] - d.p[0], r.pos[1] - d.p[1])]).sort((x, y) => x[1] - y[1]);
+      if (by.length < 2) continue;
+      a = by[0][0]; b = by[1][0];
+      const A = rooms[a].pos, B = rooms[b].pos, ab = [B[0] - A[0], B[1] - A[1]], L2 = ab[0] ** 2 + ab[1] ** 2;
+      const t = L2 ? ((d.p[0] - A[0]) * ab[0] + (d.p[1] - A[1]) * ab[1]) / L2 : -1;
+      if (t < 0.1 || t > 0.9) continue;   // not between them: an outside door, or a door of some other room
+      const toward = (C) => { const v = [C[0] - d.p[0], C[1] - d.p[1]], l = Math.hypot(v[0], v[1]) || 1; return [d.p[0] + (v[0] / l) * 0.5, d.p[1] + (v[1] / l) * 0.5]; };
+      pa = toward(A); pb = toward(B);
+    }
+    if (a < 0 || b < 0 || a === b) continue;
+    out.push({ a, b, p: d.p, pa, pb });
+  }
+  return out;
+}
+/* The way from room `from` to room `to` through the doors (fewest doors): waypoints [[x, z]...] (before, in and after each
+   door), [] in the same room, null when no door leads there. */
+export function petRoute(links, from, to) {
+  if (from === to) return [];
+  const prev = new Map([[from, null]]), q = [from];
+  while (q.length) {
+    const r = q.shift(); if (r === to) break;
+    for (const l of links) { const n = l.a === r ? l.b : l.b === r ? l.a : -1; if (n < 0 || prev.has(n)) continue; prev.set(n, { r, l }); q.push(n); }
+  }
+  if (!prev.has(to)) return null;
+  const pts = [];
+  for (let n = to; prev.get(n); n = prev.get(n).r) { const { r, l } = prev.get(n), [near, far] = l.a === r ? [l.pa, l.pb] : [l.pb, l.pa]; pts.unshift(near, l.p, far); }
+  return pts;
+}
+/* Rooms a pet can reach from `from` (itself included). */
+export function reachable(links, from) {
+  const seen = new Set([from]), q = [from];
+  while (q.length) { const r = q.shift(); for (const l of links) { const n = l.a === r ? l.b : l.b === r ? l.a : -1; if (n >= 0 && !seen.has(n)) { seen.add(n); q.push(n); } } }
+  return [...seen];
+}

@@ -44,7 +44,8 @@ beside them would add little; full-disk encryption on the host is the control fo
   DNS-01 (casatorch.com sets the TXT record), key made on the box. `https.createServer` with `minVersion: TLSv1.2`
   on port 8443. Plain http on 8090 redirects browsers to https first (`go-secure.html`), and stays available as a
   fallback on the home network.
-- **Headers** (01-security.js): CSP with hashed inline scripts, `frame-ancestors` limited to self and Home
+- **Headers** (01-security.js): CSP with hashed inline scripts (and `'wasm-unsafe-eval'` so the 3D home's WebAssembly
+  decoders for compressed scans can run - JavaScript `eval` stays blocked), `frame-ancestors` limited to self and Home
   Assistant, `X-Content-Type-Options`, `Referrer-Policy: same-origin`, `Permissions-Policy`,
   `Cross-Origin-Resource-Policy: same-site`, `Cross-Origin-Opener-Policy: same-origin-allow-popups` (none on the return page of the Home Assistant sign-in window), HSTS (180 days) over https,
   `Cache-Control: no-store` on `/api`. Host allow-list against DNS rebinding; Origin / Sec-Fetch-Site checks on

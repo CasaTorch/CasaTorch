@@ -74,6 +74,7 @@ export function createWalk(ctx) {
   addEventListener('blur', () => W.keys.clear());
   return {
     on: () => W.on, toggle: () => (W.on ? leave() : enter()), leave,
+    moving: () => W.on && (W.keys.size > 0 || !!W.stick[0] || !!W.stick[1]),   // a key or the stick held: keep drawing (standing still, the house rests)
     tick(dt) {
       if (!W.on) return;
       const K = W.keys, fwd = (K.has('w') || K.has('arrowup') ? 1 : 0) - (K.has('s') || K.has('arrowdown') ? 1 : 0) - W.stick[1];

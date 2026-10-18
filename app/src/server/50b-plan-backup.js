@@ -65,16 +65,19 @@ function pzRead(buf, limits = PZ_LIMITS) {
   }
   return out;
 }
-/* Every file the plan uses, by name: scans (.glb) and floor-plan pictures. */
+/* Every file the plan uses, by name: scanned floors (.glb), floor-plan pictures and the photo-real scans on a floor (full and light copy). */
 const PZ_FILE = /^[\w-]{1,80}\.(glb|png|jpg|webp)$/;
-const pzFilesOf = (d) => [...new Set((d?.floors || []).flatMap((f) => [f.file, f.plan?.bg]).filter((x) => typeof x === 'string' && PZ_FILE.test(x)))];
+const pzFilesOf = (d) => [...new Set((d?.floors || []).flatMap((f) => [f.file, f.plan?.bg, ...(Array.isArray(f.scans) ? f.scans.flatMap((s) => [s?.file, s?.low]) : [])]).filter((x) => typeof x === 'string' && PZ_FILE.test(x)))];
 const pzFilePath = (name) => { const own = path.join(FP_DIR, name); return fs.existsSync(own) ? own : isDemo() && fs.existsSync(path.join(DEMO_FP, name)) ? path.join(DEMO_FP, name) : null; };
-/* Links to devices, wherever they sit in the plan (pins, a car's sensors, a door's contact, a bin's schedule...). */
-const PZ_LINK_KEYS = new Set(['deviceId', 'coverId', 'binId', 'bind', 'entity', 'entityId', 'sensor', 'sensors', 'monitorId']);
+/* Links to devices and household things, wherever they sit in the plan (pins, a car's sensors, a door's contact, a blind,
+   a bin's schedule, a plant, the washer, the mailbox, the camera a view wedge turns red for...). */
+const PZ_LINK_KEYS = new Set(['deviceId', 'coverId', 'binId', 'plantId', 'laundryId', 'mail', 'motionId', 'uplinkDeviceId', 'bind', 'entity', 'entityId', 'sensor', 'sensors', 'monitorId']);
 function pzTemplate(d) {
   const walk = (v) => { if (Array.isArray(v)) return v.map(walk); if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).filter(([k]) => !PZ_LINK_KEYS.has(k)).map(([k, x]) => [k, walk(x)])); return v; };
   const out = walk({ ...d, pins: [], netPins: [] });
   delete out.view?.hidden;
+  /* The live view's settings are keyed by device (no rain warning, camera wedges, fixed lamp colors, status chips): gone too. */
+  if (out.live3d && typeof out.live3d === 'object') { for (const k of ['noRain', 'wedges', 'fixed', 'chips']) delete out.live3d[k]; }
   return out;
 }
 /* Only plain JSON comes in: no special keys, bounded depth, sizes and strings. */
@@ -102,6 +105,15 @@ function pzParse(buf) {
     if (!PZ_FILE.test(String(f.file || '')) || !/\.glb$/.test(f.file) || !files.has(f.file)) { warnings.push(`${f.name}: its scan is missing - left out`); return false; }
     return true;
   });
+  /* Photo-real scans on a floor: only the ones whose file came along (and named the way scan files are); a missing light copy is just dropped. */
+  for (const f of plan.floors) {
+    if (!Array.isArray(f.scans)) { delete f.scans; continue; }
+    const had = f.scans.length;
+    f.scans = f.scans.filter((s) => s && typeof s === 'object' && SC_FILE.test(String(s.file || '')) && files.has(s.file)).slice(0, 12);
+    for (const s of f.scans) if (s.low && !(SC_FILE.test(String(s.low)) && files.has(s.low))) delete s.low;
+    if (f.scans.length < had) warnings.push(`${f.name}: ${had - f.scans.length} photo-real scan(s) missing - left out`);
+    if (!f.scans.length) delete f.scans;
+  }
   const ids = new Set(plan.floors.map((f) => f.id));
   plan.pins = (Array.isArray(plan.pins) ? plan.pins : []).filter((p) => p && ids.has(p.floor) && Array.isArray(p.pos) && p.pos.length === 3).slice(0, 500);
   plan.netPins = (Array.isArray(plan.netPins) ? plan.netPins : []).filter((p) => p && ids.has(p.floor) && Array.isArray(p.pos) && p.pos.length === 3).slice(0, 200);

@@ -148,7 +148,8 @@ async function lowCopy(root, tris) {
 }
 /* Any scan export -> { full, low, name, tris, info }. */
 export async function prepareScan(files, step = () => {}) {
-  const { loadModel } = await import('./floorplan-import.js');
+  const { loadModel, useRenderer } = await import('./floorplan-import.js');
+  useRenderer(C?.renderer);   // KTX2 pictures in the scan: decoded for this screen
   step(T('Reading the scan…'));
   const m = await loadModel(files), root = m.scene;
   let tris = 0, points = 0, bigTex = 0;
@@ -268,7 +269,7 @@ async function loadInto(L) {
   L.loading = want;
   try {
     const { gltfLoader } = await import('./floorplan-import.js');
-    const g = await (await gltfLoader()).loadAsync(`/api/floorplan/scan-files/${encodeURIComponent(file)}`);
+    const g = await (await gltfLoader(undefined, C.renderer)).loadAsync(`/api/floorplan/scan-files/${encodeURIComponent(file)}`);
     if (L.loading !== want || !L.F.G.parent) { disposeModel(g.scene); return; }   // replaced or the floor went away meanwhile
     if (L.model) { L.holder.remove(L.model); disposeModel(L.model); }
     L.model = g.scene; L.loaded = want; L.loading = null;

@@ -14,7 +14,7 @@ export function createReplay(ctx) {
   const night = (t) => { const h = new Date(t).getHours(); return h < 6 || h >= 22; };
   function apply() {
     R.pend = false;
-    if (!R.on || !R.data) return;
+    if (!R.on || !R.data || !R.real?.pins) return;
     const f = replayFrame(R.data.series, R.t), base = R.real;
     S.live = { ...base, pins: base.pins.map((p) => (f[p.deviceId] ? { ...p, device: { ...p.device, ...f[p.deviceId], ...(f[p.deviceId].on === false && p.device.kind === 'media' ? { playing: false } : {}) } } : p)), totals: { ...base.totals }, live3d: { ...(base.live3d || {}), events: [], rainOpen: [] } };
     const w = powerAt(R.data.power, R.t); if (w != null) S.live.totals.powerW = Math.round(w);
@@ -36,7 +36,7 @@ export function createReplay(ctx) {
   }
   function start() {
     if (R.on) return;
-    if (ctx.walking?.()) return;
+    if (ctx.walking?.() || !S.live?.pins) return;   // nothing to replay before the house has loaded
     R.on = true; R.real = S.live; R.timeWas = S.timeAt || null; R.t = 0;
     ctx.closeCard(); document.body.classList.add('replaying');
     load(R.hours); ctx.drawTools();

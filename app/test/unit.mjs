@@ -537,6 +537,7 @@ t('3D: one device per real device; garage doors and locks keep their own pin', (
     try {
       const r = await fetch(`http://127.0.0.1:${srv.address().port}/api/health`), h = (k) => r.headers.get(k) || '';
       assert.match(h('content-security-policy'), /default-src 'self'/); assert.match(h('content-security-policy'), /object-src 'none'/); assert.match(h('content-security-policy'), /frame-ancestors 'self'/);
+      assert.match(h('content-security-policy'), /script-src 'self' 'wasm-unsafe-eval'/, 'WebAssembly for the 3D decoders'); assert.doesNotMatch(h('content-security-policy'), /'unsafe-eval'/, 'never eval');
       assert.equal(h('x-content-type-options'), 'nosniff'); assert.equal(h('referrer-policy'), 'same-origin'); assert.equal(h('cross-origin-opener-policy'), 'same-origin-allow-popups');   // Home Assistant's sign-in window reports back through window.opener
       assert.equal(h('cache-control'), 'no-store'); assert.equal(r.headers.get('x-powered-by'), null); assert.equal(r.headers.get('strict-transport-security'), null, 'HSTS only over https');
       const bad = await new Promise((ok, no) => req('node:http').get({ host: '127.0.0.1', port: srv.address().port, path: '/api/health', headers: { Host: 'evil.example.com' } }, (x) => { x.resume(); ok(x.statusCode); }).on('error', no));
