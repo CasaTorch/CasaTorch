@@ -17,7 +17,7 @@ final class MeshScan: UIViewController, ARSessionDelegate {
     struct Result { let name: String; let data: Data }
 
     /// One kept photo: the picture (RGB bytes), the depth (meters, may be missing), and where the camera was.
-    fileprivate struct Keyframe {
+    fileprivate struct Keyframe: Sendable {
         let rgb: [UInt8]; let width: Int; let height: Int
         let depth: [Float]; let depthWidth: Int; let depthHeight: Int
         let view: simd_float4x4        // world -> camera
@@ -168,7 +168,7 @@ final class MeshScan: UIViewController, ARSessionDelegate {
     // MARK: finishing
 
     /// The mesh as plain arrays (world coordinates, meters, Y up), copied out of ARKit's buffers.
-    fileprivate struct Mesh { var points: [simd_float3] = []; var normals: [simd_float3] = []; var faces: [UInt32] = [] }
+    fileprivate struct Mesh: Sendable { var points: [simd_float3] = []; var normals: [simd_float3] = []; var faces: [UInt32] = [] }
 
     private static func mesh(from anchors: [ARMeshAnchor]) -> Mesh {
         var m = Mesh()
@@ -197,7 +197,7 @@ final class MeshScan: UIViewController, ARSessionDelegate {
     }
 
     /// Each point's color from the photo that saw it best (facing it, close, in the middle of the picture, not hidden).
-    private static func colors(for m: Mesh, from kfs: [Keyframe]) -> [UInt8] {
+    nonisolated private static func colors(for m: Mesh, from kfs: [Keyframe]) -> [UInt8] {
         var out = [UInt8](repeating: 180, count: m.points.count * 3)
         for i in 0..<m.points.count {
             let p = m.points[i], n = m.normals[i]
@@ -229,7 +229,7 @@ final class MeshScan: UIViewController, ARSessionDelegate {
     }
 
     /// Binary PLY: x y z, nx ny nz (float), red green blue (byte); triangles as 3 indices.
-    private static func ply(_ m: Mesh, _ rgb: [UInt8]) -> Data {
+    nonisolated private static func ply(_ m: Mesh, _ rgb: [UInt8]) -> Data {
         var d = Data()
         let header = "ply\nformat binary_little_endian 1.0\ncomment CasaTorch photo-real scan (meters, Y up)\nelement vertex \(m.points.count)\nproperty float x\nproperty float y\nproperty float z\nproperty float nx\nproperty float ny\nproperty float nz\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nelement face \(m.faces.count / 3)\nproperty list uchar uint vertex_indices\nend_header\n"
         d.append(Data(header.utf8))
@@ -257,13 +257,12 @@ final class MeshScan: UIViewController, ARSessionDelegate {
         arView.session.pause()
         let kfs = keyframes
         keyframes = []
-        Task.detached(priority: .userInitiated) { [weak self] in
-            let data = m.faces.isEmpty ? nil : MeshScan.ply(m, MeshScan.colors(for: m, from: kfs))
-            await MainActor.run {
-                guard let self else { return }
-                if let data { self.finish(Result(name: "Photo-real scan", data: data)) }
-                else { self.finishing = false; self.doneButton.isEnabled = true; self.cancelButton.isEnabled = true; self.status.text = "The scan has no surfaces yet. Keep scanning, then tap Done." }
-            }
+        // The heavy coloring runs off the main thread; the result comes back here (no shared mutable state crosses).
+        Task { @MainActor [weak self] in
+            let data: Data? = await Task.detached(priority: .userInitiated) { m.faces.isEmpty ? nil : MeshScan.ply(m, MeshScan.colors(for: m, from: kfs)) }.value
+            guard let self else { return }
+            if let data { self.finish(Result(name: "Photo-real scan", data: data)) }
+            else { self.finishing = false; self.doneButton.isEnabled = true; self.cancelButton.isEnabled = true; self.status.text = "The scan has no surfaces yet. Keep scanning, then tap Done." }
         }
     }
 
