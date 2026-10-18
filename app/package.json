@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "acme-client": "5.4.0",
-    "express": "^4.21.2",
+    "express": "^5.3.0",
     "multicast-dns": "7.2.5",
     "qrcode": "1.5.4",
     "ring-client-api": "^14.3.0",
