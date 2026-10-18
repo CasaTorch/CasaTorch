@@ -188,6 +188,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     ['people', T('People & sign-in'), 'user', T('Your account, two-step sign-in, people in the house and the security log'), async () => securityCards()],
     ['safety', T('Safety'), 'shield', T('What CasaTorch will never switch, and your exceptions'), async () => [await safetyCard()], admin],
     ['connections', T('Connections & AI'), 'link', T('Home Assistant and your brands, Home AI Agent, secure access'), async () => [conn, aiCard(s), await remoteCard(), await localHttpsCard()]],
+    ['household', T('Household'), 'trash', T('Bins, the mail, plants and laundry'), async () => householdCards()],   // 37h-household.js
     ['phones', T('Phones & alerts'), 'phone', T('The CasaTorch app, alerts on your phones, quiet hours'), async () => [...(await appCards()), await phoneCard()]],
     ['updates', T('Updates & backup'), 'download', T('Versions, automatic updates and an encrypted backup'), async () => [await updatesCard(), await backupCard(s)]],
     ['pro', T('CasaTorch Pro'), 'spark', T('Your plan and license key'), async () => [pro]],

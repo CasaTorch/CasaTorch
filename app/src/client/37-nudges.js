@@ -42,7 +42,7 @@ const nudgeWhen = (n) => {
     monthly: `Every month on the ${d ? ordinal(d.getUTCDate()) : ''} at ${t}`, yearly: `Every year on ${md} at ${t}` }[n.repeat] || t;
 };
 const ordinal = (n) => `${n}${[, 'st', 'nd', 'rd'][(n % 100 >> 3 ^ 1) && n % 10] || 'th'}`;
-const nudgePic = (n, size = 'md') => (n.photo ? el('img', { class: `nudgepic ${size}`, src: `/api/nudges/${encodeURIComponent(n.id)}/photo?t=${n.lastFired || ''}`, alt: '' }) : el('span', { class: `nudgeicon ${size}`, 'aria-hidden': 'true' }, icon(n.icon || 'bell')));
+const nudgePic = (n, size = 'md') => (n.photo ? el('img', { class: `nudgepic ${size}`, src: `/api/nudges/${encodeURIComponent(n.id)}/photo?t=${n.lastFired || ''}`, alt: '' }) : el('span', { class: `nudgeicon ${size}`, 'aria-hidden': 'true', style: n.color ? `background:${safeColor(n.color)};color:${hhInk(n.color)}` : null }, icon(n.icon || 'bell')));   // a bin's own color (37h-household.js)
 /* Pro, shown to Basic: the feature greyed, with what it does and a way to get it. */
 /* A Pro card shown to Basic: a faded preview of what it looks like, what it does, and the way to get it. */
 function proPanel(text, rows = 3) {
@@ -150,9 +150,9 @@ async function nudgeCheck() {
   const canAct = (await nudgeRole()) !== 'viewer';
   const done = async (how) => { try { await post(`/api/nudges/${encodeURIComponent(n.id)}/${how}`, {}); } catch (e) { toast(e.message); } document.getElementById('nudgeflash')?.remove(); setTimeout(nudgeCheck, 400); };
   const card = el('div', { id: 'nudgeflash', 'data-id': n.id, role: 'alertdialog', 'aria-live': 'assertive', 'aria-label': `Reminder: ${n.title}` },
-    el('div', { class: 'nudgecard' }, nudgePic(n, 'lg'), el('div', { class: 'small muted', style: 'letter-spacing:.06em;text-transform:uppercase;font-weight:700' }, `${T('Reminder')} · ${hm(n.time)}`), el('h2', {}, n.title),
+    el('div', { class: 'nudgecard' }, nudgePic(n, 'lg'), el('div', { class: 'small muted', style: 'letter-spacing:.06em;text-transform:uppercase;font-weight:700' }, `${T('Reminder')} · ${hm(n.time)}`), el('h2', {}, n.msg ? TM(n.title, n.msg, n.vars) : n.title),
       list.length > 1 ? el('p', { class: 'small muted' }, `and ${list.length - 1} more`) : null,
-      canAct ? el('div', { class: 'row', style: 'gap:10px;justify-content:center' }, el('button', { class: 'btn primary', onclick: () => done('done') }, icon('check'), 'Done'), el('button', { class: 'btn', onclick: () => done('snooze') }, icon('clock'), '10 more minutes'))
+      canAct ? el('div', { class: 'row', style: 'gap:10px;justify-content:center' }, el('button', { class: 'btn primary', onclick: () => done('done') }, icon('check'), n.doneLabel ? T(n.doneLabel) : 'Done'), el('button', { class: 'btn', onclick: () => done('snooze') }, icon('clock'), '10 more minutes'))
         : el('button', { class: 'btn', onclick: () => card.remove() }, 'Close')));
   document.body.append(card);
   if (!nudgeSeen.has(`${n.id}${n.at}`)) { nudgeSeen.add(`${n.id}${n.at}`); try { navigator.vibrate?.(200); } catch { /* fine */ } if (n.sound && n.sound !== 'none') chimePlay(n.sound); }

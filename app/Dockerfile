@@ -2,8 +2,8 @@
 # Multi-arch (amd64 + arm64): .github/workflows/release.yml builds and publishes it.
 FROM node:22-bookworm-slim
 WORKDIR /app
-# traceroute: the hop-by-hop path in Network > App tests.
-RUN apt-get update && apt-get install -y --no-install-recommends traceroute && rm -rf /var/lib/apt/lists/*
+# traceroute, tracepath, mtr: the hop-by-hop path in Network > App tests (no special rights needed).
+RUN apt-get update && apt-get install -y --no-install-recommends traceroute iputils-tracepath mtr-tiny && rm -rf /var/lib/apt/lists/*
 COPY app/package.json app/package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY app/build.mjs ./

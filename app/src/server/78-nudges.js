@@ -115,6 +115,7 @@ app.get('/api/nudges/active', (_req, res) => {
   if (isDemo()) return res.json({ active: [] });
   const out = ng.active.map((a) => ({ ...a, nudge: ng.list.find((n) => n.id === a.id) })).filter((a) => a.nudge && a.nudge.flash !== false && (!a.snoozeUntil || Date.parse(a.snoozeUntil) < Date.now()))
     .map((a) => ({ at: a.at, ...nudgeView(a.nudge) }));
+  if (typeof hhActive === 'function') out.push(...hhActive());   // bin night, the mail, the plants, the laundry (78h-household.js)
   res.json({ active: out });
 });
 app.post('/api/nudges', requireRole('member'), express.json({ limit: '4kb' }), (req, res) => {
@@ -143,8 +144,9 @@ app.delete('/api/nudges/:id', requireRole('member'), (req, res) => {
   ng.list = ng.list.filter((x) => x !== n); ng.active = ng.active.filter((a) => a.id !== n.id); nudgeSave(); res.json({ ok: true });
 });
 /* Done (for everyone) or snooze 10 minutes. */
-app.post('/api/nudges/:id/done', requireRole('member'), (req, res) => { ng.active = ng.active.filter((a) => a.id !== req.params.id); nudgeSave(); res.json({ ok: true }); });
+app.post('/api/nudges/:id/done', requireRole('member'), (req, res) => { if (typeof hhAnswer === 'function' && hhAnswer(req.params.id, 'done')) return res.json({ ok: true }); ng.active = ng.active.filter((a) => a.id !== req.params.id); nudgeSave(); res.json({ ok: true }); });
 app.post('/api/nudges/:id/snooze', requireRole('member'), (req, res) => {
+  if (typeof hhAnswer === 'function' && hhAnswer(req.params.id, 'snooze')) return res.json({ ok: true });
   const a = ng.active.find((x) => x.id === req.params.id); if (a) { a.snoozeUntil = new Date(Date.now() + 10 * 60_000).toISOString(); a.until = new Date(Math.max(Date.parse(a.until), Date.now() + 20 * 60_000)).toISOString(); nudgeSave(); }
   res.json({ ok: true });
 });

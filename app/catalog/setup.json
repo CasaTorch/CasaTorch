@@ -330,6 +330,13 @@
           "id": "list",
           "type": "reminders",
           "label": "Reminders"
+        },
+        {
+          "id": "binDay",
+          "type": "choice",
+          "label": "Trash pickup day (optional - CasaTorch reminds you the evening before; more bins in Settings › Household)",
+          "default": "",
+          "options": [["", "Skip"], ["0", "Sunday"], ["1", "Monday"], ["2", "Tuesday"], ["3", "Wednesday"], ["4", "Thursday"], ["5", "Friday"], ["6", "Saturday"]]
         }
       ]
     },
@@ -1107,6 +1114,39 @@
           "default": "yes"
         }
       ]
+    },
+    {
+      "id": "apptests",
+      "title": "App tests",
+      "intro": "Every few minutes CasaTorch checks how fast the apps you use answer from home. When one is slow or down, it shows where the trouble starts: your Wi-Fi or router, your internet provider, or the app itself.",
+      "question": {
+        "id": "want",
+        "label": "Want CasaTorch to keep an eye on the apps you use?",
+        "options": [
+          [
+            "yes",
+            "Yes, pick my apps"
+          ],
+          [
+            "no",
+            "Not now"
+          ]
+        ]
+      },
+      "branches": {
+        "yes": {
+          "fields": [
+            {
+              "id": "picks",
+              "type": "apptests",
+              "label": "Apps to test"
+            }
+          ]
+        },
+        "no": {
+          "note": "You can add app tests any time in Network \u203a App tests."
+        }
+      }
     },
     {
       "id": "energy",

@@ -319,17 +319,94 @@ t('Security Center: reads the neighbor table on Linux, Mac and Windows, and expl
   assert.ok(H.securityChecklist().some((i) => i.id === 'https'));
 });
 
-t('App tests: reads traceroute, tracepath and tracert, and sorts hops into home, provider and internet', () => {
-  const lin = 'traceroute to example.com (203.0.113.10), 24 hops max, 60 byte packets\n 1  192.168.1.1  0.512 ms\n 2  100.92.0.1  8.1 ms\n 3  *\n 4  198.51.100.1  10.4 ms\n';   // scrub-ok: documentation addresses
-  assert.deepEqual(H.atParseTrace(lin, 'traceroute'), [{ n: 1, ip: '192.168.1.1', ms: 0.512 }, { n: 2, ip: '100.92.0.1', ms: 8.1 }, { n: 3, ip: null, ms: null }, { n: 4, ip: '198.51.100.1', ms: 10.4 }]);   // scrub-ok
-  const win = '\nTracing route to example.com [203.0.113.10]\n\n  1    <1 ms    <1 ms    <1 ms  192.168.1.1\n  2     9 ms     8 ms    10 ms  198.51.100.1\n  3     *        *        *     Request timed out.\n';   // scrub-ok
-  assert.deepEqual(H.atParseTrace(win, 'tracert'), [{ n: 1, ip: '192.168.1.1', ms: 0.5 }, { n: 2, ip: '198.51.100.1', ms: 8 }, { n: 3, ip: null, ms: null }]);   // scrub-ok
-  const tp = ' 1?: [LOCALHOST]                      pmtu 1500\n 1:  192.168.1.1                                           0.611ms\n 2:  no reply\n 3:  198.51.100.1                                          11.204ms\n';   // scrub-ok
-  assert.deepEqual(H.atParseTrace(tp, 'tracepath'), [{ n: 1, ip: '192.168.1.1', ms: 0.611 }, { n: 2, ip: null, ms: null }, { n: 3, ip: '198.51.100.1', ms: 11.204 }]);   // scrub-ok
+t('App tests: reads traceroute (Linux, Mac), tracepath, tracert and mtr into hops with min/avg/max and loss', () => {
+  const A = globalThis.__casatorchAT;
+  // Linux traceroute -n -q 3: three probes a hop, a silent hop, split routes, an annotation
+  const lin = 'traceroute to example.com (203.0.113.10), 24 hops max, 60 byte packets\n 1  192.168.1.1  0.512 ms  0.4 ms  0.6 ms\n 2  100.92.0.1  8.1 ms  9.0 ms *\n 3  * * *\n 4  198.51.100.1  10.4 ms 198.51.100.9  12.0 ms  11.0 ms\n 5  203.0.113.10  20.1 ms !H  19.9 ms  20.0 ms\n';   // scrub-ok: documentation addresses
+  const L = A.atParseTrace(lin, 'traceroute').hops;
+  assert.deepEqual(L.map((h) => [h.n, h.ip, h.sent, h.loss]), [[1, '192.168.1.1', 3, 0], [2, '100.92.0.1', 3, 33], [3, null, 3, 100], [4, '198.51.100.9', 3, 0], [5, '203.0.113.10', 3, 0]]);   // scrub-ok
+  assert.deepEqual([L[0].min, L[0].avg, L[0].max], [0.4, 0.5, 0.6]); assert.deepEqual(L[3].ips, ['198.51.100.9', '198.51.100.1']);   // scrub-ok
+  // macOS traceroute: same layout, different header
+  const mac = 'traceroute to example.com (203.0.113.10), 64 hops max, 52 byte packets\n 1  192.168.1.1  2.345 ms  1.879 ms  1.770 ms\n 2  * * *\n 3  10.0.0.1  9.104 ms  8.901 ms *\n';   // scrub-ok
+  assert.deepEqual(A.atParseTrace(mac, 'traceroute').hops.map((h) => [h.n, h.ip, h.loss, h.min]), [[1, '192.168.1.1', 0, 1.77], [2, null, 100, null], [3, '10.0.0.1', 33, 8.9]]);   // scrub-ok
+  // Linux traceroute --mtu prints F=
+  assert.equal(A.atParseTrace(' 1  192.168.1.1  0.173 ms F=1400  0.080 ms  0.050 ms\n', 'traceroute').mtu, 1400);   // scrub-ok
+  // Windows tracert -d, English and German
+  const win = '\nTracing route to example.com [203.0.113.10]\nover a maximum of 24 hops:\n\n  1    <1 ms    <1 ms    <1 ms  192.168.1.1\n  2     9 ms     *       10 ms  198.51.100.1\n  3     *        *        *     Request timed out.\n  4    21 ms    20 ms    22 ms  203.0.113.10\n\nTrace complete.\n';   // scrub-ok
+  assert.deepEqual(A.atParseTrace(win, 'tracert').hops.map((h) => [h.n, h.ip, h.loss, h.avg]), [[1, '192.168.1.1', 0, 0.5], [2, '198.51.100.1', 33, 9.5], [3, null, 100, null], [4, '203.0.113.10', 0, 21]]);   // scrub-ok
+  assert.equal(A.atParseTrace('  3     *        *        *     Zeitüberschreitung der Anforderung.\n', 'tracert').hops[0].loss, 100);
+  // tracepath: one line a probe, the path MTU along the way
+  const tp = ' 1?: [LOCALHOST]                      pmtu 1500\n 1:  192.168.1.1                                           0.611ms\n 1:  192.168.1.1                                           0.401ms\n 2:  no reply\n 3:  198.51.100.1                                          11.204ms pmtu 1492\n     Resume: pmtu 1492 hops 3 back 3\n';   // scrub-ok
+  const P = A.atParseTrace(tp, 'tracepath');
+  assert.deepEqual(P.hops.map((h) => [h.n, h.ip, h.sent, h.min, h.max]), [[1, '192.168.1.1', 2, 0.4, 0.61], [2, null, 1, null, null], [3, '198.51.100.1', 1, 11.2, 11.2]]); assert.equal(P.mtu, 1492);   // scrub-ok
+  // mtr -j
+  const mtr = JSON.stringify({ report: { hubs: [{ count: 1, host: '192.168.1.1', 'Loss%': 0, Snt: 5, Avg: 0.6, Best: 0.4, Wrst: 1.1 }, { count: 2, host: '???', 'Loss%': 100, Snt: 5 }, { count: 3, host: '198.51.100.1', 'Loss%': 20, Snt: 5, Avg: 10.4, Best: 9.6, Wrst: 12.9 }] } });   // scrub-ok
+  assert.deepEqual(A.atParseTrace(mtr, 'mtr').hops, [{ n: 1, ip: '192.168.1.1', sent: 5, loss: 0, min: 0.4, avg: 0.6, max: 1.1 }, { n: 2, ip: null, sent: 5, loss: 100, min: null, avg: null, max: null }, { n: 3, ip: '198.51.100.1', sent: 5, loss: 20, min: 9.6, avg: 10.4, max: 12.9 }]);   // scrub-ok
+  assert.deepEqual(A.atParseTrace('not json', 'mtr').hops, []);
+});
+t('App tests: whose network each hop is (names, then network numbers), and the network directory\'s answers', () => {
+  const A = globalThis.__casatorchAT;
   const hops = H.atZones([{ ip: '192.168.1.1' }, { ip: '100.92.0.1' }, { ip: '198.51.100.1', name: 'a.isp-one.net' }, { ip: null }, { ip: '198.51.100.9', name: 'b.isp-one.net' }, { ip: '203.0.113.5', name: 'x.transit.example' }, { ip: '203.0.113.7' }]);   // scrub-ok
   assert.deepEqual(hops.map((h) => h.zone), ['home', 'provider', 'provider', 'provider', 'provider', 'internet', 'internet']);
+  const byAsn = A.atZones([{ ip: '192.168.1.1' }, { ip: '100.92.0.1' }, { ip: '198.51.100.1', asn: 64500 }, { ip: null }, { ip: '203.0.113.5', asn: 64501 }, { ip: '203.0.113.9', asn: 64510 }], { destAsn: 64510 });   // scrub-ok
+  assert.deepEqual(byAsn.map((h) => h.zone), ['home', 'provider', 'provider', 'provider', 'internet', 'app']);
+  assert.deepEqual(A.atParseOrigin('64500 | 198.51.100.0/24 | US | arin | 2001-01-01'), { asn: 64500, prefix: '198.51.100.0/24', cc: 'US' });   // scrub-ok
+  assert.equal(A.atParseAsName('64500 | US | arin | 2001-01-01 | EXAMPLE-NET - Example Broadband, US'), 'Example Broadband');
+  assert.equal(A.atRevName('198.51.100.7'), '7.100.51.198.origin.asn.cymru.com');   // scrub-ok
+  assert.ok(A.atRevName('2001:db8::1').startsWith('1.0.0.0.0.0.0.0') && A.atRevName('2001:db8::1').endsWith('8.b.d.0.1.0.0.2.origin6.asn.cymru.com'));
+  assert.equal(A.atPathKey({ hops: [{ zone: 'home', ip: '192.168.1.1' }, { ip: '198.51.100.1', asn: 64500 }, { ip: '198.51.100.2', asn: 64500 }, { ip: '203.0.113.5', asn: 64501 }] }), 'home>AS64500>AS64501');   // scrub-ok
   assert.equal(H.atParseUrl('zoom.us').url, 'https://zoom.us/');
   for (const bad of ['-oProxy=x', 'ftp://a.b', 'https://u:p@a.b/', 'https://a..b/']) assert.equal(H.atParseUrl(bad), null, bad);
+});
+t('App tests: the likely culprit - Wi-Fi/router, provider, a network in between, or the app itself', () => {
+  const A = globalThis.__casatorchAT;
+  const hop = (n, zone, avg, loss = 0, extra = {}) => ({ n, ip: `198.51.100.${n}`, zone, sent: 5, loss, min: avg == null ? null : avg * 0.9, avg, max: avg == null ? null : avg * 1.2, ...extra });   // scrub-ok
+  const dest = (avg, loss = 0) => ({ ip: '203.0.113.10', zone: 'app', dest: true, sent: 5, avg, min: avg == null ? null : avg * 0.9, loss });   // scrub-ok
+  const path = (hops, d) => ({ hops, dest: d });
+  // loss from the router onwards: the home
+  let c = A.atCulprit(path([hop(1, 'home', 3, 40), hop(2, 'provider', 12, 40), hop(3, 'internet', 20, 40)], dest(25, 40)), { slow: true });
+  assert.deepEqual([c.who, c.kind, c.hop], ['home', 'loss', 1]);
+  // loss only at a router in the middle (it doesn't bother answering traces), none at the app: not a culprit
+  c = A.atCulprit(path([hop(1, 'home', 1), hop(2, 'provider', 10, 60), hop(3, 'internet', 20)], dest(25, 0)), { slow: false });
+  assert.equal(c.who, null);
+  // slower than usual from the provider's hop 3 onwards (the usual from earlier traces)
+  const base = { hops: { '198.51.100.1': 1, '198.51.100.2': 9, '198.51.100.3': 11, '198.51.100.4': 20 }, dest: 24 };   // scrub-ok
+  c = A.atCulprit(path([hop(1, 'home', 1), hop(2, 'provider', 9.5), hop(3, 'provider', 82), hop(4, 'internet', 90)], dest(95)), { slow: true, base });
+  assert.deepEqual([c.who, c.kind, c.hop, c.ms], ['provider', 'delay', 3, 71]);
+  assert.equal(A.atCulpritText(c, 'Zoom'), 'Likely cause: your internet provider - the slowdown starts at hop 3, about 71 ms more than usual.');
+  // a network in between, named
+  c = A.atCulprit(path([hop(1, 'home', 1), hop(2, 'provider', 9), hop(3, 'provider', 11), hop(4, 'internet', 80, 0, { org: 'Example Transit' })], dest(85)), { slow: true, base });
+  assert.deepEqual([c.who, c.hop, c.org], ['internet', 4, 'Example Transit']);
+  // the network is fine, but the app takes long to answer
+  c = A.atCulprit(path([hop(1, 'home', 1), hop(2, 'provider', 9)], dest(24)), { slow: true, base, run: { connect: 20, wait: 2400 }, med: { wait: 300 } });
+  assert.deepEqual([c.who, c.kind], ['app', 'answer']);
+  // nothing beyond the router answers and every app is down: the provider (or the line to it)
+  c = A.atCulprit(path([{ n: 1, ip: '192.168.1.1', zone: 'home', sent: 5, loss: 0, avg: 1 }, { n: 2, ip: null, zone: 'provider', sent: 5, loss: 100 }], dest(null, 100)), { down: true, run: { connect: null }, othersDown: 0, othersUp: 0 });   // scrub-ok
+  assert.deepEqual([c.who, c.kind, c.hop], ['provider', 'stops', 1]);
+  // several apps down at once, the router answers: the provider
+  c = A.atCulprit(path([{ n: 1, ip: '192.168.1.1', zone: 'home', sent: 5, loss: 0, avg: 1 }], dest(null, 100)), { down: true, run: {}, othersDown: 3, othersUp: 0 });   // scrub-ok
+  assert.deepEqual([c.who, c.kind], ['provider', 'many']);
+  // others are fine and the path reaches the app's network: the app itself
+  c = A.atCulprit(path([hop(1, 'home', 1), hop(2, 'provider', 9), hop(3, 'app', 20)], dest(null, 100)), { down: true, run: { connect: null }, othersDown: 0, othersUp: 4 });
+  assert.equal(c.who, 'app');
+  // the name couldn't be looked up
+  assert.equal(A.atCulprit(null, { down: true, run: { errKind: 'dns' } }).who, 'dns');
+  // slow means well past the usual: twice the median and half a second more
+  assert.ok(A.atIsSlow(1400, 400) && !A.atIsSlow(700, 300) && !A.atIsSlow(900, 600));
+});
+t('App tests: setup suggests apps for the country, and turns the answers into tests', () => {
+  const A = globalThis.__casatorchAT;
+  const us = A.atSuggest('US', 'en'), gb = A.atSuggest('GB', 'en'), de = A.atSuggest('', 'de');
+  assert.ok(us.picks.includes('router') && us.picks.includes('dns') && us.picks.includes('zoom') && us.picks.length <= 8);
+  assert.ok(gb.picks.includes('iplayer')); assert.equal(de.cc, 'DE'); assert.ok(de.picks.includes('ard') && de.picks.includes('teams'));
+  assert.ok(!A.atSuggest('CN', 'zh').picks.includes('google'));
+  const tests = A.atFromSetup({ want: 'yes', picks: ['router', 'netflix', 'nope'], custom: [{ name: 'Bank', url: 'bank.example.com' }, { url: '-bad' }], every: 15, alert: 'yes' }, []);
+  assert.deepEqual(tests.map((x) => x.preset || x.url), ['router', 'netflix', 'https://bank.example.com/']);
+  assert.ok(tests.every((x) => x.every === 15 && x.alert === true)); assert.equal(tests[0].kind, 'router');
+  assert.equal(A.atFromSetup({ want: 'no' }, undefined), undefined);
+  const kept = [{ id: 'k1', preset: 'netflix', name: 'Netflix', url: 'https://www.netflix.com/' }];
+  assert.equal(A.atFromSetup({ want: 'no' }, kept), kept);
+  assert.equal(A.atFromSetup({ want: 'yes', picks: ['netflix'] }, kept)[0].id, 'k1', 'running setup again keeps the history');
 });
 
 t('security: only home names reach CasaTorch (no DNS rebinding), and cloud metadata is never fetched', () => {
@@ -641,5 +718,147 @@ await t('secure access: Basic, away from home - JSON for the app, a page for bro
   } finally { H.remote.nonce = null; H.remote.homeIps = H0; srv.close(); restore(); }
 });
 
+/* Household (78h-household.js): bin schedules in the house's own time zone, holidays, waste sensors, the mailbox, appliances. */
+{
+  const HH = globalThis.__casatorchHousehold;
+  const bin = (x) => ({ id: 'aaaaaaaaaa', source: 'schedule', ...x });
+  t('household: weekly on Tuesdays', () => assert.deepEqual(HH.hhRawDates(bin({ repeat: 'weekly', dow: 2 }), '2026-10-17', '2026-11-04'), ['2026-10-20', '2026-10-27', '2026-11-03']));
+  t('household: every 2 weeks keeps to its start week', () => {
+    const b = bin({ repeat: 'biweekly', dow: 4, start: '2026-10-08' });
+    assert.deepEqual(HH.hhRawDates(b, '2026-10-17', '2026-11-30'), ['2026-10-22', '2026-11-05', '2026-11-19']);
+    assert.deepEqual(HH.hhRawDates(b, '2026-10-01', '2026-10-20'), ['2026-10-08'], 'nothing before the first pickup');
+  });
+  t('household: monthly - first Monday, last Friday, the 31st in a short month', () => {
+    assert.deepEqual(HH.hhRawDates(bin({ repeat: 'monthly', nth: 1, dow: 1 }), '2026-10-17', '2027-01-10'), ['2026-11-02', '2026-12-07', '2027-01-04']);
+    assert.deepEqual(HH.hhRawDates(bin({ repeat: 'monthly', nth: -1, dow: 5 }), '2026-10-01', '2026-12-31'), ['2026-10-30', '2026-11-27', '2026-12-25']);
+    assert.deepEqual(HH.hhRawDates(bin({ repeat: 'monthly', mday: 31 }), '2027-01-15', '2027-04-30'), ['2027-01-31', '2027-02-28', '2027-03-31', '2027-04-30']);
+  });
+  t('household: a holiday week slides the holiday and the rest of its week a day later', () => {
+    const b = bin({ repeat: 'weekly', dow: 4 }), mon = bin({ id: 'bbbbbbbbbb', repeat: 'weekly', dow: 1 });
+    const ch = [{ holiday: '2026-11-26', days: 1 }];   // Thanksgiving (Thursday)
+    assert.deepEqual(HH.hhBinDates(b, '2026-11-20', ch).slice(0, 3), [{ date: '2026-11-27', from: '2026-11-26' }, { date: '2026-12-03', from: null }, { date: '2026-12-10', from: null }]);
+    assert.equal(HH.hhBinDates(mon, '2026-11-20', ch)[0].date, '2026-11-23', 'Monday, before the holiday: unchanged');
+    const xmas = [{ holiday: '2026-12-21', days: 1 }];   // a Monday holiday moves Thursday too
+    assert.equal(HH.hhBinDates(b, '2026-12-20', xmas)[0].date, '2026-12-25');
+  });
+  t('household: skip one pickup, or move one (for one bin or all)', () => {
+    const b = bin({ repeat: 'weekly', dow: 2 });
+    assert.equal(HH.hhBinDates(b, '2026-10-17', [{ date: '2026-10-20', to: null }])[0].date, '2026-10-27');
+    assert.deepEqual(HH.hhBinDates(b, '2026-10-17', [{ date: '2026-10-20', to: '2026-10-21', bin: 'aaaaaaaaaa' }])[0], { date: '2026-10-21', from: '2026-10-20' });
+    assert.equal(HH.hhBinDates(b, '2026-10-17', [{ date: '2026-10-20', to: '2026-10-21', bin: 'cccccccccc' }])[0].date, '2026-10-20', 'a change for another bin');
+  });
+  t('household: tonight / tomorrow / later', () => assert.deepEqual([0, 1, 2, 5, null].map(HH.hhBinState), ['today', 'tonight', 'tomorrow', 'later', 'none']));
+  t('household: the house\'s own date, not this computer\'s (late evening in Los Angeles is tomorrow in UTC)', () => {
+    const L = HH.hhLocal(Date.parse('2026-10-20T05:30:00Z'), 'America/Los_Angeles');
+    assert.deepEqual(L, { date: '2026-10-19', time: '22:30', dow: 1 });
+    assert.equal(HH.hhLocal(Date.parse('2026-10-20T05:30:00Z'), 'Europe/Berlin').date, '2026-10-20');
+  });
+  t('household: 7 PM the evening before, across daylight-saving changes', () => {
+    assert.equal(new Date(HH.hhAt('2026-11-01', '19:00', 'America/Los_Angeles')).toISOString(), '2026-11-02T03:00:00.000Z', 'Nov 1: standard time (UTC-8)');
+    assert.equal(new Date(HH.hhAt('2026-10-31', '19:00', 'America/Los_Angeles')).toISOString(), '2026-11-01T02:00:00.000Z', 'the day before: daylight time (UTC-7)');
+    assert.equal(new Date(HH.hhAt('2026-03-08', '19:00', 'America/Los_Angeles')).toISOString(), '2026-03-09T02:00:00.000Z', 'spring forward');
+    assert.equal(new Date(HH.hhAt('2026-10-25', '19:00', 'Europe/Berlin')).toISOString(), '2026-10-25T18:00:00.000Z', 'Berlin after its change');
+    const b = bin({ repeat: 'weekly', dow: 1 });   // Mondays: same weekday both sides of the change
+    assert.deepEqual(HH.hhRawDates(b, '2026-10-25', '2026-11-10'), ['2026-10-26', '2026-11-02', '2026-11-09']);
+  });
+  t('household: waste-collection sensors in their many formats', () => {
+    const tz = 'America/Los_Angeles', today = '2026-10-17';
+    const S = (state, attributes = {}, id = 'sensor.waste_recycling') => ({ entity_id: id, state, attributes });
+    assert.deepEqual(HH.hhWasteDates(S('2026-10-20', { device_class: 'date' }), today, tz), ['2026-10-20']);
+    assert.deepEqual(HH.hhWasteDates(S('in 3 days'), today, tz), ['2026-10-20']);
+    assert.deepEqual(HH.hhWasteDates(S('Tomorrow'), today, tz), ['2026-10-18']);
+    assert.deepEqual(HH.hhWasteDates(S('3', { unit_of_measurement: 'days' }), today, tz), ['2026-10-20']);
+    assert.deepEqual(HH.hhWasteDates(S('2026-10-21T06:00:00+00:00', { device_class: 'timestamp' }), today, tz), ['2026-10-20'], 'a moment: the house\'s day');
+    assert.deepEqual(HH.hhWasteDates(S('2', { daysTo: 2, types: ['Recycling'], next_date: '2026-10-19' }), today, tz), ['2026-10-19']);
+    const upcoming = S('in 3 days', { '20.10.2026': 'Recycling', '23.10.2026': 'Trash', '03.11.2026': 'Recycling' }, 'sensor.waste_collection');
+    assert.deepEqual(HH.hhWasteDates(upcoming, today, tz, 'recycling'), ['2026-10-20', '2026-11-03'], 'one sensor, several bins');
+    assert.deepEqual(HH.hhWasteDates(S('x', { Recycling: '2026-10-20', Trash: '2026-10-23' }), today, tz, 'trash'), ['2026-10-23']);
+    assert.deepEqual(HH.hhWasteDates({ entity_id: 'calendar.waste', state: 'off', attributes: { message: 'Yard waste', start_time: '2026-10-22 00:00:00' } }, today, tz), ['2026-10-22']);
+    assert.deepEqual(HH.hhWasteDates(S('2026-10-01'), today, tz), [], 'a date gone by');
+  });
+  t('household: suggestions from Home Assistant', () => {
+    const st = [
+      { entity_id: 'sensor.recycling_pickup', state: '2026-10-20', attributes: { friendly_name: 'Recycling pickup', device_class: 'date' } },
+      { entity_id: 'binary_sensor.mailbox_flap', state: 'off', attributes: { friendly_name: 'Mailbox flap', device_class: 'opening' } },
+      { entity_id: 'sensor.email_unread', state: '4', attributes: { friendly_name: 'Unread e-mail' } },
+      { entity_id: 'plant.monstera', state: 'ok', attributes: { moisture: 33 } },
+      { entity_id: 'sensor.basil_soil_moisture', state: '12', attributes: { unit_of_measurement: '%', device_class: 'moisture' } },
+      { entity_id: 'sensor.bathroom_humidity', state: '55', attributes: { unit_of_measurement: '%', device_class: 'humidity' } },
+      { entity_id: 'sensor.washing_machine_plug_power', state: '3.1', attributes: { unit_of_measurement: 'W', device_class: 'power' } },
+      { entity_id: 'sensor.washing_machine_remaining_time', state: '0', attributes: { unit_of_measurement: 'min' } },
+      { entity_id: 'sensor.dishwasher_operation_state', state: 'Ready', attributes: {} },
+    ];
+    const s = HH.hhSuggest(st, '2026-10-17', 'UTC');
+    assert.deepEqual(s.bins.map((x) => [x.entity, x.icon, x.next]), [['sensor.recycling_pickup', 'recycling', '2026-10-20']]);
+    assert.deepEqual(s.mail.map((x) => x.entity), ['binary_sensor.mailbox_flap']);
+    assert.deepEqual(s.plants.map((x) => x.entity), ['plant.monstera', 'sensor.basil_soil_moisture']);
+    assert.deepEqual(s.apps.map((x) => [x.kind, x.entity, x.mode, x.remaining]), [['washer', 'sensor.washing_machine_plug_power', 'power', 'sensor.washing_machine_remaining_time'], ['dishwasher', 'sensor.dishwasher_operation_state', 'state', null]]);
+  });
+  t('household: a washer on a smart plug - running above the watts, done after 5 quiet minutes', () => {
+    const app = { mode: 'power', onW: 8, offMin: 5 }, st = { phase: 'idle' }, m = 60_000, T0 = Date.parse('2026-10-17T10:00:00Z');
+    assert.equal(HH.hhAppStep(st, app, { power: 2 }, T0), null);
+    assert.equal(HH.hhAppStep(st, app, { power: 300 }, T0 + 10_000), null, 'a blip is not a start');
+    assert.equal(HH.hhAppStep(st, app, { power: 450 }, T0 + 80_000), 'started'); assert.equal(st.phase, 'running');
+    assert.equal(HH.hhAppStep(st, app, { power: 1 }, T0 + 30 * m), null, 'soaking: below, but not long enough');
+    assert.equal(HH.hhAppStep(st, app, { power: 1 }, T0 + 33 * m), null);
+    assert.equal(HH.hhAppStep(st, app, { power: 200 }, T0 + 34 * m), null, 'spinning again'); assert.equal(st.belowSince, null);
+    assert.equal(HH.hhAppStep(st, app, { power: 1.5 }, T0 + 50 * m), null);
+    assert.equal(HH.hhAppStep(st, app, { power: 1.5 }, T0 + 55 * m), 'done'); assert.equal(st.phase, 'done'); assert.equal(st.doneAt, new Date(T0 + 50 * m).toISOString(), 'done when it went quiet');
+    assert.equal(HH.hhAppStep(st, app, { power: 1 }, T0 + 60 * m), null); assert.equal(st.phase, 'done', 'stays done until emptied');
+    assert.equal(HH.hhAppStep(st, app, { power: 1 }, T0 + 13 * 3600_000), null); assert.equal(st.phase, 'idle', 'not news half a day later');
+  });
+  t('household: appliances with a status or a time-left sensor', () => {
+    const st = { phase: 'idle' }, app = { mode: 'state' };
+    assert.equal(HH.hhAppStep(st, app, { text: 'Ready' }, 1), null);
+    assert.equal(HH.hhAppStep(st, app, { text: 'Run' }, 2), 'started');
+    assert.equal(HH.hhAppStep(st, app, { text: 'unavailable' }, 3), null); assert.equal(st.phase, 'running', 'offline for a moment is not done');
+    assert.equal(HH.hhAppStep(st, app, { text: 'Finished' }, 4), 'done');
+    const r = { phase: 'idle' }, rem = { mode: 'remaining' };
+    assert.equal(HH.hhAppStep(r, rem, { remainingMin: 0 }, 1), null);
+    assert.equal(HH.hhAppStep(r, rem, { remainingMin: 42 }, 2), 'started');
+    assert.equal(HH.hhAppStep(r, rem, { remainingMin: 0 }, 3), 'done');
+    const now = Date.parse('2026-10-17T10:00:00Z');
+    assert.equal(HH.hhMinutes({ state: '23', attributes: { unit_of_measurement: 'min' } }, now), 23);
+    assert.equal(HH.hhMinutes({ state: '1.5', attributes: { unit_of_measurement: 'h' } }, now), 90);
+    assert.equal(HH.hhMinutes({ state: '0:23:00', attributes: {} }, now), 23);
+    assert.equal(HH.hhMinutes({ state: '2026-10-17T10:23:00Z', attributes: { device_class: 'timestamp' } }, now), 23);
+  });
+  t('household: the mailbox - first opening is post, the next (after a couple of minutes) is collected', () => {
+    const st = {}, cfg = { reset: 'door' }, at = (m) => new Date(Date.parse('2026-10-17T10:00:00Z') + m * 60_000).toISOString();
+    assert.equal(HH.hhMailStep(st, cfg, { state: 'off', last_changed: at(0) }, 0), null, 'first look');
+    assert.equal(HH.hhMailStep(st, cfg, { state: 'on', last_changed: at(60) }, 0), 'arrived'); assert.equal(st.at, at(60));
+    assert.equal(HH.hhMailStep(st, cfg, { state: 'off', last_changed: at(60.1) }, 0), null, 'flap closes');
+    assert.equal(HH.hhMailStep(st, cfg, { state: 'off', last_changed: at(60.5) }, 0), null, 'rattled again within the minute (missed between looks): still the delivery');
+    assert.equal(HH.hhMailStep(st, cfg, { state: 'on', last_changed: at(300) }, 0), 'collected'); assert.equal(st.state, 'empty');
+    const tap = {}; HH.hhMailStep(tap, { reset: 'tap' }, { state: 'off', last_changed: at(0) }, 0); HH.hhMailStep(tap, { reset: 'tap' }, { state: 'on', last_changed: at(1) }, 0);
+    assert.equal(HH.hhMailStep(tap, { reset: 'tap' }, { state: 'on', last_changed: at(90) }, 0), null); assert.equal(tap.state, 'post', 'only a tap clears it');
+  });
+  t('household: thirsty plants', () => {
+    assert.deepEqual(HH.hhPlantOf({ entity_id: 'sensor.basil', state: '12', attributes: {} }, 20), { moisture: 12, thirsty: true, gone: false });
+    assert.equal(HH.hhPlantOf({ entity_id: 'plant.monstera', state: 'ok', attributes: { moisture: 33 } }, 20).thirsty, false);
+    assert.equal(HH.hhPlantOf({ entity_id: 'plant.cactus', state: 'problem', attributes: { problem: 'moisture low' } }, 20).thirsty, true);
+  });
+  t('household: bin settings are checked (and every 2 weeks starts on its weekday)', () => {
+    const b = HH.hhCleanBin({ name: ' Recycling ', icon: 'recycling', color: '#2563eb', repeat: 'biweekly', dow: 4, start: '2026-10-19' });
+    assert.equal(b.name, 'Recycling'); assert.equal(b.start, '2026-10-22');
+    assert.throws(() => HH.hhCleanBin({ name: '' }), /name/);
+    assert.equal(HH.hhCleanBin({ name: 'x', icon: '<script>', color: 'red' }).icon, 'trash');
+    assert.throws(() => HH.hhCleanBin({ name: 'x', source: 'ha', entity: 'light.kitchen' }), /sensor/);
+  });
+  t('household: setup\'s trash-day answer becomes a weekly Trash bin (once; skipping adds nothing)', () => {
+    const was = HH.hh.cfg.bins; HH.hh.cfg.bins = [];
+    try {
+      HH.hhFromSetup(''); assert.equal(HH.hh.cfg.bins.length, 0);
+      HH.hhFromSetup('2'); assert.deepEqual(HH.hh.cfg.bins.map((b) => [b.name, b.repeat, b.dow]), [['Trash', 'weekly', 2]]);
+      HH.hhFromSetup('4'); assert.equal(HH.hh.cfg.bins[0].dow, 2, 'bins already set up stay as they are');
+    } finally { HH.hh.cfg.bins = was; }
+  });
+  t('household: a city calendar becomes bins, one per kind of pickup', () => {
+    const occ = [{ title: 'Garbage & Recycling', start: '2026-10-20T00:00:00.000Z', allDay: true }, { title: 'Garbage', start: '2026-10-27T00:00:00.000Z', allDay: true }, { title: 'Yard waste', start: '2026-10-22T15:00:00.000Z', allDay: false }];
+    assert.deepEqual(HH.hhIcalKinds(occ, 'America/Los_Angeles').map((k) => [k.title, k.count, k.next, k.icon]), [['Garbage', 2, '2026-10-20', 'trash'], ['Recycling', 1, '2026-10-20', 'recycling'], ['Yard waste', 1, '2026-10-22', 'yard']]);
+  });
+}
+
+await (await import('./radar-unit.mjs')).default(t);   // the rain radar's tile proxy (radar-unit.mjs)
 console.log(`\n${n} passed`);
 process.exit(0);

@@ -637,6 +637,7 @@ function review() {
   add('Sensors', a.sensors?.has === 'yes' ? labelsOf('sensors', a.sensors.kinds) : T('none'));
   add('Home AI Agent', a.ai?.provider && a.ai.provider !== 'later' ? (a.ai._test?.ok ? `${{ anthropic: 'Claude', openai: 'OpenAI', ollama: 'Ollama' }[a.ai.provider]} · ${a.ai._test.model}` : T('not connected yet')) : T('not now'));
   add('Network', `${T(W.steps.find((s) => s.id === 'network')?.question.options.find(([v]) => v === a.network?.kind)?.[1] || '-')}${a.network?.dns && a.network.dns !== 'none' ? ` · ${a.network.dns}` : ''}`);
+  add('App tests', a.apptests?.want === 'yes' ? T('{n} apps · every {m} min{alert}', { n: (a.apptests.picks || []).length + (a.apptests.custom || []).filter((c) => c.url).length, m: a.apptests.every || 5, alert: a.apptests.alert === 'no' ? '' : ` · ${T('alerts on')}` }) : T('not now'));
   add('Energy', a.energy?.track === 'yes' ? `${a.energy.utility === 'other' || !a.energy.utility ? T('{rate} per kWh', { rate: a.energy.rate || '?' }) : a.energy.utility}${a.energy.budget ? ` · ${T('budget {budget}/month', { budget: a.energy.budget })}` : ''}${a.energy.kinds?.length ? ` · ${labelsOf('energy', a.energy.kinds)}` : ''}` : T('off'));
   const sec = el('dd', {}, T('On by default - setting itself up'));   // 43-local-https.js starts it before setup
   dl.append(el('dt', {}, T('Secure address at home')), sec);
@@ -659,6 +660,7 @@ function problems(step) {
   }
   if (step.id === 'calendars' && (store.list || []).some((c) => !c.url)) return 'Paste a link for each calendar, or remove the empty one.';
   if (step.id === 'reminders' && (store.list || []).some((r) => !r.title)) return 'Give each reminder a name, or remove the empty one.';
+  if (step.id === 'apptests' && window.atSetupProblem) { const m = window.atSetupProblem(store); if (m) return m; }   // setup-apptests.js
   if (br?.pick) for (const o of shownOptions(br.pick.options)) if ((store[br.pick.id] || []).includes(o.id) && o.method === 'direct') {
     const d = store[o.id] || {};
     for (const f of (o.fields || []).filter((g) => g.required)) if (!d[f.id]) return `${o.label}: ${f.label} is needed.`;

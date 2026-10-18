@@ -305,6 +305,7 @@ app.get('/api/setup/current', async (_req, res) => {
     sensors: c.sensors?.kinds || c.yolink ? { has: 'yes', kinds: haKinds(c.sensors?.kinds), alertOn: c.sensors?.alertOn || ['leak', 'smoke', 'battery'] } : { has: 'no' },
     network: { kind: c.network?.provider || undefined, speedtest: c.network?.speedtest === false ? 'no' : 'yes' },
     energy: c.energy ? { track: 'yes', utility: c.energy.utility || 'other', rate: c.energy.ratePerKwh ?? '', budget: c.energy.budget ?? '', kinds: haKinds(c.energy.kinds) } : {},
+    apptests: typeof atSetupCurrent === 'function' ? atSetupCurrent() : {},   // app tests (77-apptests.js)
     alerts: { quiet: c.alerts?.quietHours || '22-7', phone: c.alerts?.phone === 'homeassistant' ? 'ha' : 'no' },   // as saved - not the default
   }, keeps: { homeAssistant: !!c.homeAssistant, hue: !!c.hue, shelly: (c.shelly || []).length, yolink: !!c.yolink, cameras: (c.cameras || []).length, ring: !!c.ring, license: !!c.license } });
 });
@@ -366,6 +367,7 @@ async function setupFinish(req, res) {
     sports: { teams: (a.sports?.teams || []).slice(0, 30) },
     news: { feeds },
     reminders: undefined,   // one list now: Reminders (78-nudges.js)
+    appTests: typeof atFromSetup === 'function' ? atFromSetup(a.apptests, prev.appTests) : prev.appTests,   // "keep an eye on the apps you use" (77-apptests.js)
     homeAssistant: draft.ha && usesHa ? { url: draft.ha.url, token: draft.ha.token } : usesHa ? prev.homeAssistant || null : null,
     // Cameras set up again in this run replace that kind (Frigate, Reolink, snapshot); the other kinds stay as they were.
     cameras: [...(prev.cameras || []).filter((c) => !cams.some((n) => n.type === c.type)), ...cams],
@@ -399,6 +401,7 @@ async function setupFinish(req, res) {
   try { saveConfig(next); } catch (err) { return res.status(500).json({ error: err.code === 'ENOSPC' ? 'The disk is full, so your settings couldn\'t be saved. Free some space (Settings › Health shows how), then press Finish again - your answers are kept.' : err.code === 'EACCES' || err.code === 'EROFS' || err.code === 'EPERM' ? 'CasaTorch isn\'t allowed to save in its data folder. Check the folder\'s permissions (or the NAS share), then press Finish again - your answers are kept.' : `could not save the settings: ${err.message}` }); }
   progressClear();
   if (!isDemo() && typeof settingsSnapshot === 'function') settingsSnapshot('after-setup');
+  if (typeof hhFromSetup === 'function') hhFromSetup(a.reminders?.binDay);   // trash day, if answered (78h-household.js)
   if (typeof nudgesFromSetup === 'function') nudgesFromSetup((a.reminders?.list || []).filter((r) => r?.title).map((r) => ({ title: r.title, days: Array.isArray(r.days) ? r.days.map(Number) : null, time: r.time || null, icon: r.icon, sound: r.sound })));
   if (!isDemo()) authSetOwner({ username: acct.username, passwordHash: keepPw ? null : hashSecret(acct.password), acceptedTerms: acct.terms === true });
   let pair = null;

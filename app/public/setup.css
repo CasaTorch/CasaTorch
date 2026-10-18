@@ -134,3 +134,7 @@ html.tour-lock { overflow: hidden; }
 .tour-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 560px) { .tour-overlay { padding: 12px; } .tour-frame { border-radius: 12px; } .tour-bigplay { width: 60px; height: 60px; } .tour-end { padding: 10px 12px; font-size: 13px; } .tour-end p { display: none; } .tour-endrow { width: 100%; justify-content: center; } .tour-btn { padding: 8px 12px; font-size: 14px; } }
 @media (prefers-reduced-motion: reduce) { .tour-card, .tour-thumb img, .tour-overlay, .tour-pop { transition: none; } .tour-card:hover { transform: none; } .tour-card:hover .tour-thumb img { transform: none; } }
+/* App tests step (setup-apptests.js) */
+.atsetup .atsgroup { margin-top: 14px; } .atsetup .atsgroup > label { display: block; margin-bottom: 6px; }
+.atsetup .opts { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } .atsetup .opt { padding: 10px 12px; }
+.atsetup .atsmore { margin-top: 12px; } .atsetup .atsmore > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
