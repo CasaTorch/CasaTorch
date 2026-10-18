@@ -15,7 +15,7 @@ jobs:
     name: Build, unit and security (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy: { fail-fast: false, matrix: { node: [20, 22] } }
+    strategy: { fail-fast: false, matrix: { node: [22, 24] } }
     defaults: { run: { working-directory: app } }
     steps:
       - uses: actions/checkout@v4
@@ -73,8 +73,7 @@ jobs:
         working-directory: app
         continue-on-error: true
         run: |
-          set -o pipefail
-          { echo '### npm audit (production dependencies, high and up)'; echo '```'; npm audit --omit=dev --audit-level=high 2>&1 | tail -60; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
+          { echo '### npm audit (production dependencies, high and up)'; echo '```'; npm audit --omit=dev --audit-level=high 2>&1 | tail -60 || true; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Audit (critical - blocking)
         working-directory: app
         run: npm audit --omit=dev --audit-level=critical

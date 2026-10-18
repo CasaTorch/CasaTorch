@@ -20,7 +20,7 @@
     "test:fast": "node ../tools/test-all.mjs --no-e2e"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "acme-client": "5.4.0",

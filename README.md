@@ -33,7 +33,7 @@ npm ci
 npm run demo          # open http://localhost:8090
 ```
 
-Needs Node.js 20 or newer (22 recommended) and git.
+Needs Node.js 22 or newer and git.
 
 ## Get a CasaTorch Box
 
@@ -55,7 +55,7 @@ for developers and command-line fans.
 | Home Assistant OS / Supervised | Add-on - see [Home Assistant users](#home-assistant-users) |
 | NAS or any Docker host (amd64/arm64) | `cd deploy && docker compose up -d` |
 | Windows 10/11 | `deploy\install.ps1` in PowerShell as Administrator |
-| macOS / anything with Node 20+ | `cd app && npm install && npm start` |
+| macOS / anything with Node 22+ | `cd app && npm install && npm start` |
 
 Then open `casatorch.com/home` on any device at home, or `http://<that machine>:8090`. Hardware advice and wall-screen picks: [docs/HARDWARE.md](docs/HARDWARE.md).
 
