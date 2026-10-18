@@ -39,6 +39,7 @@ async function weatherNow() {
   const loc = config.location;
   if (!loc?.lat || !loc?.lon) return { error: 'no location set' };
   const lat = Number(loc.lat).toFixed(4), lon = Number(loc.lon).toFixed(4);   // MET asks for at most 4 decimals
-  return cached(`weather:${lat},${lon}`, 30 * 60_000, async () => weatherView(await getJSON(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`), houseTz()));
+  const wx = await cached(`weather:${lat},${lon}`, 30 * 60_000, async () => weatherView(await getJSON(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`), houseTz()));
+  return typeof famOutside === 'function' ? famOutside(wx) : wx;   // your own outdoor sensors in place of the forecast's "now" (79c-family.js)
 }
 app.get('/api/weather', async (_req, res) => { try { res.json(await weatherNow()); } catch (err) { res.status(502).json({ error: String(err.message) }); } });

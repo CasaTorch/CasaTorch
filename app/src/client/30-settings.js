@@ -182,13 +182,14 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
   conn.append(el('div', { class: 'row wrap', style: 'margin-top:12px' }, el('a', { class: 'btn primary', href: '#connect' }, icon('plus', 14), T('Connect more')), el('a', { class: 'btn', href: '#connect' }, T('Manage connections'))));
   /* Sections, like a phone's Settings: a list on the left (the whole page on a phone), one section at a time, and search. */
   const SECTIONS = [
-    ['general', T('General'), 'home', T('Your home\'s name, language, energy price and this CasaTorch'), async () => [acct, langCard(s), everyday]],
+    ['general', T('General'), 'home', T('Your home\'s name, language, energy price and this CasaTorch'), async () => [acct, langCard(s), everyday, await famOutsideCard()]],   // famOutsideCard: 38-family.js
     ['health', T('Health|settings'), 'checkc', T('Is everything working? Checks, one-tap fixes and saved copies of your settings'), async () => healthCards(s, me), admin],
-    ['appearance', T('Look & main bar'), 'palette', T('Dark or light, colors, the main bar and the Home screen'), async () => [lookCard(), barCard(), homeCard]],
+    ['appearance', T('Look & main bar'), 'palette', T('Dark or light, colors, the main bar and the Home screen'), async () => [lookCard(), barCard(), await famChipsCard(), homeCard]],   // famChipsCard: 38-family.js
     ['people', T('People & sign-in'), 'user', T('Your account, two-step sign-in, people in the house and the security log'), async () => securityCards()],
     ['safety', T('Safety'), 'shield', T('What CasaTorch will never switch, and your exceptions'), async () => [await safetyCard()], admin],
     ['connections', T('Connections & AI'), 'link', T('Home Assistant and your brands, Home AI Agent, secure access'), async () => [conn, aiCard(s), await remoteCard(), await localHttpsCard()]],
     ['household', T('Household'), 'trash', T('Bins, the mail, plants and laundry'), async () => householdCards()],   // 37h-household.js
+    ['family', T('Family hub'), 'star', T('The family, chores and stars, lists and meals'), async () => familyCards()],   // 38-family.js
     ['phones', T('Phones & alerts'), 'phone', T('The CasaTorch app, alerts on your phones, quiet hours'), async () => [...(await appCards()), await phoneCard()]],
     ['updates', T('Updates & backup'), 'download', T('Versions, automatic updates and an encrypted backup'), async () => [await updatesCard(), await backupCard(s)]],
     ['pro', T('CasaTorch Pro'), 'spark', T('Your plan and license key'), async () => [pro]],

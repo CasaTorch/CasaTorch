@@ -11,9 +11,9 @@ final class Bridge: NSObject, WKScriptMessageHandler {
     init(controller: MainViewController) { self.controller = controller }
 
     static func infoJSON() -> String {
-        var lidar = false
-        if #available(iOS 16.0, *) { lidar = RoomScan.isSupported }
-        let info: [String: Any] = ["platform": UIDevice.current.userInterfaceIdiom == .pad ? "ipados" : "ios", "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "", "device": UIDevice.current.model, "lidar": lidar]
+        var lidar = false, mesh = false
+        if #available(iOS 16.0, *) { lidar = RoomScan.isSupported; mesh = MeshScan.isSupported }
+        let info: [String: Any] = ["platform": UIDevice.current.userInterfaceIdiom == .pad ? "ipados" : "ios", "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "", "device": UIDevice.current.model, "lidar": lidar, "mesh": mesh]
         let d = (try? JSONSerialization.data(withJSONObject: info)) ?? Data("{}".utf8)
         return String(data: d, encoding: .utf8) ?? "{}"
     }
@@ -80,19 +80,18 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             let key = HomeStore.shared.alertKey(for: id)
             return ["platform": "ios", "token": token, "key": key.base64EncodedString()]
         case "lidar":
-            if #available(iOS 16.0, *), RoomScan.isSupported { return ["available": true] }
+            if #available(iOS 16.0, *), RoomScan.isSupported { return ["available": true, "mesh": MeshScan.isSupported] }
             return ["available": false, "why": "Room scanning needs an iPhone Pro or iPad Pro with a LiDAR scanner (iOS 16 or later)."]
         case "scanRoom":
             guard #available(iOS 16.0, *), RoomScan.isSupported else { throw Failure("This iPhone or iPad has no LiDAR scanner.") }
             guard let r = try await RoomScan.run(from: vc) else { return nil }
-            // the file goes to the page in pieces (the bridge joins them)
-            let chunk = 512 * 1024
-            var off = 0
-            while off < r.data.count {
-                let piece = r.data.subdata(in: off..<min(off + chunk, r.data.count)).base64EncodedString()
-                _ = try? await vc.web.evaluateJavaScript("window.__casaChunk(\(callId), '\(piece)'); 1")
-                off += chunk
-            }
+            await sendChunks(r.data, callId: callId, vc: vc)
+            return ["name": r.name, "size": r.data.count, "chunked": true]
+        case "scanMesh":
+            // a photo-real scan: the LiDAR mesh colored from the camera (MeshScan.swift), as a PLY file
+            guard #available(iOS 16.0, *), MeshScan.isSupported else { throw Failure("Photo-real scans need an iPhone Pro or iPad Pro with a LiDAR scanner (iOS 16 or later).") }
+            guard let r = await MeshScan.run(from: vc) else { return nil }
+            await sendChunks(r.data, callId: callId, vc: vc)
             return ["name": r.name, "size": r.data.count, "chunked": true]
         case "probe":
             // the app's own screens asking "is there a CasaTorch at this address?" - see Probe in Net.swift
@@ -134,6 +133,17 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             HomeStore.shared.homes.isEmpty ? vc.openShell("welcome") : vc.openShell("homes")
             return nil
         default: throw Failure("The app doesn't know \"\(cmd)\" - update it from the App Store.")
+        }
+    }
+
+    /// A scan file goes to the page in pieces (the bridge joins them).
+    @MainActor private func sendChunks(_ data: Data, callId: Int, vc: MainViewController) async {
+        let chunk = 512 * 1024
+        var off = 0
+        while off < data.count {
+            let piece = data.subdata(in: off..<min(off + chunk, data.count)).base64EncodedString()
+            _ = try? await vc.web.evaluateJavaScript("window.__casaChunk(\(callId), '\(piece)'); 1")
+            off += chunk
         }
     }
 

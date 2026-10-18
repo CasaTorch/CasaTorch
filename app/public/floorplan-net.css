@@ -1,0 +1,46 @@
+/* CasaTorch 3D Home - network pins, Wi-Fi coverage, backups, vacuum map and voice (floorplan-net.js) */
+.pin.netpin { position: relative; }
+.pin.netpin.up .ic { color: var(--good); }
+.pin.netpin.unknown .ic { color: var(--muted); }
+.pin.netpin.warn { border-color: var(--warm); } .pin.netpin.warn .ic { color: var(--warm); }
+.pin.netpin.down { background: var(--bad); border-color: var(--bad); color: #fff; box-shadow: 0 0 0 3px rgba(248, 113, 113, .28), 0 3px 10px rgba(0, 0, 0, .45); }
+.pin.netpin.down .ic { color: #fff; }
+.pin.netpin .nb { position: absolute; top: -8px; right: -9px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--good); color: #052e1a; font: 700 11px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 2px 6px rgba(0, 0, 0, .4); }
+.wifichipw { pointer-events: none; } .wifichip { display: inline-block; transform: translateY(30px); font: 650 11px/1 system-ui, sans-serif; padding: 3px 7px; border-radius: 8px; background: var(--panel-solid); border: 1px solid var(--line-2); color: var(--text); white-space: nowrap; }
+.wifichip::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; background: #64748b; }
+.wifichip.strong::before { background: #22c55e; } .wifichip.good::before { background: #a3e635; } .wifichip.fair::before { background: #fbbf24; } .wifichip.weak::before { background: #ef4444; }
+#wifilegend { position: fixed; left: 50%; transform: translateX(-50%); bottom: 74px; z-index: 5; width: max-content; max-width: min(420px, calc(100% - 24px)); padding: 10px 12px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: var(--blur); box-shadow: var(--shadow); font-size: 12px; color: var(--text); }
+#wifilegend b { display: block; margin-bottom: 6px; font-size: 13px; }
+#wifilegend .keys { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; } #wifilegend .keys span { display: inline-flex; align-items: center; gap: 5px; }
+#wifilegend .keys i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+#wifilegend small { color: var(--muted); display: block; line-height: 1.35; }
+@media (max-width: 700px) { #wifilegend { left: 8px; right: 8px; transform: none; bottom: 124px; width: auto; max-width: none; padding: 8px 10px; } #wifilegend small { display: none; } #wifilegend b { margin-bottom: 4px; } }
+#netplace { position: fixed; left: 50%; top: 64px; transform: translateX(-50%); z-index: 12; box-shadow: var(--shadow); background: var(--panel-solid); max-width: calc(100% - 24px); }
+#modal .box.netbox { width: min(460px, 94vw); max-height: 86vh; overflow-y: auto; color: var(--text); }
+#modal .box.netbox.wide { width: min(560px, 94vw); }
+#modal .netbox h2 { display: flex; align-items: center; gap: 6px; } #modal .netbox h3 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); font-weight: 650; }
+#modal .netbox .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+#modal .netbox a.mini { text-decoration: none; color: inherit; display: inline-block; }
+#modal .netbox .mini.primary { background: var(--hl); color: var(--hl-ink); border-color: var(--hl); font-weight: 650; }
+#modal .netbox .note { color: var(--muted); font-size: 12px; margin: 6px 0; line-height: 1.4; } #modal .netbox .note.warn { color: var(--warm); }
+.nrow { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.nrow > span:first-child:not(.dotst) { color: var(--muted); } .nrow > b { margin-left: auto; text-align: right; font-weight: 600; }
+.nrow.sub { padding-left: 12px; font-size: 12px; } .nrow.sub.bad b { color: var(--bad); } .nrow.sub.warn b { color: var(--warm); }
+.nrow .nm { flex: 1; min-width: 0; color: var(--text) !important; display: flex; flex-direction: column; } .nrow .nm small { color: var(--muted); font-size: 11px; }
+.nrow .ic svg { width: 16px; height: 16px; display: block; }
+.dotst { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); } .dotst.up { background: var(--good); } .dotst.down { background: var(--bad); } .dotst.warn { background: var(--warm); }
+.rplist { max-height: 42vh; overflow-y: auto; }
+.undobar { flex-wrap: wrap; } .undobar .nbx { display: inline-flex; gap: 6px; }
+#drawer .vacpop { flex-basis: 100%; margin-top: 6px; display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: var(--panel-solid); border: 1px solid var(--line-2); box-shadow: var(--shadow); max-width: 340px; font-size: 13px; }
+#drawer .vacpop .note { margin: 0; color: var(--muted); }
+#drawer .vacrow { display: flex; flex-direction: column; align-items: flex-start; text-align: left; } #drawer .vacrow small { color: var(--muted); font-size: 11px; }
+#micBtn.on { color: #fff; background: var(--bad); border-color: var(--bad); }
+#voicebox { position: fixed; left: 50%; top: 62px; transform: translateX(-50%); z-index: 15; width: min(440px, calc(100% - 24px)); padding: 12px 40px 12px 14px; border-radius: 16px; background: var(--panel-solid); border: 1px solid var(--line-2); box-shadow: var(--shadow); color: var(--text); font-size: 14px; }
+#voicebox p { margin: 4px 0; line-height: 1.4; } #voicebox .said { color: var(--muted); font-style: italic; } #voicebox small { color: var(--muted); }
+#voicebox .listening { display: inline-flex; align-items: center; gap: 6px; } #voicebox .listening .ic { color: var(--bad); animation: pulse 1s infinite; }
+#voicebox .vx { position: absolute; top: 8px; right: 8px; border: 0; background: none; color: var(--muted); padding: 4px; }
+#voicebox .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+#voicebox .typing { display: inline-flex; gap: 4px; } #voicebox .typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: pulse 1s infinite; }
+#voicebox .ic svg, #micBtn .ic svg, #wifiTog .ic svg { width: 15px; height: 15px; display: block; }
+/* The mic shows its word only where the top bar has room for it (it never pushes Help onto a second line). */
+@media (max-width: 1360px) { #micBtn .btxt { display: none; } #micBtn { padding-left: 10px; padding-right: 10px; } }

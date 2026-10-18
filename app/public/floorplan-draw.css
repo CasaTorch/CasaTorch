@@ -1,0 +1,113 @@
+/* The floor-plan drawing editor (floorplan-draw.js): light, calm, finger-friendly. Scoped to #drawer.dz. */
+#drawer.dz { --d-bg: #eef1f5; --d-canvas: #f8f9fb; --d-panel: #ffffff; --d-line: rgba(15, 23, 42, .1); --d-line2: rgba(15, 23, 42, .18); --d-text: #0f172a; --d-muted: #64748b;
+  --d-acc: #0a84ff; --d-acc-ink: #fff; --d-wall: #2b3038; --d-room: rgba(10, 132, 255, .07); --d-bad: #ef4444; --d-good: #16a34a; --d-ghost: #a855f7;
+  position: fixed; inset: 0; z-index: 30; display: grid; grid-template-columns: 76px 1fr 320px; grid-template-rows: auto 1fr; background: var(--d-bg); color: var(--d-text);
+  font: 14px/1.35 -apple-system, BlinkMacSystemFont, Inter, system-ui, Segoe UI, sans-serif; }
+#drawer.dz.nopv { grid-template-columns: 76px 1fr 300px; }
+#drawer.dz * { box-sizing: border-box; }
+#drawer.dz button { font: inherit; color: inherit; border: 1px solid var(--d-line); background: var(--d-panel); border-radius: 10px; padding: 7px 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; }
+#drawer.dz button:hover { border-color: var(--d-line2); } #drawer.dz button:disabled { opacity: .4; cursor: default; }
+#drawer.dz button.primary { background: var(--d-acc) !important; color: var(--d-acc-ink); border-color: transparent !important; font-weight: 650; }
+#drawer.dz button.danger { color: var(--d-bad); } #drawer.dz button.on { border-color: var(--d-acc); color: var(--d-acc); background: color-mix(in srgb, var(--d-acc) 9%, #fff); }
+#drawer.dz button.ghost { border-color: transparent; background: none; }
+#drawer.dz input[type=text], #drawer.dz input[type=number] { font: inherit; color: var(--d-text); background: #f1f4f8; border: 1px solid transparent; border-radius: 9px; padding: 7px 9px; width: 100%; min-width: 0; }
+#drawer.dz input:focus { outline: none; border-color: var(--d-acc); background: #fff; }
+#drawer.dz input[type=range] { width: 100%; accent-color: var(--d-acc); }
+#drawer.dz .dz-ic { width: 20px; height: 20px; flex: none; } #drawer.dz .dz-ic svg { width: 100%; height: 100%; }
+/* top bar */
+#drawer.dz .dz-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--d-panel); border-bottom: 1px solid var(--d-line); min-width: 0; }
+#drawer.dz .dz-top .dz-name { max-width: 220px; font-weight: 650; }
+#drawer.dz .dz-top .dz-sp { flex: 1; }
+#drawer.dz .dz-status { font-size: 12px; color: var(--d-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#drawer.dz .dz-status.bad { color: var(--d-bad); font-weight: 600; cursor: pointer; }
+/* tools */
+#drawer.dz .dz-tools { display: flex; flex-direction: column; gap: 4px; padding: 8px 6px; background: var(--d-panel); border-right: 1px solid var(--d-line); overflow-y: auto; }
+#drawer.dz .dz-tools button { flex-direction: column; gap: 3px; border-color: transparent; background: none; padding: 7px 2px; font-size: 11px; font-weight: 550; color: var(--d-muted); min-height: 54px; }
+#drawer.dz .dz-tools button.on { color: var(--d-acc); background: color-mix(in srgb, var(--d-acc) 10%, #fff); }
+/* canvas */
+#drawer.dz .dz-stage { position: relative; overflow: hidden; background: var(--d-canvas); min-width: 0; min-height: 0; }
+#drawer.dz .dz-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; }
+#drawer.dz .dz-stage.select svg { cursor: default; }
+#drawer.dz .dz-bg { position: absolute; left: 0; top: 0; pointer-events: none; user-select: none; transform-origin: 0 0; max-width: none; }
+#drawer.dz .dz-hint { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); background: rgba(15, 23, 42, .78); color: #fff; font-size: 13px; padding: 6px 12px; border-radius: 999px; pointer-events: none; white-space: nowrap; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; }
+#drawer.dz .dz-zoom { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+#drawer.dz .dz-zoom button { width: 38px; padding: 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+#drawer.dz .dz-fix { position: absolute; z-index: 2; transform: translate(-50%, 16px); display: flex; gap: 6px; align-items: center; background: #fff; border: 1px solid var(--d-bad); color: var(--d-text); padding: 5px 6px 5px 10px; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.14); font-size: 12px; max-width: 280px; }
+#drawer.dz .dz-fix button { min-height: 28px; padding: 4px 10px; }
+.dz-svg .g1 { stroke: rgba(15, 23, 42, .055); stroke-width: 1; } .dz-svg .g5 { stroke: rgba(15, 23, 42, .12); stroke-width: 1; }
+.dz-svg .room { fill: var(--d-room); stroke: none; } .dz-svg .room.sel { fill: rgba(10, 132, 255, .14); }
+.dz-svg .wallv { stroke: var(--d-wall); stroke-linecap: square; fill: none; pointer-events: none; }
+.dz-svg .hit { stroke: transparent; stroke-width: 16; fill: none; cursor: pointer; } .dz-svg .hit:hover { stroke: rgba(10, 132, 255, .18); }
+.dz-svg .selln { stroke: var(--d-acc); stroke-width: 3; fill: none; pointer-events: none; }
+.dz-svg .handle { fill: #fff; stroke: var(--d-acc); stroke-width: 2.5; cursor: grab; }
+.dz-svg .lbl { font: 600 12px -apple-system, system-ui, sans-serif; fill: var(--d-text); paint-order: stroke; stroke: rgba(255,255,255,.92); stroke-width: 4px; stroke-linejoin: round; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.dz-svg .lbl.acc { fill: var(--d-acc); } .dz-svg .lbl.big { font-size: 14px; } .dz-svg .lbl.dim { fill: var(--d-muted); font-weight: 500; }
+.dz-svg .rname { font: 650 13px -apple-system, system-ui, sans-serif; fill: var(--d-text); text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.dz-svg .rarea { font: 12px -apple-system, system-ui, sans-serif; fill: var(--d-muted); text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.dz-svg .ghost { stroke: var(--d-acc); stroke-width: 2.5; stroke-dasharray: 7 5; fill: rgba(10, 132, 255, .06); pointer-events: none; }
+.dz-svg .below { stroke: var(--d-ghost); stroke-width: 2; stroke-dasharray: 5 4; fill: rgba(168, 85, 247, .05); pointer-events: none; }
+.dz-svg .guide { stroke: var(--d-ghost); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.dz-svg .mag { fill: none; stroke: var(--d-ghost); stroke-width: 2; pointer-events: none; }
+.dz-svg .gap { stroke: var(--d-canvas); stroke-linecap: butt; pointer-events: none; }
+.dz-svg .sym { stroke: var(--d-wall); stroke-width: 1.6; fill: none; pointer-events: none; } .dz-svg .sym.glass { stroke: #0284c7; stroke-width: 2; } .dz-svg .sym.arc { stroke-dasharray: 4 3; stroke-width: 1.2; }
+.dz-svg .sym.sel { stroke: var(--d-acc); }
+.dz-svg .stairs { fill: rgba(148, 120, 90, .12); stroke: #8b6f52; stroke-width: 1.5; cursor: pointer; } .dz-svg .stairs.sel { stroke: var(--d-acc); stroke-width: 2.5; }
+.dz-svg .step { stroke: #8b6f52; stroke-width: 1; fill: none; pointer-events: none; } .dz-svg .arrow { stroke: #5b4633; stroke-width: 1.8; fill: none; pointer-events: none; marker-end: url(#dz-arrow); }
+.dz-svg .sky { fill: rgba(2, 132, 199, .12); stroke: #0284c7; stroke-width: 1.6; stroke-dasharray: 5 3; cursor: pointer; }
+.dz-svg .issue circle { fill: var(--d-bad); stroke: #fff; stroke-width: 2.5; cursor: pointer; } .dz-svg .issue text { fill: #fff; font: 800 13px system-ui; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.dz-svg .issue .ring { fill: none; stroke: var(--d-bad); stroke-width: 2; animation: dzpulse 1.6s ease-out infinite; pointer-events: none; transform-box: fill-box; transform-origin: center; }
+@keyframes dzpulse { from { opacity: .9; transform: scale(.6); } to { opacity: 0; transform: scale(1.6); } }
+@media (prefers-reduced-motion: reduce) { .dz-svg .issue .ring { animation: none; opacity: .5; } }
+.dz-svg .paint { stroke-linecap: butt; pointer-events: none; }
+.dz-svg .meas { stroke: #f97316; stroke-width: 2.5; pointer-events: none; } .dz-svg .meas-dot { fill: #f97316; pointer-events: none; }
+/* inspector + preview */
+#drawer.dz .dz-side { display: flex; flex-direction: column; min-height: 0; background: var(--d-panel); border-left: 1px solid var(--d-line); }
+#drawer.dz .dz-insp { flex: 1; overflow-y: auto; padding: 12px 14px 18px; min-height: 0; }
+#drawer.dz .dz-insp h3 { margin: 4px 0 8px; font-size: 16px; font-weight: 700; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+#drawer.dz .dz-insp h4 { margin: 16px 0 6px; font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--d-muted); }
+#drawer.dz .dz-insp p { margin: 6px 0; color: var(--d-muted); font-size: 13px; }
+#drawer.dz .dz-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; } #drawer.dz .dz-row > label { flex: 0 0 112px; font-size: 13px; color: var(--d-muted); }
+#drawer.dz .dz-row .unit { color: var(--d-muted); font-size: 13px; flex: none; }
+#drawer.dz .dz-row.wrap { flex-wrap: wrap; } #drawer.dz .dz-row.two > * { flex: 1; }
+#drawer.dz .dz-seg { display: flex; padding: 2px; gap: 2px; border-radius: 10px; background: #eef1f5; flex: 1; }
+#drawer.dz .dz-seg button { flex: 1; border: 0; background: none; padding: 5px 6px; min-height: 30px; font-size: 13px; color: var(--d-muted); border-radius: 8px; white-space: nowrap; }
+#drawer.dz .dz-seg button.on { background: #fff; color: var(--d-text); font-weight: 650; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+#drawer.dz .dz-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#drawer.dz .dz-chips button { padding: 6px 10px; min-height: 32px; font-size: 13px; border-radius: 999px; }
+#drawer.dz .dz-sw { display: flex; flex-wrap: wrap; gap: 7px; }
+#drawer.dz .dz-sw button { width: 32px; height: 32px; min-height: 0; padding: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--d-line2); }
+#drawer.dz .dz-sw button.on { box-shadow: 0 0 0 2.5px var(--d-acc); }
+#drawer.dz .dz-sw button.mat { width: auto; height: 32px; border-radius: 999px; padding: 0 11px; font-size: 12px; font-weight: 600; color: #1f2937; border: 1px solid var(--d-line2); box-shadow: none; }
+#drawer.dz .dz-sw button.mat.on { box-shadow: 0 0 0 2.5px var(--d-acc); }
+#drawer.dz .dz-issue { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #fef2f2; margin: 6px 0; font-size: 13px; }
+#drawer.dz .dz-issue span { flex: 1; } #drawer.dz .dz-issue button { min-height: 28px; padding: 4px 10px; }
+#drawer.dz .dz-ok { color: var(--d-good); font-size: 13px; font-weight: 600; margin: 6px 0; }
+#drawer.dz .dz-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+#drawer.dz .dz-pv { position: relative; height: 300px; flex: none; border-top: 1px solid var(--d-line); background: linear-gradient(#dfe9f3, #f3f5f8); }
+#drawer.dz .dz-pv canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#drawer.dz .dz-pv .dz-pvlab { position: absolute; left: 10px; top: 8px; font-size: 11px; font-weight: 650; color: var(--d-muted); text-transform: uppercase; letter-spacing: .06em; pointer-events: none; }
+#drawer.dz .dz-pv .dz-pvx { position: absolute; right: 8px; top: 6px; min-height: 28px; padding: 3px 9px; font-size: 12px; }
+#drawer.dz.nopv .dz-pv { display: none; }
+#drawer.dz .dz-help { position: absolute; inset: 0; background: rgba(15, 23, 42, .35); display: grid; place-items: center; z-index: 5; }
+#drawer.dz .dz-help > div { background: #fff; border-radius: 16px; padding: 18px 20px; width: min(420px, calc(100% - 32px)); max-height: 80%; overflow: auto; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+#drawer.dz .dz-help table { width: 100%; border-collapse: collapse; font-size: 13px; } #drawer.dz .dz-help td { padding: 5px 4px; border-bottom: 1px solid var(--d-line); }
+#drawer.dz .dz-help kbd { font: 600 12px ui-monospace, monospace; background: #f1f4f8; border: 1px solid var(--d-line2); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; }
+#drawer.dz .dz-more { display: none; }
+#drawer.dz .dz-picbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 14px 12px; border: 0; }
+#drawer.dz .dz-picbar:empty, #drawer.dz .dz-picbar:not(:has(button)) { padding: 0; }
+/* phones and narrow windows: tools along the bottom, the inspector as a sheet above them, the 3D preview on request */
+@media (max-width: 760px) {
+  #drawer.dz, #drawer.dz.nopv { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto auto; }
+  #drawer.dz .dz-top { padding: 6px 8px; gap: 6px; } #drawer.dz .dz-top .dz-name { max-width: 120px; } #drawer.dz .dz-top .dz-hide-s { display: none; }
+  #drawer.dz .dz-top button { padding: 6px 9px; }
+  #drawer.dz .dz-stage { grid-row: 2; }
+  #drawer.dz .dz-side { grid-row: 3; border-left: 0; border-top: 1px solid var(--d-line); max-height: 40vh; }
+  #drawer.dz .dz-side.min .dz-insp { display: none; }
+  #drawer.dz .dz-insp { padding: 8px 12px 12px; }
+  #drawer.dz .dz-more { display: flex; justify-content: center; padding: 2px; border-bottom: 1px solid var(--d-line); }
+  #drawer.dz .dz-more button { min-height: 22px; padding: 0 18px; border: 0; background: none; color: var(--d-muted); font-size: 12px; }
+  #drawer.dz .dz-tools { grid-row: 4; flex-direction: row; overflow-x: auto; border-right: 0; border-top: 1px solid var(--d-line); padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); scrollbar-width: none; }
+  #drawer.dz .dz-tools button { min-width: 62px; min-height: 50px; flex: none; }
+  #drawer.dz .dz-pv { position: absolute; left: 8px; right: 8px; top: 56px; height: 44vh; z-index: 4; border: 1px solid var(--d-line2); border-radius: 14px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,.2); }
+  #drawer.dz .dz-row > label { flex-basis: 96px; }
+}

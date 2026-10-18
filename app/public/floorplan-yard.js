@@ -1,16 +1,54 @@
-/* The yard around the 3D house: areas you draw (grass, driveway, patio, path, garden beds, a pool)
-   and things you place (trees, pines, bushes, cars, an EV charger). Trees and cars cast real sun
-   shadows, so the sun on the plan finally knows about the big oak out front.
+/* The yard around the 3D house: areas you draw (lawn, terrace, path, a driveway that can slope up to the garage,
+   flower beds, gravel, a pool with real depth), fences and hedges, and things you place (trees, pines, bushes, cars,
+   an EV charger). Trees and cars cast real sun shadows, so the sun on the plan finally knows about the big oak out front.
    A car can be linked to your car's own sensors (Tesla, or any EV Home Assistant knows): it sits in
    the driveway when the car is home, fades out when it's away, and while it charges a glowing cable
-   runs from the charger with current flowing into it. Shown only - CasaTorch never controls the car. */
+   runs from the charger with current flowing into it. Shown only - CasaTorch never controls the car.
+   Drawing and editing the ground lives in floorplan-outdoor.js. */
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { AREA_KINDS, AREA_ITEM_KIND, LINE_KINDS, slopeFn, poolShell, copingPieces, fencePosts, pointInPoly, polyArea } from './floorplan-outdoor.js';
+import { Kit } from './floorplan-furniture.js';
+import { RoundedBoxGeometry as RoundedBox } from 'three/addons/geometries/RoundedBoxGeometry.js';
+export { AREA_KINDS };
 
-export const AREA_KINDS = { grass: ['Grass', '#4f7d3a'], driveway: ['Driveway', '#5f6670'], patio: ['Patio / deck', '#9c8b78'], path: ['Path', '#c9c2b8'], garden: ['Garden bed', '#5a3c2a'], pool: ['Pool', '#2fa4d6'] };
 export const ITEM_KINDS = { tree: 'Tree', pine: 'Pine', bush: 'Bush', car: 'Car', charger: 'EV charger' };
-const LIFT = { grass: 0.004, garden: 0.012, driveway: 0.008, patio: 0.016, path: 0.02, pool: 0.024 };
+const LIFT = { grass: 0.004, gravel: 0.008, garden: 0.012, driveway: 0.008, patio: 0.016, path: 0.02, pool: 0.024 };
 const PAINT = { night: 0.5, blueprint: 0.42, day: 1, real: 1 };
+
+/* ---- ground pictures, drawn once in grey and tinted by each area's color (UVs are metres) ---- */
+const TEXS = {};
+function groundTex(kind) {
+  if (TEXS[kind] !== undefined || typeof document === 'undefined') return TEXS[kind] || null;
+  const N = 256, c = Object.assign(document.createElement('canvas'), { width: N, height: N }), g = c.getContext('2d'), R = Math.random;
+  const noise = (n, lo, hi, w = 2, h = 2) => { for (let i = 0; i < n; i++) { const v = lo + R() * (hi - lo) | 0; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(R() * N, R() * N, 1 + R() * w, 1 + R() * h); } };
+  let tile = 1;
+  g.fillStyle = '#d4d4d4'; g.fillRect(0, 0, N, N);
+  if (kind === 'grass') { tile = 4; g.fillStyle = '#c4c4c4'; g.fillRect(0, 0, N / 2, N); noise(14000, 150, 245, 1.5, 3); }   // mowing stripes, 2 m wide
+  else if (kind === 'patio') { tile = 1.2; noise(5000, 175, 235, 3, 3); g.strokeStyle = '#8f8f8f'; g.lineWidth = 3; for (let i = 0; i <= 2; i++) { g.beginPath(); g.moveTo(i * N / 2, 0); g.lineTo(i * N / 2, N); g.moveTo(0, i * N / 2); g.lineTo(N, i * N / 2); g.stroke(); } }
+  else if (kind === 'path') { tile = 0.8; noise(4000, 170, 235); g.strokeStyle = '#8a8a8a'; g.lineWidth = 3; const bh = N / 8; for (let r = 0; r < 8; r++) { g.beginPath(); g.moveTo(0, r * bh); g.lineTo(N, r * bh); g.stroke(); for (let k = 0; k <= 4; k++) { const x = k * N / 4 + (r % 2) * N / 8; g.beginPath(); g.moveTo(x, r * bh); g.lineTo(x, r * bh + bh); g.stroke(); } } }
+  else if (kind === 'driveway') { tile = 2; noise(26000, 120, 255, 1.5, 1.5); }
+  else if (kind === 'garden') { tile = 1; g.fillStyle = '#a8a8a8'; g.fillRect(0, 0, N, N); noise(9000, 90, 200, 4, 2); }
+  else if (kind === 'gravel') { tile = 1; noise(22000, 120, 255, 3, 3); }
+  else if (kind === 'tile') { tile = 0.5; g.fillStyle = '#e6e6e6'; g.fillRect(0, 0, N, N); g.strokeStyle = '#b8b8b8'; g.lineWidth = 4; for (let i = 0; i <= 4; i++) { g.beginPath(); g.moveTo(i * N / 4, 0); g.lineTo(i * N / 4, N); g.moveTo(0, i * N / 4); g.lineTo(N, i * N / 4); g.stroke(); } }
+  else if (kind === 'hedge') { tile = 1; g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, N, N); for (let i = 0; i < 2600; i++) { const v = 110 + R() * 140 | 0; g.fillStyle = `rgb(${v},${v},${v})`; g.beginPath(); g.ellipse(R() * N, R() * N, 2 + R() * 4, 1 + R() * 3, R() * 3, 0, 6.3); g.fill(); } }
+  else if (kind === 'caustic') { tile = 1.6; g.fillStyle = '#000'; g.fillRect(0, 0, N, N); g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 2.2; for (let i = 0; i < 70; i++) { const x = R() * N, y = R() * N, r = 10 + R() * 22; g.beginPath(); for (let a = 0; a <= 6.4; a += 0.7) { const rr = r * (0.75 + R() * 0.5); g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.stroke(); } }
+  else { TEXS[kind] = null; return null; }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / tile, 1 / tile); t.colorSpace = kind === 'caustic' ? THREE.NoColorSpace : THREE.SRGBColorSpace; t.anisotropy = 2;
+  return (TEXS[kind] = t);
+}
+/* Box-like shapes get UVs in metres, so a long hedge or fence isn't one stretched picture. */
+function metreUV(geo) {
+  const p = geo.attributes.position, n = geo.attributes.normal, uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) { const ax = Math.abs(n.getX(i)), ay = Math.abs(n.getY(i)), az = Math.abs(n.getZ(i)); const [u, v] = ay >= ax && ay >= az ? [p.getX(i), p.getZ(i)] : ax >= az ? [p.getZ(i), p.getY(i)] : [p.getX(i), p.getY(i)]; uv[i * 2] = u; uv[i * 2 + 1] = v; }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); return geo;
+}
+/* Seeing into a pool without cutting a hole in the ground: its inside (walls, floor, water) is drawn first, then its
+   opening is drawn into the depth buffer only - so the lawn and the ground drawn after it stay out of the opening,
+   while anything standing in front of the pool still covers it. */
+const PUNCH = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 });   // always nearer than the lawn's own offset
+/* A little seeded random, so a flower bed looks the same every time it's built. */
+const seeded = (str) => { let h = 2166136261; for (const ch of String(str)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; }; };
 
 /* ---- shared, cached geometry (one tree shape for every tree) ---- */
 const G = {};
@@ -68,10 +106,10 @@ export class Yard {
     for (const l of this.labels) { l.parent?.remove(l); l.element.remove(); }
     this.labels = []; this.cars = []; this.trees = []; this.charger = null;   // a yard without a charger draws no cable to the old one
     /* Free each build's own shapes and materials; the tree and car shapes are shared by every build and stay. */
-    const shared = new Set(Object.values(G)), mats = new Set(Object.values(this.mats || {}));
+    const shared = new Set(Object.values(G)), mats = new Set(Object.values(this.mats || {}));   // (the pool opening's material is shared too: kept)
     for (const o of [...this.group.children]) { this.group.remove(o); o.traverse((x) => { if ((x.isMesh || x.isLine) && !shared.has(x.geometry)) x.geometry.dispose(); if (x.material) mats.add(x.material); }); }
-    for (const m of mats) m.dispose();
-    this.mats = null;
+    for (const m of mats) if (m !== PUNCH) m.dispose();
+    this.mats = null; this.pools = [];
   }
   /* yard: { areas: [{ kind, pts: [[x, z]...] }], items: [{ id, kind, pos: [x, z], rot, scale, ... }] }; y: ground height (world) */
   build(yard, y, theme, el) {
@@ -83,12 +121,26 @@ export class Yard {
       tire: new THREE.MeshStandardMaterial({ color: '#16181c', roughness: .8, transparent: true }), charger: new THREE.MeshStandardMaterial({ color: '#e8ecf2', roughness: .4, emissive: '#38bdf8', emissiveIntensity: .25 }),
     };
     this.mats = mats;
+    this.pools = []; const low = !!this.lowQuality?.();   // an old tablet: plain colors on big ground areas, fewer flowers
     for (const a of yard?.areas || []) {
       if (!AREA_KINDS[a.kind] || (a.pts || []).length < 3) continue;
-      const s = new THREE.Shape(a.pts.map(([x, z]) => new THREE.Vector2(x, -z)));
-      const m = new THREE.Mesh(new THREE.ShapeGeometry(s).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: tint(AREA_KINDS[a.kind][1]), roughness: a.kind === 'pool' ? .1 : .95, metalness: a.kind === 'pool' ? .2 : 0, ...(a.kind === 'pool' ? { emissive: '#0e7490', emissiveIntensity: theme === 'day' ? .15 : .5 } : {}), polygonOffset: true, polygonOffsetFactor: -1 }));
-      m.position.y = y + (LIFT[a.kind] || .01); m.receiveShadow = true; m.userData.yard = { area: a.id }; this.group.add(m);
-      if (theme !== 'day') { const e = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(a.pts.map(([x, z]) => new THREE.Vector3(x, 0, z))), new THREE.LineBasicMaterial({ color: tint(AREA_KINDS[a.kind][1]).multiplyScalar(2.2), transparent: true, opacity: .6 })); e.position.y = m.position.y + .005; e.raycast = () => {}; this.group.add(e); }
+      const tag = { itemId: a.id, kind: AREA_ITEM_KIND[a.kind], yardArea: a.id }, base = y + (LIFT[a.kind] || .01);
+      if (a.kind === 'pool') { this.group.add(this.pool(a, base, tint, theme, tag)); continue; }
+      const s = new THREE.Shape(a.pts.map(([x, z]) => new THREE.Vector2(x, -z))), geo = new THREE.ShapeGeometry(s).rotateX(-Math.PI / 2), up = slopeFn(a.pts, a.rise || 0);
+      if (a.rise) { const p = geo.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, up(p.getX(i), p.getZ(i))); geo.computeVertexNormals(); }
+      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: tint(AREA_KINDS[a.kind][1]), map: low ? null : groundTex(a.kind), roughness: a.kind === 'patio' ? .8 : .95, polygonOffset: true, polygonOffsetFactor: -1 }));
+      m.position.y = base; m.receiveShadow = true; m.userData = { ...tag }; this.group.add(m);
+      if (a.rise) {   // the raised edge of a sloped driveway, so it doesn't float
+        const pos = []; a.pts.forEach((p, i) => { const q = a.pts[(i + 1) % a.pts.length], hp = up(p[0], p[1]), hq = up(q[0], q[1]); if (hp < 0.02 && hq < 0.02) return; pos.push(p[0], 0, p[1], q[0], 0, q[1], q[0], hq, q[1], p[0], 0, p[1], q[0], hq, q[1], p[0], hp, p[1]); });
+        if (pos.length) { const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); sg.computeVertexNormals(); const sk = new THREE.Mesh(sg, new THREE.MeshStandardMaterial({ color: tint('#8b8f96'), roughness: .9, side: THREE.DoubleSide })); sk.position.y = base - 0.002; sk.receiveShadow = true; sk.castShadow = true; sk.userData = { ...tag }; this.group.add(sk); }
+      }
+      if (a.kind === 'garden') this.flowers(a, base, tint, low);
+      if (theme !== 'day') { const e = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(a.pts.map(([x, z]) => new THREE.Vector3(x, up(x, z), z))), new THREE.LineBasicMaterial({ color: tint(AREA_KINDS[a.kind][1]).multiplyScalar(2.2), transparent: true, opacity: .6 })); e.position.y = m.position.y + .005; e.raycast = () => {}; this.group.add(e); }
+    }
+    for (const ln of yard?.lines || []) {
+      if (!LINE_KINDS[ln.kind] || (ln.pts || []).length < 2) continue;
+      const o = ln.kind === 'hedge' ? this.hedge(ln, tint) : this.fence(ln, tint);
+      o.position.y = y; o.userData = { itemId: ln.id, kind: ln.kind, yardLine: ln.id }; this.group.add(o);
     }
     for (const it of yard?.items || []) {
       if (!ITEM_KINDS[it.kind]) continue;
@@ -103,6 +155,74 @@ export class Yard {
       if (it.kind === 'charger') this.charger = o;
     }
     return this;
+  }
+  /* A pool you can look into: tiled walls and floor down to its depth, water a little below the stone edge. */
+  pool(a, base, tint, theme, tag) {
+    const g = new THREE.Group(), sh = poolShell(a.pts, a.depth ?? 1.4), d = sh.depth, shape = new THREE.Shape(a.pts.map(([x, z]) => new THREE.Vector2(x, -z))), flat = () => new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2);
+    g.position.y = base; g.userData = { ...tag, depth: d };
+    const punch = new THREE.Mesh(flat(), PUNCH); punch.renderOrder = -5; punch.position.y = 0.002; punch.userData = { ...tag }; g.add(punch);
+    const pos = [], nrm = [], uv = []; let u0 = 0;
+    for (const w of sh.walls) {
+      const [x1, z1] = w.a, [x2, z2] = w.b, n = [w.n[0], 0, w.n[1]], u1 = u0 + w.len;
+      if (sh.ccw) { pos.push(x1, 0, z1, x2, -d, z2, x2, 0, z2, x1, 0, z1, x1, -d, z1, x2, -d, z2); uv.push(u0, 0, u1, -d, u1, 0, u0, 0, u0, -d, u1, -d); }   // wound to face the water
+      else { pos.push(x1, 0, z1, x2, 0, z2, x2, -d, z2, x1, 0, z1, x2, -d, z2, x1, -d, z1); uv.push(u0, 0, u1, 0, u1, -d, u0, 0, u1, -d, u0, -d); }
+      for (let i = 0; i < 6; i++) nrm.push(...n); u0 = u1;
+    }
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); wg.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); wg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    const tile = new THREE.MeshStandardMaterial({ color: tint('#9ad8e8'), map: groundTex('tile'), roughness: .35 });
+    const walls = new THREE.Mesh(wg, tile); walls.renderOrder = -7; walls.receiveShadow = true; walls.raycast = () => {}; g.add(walls);
+    const floorMat = tile.clone(); floorMat.color = tint('#63c3df'); if (this.high) { floorMat.emissiveMap = groundTex('caustic'); floorMat.emissive = new THREE.Color('#d8f6ff'); floorMat.emissiveIntensity = 0.4; }   // the shimmer: best quality only
+    const fl = new THREE.Mesh(flat(), floorMat); fl.position.y = -d; fl.renderOrder = -7; fl.receiveShadow = true; fl.raycast = () => {}; g.add(fl);
+    /* blended, but drawn with the solid things (custom blending keeps it out of the see-through pass, which comes too late) */
+    const water = new THREE.Mesh(flat(), new THREE.MeshStandardMaterial({ color: tint('#3ab4dd'), opacity: .55, blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor, roughness: .04, metalness: .15, depthWrite: false, emissive: '#0e7490', emissiveIntensity: theme === 'day' || theme === 'real' ? .1 : .45 }));
+    water.position.y = sh.waterY; water.renderOrder = -6; water.raycast = () => {}; g.add(water);
+    const k = new Kit(null), stone = new THREE.MeshStandardMaterial({ color: tint('#e6e0d6'), map: groundTex('patio'), roughness: .8 });
+    for (const c of copingPieces(a.pts, .3)) { const b = new THREE.BoxGeometry(c.len, .05, c.width); b.rotateY(-c.ang); b.translate(c.cx, .025, c.cz); k.put(metreUV(b), stone); }
+    const cop = k.group(); cop.traverse((o) => { o.userData = { ...tag }; }); g.add(cop);
+    this.pools.push(floorMat);
+    return g;
+  }
+  /* Flowers and low plants scattered over a bed (the same every time). */
+  flowers(a, base, tint, low) {
+    const rnd = seeded(a.id || a.pts.join()), xs = a.pts.map((p) => p[0]), zs = a.pts.map((p) => p[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const n = Math.max(3, Math.min(low ? 50 : 160, Math.round(polyArea(a.pts) * (low ? 2 : 6)))), spots = [];
+    for (let t = 0; spots.length < n && t < n * 8; t++) { const p = [x0 + rnd() * (x1 - x0), z0 + rnd() * (z1 - z0)]; if (pointInPoly(p, a.pts)) spots.push(p); }
+    if (!spots.length) return;
+    /* merged into one shape per color (no instancing: fewer shader variants for an old tablet to compile) */
+    const k = new Kit(null), leaf = new THREE.MeshStandardMaterial({ color: tint('#3f7f3a'), roughness: .9 }), cols = ['#e11d48', '#f59e0b', '#a855f7', '#f472b6', '#fde047', '#ffffff'], bloom = cols.map((c) => new THREE.MeshStandardMaterial({ color: tint(c), roughness: .7 }));
+    for (const [x, z] of spots) {
+      const s = 0.7 + rnd() * 0.6, a = rnd() * 6.28, l = new THREE.IcosahedronGeometry(0.16, 0); l.scale(s, s * 0.8, s); l.rotateY(a); k.put(l, leaf, x, base + 0.1 * s, z, { flat: true });
+      const b = new THREE.IcosahedronGeometry(0.06 * s, 0); k.put(b, bloom[(rnd() * cols.length) | 0], x + (rnd() - 0.5) * 0.08, base + 0.2 * s, z + (rnd() - 0.5) * 0.08, { flat: true });
+    }
+    const g = k.group(); g.traverse((o) => { o.raycast = () => {}; }); this.group.add(g);
+  }
+  /* A board fence: posts at the corners and every ~1.8 m, horizontal boards with small gaps, a top rail. */
+  fence(ln, tint) {
+    const h = Math.max(0.3, Math.min(3, ln.h || 1.2)), k = new Kit(null), wood = new THREE.MeshStandardMaterial({ color: tint(ln.color || LINE_KINDS.fence[1]), map: groundTex('garden'), roughness: .85 }), post = new THREE.MeshStandardMaterial({ color: tint('#5b4636'), roughness: .8 });
+    const put = (g, m, x, yy, z, ang = 0) => { g.rotateY(-ang); g.translate(x, yy, z); k.put(metreUV(g), m); };
+    for (const [x, z] of fencePosts(ln.pts, 1.8)) put(new THREE.BoxGeometry(0.09, h + 0.06, 0.09), post, x, (h + 0.06) / 2, z);
+    for (let i = 0; i < ln.pts.length - 1; i++) {
+      const [x1, z1] = ln.pts[i], [x2, z2] = ln.pts[i + 1], len = Math.hypot(x2 - x1, z2 - z1), ang = Math.atan2(z2 - z1, x2 - x1), mx = (x1 + x2) / 2, mz = (z1 + z2) / 2; if (len < 0.05) continue;
+      const n = Math.max(2, Math.round((h - 0.1) / 0.15));
+      for (let j = 0; j < n; j++) put(new THREE.BoxGeometry(len, 0.11, 0.022), wood, mx, 0.1 + j * (h - 0.2) / (n - 1) + 0.055, mz, ang);
+      put(new THREE.BoxGeometry(len + 0.08, 0.04, 0.08), post, mx, h + 0.02, mz, ang);
+    }
+    return k.group();
+  }
+  /* A clipped hedge: one rounded block per side, overlapping at the corners. */
+  hedge(ln, tint) {
+    const h = Math.max(0.3, Math.min(3, ln.h || 1.4)), k = new Kit(null), leaf = new THREE.MeshStandardMaterial({ color: tint(ln.color || LINE_KINDS.hedge[1]), map: groundTex('hedge'), roughness: .95 });
+    for (let i = 0; i < ln.pts.length - 1; i++) {
+      const [x1, z1] = ln.pts[i], [x2, z2] = ln.pts[i + 1], len = Math.hypot(x2 - x1, z2 - z1); if (len < 0.05) continue;
+      const g = new RoundedBox(len + 0.55, h, 0.7); g.rotateY(-Math.atan2(z2 - z1, x2 - x1)); g.translate((x1 + x2) / 2, h / 2, (z1 + z2) / 2); k.put(metreUV(g), leaf);
+    }
+    return k.group();
+  }
+  /* The light dancing on a pool's floor - only on the best picture quality. Returns true while it moves. */
+  shimmer(t) {
+    if (!this.pools?.length || !this.high || !this.group.visible) return false;
+    const c = TEXS.caustic; if (!c) return false;
+    c.offset.set(Math.sin(t * 0.17) * 0.35 + t * 0.012, Math.cos(t * 0.13) * 0.3); return true;
   }
   /* Wind: every tree leans with the real wind and sways, harder in gusts; pines are stiffer, bushes barely move.
      windMs: metres per second; toward: the direction the wind blows TO, as a world-space unit vector. */

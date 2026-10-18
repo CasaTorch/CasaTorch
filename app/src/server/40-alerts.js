@@ -34,7 +34,8 @@ async function alertConditions() {
   if (typeof monitorAlerts === 'function') for (const m of monitorAlerts()) add(m.id, m);   // the server monitor (Pro)
   if (typeof networkAlerts === 'function') for (const m of networkAlerts()) add(m.id, m);   // network monitoring (Pro)
   if (typeof securityAlerts === 'function') for (const m of securityAlerts()) add(m.id, m);
-  if (typeof appTestAlerts === 'function') for (const m of appTestAlerts()) add(m.id, m);   // app tests (Pro)   // Security Center: new devices, risky open ports
+  if (typeof appTestAlerts === 'function') for (const m of appTestAlerts()) add(m.id, m);
+  if (typeof rainWindowAlerts === 'function') for (const m of await rainWindowAlerts()) add(m.id, m);   // a window open while it rains (50l-live3d.js)   // app tests (Pro)   // Security Center: new devices, risky open ports
   if (offline.length > 10) add('offline:more', { severity: 'notice', title: `${offline.length - 10} more devices are not responding`, source: 'casatorch' });
   const net = await internetNow().catch(() => null);
   if (net && !net.online) add('internet', { severity: 'critical', title: 'The internet is down', source: 'internet' });

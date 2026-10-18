@@ -3,6 +3,8 @@
    them while the device is on, faster the more it draws. */
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { roofShape, offsetPoly } from './floorplan-geom.js';
+import { roofOn, roofParams, wallHeight, buildSkylightFor } from './floorplan-drawn.js';
 
 /* ---------- roof: a gable over the top floor's footprint, with a little overhang ---------- */
 const ROOF = { real: ['#55595f', '#3c3f45', 1], night: ['#1e2b4f', '#38bdf8', 0.92], blueprint: ['#1d4a8f', '#e8f1ff', 0.35], day: ['#8a5a44', '#5c3a2c', 1] };
@@ -28,6 +30,42 @@ export function buildRoof(box, theme, custom) {
   m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, 20), new THREE.LineBasicMaterial({ color: edge, transparent: true, opacity: 0.8 })));
   m.raycast = () => {}; m.userData.roof = true;
   return m;
+}
+
+/* ---------- a drawn floor's own roof: Flat / Gable / Hip, with its pitch and overhang (set in the drawing editor) ----------
+   Built in the floor's plan (meters, y down the page = z), to sit in the drawn floor's own group. A flat roof follows each room's
+   outline (grown by the overhang); a gable or hip roof covers the outline's box. Returns null when the floor has no roof. */
+export function buildPlanRoof(f, floors, theme, custom) {
+  if (!roofOn(f, floors)) return null;
+  const R = roofParams(f); if (!R) return null;
+  const [themeColor, edge, opacity] = ROOF[theme] || ROOF.real, color = custom || themeColor, y = wallHeight(f) + 0.02, P = [];
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.8, side: THREE.DoubleSide, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 });
+  const g = new THREE.Group(); g.userData.roof = true; g.name = 'Roof';
+  if (R.type === 'flat') {
+    const rooms = R.plan.rooms.length ? R.plan.rooms.map((r) => r.pts) : [[[R.box.x0, R.box.z0], [R.box.x1, R.box.z0], [R.box.x1, R.box.z1], [R.box.x0, R.box.z1]]];
+    rooms.forEach((pts, i) => {
+      const o = R.plan.rooms.length ? offsetPoly(pts, R.overhang) : pts, sh = new THREE.Shape(o.map(([x, z]) => new THREE.Vector2(x, z)));
+      const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.15, bevelEnabled: false }); geo.rotateX(Math.PI / 2); geo.translate(0, y + 0.15 + i * 0.002, 0);   // a hair apart: no flicker where they overlap
+      const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.raycast = () => {}; g.add(m);
+    });
+    addSkylights(g, f, R); return g;
+  }
+  const rs = roofShape(R.box, y, R.type, R.pitch);
+  for (const t of rs.tris) for (const v of t) P.push(...v);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.raycast = () => {};
+  m.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), new THREE.LineBasicMaterial({ color: edge, transparent: true, opacity: 0.8 })));
+  g.add(m); addSkylights(g, f, R); return g;
+}
+/* Roof windows sit in the roof, so they lift away with it. Glass and frame get their own look here (the roof is built after the
+   floor is styled); each is still a "Window <id>" group with its 'leaf', like every other opening. */
+function addSkylights(g, f, R) {
+  for (const o of R.plan.openings) {
+    if (o.kind !== 'skylight') continue;
+    const s = buildSkylightFor(f, o, R); if (!s) continue;
+    s.traverse((x) => { if (x.isMesh) { const glass = /pane/i.test(x.name); x.material = new THREE.MeshStandardMaterial({ color: glass ? '#9fd0ee' : '#e9e6df', roughness: glass ? 0.15 : 0.8, transparent: glass, opacity: glass ? 0.55 : 1 }); x.raycast = () => {}; } });
+    g.add(s);
+  }
 }
 
 /* ---------- power lines ---------- */

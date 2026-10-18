@@ -29,15 +29,15 @@
   };
   window.__casaEvent = (name, detail) => { try { window.dispatchEvent(new CustomEvent(`casa:${name}`, { detail })); } catch { /* old browser */ } };
   window.CasaNative = Object.freeze({
-    platform: info.platform || (ios ? 'ios' : 'android'), version: info.version || '', device: info.device || '', hasLidar: !!info.lidar,
+    platform: info.platform || (ios ? 'ios' : 'android'), version: info.version || '', device: info.device || '', hasLidar: !!info.lidar, hasMesh: !!info.mesh,
     /* feel */
     haptic: (kind = 'light') => fire('haptic', { kind }), fullscreen: (on) => fire('fullscreen', { on: !!on }), share: (o) => call('share', o), openExternal: (url) => fire('openExternal', { url }),
     /* Face ID / Touch ID / fingerprint */
     biometrics: () => call('biometrics'), setBiometricLock: (on) => call('setBiometricLock', { on: !!on }),
     /* alerts: asks the phone's permission, returns { platform, token, key } for this home */
     pushEnable: () => call('pushEnable'),
-    /* scanning a room (iPhone / iPad with LiDAR) */
-    lidar: () => call('lidar'), scanRoom: () => call('scanRoom'),
+    /* scanning a room (iPhone / iPad with LiDAR): RoomPlan's walls and furniture (USDZ), or a photo-real scan (the LiDAR mesh colored from the camera, PLY) */
+    lidar: () => call('lidar'), scanRoom: () => call('scanRoom'), scanMesh: () => call('scanMesh'),
     /* homes */
     homes: () => call('homes'), saveHome: (h) => call('saveHome', h), openHome: (id) => fire('openHome', { id }), removeHome: (id) => call('removeHome', { id }),
     switchHome: () => fire('switchHome'), signOut: () => fire('signOut'), scanQR: () => call('scanQR'), deviceInfo: () => call('deviceInfo'), copy: (text) => call('copy', { text: String(text || '').slice(0, 4096) }),

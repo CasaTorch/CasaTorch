@@ -10,7 +10,7 @@
  * the house, doors, leaks, temperatures, cameras.
  *
  * Stored in data/floorplan/: one .glb per floor + floorplan.json
- *   { floors: [{ id, name, kind: scan|drawn, file?, plan?: { rooms, walls, bg, bgW, bgOpacity }, level, heightM, rotationY, scale, offset: [x,z] }],
+ *   { floors: [{ id, name, kind: scan|drawn, file?, plan?: { rooms, walls, openings, stairs, roof, bg, bgW, bgOpacity, ... (50d-drawplan.js) }, level, heightM, rotationY, scale, offset: [x,z] }],
  *       + rooms?: [{ name, color, pos: [x, z] }], paint?: { item: '#hex' }, look?: auto|styled|original
  *     pins:   [{ deviceId, floor, pos: [x, y, z], label?, color? }], style?: { theme, colors: { theme: { key: '#hex' } } } }
  * ====================================================================== */
@@ -93,10 +93,7 @@ app.put('/api/floorplan/floors/:id/plan', requirePro, express.json({ limit: '1mb
   const d = fpData(), f = d.floors.find((x) => x.id === req.params.id);
   if (!f || f.kind !== 'drawn') return res.status(404).json({ error: 'no such drawn floor' });
   const b = req.body || {};
-  const rooms = (Array.isArray(b.rooms) ? b.rooms : []).filter((r) => [r.x, r.y].every((v) => fin(v, -500, 500)) && fin(r.w, 0.2, 200) && fin(r.h, 0.2, 200)).slice(0, 200)
-    .map((r) => ({ name: String(r.name || '').slice(0, 30), x: +(+r.x).toFixed(2), y: +(+r.y).toFixed(2), w: +(+r.w).toFixed(2), h: +(+r.h).toFixed(2) }));
-  const walls = (Array.isArray(b.walls) ? b.walls : []).filter((w) => Array.isArray(w) && w.length === 4 && w.every((v) => fin(v, -500, 500))).slice(0, 1000).map((w) => w.map((v) => +(+v).toFixed(2)));
-  f.plan = { ...f.plan, rooms, walls, bgW: fin(b.bgW, 1, 500) ? +b.bgW : f.plan.bgW, bgOpacity: fin(b.bgOpacity, 0, 1) ? +b.bgOpacity : f.plan.bgOpacity };
+  f.plan = dpClean(b, f.plan || {});   // rooms, walls, doors and windows, stairs, roof, paint (50d-drawplan.js)
   if (b.name) f.name = String(b.name).slice(0, 40);
   fpWrite(d); res.json({ ok: true, floor: f });
 });
@@ -148,12 +145,12 @@ app.put('/api/floorplan/view', requirePro, express.json({ limit: '64kb' }), (req
 /* The yard: areas drawn on the ground and things placed on it (trees, bushes, cars, an EV charger).
    A car can be linked to its own sensors - home/away, plugged in, charging power, battery - to show
    where it is and whether it is charging. Showing only: nothing here can control a car. */
-const YARD_AREAS = new Set(['grass', 'driveway', 'patio', 'path', 'garden', 'pool']), YARD_ITEMS = new Set(['tree', 'pine', 'bush', 'car', 'charger']), CAR_BINDS = ['home', 'plugged', 'power', 'battery'];
+const YARD_AREAS = new Set(['grass', 'driveway', 'patio', 'path', 'garden', 'pool', 'gravel']), YARD_ITEMS = new Set(['tree', 'pine', 'bush', 'car', 'charger']), CAR_BINDS = ['home', 'plugged', 'power', 'battery'];
 const yid = (v) => (/^[\w-]{1,24}$/.test(v) ? v : crypto.randomBytes(5).toString('hex'));
 app.put('/api/floorplan/yard', requirePro, express.json({ limit: '512kb' }), (req, res) => {
   const d = fpData(), b = req.body || {}, pt = (q) => Array.isArray(q) && q.length === 2 && q.every((n) => fin(n, -1000, 1000));
   const areas = (Array.isArray(b.areas) ? b.areas : []).filter((a) => YARD_AREAS.has(a?.kind) && Array.isArray(a.pts) && a.pts.length >= 3 && a.pts.length <= 200 && a.pts.every(pt)).slice(0, 150)
-    .map((a) => ({ id: yid(a.id), kind: a.kind, pts: a.pts.map((q) => q.map((n) => Math.round(n * 100) / 100)) }));
+    .map((a) => ({ id: yid(a.id), kind: a.kind, pts: a.pts.map((q) => q.map((n) => Math.round(n * 100) / 100)), ...yardAreaExtras(a) }));   // OUTDOOR: pool depth, slope (50i-items.js)
   const items = (Array.isArray(b.items) ? b.items : []).filter((it) => YARD_ITEMS.has(it?.kind) && pt(it.pos)).slice(0, 400).map((it) => {
     const o = { id: yid(it.id), kind: it.kind, pos: it.pos.map((n) => Math.round(n * 100) / 100), rot: fin(it.rot, -360, 360) ? Math.round(+it.rot) : 0, scale: fin(it.scale, 0.3, 4) ? +(+it.scale).toFixed(2) : 1 };
     if (it.kind === 'car') Object.assign(o, { name: String(it.name || 'Car').slice(0, 30), color: FP_HEX.test(it.color) ? it.color : '#cfd6df', body: it.body === 'suv' ? 'suv' : 'sedan',
@@ -161,7 +158,7 @@ app.put('/api/floorplan/yard', requirePro, express.json({ limit: '512kb' }), (re
     return o;
   });
   const seen = Array.isArray(b.seen) ? [...new Set(b.seen.filter((k) => typeof k === 'string' && /^[\w:.-]{1,120}$/.test(k)))].slice(0, 30) : d.yard?.seen || [];   // cars already parked once (a removed one stays removed)
-  d.yard = { areas, items, seen }; fpWrite(d); res.json({ ok: true, yard: d.yard });
+  d.yard = { areas, items, seen, lines: yardLines(b.lines) }; fpWrite(d); res.json({ ok: true, yard: d.yard });   // OUTDOOR: + fences and hedges
 });
 /* Where the electrical panel is (the power lines start there) and which side is the front of the house. */
 app.put('/api/floorplan/settings', requirePro, express.json(), (req, res) => {
@@ -255,7 +252,7 @@ app.get('/api/floorplan/live', async (_req, res) => {
   for (const x of devices) { const r = riskOf(x); if (r) x.guarded = r.only; }   // which controls the safety rule allows
   const G = fpGroup(devices), gById = new Map(G.list.map((x) => [x.id, x])), main = (id) => G.alias.get(id) || id, seenPin = new Set();
   const hp = housePower(devices), powerW = hp.watts;
-  res.json({
+  res.json(fpLiveExtra({   // + the live view's extras (50l-live3d.js)
     pins: d.pins.map((p) => ({ ...p, deviceId: main(p.deviceId) })).filter((p) => !seenPin.has(p.deviceId) && seenPin.add(p.deviceId))   // one pin per device, even if two of its parts were placed
       .map((p) => ({ ...p, device: gById.get(p.deviceId) || byId.get(p.deviceId) || { id: p.deviceId, name: p.label || p.deviceId, online: false } })), weather,
     devices: G.list.map((x) => ({ id: x.id, name: x.name, kind: x.kind, provider: x.provider, ...(x.area ? { area: x.area } : {}), ...(x.dev ? { dev: x.dev } : {}), ...(x.home != null ? { pres: 1 } : {}), ...(x.powerW != null ? { pw: 1 } : {}), ...(x.battery != null || /battery/i.test(x.id) ? { bat: 1 } : {}), ...(x.kind === 'sensor' && x.on != null ? { bin: 1 } : {}) })),
@@ -266,5 +263,5 @@ app.get('/api/floorplan/live', async (_req, res) => {
     })),
     energy: energyFlows(devices, Math.round(powerW)),
     totals: { powerW: Math.round(powerW), from: hp.from || null, parts: (hp.parts || []).slice(0, 30), vs: isDemo() ? { level: 'above', usual: 6400, sameDay: true } : pbLevel(powerW), lightsOn: devices.filter((x) => x.kind === 'light' && x.on).length, playing: devices.filter((x) => x.playing).map((x) => ({ name: x.name, title: x.title })), openDoors: devices.filter((x) => x.open).length, leaks: devices.filter((x) => x.water).length },
-  });
+  }, d, devices));
 });

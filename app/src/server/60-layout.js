@@ -38,6 +38,7 @@ function cleanTiles(tiles) {
     if (t.tint && /^#[0-9a-f]{6}$/i.test(String(t.tint))) out.tint = String(t.tint);
     const o = t.opts && typeof t.opts === 'object' ? cleanOpts(t.opts) : undefined;
     if (o && Object.keys(o).length && JSON.stringify(o).length <= 8000) out.opts = o;
+    if (t.showWhen && typeof famCleanRule === 'function') { const r = famCleanRule(t.showWhen); if (r) out.showWhen = r; }   // "Show only when..." (79c-family.js)
     return out;
   });
 }

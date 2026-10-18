@@ -13,7 +13,7 @@ async function haStates() {
 }
 /* Home Assistant reports temperatures in its own unit system; CasaTorch keeps Celsius inside. */
 const haC = (v, unit) => { if (v == null || v === '' || Number.isNaN(Number(v))) return null; const f = unit ? /F/.test(unit) : config.house?.units === 'F'; return f ? Math.round((Number(v) - 32) * 5 / 9 * 10) / 10 : Number(v); };
-const HA_SKIP = new Set(['zone', 'sun', 'persistent_notification', 'tts', 'stt', 'conversation', 'event', 'wake_word', 'assist_satellite', 'tag', 'image', 'notify', 'ai_task', 'todo', 'calendar']);
+const HA_SKIP = new Set(['zone', 'sun', 'persistent_notification', 'tts', 'stt', 'conversation', 'event', 'wake_word', 'assist_satellite', 'tag', 'image', 'notify', 'ai_task', 'calendar']);   // to-do lists (todo.*) come through: their items are in Family › Lists (79c-family.js)
 const RISKY_COVERS = new Set(['garage', 'gate', 'door']);
 const num = (v) => (v === '' || v == null || Number.isNaN(Number(v)) ? null : Number(v));
 /* Smart plugs show up in Home Assistant as a switch plus separate sensors (switch.kitchen_kettle,
@@ -59,6 +59,7 @@ function haDevice(s) {
     case 'vacuum': case 'lawn_mower': return { ...base, kind: 'vacuum' };
     case 'alarm_control_panel': return { ...base, kind: 'alarm', armed: /^armed/.test(s.state), triggered: s.state === 'triggered', can: haBits(a.supported_features ?? 3, { arm_home: 1, arm_away: 2, arm_night: 4 }) };
     case 'person': case 'device_tracker': return { ...base, kind: 'presence', home: s.state === 'home', online: true };
+    case 'todo': return { ...base, kind: 'value', value: s.state, unit: 'to do', list: true, online: !['unavailable', 'unknown'].includes(s.state) };   // a to-do list: its state is how many are still to do
     case 'binary_sensor': {
       const map = { moisture: 'water', door: 'open', window: 'open', garage_door: 'open', opening: 'open', motion: 'motion', occupancy: 'motion', presence: 'motion', smoke: 'smoke', gas: 'smoke', carbon_monoxide: 'smoke' };
       return { ...base, kind: 'sensor', ...(map[cls] ? { [map[cls]]: on } : { on }), ...(map[cls] === 'motion' && s.last_changed ? { changedAt: s.last_changed } : {}) };

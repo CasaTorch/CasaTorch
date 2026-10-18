@@ -859,6 +859,12 @@ await t('secure access: Basic, away from home - JSON for the app, a page for bro
   });
 }
 
+await (await import('./scan-unit.mjs')).default(t);   // photo-real scans and plan imports (scan-unit.mjs)
 await (await import('./radar-unit.mjs')).default(t);   // the rain radar's tile proxy (radar-unit.mjs)
+await (await import('./live3d-unit.mjs')).default(t);   // the 3D home, live: tweens, glows, replay, rain rule (live3d-unit.mjs)
+await (await import('./floorplan-geom-unit.mjs')).default(t);   // the 3D home drawing's geometry (floorplan-geom-unit.mjs)
+await (await import('./family-unit.mjs')).default(t);   // the Family hub: chores, stars, lists, meals, outside sensors, chips, conditional widgets (family-unit.mjs)
+await (await import('./plan-net-unit.mjs')).default(t);   // 3D Home: plan backups and restore points, network on the plan, Wi-Fi estimate, voice (plan-net-unit.mjs)
+await (await import('./outdoor-unit.mjs')).default(t);   // 3D home outside and furniture: polygons, pools, slopes, fences, models, saved items (outdoor-unit.mjs)
 console.log(`\n${n} passed`);
 process.exit(0);

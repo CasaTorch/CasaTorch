@@ -69,6 +69,17 @@ no copy - only your box's public key (so nobody else can send as your home) and 
 **Room scans go home.** On a LiDAR iPhone or iPad, **3D home › Scan a room** runs Apple's RoomPlan and uploads
 the result to *your* CasaTorch's editor. It never touches casatorch.com.
 
+**Photo-real scans.** Next to it, **3D home › Editor › Floors › Photo-real scan with this phone** scans the room with
+ARKit's scene reconstruction (the LiDAR mesh, `ARMeshAnchor`) and colors it from the camera: while you walk, a small
+photo (320 x 240) and the LiDAR depth are kept whenever the phone has moved or turned enough (up to 80); at Done each
+point of the mesh takes its color from the photo that saw it best (facing it, close by, not hidden - the depth
+says so). The result is a binary PLY (meters, Y up, normals and colors) that goes to the page through the same
+chunked bridge as a RoomPlan scan, and the page makes it a photo-real scan on that floor (full and lighter copy,
+lined up automatically). The screen says what to do as you go ("Move slowly. Point at every wall, the floor and the
+corners", "Slow down a little", "Point at something with more detail"). Needs iOS 16 and
+`ARWorldTrackingConfiguration.supportsSceneReconstruction(.meshWithClassification)` (iPhone 12 Pro or newer Pro,
+iPad Pro with LiDAR); the bridge reports it as `hasMesh`. Code: `ios/CasaTorch/MeshScan.swift`.
+
 ## Fitted to each device
 
 - **iPhone:** safe areas, Dynamic Type (the app's screens follow your text size), dark and light, VoiceOver labels

@@ -73,6 +73,10 @@ function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize }) {
   function place(node, t) { const span = toSpan(t.w, cols); node.style.gridColumn = `span ${span}`; node.style.gridRow = `span ${t.h}`; node.style.setProperty('--h', t.h); const tag = node.querySelector('.size-tag'); if (tag) tag.textContent = `${span} × ${t.h}`; }
   async function paint(node, force) {
     const L = live.get(node); if (!L) return;
+    if (typeof famShowWhen === 'function' && L.t.showWhen) {   // "Show only when..." (38-family.js): hidden tiles collapse; nothing runs inside one
+      const off = !famShowWhen(L.t, ctx); node.classList.toggle('cond-off', off); node.dataset.hiddenNow = off ? T('Hidden now') : '';
+      if (off && !editing()) { if (L.painted) { L.body.replaceChildren(); L.painted = false; } return; }
+    } else node.classList.remove('cond-off');
     if (L.widget.live && !force && L.painted) return;
     if (L.busy && !force) return;   // still drawing the last one: a live refresh can skip a beat
     L.painted = true; L.busy = true;
@@ -181,7 +185,7 @@ function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize }) {
       else if (e.key === 'Enter') { e.preventDefault(); node.querySelector('.tools button[title="Customize"]')?.click(); }
     });
   }
-  function setEditing(on) { grid.classList.toggle('editing', on); for (const n of live.keys()) { if (on) n.setAttribute('tabindex', '0'); else n.removeAttribute('tabindex'); } }
+  function setEditing(on) { grid.classList.toggle('editing', on); for (const n of live.keys()) { if (on) n.setAttribute('tabindex', '0'); else n.removeAttribute('tabindex'); if (n.classList.contains('cond-off')) paint(n, true); } }
   function build() { live.clear(); grid.replaceChildren(...tiles.map(tileEl).filter(Boolean)); grid.style.setProperty('--cols', cols); setEditing(editing()); return Promise.all([...live.keys()].map((n) => paint(n, true))); }
   let rt = null;
   // one listener per visit to Home, gone once this grid is off the page
@@ -238,6 +242,7 @@ function customizeTile(t, ctx, done) {
       t.look === 'tint' ? el('div', { class: 'swatches' }, TINTS.map((c) => el('button', { type: 'button', class: `swatch${(t.tint || TINTS[0]) === c ? ' on' : ''}`, style: `background:${c}`, 'aria-label': `Tint ${c}`, onclick: () => { t.tint = c; draw(); repaint(); } }))) : null));
     const opts = typeof w.options === 'function' ? w.options(t, ctx) : w.options || [];
     for (const f of opts) { const node = optField(f, t, ctx, () => { repaint(); if (f.redraw) draw(); }); if (node) out.push(section(f.label, node, f.help ? el('div', { class: 'tiny muted', style: 'margin-top:6px' }, f.help) : null)); }
+    if (typeof famCondField === 'function') out.push(section(T('Show only when…'), famCondField(t, ctx, repaint)));   // conditional widgets (38-family.js)
     fields.replaceChildren(...out);
   };
   draw(); repaint();
