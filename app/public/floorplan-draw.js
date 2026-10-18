@@ -27,7 +27,6 @@ export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], o
   ensureCss();
   document.getElementById('drawer')?.remove();
   let plan = G.normalizePlan(floor.plan || { rooms: [], walls: [] });
-  const saved0 = JSON.stringify(plan);
   const narrow = () => matchMedia('(max-width: 760px)').matches;
   const st = { tool: tool0 && tool0 !== 'floor' ? tool0 : plan.rooms.length || plan.walls.length ? 'select' : 'room', ppm: 40, ox: 60, oy: 60, sel: null, drag: null, chain: null, hover: null, free: false, shift: false,
     openKind: kind0 || 'door', stairShape: 'straight', paint: { kind: 'wall', value: G.WALL_COLORS[4] }, issues: [], walls: [], undo: [], redo: [], moveFloor: false, measure: null, bgRatio: null, bgv: 1,
@@ -43,12 +42,13 @@ export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], o
   const nameIn = el('input', { type: 'text', value: floor.name, class: 'dz-name', maxlength: 40, 'aria-label': T('Floor name') });
   const undoB = el('button', { type: 'button', class: 'ghost', title: `${T('Undo')} (Ctrl+Z)`, onclick: () => undo() }, icon('undo'));
   const redoB = el('button', { type: 'button', class: 'ghost', title: `${T('Redo')} (Ctrl+Y)`, onclick: () => redo() }, icon('redo'));
+  const saveSt = el('span', { class: 'dz-saved', role: 'status', 'aria-live': 'polite' });   // saves by itself, like the rest of CasaTorch
   const status = el('span', { class: 'dz-status', onclick: () => { if (st.issues.length) { select({ type: 'issue', id: st.issues[0].id }); centerOn(st.issues[0].at); } } });
   const pvBtn = el('button', { type: 'button', title: T('3D preview'), onclick: () => { st.preview = !st.preview; layoutPv(); } }, icon('cube'), el('span', { class: 'dz-hide-s' }, T('3D')));
   const top = el('div', { class: 'dz-top' },
-    el('button', { type: 'button', class: 'ghost', title: T('Close'), onclick: () => close() }, icon('close')), nameIn, undoB, redoB, el('span', { class: 'dz-sp' }, status),
+    el('button', { type: 'button', class: 'ghost', title: T('Close'), onclick: () => close() }, icon('close')), nameIn, undoB, redoB, saveSt, el('span', { class: 'dz-sp' }, status),
     el('button', { type: 'button', class: 'ghost dz-hide-s', title: T('Keyboard shortcuts'), onclick: () => { st.help = !st.help; drawHelp(); } }, icon('help')), pvBtn,
-    el('button', { type: 'button', class: 'primary', onclick: save }, T('Save')));
+    el('button', { type: 'button', class: 'primary', title: T('Your drawing saves by itself'), onclick: () => close() }, T('Done')));
   const tools = el('div', { class: 'dz-tools', role: 'toolbar' }, ...TOOLS.map(([id, label]) => el('button', { type: 'button', 'data-tool': id, title: T(label), onclick: () => setTool(id) }, icon(id), el('span', {}, T(label)))));
   const insp = el('div', { class: 'dz-insp' });
   const pvHost = el('div', { class: 'dz-pv' }, el('span', { class: 'dz-pvlab' }, T('3D preview')), el('button', { type: 'button', class: 'dz-pvx', onclick: () => { st.preview = false; layoutPv(); } }, T('Hide')));
@@ -94,6 +94,7 @@ export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], o
     if (st.sel?.type === 'issue' && !st.issues.some((i) => i.id === st.sel.id)) st.sel = null;
     draw(); if (!soft) inspector(); preview.soon();
     undoB.disabled = !st.undo.length; redoB.disabled = !st.redo.length;
+    autoSave();
   }
   /* ---------- finding things ---------- */
   const room = (id) => plan.rooms.find((r) => r.id === id), wall = (id) => plan.walls.find((w) => w.id === id), opening = (id) => plan.openings.find((o) => o.id === id), stair = (id) => plan.stairs.find((s) => s.id === id);
@@ -846,18 +847,38 @@ export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], o
     catch (e) { toast(e.message); }
   };
 
-  /* ---------- saving and closing ---------- */
+  /* ---------- saving (by itself) and closing ----------
+     A moment after each change (and after Undo/Redo) the drawing is saved, one save at a time; "Saved" shows beside
+     Undo and Redo. Undo and Redo stay in the drawer's own history, so they still work after a save. Done (or the X)
+     saves what is left and closes; the 3D home then redraws. */
   const body = () => JSON.stringify({ ...plan, name: nameIn.value });
-  async function putPlan() { await api(`/api/floorplan/floors/${floor.id}/plan`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: body() }); floor.plan = JSON.parse(JSON.stringify(plan)); floor.name = nameIn.value; }
-  async function save() {
-    try { await putPlan(); teardown(); toast(T('Saved')); onSave?.(); }
-    catch (e) { toast(e.message); }
+  let savedBody = body(), saveTimer = null, saving = null, saveErr = null, changedSinceOpen = false;
+  const showSave = (t, cls = '') => { saveSt.textContent = t; saveSt.className = `dz-saved ${cls}`.trim(); };
+  async function putPlan() { const b = body(); await api(`/api/floorplan/floors/${floor.id}/plan`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: b }); savedBody = b; const p = JSON.parse(b); if (!('name' in plan)) delete p.name; floor.plan = p; floor.name = nameIn.value; }
+  function autoSave(ms = 1200) {
+    if (!box.isConnected || body() === savedBody) return;
+    clearTimeout(saveTimer); showSave(T('Not saved yet'), 'wait');
+    saveTimer = setTimeout(() => { if (st.drag || st.pinch) return autoSave(600); saveNow().catch(() => {}); }, ms);   // not in the middle of a drag
   }
-  function close() {
-    if (snap() !== saved0 && !confirm(T('Leave without saving your changes?'))) return;
+  async function saveNow() {
+    clearTimeout(saveTimer);
+    if (saving) { await saving.catch(() => {}); }
+    if (body() === savedBody) { if (changedSinceOpen) showSave(T('Saved'), 'ok'); return; }
+    showSave(T('Saving…'), 'wait');
+    saving = putPlan();
+    try { await saving; saveErr = null; changedSinceOpen = true; showSave(T('Saved'), 'ok'); }
+    catch (e) { saveErr = e; showSave(T('Not saved: {why}', { why: e.message }), 'bad'); throw e; }
+    finally { saving = null; }
+    if (body() !== savedBody) autoSave(300);   // changed again while it was saving
+  }
+  nameIn.addEventListener('input', () => autoSave());
+  async function close() {
+    try { await saveNow(); }
+    catch { if (!confirm(T('Your last changes couldn\'t be saved ({why}). Close anyway?', { why: saveErr?.message || '' }))) return; }
     teardown();
+    if (changedSinceOpen) onSave?.();   // the 3D home redraws with the new drawing
   }
-  function teardown() { unbindKeys(); preview.dispose(); ro.disconnect(); box.remove(); }
+  function teardown() { clearTimeout(saveTimer); unbindKeys(); preview.dispose(); ro.disconnect(); box.remove(); }
 
   /* ---------- the live 3D preview ---------- */
   const preview = createPreview(pvHost, () => ({ ...floor, plan, name: nameIn.value }), floors);

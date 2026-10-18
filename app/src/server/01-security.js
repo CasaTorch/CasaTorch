@@ -32,7 +32,7 @@ const frameAncestors = () => {
 app.set('trust proxy', 'loopback');
 /* Which names CasaTorch answers to. A web page on some other site can't point its own name at this box
    ("DNS rebinding") and talk to it: only addresses, home-network names, and CasaTorch's own secure names are
-   accepted. Others can be added (Settings › Security, or CASATORCH_ALLOWED_HOSTS=name1,name2). */
+   accepted. Others can be added (Settings › Safety › Allowed names, or CASATORCH_ALLOWED_HOSTS=name1,name2). */
 const HOME_SUFFIX = /\.(local|lan|home|home\.arpa|internal|localdomain|intranet|corp|private|ts\.net)$/i;
 function hostAllowed(hostHeader) {
   const h = String(hostHeader || '').toLowerCase().replace(/:\d+$/, '').replace(/^\[|\]$/g, '').replace(/\.$/, '');
@@ -46,7 +46,7 @@ function hostAllowed(hostHeader) {
 }
 app.use((req, res, next) => {
   if (hostAllowed(req.headers.host)) return next();
-  res.status(421).type('text/plain').send(`CasaTorch doesn't answer to "${String(req.headers.host || '').slice(0, 80)}". Open it with its address on your network (like http://192.168.1.20:8090) or casatorch.com/home. To use this name, add it in Settings › Security › Safety › Allowed names, or set CASATORCH_ALLOWED_HOSTS.`);
+  res.status(421).type('text/plain').send(`CasaTorch doesn't answer to "${String(req.headers.host || '').slice(0, 80)}". Open it with its address on your network (like http://192.168.1.20:8090) or casatorch.com/home. To use this name, add it in Settings › Safety › Allowed names, or set CASATORCH_ALLOWED_HOSTS.`);
 });
 /* Changes only from CasaTorch's own pages: a request another site's page makes is refused. Registered here,
    before every route - setup's included. The one exception is the CasaTorch phone app, whose built-in screens run from

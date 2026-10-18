@@ -248,7 +248,7 @@ const GUIDES = {
   async remote() {
     if (!config.remote?.on) return { steps: [step('info', 'Secure access', 'Secure access is off.', { fix: { label: 'Open Connections', href: '#settings/connections' } })] };
     const out = [fromCheck('Secure access', await docRemote().catch(() => null))].filter(Boolean);
-    out.push(proStatus().pro ? step('ok', 'Away from home', 'With Pro, the secure address works from anywhere.') : step('info', 'Away from home', 'On CasaTorch Free the secure address works on your home Wi-Fi. Using it from anywhere is part of Pro.'));
+    out.push(proStatus().pro ? step('ok', 'Away from home', 'With Pro, the secure address works from anywhere. Secure access is in beta: still being finished.') : step('info', 'Away from home', 'On CasaTorch Basic the secure address works on your home Wi-Fi. Using it from anywhere is part of Pro.'));
     const n = typeof internetNow === 'function' ? await internetNow().catch(() => null) : null;
     if (n && !n.online) out.push(step('bad', 'Internet', 'The internet is down at home, so secure access can\'t work until it\'s back.'));
     return { steps: out };
@@ -342,7 +342,17 @@ app.post('/api/support/test-alert', express.json({ limit: '1kb' }), async (req, 
 
 /* ---------------------------------------------------------------- owner recovery */
 const RECOVER_FILE = path.join(DATA_DIR, 'owner-reset-code');
-let recoverPending = null;   // { hash, exp, tries }
+let recoverPending = null;   // { hash, shown, exp, tries, byIp }
+/* Limits on asking for a reset code: per source address (3 an hour, 6 a day) plus a modest ceiling for the whole box
+   (30 a day), so one device on the home network can't use up the owner's resets. The owner at the box itself ("this
+   computer") is never held back by the box-wide ceiling. Records the ask when it is allowed; returns the refusal text or null. */
+const RECOVER_IP_HOUR = 3, RECOVER_IP_DAY = 6, RECOVER_ALL_DAY = 30, RECOVER_TRIES_IP = 5, RECOVER_TRIES_ALL = 25;
+function recoverAskLimit(ip, { local = false, renew = true } = {}) {
+  if (limited(`recover:${ip}`, RECOVER_IP_HOUR, 3600_000) || limited(`recoverday:${ip}`, RECOVER_IP_DAY, 86400_000)) return 'Too many reset codes asked for from this device. Wait an hour and try again.';
+  if (renew && !local && limited('recover:all', RECOVER_ALL_DAY, 86400_000)) return 'Too many reset codes were asked for today. Try again tomorrow, or ask on the computer CasaTorch runs on.';
+  failed(`recover:${ip}`, `recoverday:${ip}`); if (renew) failed('recover:all');
+  return null;
+}
 const recoverWhere = () => (process.env.SUPERVISOR_TOKEN ? 'addon' : INSTALL === 'docker' || fs.existsSync('/.dockerenv') ? 'docker' : ['deb', 'pi-image', 'script'].includes(INSTALL) ? 'linux' : INSTALL === 'windows' ? 'windows' : INSTALL === 'macos' ? 'macos' : 'computer');
 const viaSecureAccess = (req) => !!(config.remote?.hostname && String(req.headers.host || '').toLowerCase().startsWith(String(config.remote.hostname).toLowerCase()));
 function recoverOwners() { return (users?.list || []).filter((u) => u.role === 'owner' && !u.panel); }
@@ -357,11 +367,15 @@ app.post('/api/auth/recover/start', express.json({ limit: '1kb' }), (req, res) =
   if (!signInOn()) return res.status(409).json({ error: 'Sign-in is off - just open CasaTorch.' });
   if (viaSecureAccess(req)) return res.status(403).json({ error: 'For safety, resetting the owner\'s password only works on your home network.' });
   const ip = clientIp(req);
-  if (limited(`recover:${ip}`, 3, 60 * 60_000) || limited('recover:all', 6, 24 * 3600_000)) return res.status(429).json({ error: 'Too many reset codes asked for. Wait an hour and try again.' });
-  failed(`recover:${ip}`, 'recover:all');
-  const code = Array.from({ length: 10 }, () => CODE_ABC[crypto.randomInt(CODE_ABC.length)]).join('');
-  recoverPending = { hash: sha256(code), exp: Date.now() + 30 * 60_000, tries: 0 };
-  const shown = `${code.slice(0, 5)}-${code.slice(5)}`;
+  // A code that is still waiting is kept (shown again, same expiry), so someone else asking can't cancel the owner's code.
+  const keep = !!(recoverPending && recoverPending.exp > Date.now());
+  const no = recoverAskLimit(ip, { local: !!setupTrusted(req), renew: !keep });
+  if (no) { audit(req, 'owner-reset-asked', { limited: true }); return res.status(429).json({ error: no }); }
+  if (!keep) {
+    const code = Array.from({ length: 10 }, () => CODE_ABC[crypto.randomInt(CODE_ABC.length)]).join('');
+    recoverPending = { hash: sha256(code), shown: `${code.slice(0, 5)}-${code.slice(5)}`, exp: Date.now() + 30 * 60_000, tries: 0, byIp: new Map() };
+  }
+  const shown = recoverPending.shown;
   try { writeFileSafe(RECOVER_FILE, `CasaTorch owner reset code: ${shown}\nWorks once, for 30 minutes (until ${new Date(recoverPending.exp).toISOString()}).\nIf you didn't ask for it, delete this file - nothing changes.\n`, 0o600); } catch { /* the system log still has it */ }
   // Straight to the system log (journald, Docker, the add-on log) - not into the in-app log that admins can read.
   try { process.stdout.write(`\n  CasaTorch owner reset code: ${shown}  (asked for on the sign-in page; works once, for 30 minutes)\n\n`); } catch { /* no stdout */ }
@@ -369,30 +383,35 @@ app.post('/api/auth/recover/start', express.json({ limit: '1kb' }), (req, res) =
   if (typeof alertRaise === 'function') alertRaise({ id: `owner-reset:${Date.now()}`, severity: 'warning', title: 'Someone asked to reset the owner\'s password', body: 'If that wasn\'t you or someone you trust, you can ignore it - the code is only on the box itself.', source: 'sign-in' });
   res.json({ ok: true, where: recoverWhere() });
 });
-app.post('/api/auth/recover/finish', express.json({ limit: '2kb' }), (req, res) => {
+app.post('/api/auth/recover/finish', express.json({ limit: '2kb' }), asyncRoute(async (req, res) => {
   if (!signInOn()) return res.status(409).json({ error: 'Sign-in is off.' });
   if (viaSecureAccess(req)) return res.status(403).json({ error: 'For safety, resetting the owner\'s password only works on your home network.' });
   const ip = clientIp(req), b = req.body || {};
-  if (limited(`recoverfin:${ip}`, 8) || limited('recoverfin:all', 20)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' });
+  if (limited(`recoverfin:${ip}`, 8) || limited('recoverfin:all', 60)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' });
   if (!recoverPending || recoverPending.exp < Date.now()) { failed(`recoverfin:${ip}`, 'recoverfin:all'); return res.status(401).json({ error: 'No reset code is waiting, or it ran out. Ask for a new one.' }); }
+  // Wrong tries count per device (5 for this code) and for everyone (25): one device can't burn the owner's code.
+  if ((recoverPending.byIp.get(ip) || 0) >= RECOVER_TRIES_IP) return res.status(429).json({ error: 'That code was tried too often from this device. Ask for a new one later, or use another device.' });
   const got = sha256(cleanCode(b.code)), want = recoverPending.hash;
   if (!crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want))) {
     failed(`recoverfin:${ip}`, 'recoverfin:all'); audit(req, 'owner-reset-failed');
-    if (++recoverPending.tries >= 5) { recoverPending = null; try { fs.rmSync(RECOVER_FILE, { force: true }); } catch { /* gone */ } return res.status(401).json({ error: 'That code isn\'t right, and it was tried too often - ask for a new one.' }); }
+    recoverPending.byIp.set(ip, (recoverPending.byIp.get(ip) || 0) + 1);
+    if (++recoverPending.tries >= RECOVER_TRIES_ALL) { recoverPending = null; try { fs.rmSync(RECOVER_FILE, { force: true }); } catch { /* gone */ } return res.status(401).json({ error: 'That code isn\'t right, and it was tried too often - ask for a new one.' }); }
     return res.status(401).json({ error: 'That code isn\'t right. It\'s 10 letters and numbers, like ABCDE-23456.' });
   }
   const owners = recoverOwners(), name = String(b.username || '').trim().toLowerCase();
   const u = name ? owners.find((x) => x.username.toLowerCase() === name || String(x.email || '').toLowerCase() === name) : owners.length === 1 ? owners[0] : null;
   if (!u) return res.status(400).json({ error: owners.length > 1 && !name ? 'This CasaTorch has more than one owner - type the owner\'s username.' : 'That isn\'t an owner\'s username.', needUser: owners.length > 1 });
   const problem = passwordProblem(b.password, u.username); if (problem) return res.status(400).json({ error: problem });
-  u.password = hashSecret(b.password); delete u.invite;
+  const pending = recoverPending, hash = await hashSecretAsync(b.password);
+  if (recoverPending !== pending) return res.status(401).json({ error: 'No reset code is waiting, or it ran out. Ask for a new one.' });   // used meanwhile
+  u.password = hash; delete u.invite;
   const twoStepOff = !!(b.turnOff2fa && u.totp?.on); if (twoStepOff) delete u.totp;
   saveUsers(); endSessionsOf(u.id);
   recoverPending = null; try { fs.rmSync(RECOVER_FILE, { force: true }); } catch { /* gone */ }
   audit(req, 'owner-reset', { user: u.username, twoStepOff });
   if (typeof alertRaise === 'function') alertRaise({ id: `owner-reset-done:${Date.now()}`, severity: 'warning', title: 'The owner\'s password was reset with a code from the box', body: twoStepOff ? 'Two-step sign-in was turned off for the owner - turn it on again in Settings › People & sign-in.' : 'Every device signed in as the owner was signed out.', source: 'sign-in' });
   res.json({ ok: true, username: u.username, twoStepOff });
-});
+}));
 OPEN.push(/^\/recover\.(html|js)$/, /^\/api\/auth\/recover\/(state|start|finish)$/);
 
 /* ---------------------------------------------------------------- activity (the audit log) */
@@ -436,7 +455,7 @@ function activityTrim(lines, now = Date.now()) {
 function activityTrimFile() {
   try {
     const lines = fs.readFileSync(AUDIT_FILE, 'utf8').split('\n').filter(Boolean), keep = activityTrim(lines);
-    if (keep.length !== lines.length) fs.writeFileSync(AUDIT_FILE, keep.length ? `${keep.join('\n')}\n` : '', { mode: 0o600 });
+    if (keep.length !== lines.length) writeFileSafe(AUDIT_FILE, keep.length ? `${keep.join('\n')}\n` : '', 0o600);   // atomic: a crash mid-trim never leaves half a log
   } catch { /* no log yet */ }
 }
 if (process.env.CASATORCH_TEST !== '1') { setTimeout(activityTrimFile, 5 * 60_000).unref?.(); setInterval(activityTrimFile, 24 * 3600_000).unref?.(); }
@@ -511,4 +530,4 @@ app.get('/api/support/update-status', (_req, res) => {
   res.json({ version: VERSION, install: INSTALL, previous: supVersions.prev || null, since: supVersions.since || null, last: st, rollback: ['deb', 'pi-image', 'script'].includes(INSTALL), backupFirst: settingsHistory().some((id) => /before/.test(id)) });
 });
 
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchSupport = { supShape, supPrivateStrings, supMaskText, supportBundle, supportSummary, activityFor, activityFilter, activityTrim, checklistState, GUIDES, ACT_KINDS };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchSupport = { supShape, supPrivateStrings, supMaskText, supportBundle, supportSummary, activityFor, activityFilter, activityTrim, checklistState, GUIDES, ACT_KINDS, recoverAskLimit, activityTrimFile };

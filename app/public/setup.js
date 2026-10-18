@@ -134,7 +134,7 @@ const CUSTOM = {
       const ll = q.value.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
       if (ll) { pick({ name: `${ll[1]}, ${ll[2]}`, lat: Number(ll[1]), lon: Number(ll[2]) }); return; }
       results.replaceChildren(el('div', { class: 'note' }, T('Looking...')));
-      try { const r = await api(`/api/setup/geocode?q=${encodeURIComponent(q.value)}`); results.replaceChildren(...(r.places.length ? r.places.map((p) => el('button', { type: 'button', class: 'small', onclick: () => pick(p) }, p.name)) : [el('div', { class: 'note' }, T('No match - try the nearest bigger town.'))])); }
+      try { const r = await api(`/api/setup/geocode?q=${encodeURIComponent(q.value)}`); results.replaceChildren(...(r.places.length ? r.places.map((p) => el('button', { type: 'button', class: 'small', onclick: () => pick(p) }, p.name)) : [el('div', { class: 'note' }, T('No match - try the nearest bigger town.'))])); if (r.credit) results.append(el('a', { class: 'note', style: 'display:block', href: 'https://www.openstreetmap.org/copyright', target: '_blank', rel: 'noopener' }, String(r.credit.text))); }
       catch (e) { results.replaceChildren(el('div', { class: 'err' }, e.message)); }
     };
     q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); find(); } });
@@ -148,27 +148,27 @@ const CUSTOM = {
     const list = store[f.id] ||= [];
     const box = el('div', {});
     list.forEach((c, k) => box.append(el('div', { class: 'item' },
-      el('div', { class: 'grid2' }, fieldEl({ id: 'name', label: 'Name', type: 'text', placeholder: 'Family', required: true }, c), fieldEl({ id: 'color', label: 'Color', type: 'choice', options: COLORS, default: COLORS[k % COLORS.length][0] }, c)),
-      fieldEl({ id: 'url', label: 'Private iCal link', type: 'url', placeholder: 'https://calendar.google.com/calendar/ical/.../basic.ics', required: true }, c),
-      el('div', { class: 'row' }, testEl('calendar', c, 'Check it'), el('button', { type: 'button', class: 'small', onclick: () => { list.splice(k, 1); go(); } }, 'Remove')))));
-    box.append(el('button', { type: 'button', class: 'small', onclick: () => { list.push({ name: list.length ? '' : 'Family', url: '' }); go(); } }, list.length ? 'Add another calendar' : 'Add a calendar'));
+      el('div', { class: 'grid2' }, fieldEl({ id: 'name', label: T('Name'), type: 'text', placeholder: T('Family'), required: true }, c), fieldEl({ id: 'color', label: T('Color'), type: 'choice', options: COLORS, default: COLORS[k % COLORS.length][0] }, c)),
+      fieldEl({ id: 'url', label: T('Private iCal link'), type: 'url', placeholder: 'https://calendar.google.com/calendar/ical/.../basic.ics', required: true }, c),
+      el('div', { class: 'row' }, testEl('calendar', c, 'Check it'), el('button', { type: 'button', class: 'small', onclick: () => { list.splice(k, 1); go(); } }, T('Remove'))))));
+    box.append(el('button', { type: 'button', class: 'small', onclick: () => { list.push({ name: list.length ? '' : 'Family', url: '' }); go(); } }, list.length ? T('Add another calendar') : T('Add a calendar')));
     return box;
   },
   teams(f, store) {
     const teams = store[f.id] ||= [];
     const box = el('div', {});
-    box.append(el('div', { class: 'chips' }, ...teams.map((t, k) => el('span', { class: 'chip' }, `${t.name} · ${String(t.league).toUpperCase()}`, el('button', { type: 'button', 'aria-label': `Remove ${t.name}`, onclick: () => { teams.splice(k, 1); go(); } }, '×')))));
-    const league = el('select', { 'aria-label': 'League' }, el('option', { value: '' }, 'League...'));
-    const team = el('select', { disabled: true, 'aria-label': 'Team' }, el('option', { value: '' }, 'Team...'));
+    box.append(el('div', { class: 'chips' }, ...teams.map((t, k) => el('span', { class: 'chip' }, `${t.name} · ${String(t.league).toUpperCase()}`, el('button', { type: 'button', 'aria-label': T('Remove {name}', { name: t.name }), onclick: () => { teams.splice(k, 1); go(); } }, '×')))));
+    const league = el('select', { 'aria-label': T('League') }, el('option', { value: '' }, T('League...')));
+    const team = el('select', { disabled: true, 'aria-label': T('Team') }, el('option', { value: '' }, T('Team...')));
     let list = [];
     api('/api/setup/sports/leagues').then((r) => league.append(...r.leagues.map((l) => el('option', { value: l.id }, l.name)))).catch(() => {});
     league.onchange = async () => {
-      team.replaceChildren(el('option', { value: '' }, 'Loading...')); team.disabled = true;
-      try { list = (await api(`/api/setup/sports/teams?league=${league.value}`)).teams || []; team.replaceChildren(el('option', { value: '' }, 'Team...'), ...list.map((t) => el('option', { value: t.id }, t.name))); team.disabled = false; }
-      catch (e) { team.replaceChildren(el('option', { value: '' }, `Could not load teams: ${e.message}`)); }
+      team.replaceChildren(el('option', { value: '' }, T('Loading...'))); team.disabled = true;
+      try { list = (await api(`/api/setup/sports/teams?league=${league.value}`)).teams || []; team.replaceChildren(el('option', { value: '' }, T('Team...')), ...list.map((t) => el('option', { value: t.id }, t.name))); team.disabled = false; }
+      catch (e) { team.replaceChildren(el('option', { value: '' }, T('Could not load teams: {message}', { message: e.message }))); }
     };
-    const add = el('button', { type: 'button', class: 'small', onclick: () => { const t = list.find((x) => x.id === team.value); if (!t || teams.some((x) => x.league === league.value && x.id === t.id)) return; teams.push({ league: league.value, id: t.id, name: t.name, abbr: t.abbr || null, logo: t.logo || null }); go(); } }, 'Add team');
-    box.append(el('div', { class: 'grid2' }, league, team), el('div', { class: 'row', style: 'margin-top:8px' }, add), el('p', { class: 'note' }, 'Scores come from ESPN\'s public scoreboard.'));
+    const add = el('button', { type: 'button', class: 'small', onclick: () => { const t = list.find((x) => x.id === team.value); if (!t || teams.some((x) => x.league === league.value && x.id === t.id)) return; teams.push({ league: league.value, id: t.id, name: t.name, abbr: t.abbr || null, logo: t.logo || null }); go(); } }, T('Add team'));
+    box.append(el('div', { class: 'grid2' }, league, team), el('div', { class: 'row', style: 'margin-top:8px' }, add), el('p', { class: 'note' }, T('Scores come from ESPN\'s public scoreboard.')));
     return box;
   },
   feeds(f, store) {
@@ -187,7 +187,7 @@ const CUSTOM = {
       const byGroup = {}; for (const d of r.feeds) (byGroup[d.group || 'More'] ||= []).push(d);
       for (const [g, list] of Object.entries(byGroup)) groups.append(el('label', { style: 'margin-top:14px' }, T(g)), el('div', { class: 'opts' }, ...list.map((d) => chip(d.id, d.name))));
     }).catch(() => {});
-    custom.forEach((c, k) => box.append(el('div', { class: 'item' }, el('div', { class: 'grid2' }, fieldEl({ id: 'name', label: 'Name', type: 'text', required: true }, c), fieldEl({ id: 'url', label: 'RSS or Atom feed address', type: 'url', required: true }, c)), el('div', { class: 'row' }, testEl('feed', c, T('Check it')), el('button', { type: 'button', class: 'small', onclick: () => { custom.splice(k, 1); go(); } }, T('Remove'))))));
+    custom.forEach((c, k) => box.append(el('div', { class: 'item' }, el('div', { class: 'grid2' }, fieldEl({ id: 'name', label: T('Name'), type: 'text', required: true }, c), fieldEl({ id: 'url', label: T('RSS or Atom feed address'), type: 'url', required: true }, c)), el('div', { class: 'row' }, testEl('feed', c, T('Check it')), el('button', { type: 'button', class: 'small', onclick: () => { custom.splice(k, 1); go(); } }, T('Remove'))))));
     box.append(el('div', { class: 'row', style: 'margin-top:10px' }, el('button', { type: 'button', class: 'small', onclick: () => { custom.push({ name: '', url: '' }); go(); } }, T('Add any feed (a local paper, a blog...)'))));
     return box;
   },
@@ -196,8 +196,8 @@ const CUSTOM = {
     const box = el('div', {});
     list.forEach((r, k) => {
       const days = new Set(r.days ||= [0, 1, 2, 3, 4, 5, 6]);
-      box.append(el('div', { class: 'item' }, fieldEl({ id: 'title', label: 'Reminder', type: 'text', placeholder: T('Trash night - bins out'), required: true }, r),
-        el('div', { class: 'grid2' }, fieldEl({ id: 'icon', label: 'Icon', type: 'choice', default: 'bell', options: REM_ICONS }, r), fieldEl({ id: 'sound', label: 'Sound on the screens', type: 'choice', default: 'chime', options: REM_SOUNDS }, r)),
+      box.append(el('div', { class: 'item' }, fieldEl({ id: 'title', label: T('Reminder'), type: 'text', placeholder: T('Trash night - bins out'), required: true }, r),
+        el('div', { class: 'grid2' }, fieldEl({ id: 'icon', label: T('Icon'), type: 'choice', default: 'bell', options: REM_ICONS }, r), fieldEl({ id: 'sound', label: T('Sound on the screens'), type: 'choice', default: 'chime', options: REM_SOUNDS }, r)),
         el('div', { class: 'row' }, el('div', { class: 'days' }, ...DAYS.map((d, n) => { const b = el('button', { type: 'button', class: days.has(n) ? 'on' : '', 'aria-label': T(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][n]), onclick: () => { days.has(n) ? days.delete(n) : days.add(n); r.days = [...days].sort(); b.classList.toggle('on'); } }, d); return b; })),
           el('input', { type: 'time', value: r.time || '', style: 'width:auto', oninput: (e) => { r.time = e.target.value; } }), el('button', { type: 'button', class: 'small', onclick: () => { list.splice(k, 1); go(); } }, T('Remove')))));
     });
@@ -212,31 +212,31 @@ const CUSTOM = {
 function haSigninEl(sub) {
   const box = el('div', { class: 'card' });
   const msg = el('div', { class: 'note' });
-  if (sub._signedIn && W.ha) { box.append(el('div', { class: 'ok' }, `✓ ${W.ha.message}`), el('p', { class: 'note' }, 'CasaTorch made its own access token in Home Assistant (named "CasaTorch"). You can see or remove it there under Profile > Security.'),
-    el('button', { type: 'button', class: 'small', onclick: () => { sub._signedIn = false; W.ha = null; go(); } }, 'Use a different Home Assistant')); return box; }
+  if (sub._signedIn && W.ha) { box.append(el('div', { class: 'ok' }, `✓ ${W.ha.message}`), el('p', { class: 'note' }, T('CasaTorch made its own access token in Home Assistant (named "CasaTorch"). You can see or remove it there under Profile > Security.')),
+    el('button', { type: 'button', class: 'small', onclick: () => { sub._signedIn = false; W.ha = null; go(); } }, T('Use a different Home Assistant'))); return box; }
   if (!sub.url && !sub._looked && W.found?.homeassistant?.[0]) { sub.url = W.found.homeassistant[0]; sub._looked = true; msg.textContent = T('Found Home Assistant on your network at {url}.', { url: sub.url }); }
-  const url = el('input', { type: 'url', placeholder: 'http://homeassistant.local:8123', value: sub.url || '', 'aria-label': 'Home Assistant address', oninput: (e) => { sub.url = e.target.value.trim(); } });
+  const url = el('input', { type: 'url', placeholder: 'http://homeassistant.local:8123', value: sub.url || '', 'aria-label': T('Home Assistant address'), oninput: (e) => { sub.url = e.target.value.trim(); } });
   const find = el('button', { type: 'button', class: 'small', onclick: async () => {
     find.disabled = true; msg.textContent = T('Looking on your network…');
     const r = await api('/api/setup/ha/find').catch(() => ({}));
     if (r.url) { sub.url = r.url; url.value = r.url; msg.textContent = (r.all || []).length > 1 ? T('Found {n}: {list}. The first is filled in.', { n: r.all.length, list: r.all.join(', ') }) : T('Found it at {url}.', { url: r.url }); } else msg.textContent = T('Couldn\'t find it by itself - type its address (the one you open Home Assistant with). Just the name or number is fine, like 192.168.1.20.');
     find.disabled = false; saveProgress();
-  } }, 'Find it');
+  } }, T('Find it'));
   if (!sub.url && !sub._looked) { sub._looked = true; setTimeout(() => { if (find.isConnected && !sub.url) find.click(); }, 50); }   // look once by itself
   const go2 = el('button', { type: 'button', class: 'primary', onclick: async () => {
-    if (!sub.url) { msg.textContent = 'Type the address first, or press Find it.'; return; }
+    if (!sub.url) { msg.textContent = T('Type the address first, or press Find it.'); return; }
     const win = window.open('about:blank', 'ha-signin', 'width=520,height=720');
     try {
       const r = await api('/api/setup/ha/signin', { body: { url: sub.url } });
       if (r.url && r.url !== sub.url) { sub.url = r.url; url.value = r.url; }
       saveProgress(true);
       if (win) win.location = r.go; else location.href = r.go;
-      msg.textContent = 'Sign in to Home Assistant in the window that opened…';
+      msg.textContent = T('Sign in to Home Assistant in the window that opened…');
     } catch (e) { win?.close(); msg.textContent = e.body?.msg ? [TM(null, e.body.msg, e.body.vars), e.body.fixMsg ? TM(null, e.body.fixMsg, e.body.vars) : ''].join(' ').trim() : e.message; }
-  } }, 'Sign in with Home Assistant');
-  box.append(el('h3', {}, 'Connect with your Home Assistant sign-in'), el('p', { class: 'note' }, 'Sign in with an administrator account. CasaTorch never sees your password.'),
+  } }, T('Sign in with Home Assistant'));
+  box.append(el('h3', {}, T('Connect with your Home Assistant sign-in')), el('p', { class: 'note' }, T('Sign in with an administrator account. CasaTorch never sees your password.')),
     el('div', { class: 'row' }, url, find), el('div', { class: 'row', style: 'margin-top:10px' }, go2), msg,
-    el('p', { class: 'note', style: 'margin-top:12px' }, 'Or paste an access token instead:'));
+    el('p', { class: 'note', style: 'margin-top:12px' }, T('Or paste an access token instead:')));
   return box;
 }
 addEventListener('message', async (e) => {
@@ -244,7 +244,7 @@ addEventListener('message', async (e) => {
   const r = await api('/api/setup/ha/signin-result').catch(() => null);
   const store = ans('homeassistant'), sub = branchStore(W.steps.find((s) => s.id === 'homeassistant'), store);
   if (r?.ok) { W.ha = r; W.haDomains = r.domains || []; store.uses = 'yes'; sub.url = r.url; sub._signedIn = true; sub._test = r; }
-  else $('#navmsg').textContent = r?.error || 'Home Assistant sign-in didn\'t finish.';
+  else $('#navmsg').textContent = r?.error || T('Home Assistant sign-in didn\'t finish.');
   go();
 });
 
@@ -293,7 +293,7 @@ const ABORTS = { already_configured: 'Already set up in Home Assistant ✓', sin
 const okAbort = (r) => (ABORTS[r] || '').includes('✓');
 /* Home Assistant describes each question (its "data schema"); turn that into one of our fields. */
 function schemaField(s) {
-  const name = s.name, label = FIELD_LABELS[name] || pretty(name), required = !!s.required && !s.optional;
+  const name = s.name, label = T(FIELD_LABELS[name] || pretty(name)), required = !!s.required && !s.optional;
   const sel = s.selector || {};
   if (sel.select || s.type === 'select') {
     const raw = sel.select?.options || s.options || [];
@@ -314,21 +314,21 @@ function flowEl(domain, hint, done, extra) {
   function render() {
     const v = state.view; box.replaceChildren();
     if (!v) return;
-    if (v.type === 'error') { box.append(el('div', { class: 'err' }, `✗ ${v.error}`), el('button', { type: 'button', class: 'small', onclick: start }, 'Try again')); return; }
+    if (v.type === 'error') { box.append(el('div', { class: 'err' }, `✗ ${v.error}`), el('button', { type: 'button', class: 'small', onclick: start }, T('Try again'))); return; }
     if (v.type === 'create_entry') { box.append(el('div', { class: 'ok' }, `✓ Added to Home Assistant${v.title ? `: ${v.title}` : ''}`)); return; }
-    if (v.type === 'abort') { box.append(el('div', { class: okAbort(v.reason) ? 'ok' : 'warn' }, ABORTS[v.reason] || `Home Assistant stopped: ${pretty(v.reason)}`)); if (!okAbort(v.reason)) box.append(el('button', { type: 'button', class: 'small', onclick: start }, 'Try again')); return; }
-    if (v.type === 'external') { box.append(el('p', { class: 'note' }, 'Finish signing in on the page that opens, then come back.'), el('div', { class: 'row' }, el('a', { href: /^https?:\/\//i.test(String(v.url || '')) ? v.url : null, target: '_blank', rel: 'noopener' }, 'Open the sign-in page'), el('button', { type: 'button', class: 'small', onclick: () => send({}) }, 'I\'ve signed in'))); return; }
-    if (v.type === 'progress') { box.append(el('p', { class: 'note' }, 'Home Assistant is working on it…')); setTimeout(() => { if (box.isConnected) send({}); }, 3000); return; }   // stop asking once this panel is gone
+    if (v.type === 'abort') { box.append(el('div', { class: okAbort(v.reason) ? 'ok' : 'warn' }, (ABORTS[v.reason] ? T(ABORTS[v.reason]) : T('Home Assistant stopped: {reason}', { reason: pretty(v.reason) })))); if (!okAbort(v.reason)) box.append(el('button', { type: 'button', class: 'small', onclick: start }, T('Try again'))); return; }
+    if (v.type === 'external') { box.append(el('p', { class: 'note' }, T('Finish signing in on the page that opens, then come back.')), el('div', { class: 'row' }, el('a', { href: /^https?:\/\//i.test(String(v.url || '')) ? v.url : null, target: '_blank', rel: 'noopener' }, T('Open the sign-in page')), el('button', { type: 'button', class: 'small', onclick: () => send({}) }, T('I\'ve signed in')))); return; }
+    if (v.type === 'progress') { box.append(el('p', { class: 'note' }, T('Home Assistant is working on it…'))); setTimeout(() => { if (box.isConnected) send({}); }, 3000); return; }   // stop asking once this panel is gone
     if (v.type === 'menu') {
       const opts = Array.isArray(v.menu) ? v.menu.map((m) => [m, pretty(m)]) : Object.entries(v.menu || {});
-      box.append(el('p', { class: 'q' }, 'Choose one:'), el('div', { class: 'opts' }, ...opts.map(([id, l]) => el('button', { type: 'button', class: 'opt', onclick: () => send({ next_step_id: id }) }, l))));
+      box.append(el('p', { class: 'q' }, T('Choose one:')), el('div', { class: 'opts' }, ...opts.map(([id, l]) => el('button', { type: 'button', class: 'opt', onclick: () => send({ next_step_id: id }) }, l))));
       return;
     }
     const fields = (v.fields || []).map(schemaField).filter(Boolean);
     const input = state.input;
     if (hint) box.append(el('p', { class: 'note' }, T(hint)));
-    if (v.step && v.step !== 'user') box.append(el('p', { class: 'note' }, `Next: ${pretty(v.step)}`));
-    for (const [k, e] of Object.entries(v.errors || {})) box.append(el('div', { class: 'err' }, `${k === 'base' ? '' : `${FIELD_LABELS[k] || pretty(k)}: `}${ERRORS[e] || pretty(e)}`));
+    if (v.step && v.step !== 'user') box.append(el('p', { class: 'note' }, T('Next: {pretty}', { pretty: pretty(v.step) })));
+    for (const [k, e] of Object.entries(v.errors || {})) box.append(el('div', { class: 'err' }, `${k === 'base' ? '' : `${T(FIELD_LABELS[k] || pretty(k))}: `}${T(ERRORS[e] || pretty(e))}`));
     for (const f of fields) {
       if (f.type === 'bool') { if (input[f.id] === undefined) input[f.id] = !!f.default; box.append(el('label', { class: 'field check' }, el('input', { type: 'checkbox', checked: input[f.id], onchange: (e) => { input[f.id] = e.target.checked; } }), f.label)); }
       else box.append(fieldEl(f, input));
@@ -344,12 +344,12 @@ function flowEl(domain, hint, done, extra) {
           out[f.id] = val;
         }
         state.input = {}; send(out);
-      } }, v.last === false ? 'Next' : 'Connect'),
+      } }, v.last === false ? T('Next') : T('Connect')),
       extra ? extra(cancel) : null,
-      el('button', { type: 'button', class: 'small', onclick: cancel }, 'Cancel')));
+      el('button', { type: 'button', class: 'small', onclick: cancel }, T('Cancel'))));
   }
-  async function start() { box.replaceChildren(el('p', { class: 'note' }, 'Asking Home Assistant…')); try { state.view = await api('/api/setup/ha/flow', { body: { domain } }); } catch (e) { state.view = { type: 'error', error: e.message }; } after(); }
-  async function send(input) { const id = state.view?.flowId; box.replaceChildren(el('p', { class: 'note' }, 'Working…')); try { state.view = await api(`/api/setup/ha/flow/${id}`, { body: { input } }); } catch (e) { state.view = { type: 'error', error: e.message }; } after(); }
+  async function start() { box.replaceChildren(el('p', { class: 'note' }, T('Asking Home Assistant…'))); try { state.view = await api('/api/setup/ha/flow', { body: { domain } }); } catch (e) { state.view = { type: 'error', error: e.message }; } after(); }
+  async function send(input) { const id = state.view?.flowId; box.replaceChildren(el('p', { class: 'note' }, T('Working…'))); try { state.view = await api(`/api/setup/ha/flow/${id}`, { body: { input } }); } catch (e) { state.view = { type: 'error', error: e.message }; } after(); }
   function cancel() { const id = state.view?.flowId; if (id) api(`/api/setup/ha/flow/${id}`, { method: 'DELETE' }).catch(() => {}); state.view = null; state.input = {}; go(); }
   function after() {
     const v = state.view;
@@ -372,9 +372,9 @@ function shownOptions(list) {
   });
 }
 function badge(o) {
-  if (o.method === 'ring') return el('span', { class: 'badge pro' }, 'Pro · Labs');
-  if (needsHa(o)) return el('span', { class: 'badge ha' }, W.ha ? 'via Home Assistant' : 'needs Home Assistant');
-  if (o.method === 'direct' || o.method === 'hue') return el('span', { class: 'badge direct' }, 'no Home Assistant needed');
+  if (o.method === 'ring') return el('span', { class: 'badge pro' }, T('Pro · Labs'));
+  if (needsHa(o)) return el('span', { class: 'badge ha' }, W.ha ? T('via Home Assistant') : T('needs Home Assistant'));
+  if (o.method === 'direct' || o.method === 'hue') return el('span', { class: 'badge direct' }, T('no Home Assistant needed'));
   return null;
 }
 function hueEl(card) {
@@ -383,30 +383,30 @@ function hueEl(card) {
   if (!st.host && !st.looked && W.found?.hue?.length) { st.host = W.found.hue[0]; st.looked = true; st.msg = T('Found your Hue bridge at {ip}.', { ip: st.host }); }
   const host = el('input', { type: 'text', placeholder: '192.168.1.20', value: st.host, oninput: (e) => { st.host = e.target.value.trim(); } });
   const out = el('div', { class: 'note' }, st.msg || '');
-  card.append(el('p', { class: 'note' }, '1. Enter the bridge\'s address (or press Find). 2. Press the round button on top of the Hue bridge. 3. Within 30 seconds, press Pair.'),
+  card.append(el('p', { class: 'note' }, T('1. Enter the bridge\'s address (or press Find). 2. Press the round button on top of the Hue bridge. 3. Within 30 seconds, press Pair.')),
     el('div', { class: 'row' }, el('div', { style: 'flex:1;min-width:160px' }, host),
-      el('button', { type: 'button', class: 'small', onclick: async () => { out.textContent = 'Looking...'; const r = await api('/api/setup/hue/discover').catch(() => ({ bridges: [] })); if (r.bridges[0]) { st.host = r.bridges[0]; host.value = st.host; out.textContent = `Found ${r.bridges.join(', ')}`; } else out.textContent = 'Not found automatically - look in your router\'s client list for "Philips-hue".'; } }, 'Find'),
-      el('button', { type: 'button', class: 'primary', onclick: async () => { out.textContent = 'Pairing...'; const r = await api('/api/setup/hue/pair', { body: { host: st.host } }).catch((e) => ({ ok: false, error: e.message })); if (r.ok) { st.paired = true; st.msg = r.message; go(); } else out.replaceChildren(el('span', { class: 'err' }, `✗ ${r.error}`)); } }, 'Pair')), out);
+      el('button', { type: 'button', class: 'small', onclick: async () => { out.textContent = T('Looking...'); const r = await api('/api/setup/hue/discover').catch(() => ({ bridges: [] })); if (r.bridges[0]) { st.host = r.bridges[0]; host.value = st.host; out.textContent = T('Found {join}', { join: r.bridges.join(', ') }); } else out.textContent = T('Not found automatically - look in your router\'s client list for "Philips-hue".'); } }, T('Find')),
+      el('button', { type: 'button', class: 'primary', onclick: async () => { out.textContent = T('Pairing...'); const r = await api('/api/setup/hue/pair', { body: { host: st.host } }).catch((e) => ({ ok: false, error: e.message })); if (r.ok) { st.paired = true; st.msg = r.message; go(); } else out.replaceChildren(el('span', { class: 'err' }, `✗ ${r.error}`)); } }, T('Pair'))), out);
   return card;
 }
 function ringEl(card) {
   const st = W.ring ||= { email: '', step: 'login' };
-  if (st.step === 'done') { card.append(el('div', { class: 'ok' }, '✓ Signed in to Ring. Your Ring password was not saved - only a sign-in token.')); return card; }
-  card.append(el('p', { class: 'note' }, 'Ring has no official API. CasaTorch signs in the way the Ring app does (the method Homebridge and ring-mqtt use). It works today, but Ring could change it - that\'s why it\'s "Labs". Included with Pro and the free trial.'));
+  if (st.step === 'done') { card.append(el('div', { class: 'ok' }, T('✓ Signed in to Ring. Your Ring password was not saved - only a sign-in token.'))); return card; }
+  card.append(el('p', { class: 'note' }, T('Ring has no official API. CasaTorch signs in the way the Ring app does (the method Homebridge and ring-mqtt use). It works today, but Ring could change it - that\'s why it\'s "Labs". Included with Pro and the free trial.')));
   const out = el('div', {});
   const send = async (body) => {
-    out.replaceChildren(el('div', { class: 'note' }, 'Talking to Ring...'));
-    try { const r = await api('/api/setup/ring/login', { body }); if (r.ok) { st.step = 'done'; go(); return; } if (r.needsCode) { st.step = 'code'; st.prompt = r.prompt; go(); return; } out.replaceChildren(el('div', { class: 'err' }, r.error || 'Ring did not accept that')); }
-    catch (e) { out.replaceChildren(el('div', { class: 'err' }, /Pro feature/.test(e.message) ? 'Ring needs CasaTorch Pro (the trial has ended).' : e.message)); }
+    out.replaceChildren(el('div', { class: 'note' }, T('Talking to Ring...')));
+    try { const r = await api('/api/setup/ring/login', { body }); if (r.ok) { st.step = 'done'; go(); return; } if (r.needsCode) { st.step = 'code'; st.prompt = r.prompt; go(); return; } out.replaceChildren(el('div', { class: 'err' }, r.error || T('Ring did not accept that'))); }
+    catch (e) { out.replaceChildren(el('div', { class: 'err' }, /Pro feature/.test(e.message) ? T('Ring needs CasaTorch Pro (the trial has ended).') : e.message)); }
   };
   if (st.step === 'code') {
     const code = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', placeholder: '123456' });
-    card.append(el('div', { class: 'field' }, el('label', {}, st.prompt || 'Enter the code Ring sent you'), code), el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => send({ code: code.value }) }, 'Verify'), el('button', { type: 'button', class: 'small', onclick: () => { st.step = 'login'; go(); } }, 'Start over')), out);
+    card.append(el('div', { class: 'field' }, el('label', {}, st.prompt || T('Enter the code Ring sent you')), code), el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => send({ code: code.value }) }, T('Verify')), el('button', { type: 'button', class: 'small', onclick: () => { st.step = 'login'; go(); } }, T('Start over'))), out);
     return card;
   }
   const email = el('input', { type: 'email', value: st.email, autocomplete: 'off', oninput: (e) => { st.email = e.target.value; } }), pw = el('input', { type: 'password', autocomplete: 'off' });
-  card.append(el('div', { class: 'field' }, el('label', {}, 'Ring e-mail'), email), el('div', { class: 'field' }, el('label', {}, 'Ring password'), pw, el('div', { class: 'help' }, 'Sent to Ring once to get a sign-in token; never saved.')),
-    el('button', { type: 'button', class: 'primary', onclick: () => send({ email: st.email, password: pw.value }) }, 'Sign in to Ring'), out);
+  card.append(el('div', { class: 'field' }, el('label', {}, T('Ring e-mail')), email), el('div', { class: 'field' }, el('label', {}, T('Ring password')), pw, el('div', { class: 'help' }, T('Sent to Ring once to get a sign-in token; never saved.'))),
+    el('button', { type: 'button', class: 'primary', onclick: () => send({ email: st.email, password: pw.value }) }, T('Sign in to Ring')), out);
   return card;
 }
 
@@ -420,17 +420,17 @@ function setupFor(stepId, opt) {
   if (opt.method === 'hue') return hueEl(card);
   if (opt.method === 'ring') return ringEl(card);
   if (opt.method === 'ha' || opt.method === 'ha-ui') {
-    if (!W.ha) { card.append(el('div', { class: 'warn' }, 'Needs Home Assistant. Connect it in the Home Assistant step, or add this later from Settings.')); return card; }
+    if (!W.ha) { card.append(el('div', { class: 'warn' }, T('Needs Home Assistant. Connect it in the Home Assistant step, or add this later from Settings.'))); return card; }
     const added = W.added.find((x) => x.domain === opt.domain);
-    if (W.haDomains.includes(opt.domain) || added) { card.append(el('div', { class: 'ok' }, added ? `✓ Added to Home Assistant: ${added.title}` : '✓ Already in Home Assistant')); return card; }
+    if (W.haDomains.includes(opt.domain) || added) { card.append(el('div', { class: 'ok' }, added ? T('✓ Added to Home Assistant: {title}', { title: added.title }) : T('✓ Already in Home Assistant'))); return card; }
     if (opt.method === 'ha-ui') {
       card.append(el('p', { class: 'note' }, T(opt.hint || 'This one signs in on a page only Home Assistant can show.')),
-        el('button', { type: 'button', class: 'small', onclick: async () => { const r = await api(`/api/setup/ha/link?domain=${encodeURIComponent(opt.domain)}`); window.open(r.url, '_blank', 'noopener'); } }, 'Set it up in Home Assistant'));
+        el('button', { type: 'button', class: 'small', onclick: async () => { const r = await api(`/api/setup/ha/link?domain=${encodeURIComponent(opt.domain)}`); window.open(r.url, '_blank', 'noopener'); } }, T('Set it up in Home Assistant')));
       return card;
     }
     const f = flowEl(opt.domain, opt.hint, () => go());
     if (W.flows[opt.domain]?.view) f.render();
-    else card.append(el('button', { type: 'button', class: 'small', onclick: (e) => { e.target.remove(); f.start(); } }, 'Add to Home Assistant'));
+    else card.append(el('button', { type: 'button', class: 'small', onclick: (e) => { e.target.remove(); f.start(); } }, T('Add to Home Assistant')));
     card.append(f.el);
     return card;
   }
@@ -532,21 +532,21 @@ function langRow() {
 }
 /* Moving from another CasaTorch: restore its backup instead of setting up again. */
 function restoreBox() {
-  const file = el('input', { type: 'file', accept: '.ctbk,application/octet-stream' }), pass = el('input', { type: 'password', autocomplete: 'off', placeholder: 'The backup\'s passphrase' });
+  const file = el('input', { type: 'file', accept: '.ctbk,application/octet-stream' }), pass = el('input', { type: 'password', autocomplete: 'off', placeholder: T('The backup\'s passphrase') });
   const msg = el('p', { class: 'note' });
   const go = el('button', { type: 'button', class: 'small', onclick: async () => {
-    const f = file.files?.[0]; if (!f || !pass.value) { msg.textContent = 'Choose the backup file and enter its passphrase.'; return; }
-    go.disabled = true; msg.textContent = 'Checking and restoring...';
+    const f = file.files?.[0]; if (!f || !pass.value) { msg.textContent = T('Choose the backup file and enter its passphrase.'); return; }
+    go.disabled = true; msg.textContent = T('Checking and restoring...');
     try {
       const r = await fetch('/api/setup/restore', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Backup-Passphrase': encodeURIComponent(pass.value) }, body: f });
       const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Couldn\'t restore.');
-      msg.textContent = j.restart === 'manual' ? 'Restored. Start CasaTorch again, then sign in with the accounts from the backup.' : 'Restored. CasaTorch is restarting - this page reloads in a few seconds.';
+      msg.textContent = j.restart === 'manual' ? T('Restored. Start CasaTorch again, then sign in with the accounts from the backup.') : T('Restored. CasaTorch is restarting - this page reloads in a few seconds.');
       if (j.restart !== 'manual') setTimeout(() => { location.href = '/'; }, 8000);
     } catch (e) { msg.textContent = e.message; go.disabled = false; }
   } }, T('Restore'));
   return el('details', { class: 'card' }, el('summary', {}, el('b', {}, T('Moving from another CasaTorch?')), ' ', T('Restore its backup')),
-    el('p', { class: 'note' }, 'Use a backup file from Settings › Updates & backup on your old CasaTorch. Everything comes across: settings, connections, sign-ins, floor plans and history.'),
-    el('label', {}, 'Backup file (.ctbk) ', file), el('label', {}, 'Passphrase ', pass), go, msg);
+    el('p', { class: 'note' }, T('Use a backup file from Settings › Updates & backup on your old CasaTorch. Everything comes across: settings, connections, sign-ins, floor plans and history.')),
+    el('label', {}, T('Backup file (.ctbk) '), file), el('label', {}, T('Passphrase '), pass), go, msg);
 }
 /* Where a step's branch keeps its answers: the network step keeps each kind's own (meraki, unifi). */
 const branchStore = (step, store) => (step.id === 'network' && step.branches?.[store.kind]?.fields ? (store[store.kind] ||= {}) : store);
@@ -592,8 +592,8 @@ function claimEl(store, keyField) {
   const st = W.claim ||= { email: '', sent: false, msg: '' };
   const card = el('details', { class: 'card claim', open: store.license || st.sent || st.email ? true : null }, el('summary', {}, el('b', {}, T('Already bought CasaTorch Pro?')), el('span', { class: 'note', style: 'display:block;font-weight:400' }, T('Every new CasaTorch gets 14 days of Pro free - nothing to enter for that.'))));
   if (store.license && st.done) { card.append(el('div', { class: 'ok' }, T('✓ Pro key added ({plan})', { plan: st.done }))); return card; }
-  if (keyField) card.append(fieldEl({ ...keyField, label: 'Paste your license key', help: null }, store, null), el('p', { class: 'note', style: 'margin:4px 0 12px' }, T('Or get it by e-mail - no key to copy:')));
-  const email = el('input', { type: 'email', value: st.email, placeholder: 'you@example.com', autocomplete: 'email', oninput: (e) => { st.email = e.target.value; } });
+  if (keyField) card.append(fieldEl({ ...keyField, label: T('Paste your license key'), help: null }, store, null), el('p', { class: 'note', style: 'margin:4px 0 12px' }, T('Or get it by e-mail - no key to copy:')));
+  const email = el('input', { type: 'email', value: st.email, placeholder: T('you@example.com'), autocomplete: 'email', oninput: (e) => { st.email = e.target.value; } });
   const code = el('input', { inputmode: 'numeric', maxlength: '6', placeholder: T('6-digit code'), autocomplete: 'one-time-code' });
   const msg = el('p', { class: 'note' }, st.msg ? T(st.msg) : T('Type the e-mail you bought with and we\'ll send you a code.'));
   const btn = el('button', { type: 'button', class: 'small' }, st.sent ? T('Get my key') : T('Send me a code'));
@@ -611,14 +611,14 @@ function claimEl(store, keyField) {
 }
 /* "Who is your power company?" - Home Assistant's own list (Opower), then its sign-in. */
 function utilityEl(p, store) {
-  const card = el('div', { class: 'card' }, el('h3', {}, T(p.label), el('span', { class: 'badge ha' }, W.ha ? 'via Home Assistant' : 'needs Home Assistant')), W.ha ? el('p', { class: 'note' }, T(p.help)) : null);
-  if (store.utility === 'other') { card.append(el('div', { class: 'note' }, 'OK - enter your price per kWh below.'), W.ha ? el('button', { type: 'button', class: 'small', onclick: () => { store.utility = null; go(); } }, 'Look again') : null); return card; }
-  if (store.utility) { card.append(el('div', { class: 'ok' }, `✓ ${store.utility} - connected through Home Assistant`)); return card; }
-  if (!W.ha) { store.utility = 'other'; card.append(el('div', { class: 'warn', style: 'margin:6px 0' }, '\u26A0 Needs Home Assistant - you skipped it, so CasaTorch can\'t sign in to your power company.'), el('div', { class: 'note' }, 'You can still see costs: CasaTorch adds up your smart plugs and uses the price per kWh you enter below (it\'s on your bill). To get your real bill and usage later, connect Home Assistant from Settings > Run setup again.')); return card; }
-  if (W.haDomains.includes(p.domain)) { store.utility = 'Your power company'; card.append(el('div', { class: 'ok' }, '✓ Your power company is already connected in Home Assistant')); return card; }
+  const card = el('div', { class: 'card' }, el('h3', {}, T(p.label), el('span', { class: 'badge ha' }, W.ha ? T('via Home Assistant') : T('needs Home Assistant'))), W.ha ? el('p', { class: 'note' }, T(p.help)) : null);
+  if (store.utility === 'other') { card.append(el('div', { class: 'note' }, T('OK - enter your price per kWh below.')), W.ha ? el('button', { type: 'button', class: 'small', onclick: () => { store.utility = null; go(); } }, T('Look again')) : null); return card; }
+  if (store.utility) { card.append(el('div', { class: 'ok' }, T('✓ {utility} - connected through Home Assistant', { utility: store.utility }))); return card; }
+  if (!W.ha) { store.utility = 'other'; card.append(el('div', { class: 'warn', style: 'margin:6px 0' }, T('\u26A0 Needs Home Assistant - you skipped it, so CasaTorch can\'t sign in to your power company.')), el('div', { class: 'note' }, T('You can still see costs: CasaTorch adds up your smart plugs and uses the price per kWh you enter below (it\'s on your bill). To get your real bill and usage later, connect Home Assistant from Settings > Run setup again.'))); return card; }
+  if (W.haDomains.includes(p.domain)) { store.utility = 'Your power company'; card.append(el('div', { class: 'ok' }, T('✓ Your power company is already connected in Home Assistant'))); return card; }
   const f = flowEl(p.domain, null, (title) => { store.utility = title; go(); }, (cancel) => el('button', { type: 'button', class: 'small', onclick: () => { store.utility = 'other'; cancel(); } }, T(p.otherLabel)));
   if (W.flows[p.domain]?.view) f.render();
-  else card.append(el('div', { class: 'row' }, el('button', { type: 'button', class: 'small', onclick: (e) => { e.target.parentElement.remove(); f.start(); } }, 'Find my power company'), el('button', { type: 'button', class: 'small', onclick: () => { store.utility = 'other'; go(); } }, T(p.otherLabel))));
+  else card.append(el('div', { class: 'row' }, el('button', { type: 'button', class: 'small', onclick: (e) => { e.target.parentElement.remove(); f.start(); } }, T('Find my power company')), el('button', { type: 'button', class: 'small', onclick: () => { store.utility = 'other'; go(); } }, T(p.otherLabel))));
   card.append(f.el);
   return card;
 }
@@ -772,7 +772,7 @@ async function setupCodeGate() {
 /* On the computer CasaTorch runs on: set up from a phone instead by scanning this. */
 function phoneCard() {
   if (!W.phone?.code) return null;
-  const q = el('div', { class: 'qr', role: 'img', 'aria-label': 'QR code that opens setup on your phone' }); if (W.phone.qr) q.innerHTML = W.phone.qr;   // made by this CasaTorch
+  const q = el('div', { class: 'qr', role: 'img', 'aria-label': T('QR code that opens setup on your phone') }); if (W.phone.qr) q.innerHTML = W.phone.qr;   // made by this CasaTorch
   return el('details', { class: 'card phonedetails' }, el('summary', {}, T('Prefer to set up on your phone or another computer?')),
     el('div', { class: 'phonecard' }, W.phone.qr ? q : null, el('div', {},
       el('p', { class: 'note' }, T('You can set up right here, or on any device on your home Wi-Fi. Scan this with your phone\'s camera and setup opens there with your setup code filled in.')),
@@ -797,7 +797,7 @@ function watchAsks() {
   await setupCodeGate();
   watchAsks();
   const st = await api('/api/setup/state');
-  if (!st.open) { $('#page').replaceChildren(el('h1', {}, 'CasaTorch is already set up'), el('p', {}, el('a', { href: '/' }, 'Open the dashboard'))); document.querySelector('footer').hidden = true; return; }
+  if (!st.open) { $('#page').replaceChildren(el('h1', {}, T('CasaTorch is already set up')), el('p', {}, el('a', { href: '/' }, T('Open the dashboard')))); document.querySelector('footer').hidden = true; return; }
   W.cat = await api('/api/setup/catalog');
   if (st.configured && !st.demo) { const cur = await api('/api/setup/current').catch(() => null); if (cur?.answers) { W.rerun = true; W.a = cur.answers; W.keeps = cur.keeps || {}; if (cur.ha) { W.ha = cur.ha; W.haDomains = cur.ha.domains || []; W.a.homeassistant._test = cur.ha; } } }
   W.steps = W.cat.steps; W.demo = !!st.demo;

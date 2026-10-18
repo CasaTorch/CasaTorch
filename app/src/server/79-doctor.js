@@ -202,8 +202,11 @@ function lastBackupAt() {
   try {
     const st = fs.statSync(AUDIT_FILE), fd = fs.openSync(AUDIT_FILE, 'r'), len = Math.min(st.size, 512 * 1024), buf = Buffer.alloc(len);
     try { fs.readSync(fd, buf, 0, len, st.size - len); } finally { fs.closeSync(fd); }
-    const lines = buf.toString('utf8').split('\n').filter((l) => l.includes('"backup-made"'));
-    return lines.length ? JSON.parse(lines[lines.length - 1]).at : null;
+    /* a backup made here, or one restored here (counted from the day it was made, or restored if that isn't known) */
+    const lines = buf.toString('utf8').split('\n').filter((l) => l.includes('"backup-made"') || l.includes('"backup-restored"'));
+    let best = null;
+    for (const l of lines) { try { const j = JSON.parse(l), at = j.event === 'backup-restored' ? j.backupAt || j.at : j.at; if (at && (!best || Date.parse(at) > Date.parse(best))) best = at; } catch { /* a cut line */ } }
+    return best;
   } catch { return null; }
 }
 function docBackup() {

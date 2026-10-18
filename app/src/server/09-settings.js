@@ -53,8 +53,8 @@ app.put('/api/settings', express.json(), (req, res) => {
   saveConfig(next); res.json({ ok: true });
 });
 /* Re-open the setup wizard from the app (asks for the password again). */
-app.post('/api/settings/rerun-setup', express.json(), (req, res) => {
+app.post('/api/settings/rerun-setup', express.json(), asyncRoute(async (req, res) => {
   if (signInOn() && req.user && limited(`pw:${req.user.id}`, 5)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes.' });
-  if (signInOn() && (!req.user || rank(req.user.role) < rank('admin') || !verifySecret(req.user.password, req.body?.password || ''))) { if (req.user) failed(`pw:${req.user.id}`); return res.status(403).json({ error: 'that password is not right' }); }
+  if (signInOn() && (!req.user || rank(req.user.role) < rank('admin') || !await verifySecretAsync(req.user.password, req.body?.password || ''))) { if (req.user) failed(`pw:${req.user.id}`); return res.status(403).json({ error: 'that password is not right' }); }
   setupReopened = Date.now(); res.json({ ok: true, url: '/setup.html' });
-});
+}));

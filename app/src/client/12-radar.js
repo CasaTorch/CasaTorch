@@ -249,7 +249,7 @@ function radarView(host, cfg) {
   function showTime() {
     const f = st.frames[st.idx]; if (!f) { timeChip.replaceChildren(); return; }
     const newest = st.frames.filter((x) => x.kind === 'past').at(-1), fresh = st.info && st.info.now - newest.t < 20 * 60;
-    const label = f.kind === 'forecast' ? `+${Math.round((f.t - newest.t) / 60)} min` : f === newest && fresh ? T('Now') : fmtTime(rdIso(f.t));
+    const label = f.kind === 'forecast' ? T('+{n} min', { n: Math.round((f.t - newest.t) / 60) }) : f === newest && fresh ? T('Now') : fmtTime(rdIso(f.t));
     timeChip.replaceChildren(...[el('b', {}, label), f.kind === 'forecast' ? el('span', { class: 'rd-sub' }, T('Forecast')) : f === newest && fresh && !compact ? el('span', { class: 'rd-sub' }, fmtTime(rdIso(f.t))) : null].filter(Boolean));
     timeChip.classList.toggle('rd-past', f !== newest);
     if (bar) { range.value = st.idx; range.setAttribute('aria-valuetext', label); }
@@ -384,17 +384,18 @@ function radarFull(opts = {}) {
 /* ---- no town yet: find it here (admins), and the weather gets it too ---- */
 function radarSetHome(onDone) {
   const q = el('input', { type: 'search', placeholder: T('Search for a town or city…'), 'aria-label': T('Search for a town or city…') }), list = el('div', { class: 'pick-list' });
-  let tq = null;
-  q.oninput = () => { clearTimeout(tq); tq = setTimeout(async () => {
-    const s = q.value.trim(); if (s.length < 2) return list.replaceChildren();
+  // One search when you press Find or Enter (OpenStreetMap's search asks apps not to search while you type).
+  const find = async () => {
+    const s = q.value.trim(); if (s.length < 3) return list.replaceChildren();
     try {
-      const { places = [] } = await api(`/api/w/places?q=${encodeURIComponent(s)}`);
+      const { places = [], credit } = await api(`/api/w/places?q=${encodeURIComponent(s)}`);
       list.replaceChildren(...(places.length ? places.map((p) => el('button', { type: 'button', class: 'pick-item', onclick: async () => {
         try { await post('/api/radar/home', p); m.remove(); RD.framesP = null; RD.outlines.clear(); toast(T('Home is set to {name}.', { name: p.name })); onDone?.(); } catch (err) { toast(err.message); }
-      } }, icon('home', 14), p.name)) : [el('div', { class: 'tiny muted' }, T('Nothing found.'))]));
+      } }, icon('home', 14), p.name)) : [el('div', { class: 'tiny muted' }, T('Nothing found.'))]), ...(credit ? [placeCredit(credit)] : []));
     } catch { list.replaceChildren(el('div', { class: 'tiny muted' }, T('Town search is not answering right now. Try again in a minute.'))); }
-  }, 350); };
-  const m = modal(el('div', {}, el('p', { class: 'small muted', style: 'margin-top:0' }, T('The radar centers on your town. The weather uses it too. Only the town is saved, not your address.')), q, list), { title: T('Where is home?') });
+  };
+  q.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); find(); } };
+  const m = modal(el('div', {}, el('p', { class: 'small muted', style: 'margin-top:0' }, T('The radar centers on your town. The weather uses it too. Only the town is saved, not your address.')), el('div', { class: 'row', style: 'gap:8px' }, el('div', { class: 'grow' }, q), el('button', { type: 'button', class: 'btn small', onclick: find }, T('Find'))), list), { title: T('Where is home?') });
   setTimeout(() => q.focus(), 60);
 }
 

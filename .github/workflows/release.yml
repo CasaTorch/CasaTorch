@@ -189,6 +189,9 @@ jobs:
         run: |
           [ -n "$KEY" ] || { echo "CASATORCH_RELEASE_KEY is not set - not publishing an unsigned release" >&2; exit 1; }
           umask 077; printf '%s\n' "$KEY" > "$RUNNER_TEMP/release.key"
+          # Every source file's checksum, so source installs (install.sh, install.ps1, the Home Assistant add-on) can
+          # check a tag's files against this signed release before they build or run anything (verify-release.js).
+          git ls-files -z | LC_ALL=C sort -z | xargs -0 sha256sum -- > out/casatorch-source-files.sha256
           (cd out && sha256sum -- * > SHA256SUMS)
           openssl pkeyutl -sign -inkey "$RUNNER_TEMP/release.key" -rawin -in out/SHA256SUMS -out out/SHA256SUMS.sig
           rm -f "$RUNNER_TEMP/release.key"

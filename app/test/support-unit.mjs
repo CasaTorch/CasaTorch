@@ -103,4 +103,28 @@ export default async function supportTests(t) {
     assert.equal(S.checklistState(all, { allDoneAt: new Date().toISOString() }).show, true, 'all done: still shows "all set" for a day');
     assert.equal(S.checklistState(all, { allDoneAt: new Date(Date.now() - 2 * 86400_000).toISOString() }).show, false);
   });
+
+  t('owner reset: asks are limited per device, with a box-wide ceiling one device cannot use up', () => {
+    const ip = (n) => `192.168.77.${n}`;   // scrub-ok: documentation-style example addresses
+    const r1 = [1, 2, 3, 4].map(() => S.recoverAskLimit(ip(1)));
+    assert.deepEqual(r1.slice(0, 3), [null, null, null]); assert.match(r1[3], /from this device/);
+    assert.equal(S.recoverAskLimit(ip(2)), null, 'another device still can ask after one device used its share');
+    for (let i = 3; i < 13; i++) for (let k = 0; k < 3; k++) S.recoverAskLimit(ip(i));   // 30+ asks across many devices
+    assert.match(S.recoverAskLimit(ip(50)), /today/, 'the box-wide ceiling holds');
+    assert.equal(S.recoverAskLimit(ip(51), { local: true }), null, 'the owner at the box itself is never held back by the ceiling');
+    assert.equal(S.recoverAskLimit(ip(52), { renew: false }), null, 'showing a waiting code again makes no new code and needs no box-wide place');
+  });
+
+  await t('activity: trimming the log rewrites it atomically (no temp file left, old lines gone)', async () => {
+    const fs = await import('node:fs'), path = await import('node:path');
+    const file = path.join(process.env.CASATORCH_DATA_DIR, 'audit.log'), was = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+    try {
+      fs.writeFileSync(file, `${JSON.stringify({ at: new Date(Date.now() - 500 * 86400_000).toISOString(), event: 'signed-in' })}\n${JSON.stringify({ at: new Date().toISOString(), event: 'signed-in', n: 1 })}\n`);
+      S.activityTrimFile();
+      const left = fs.readFileSync(file, 'utf8').trim().split('\n');
+      assert.equal(left.length, 1); assert.equal(JSON.parse(left[0]).n, 1);
+      assert.ok(!fs.readdirSync(path.dirname(file)).some((f) => f.startsWith('audit.log.') && f.endsWith('.tmp')));
+      if (process.platform !== 'win32') assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+    } finally { if (was == null) fs.rmSync(file, { force: true }); else fs.writeFileSync(file, was); }
+  });
 }

@@ -11,6 +11,9 @@
    The CasaTorch web app's languages: es de fr pt it nl ja zh ko hi pl sv tr. */
 window.CASA_WORDS = {
   es: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Usar CasaTorch desde cualquier lugar forma parte de Pro (tu prueba lo incluye). En el Wi-Fi de tu casa se abre como siempre.",
+    "You're away from home": "Estás fuera de casa",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "Estás fuera de casa. Usar CasaTorch desde cualquier lugar forma parte de Pro (tu prueba lo incluye).",
     "Add a home": "Añadir una casa",
     "Add to Apple Passwords": "Añadir a Apple Passwords",
     "Address": "Dirección",
@@ -167,6 +170,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "hace {n} minutos",
   },
   de: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "CasaTorch von überall zu nutzen ist Teil von Pro (in deiner Testphase enthalten). In deinem WLAN zu Hause öffnet es sich wie gewohnt.",
+    "You're away from home": "Du bist unterwegs",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "Du bist unterwegs. CasaTorch von überall zu nutzen ist Teil von Pro (in deiner Testphase enthalten).",
     "Add a home": "Zuhause hinzufügen",
     "Add to Apple Passwords": "Zu Apple Passwords hinzufügen",
     "Address": "Adresse",
@@ -323,6 +329,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "vor {n} Minuten",
   },
   fr: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Utiliser CasaTorch de n'importe où fait partie de Pro (inclus dans votre essai). Sur le Wi-Fi de la maison, il s'ouvre comme d'habitude.",
+    "You're away from home": "Vous n'êtes pas à la maison",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "Vous n'êtes pas à la maison. Utiliser CasaTorch de n'importe où fait partie de Pro (inclus dans votre essai).",
     "Add a home": "Ajouter une maison",
     "Add to Apple Passwords": "Ajouter à Apple Passwords",
     "Address": "Adresse",
@@ -479,6 +488,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "il y a {n} minutes",
   },
   pt: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Usar o CasaTorch de qualquer lugar faz parte do Pro (seu teste inclui). No Wi-Fi de casa ele abre como sempre.",
+    "You're away from home": "Você está fora de casa",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "Você está fora de casa. Usar o CasaTorch de qualquer lugar faz parte do Pro (seu teste inclui).",
     "Add a home": "Adicionar uma casa",
     "Add to Apple Passwords": "Adicionar ao Apple Passwords",
     "Address": "Endereço",
@@ -635,6 +647,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "há {n} minutos",
   },
   it: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Usare CasaTorch ovunque fa parte di Pro (incluso nella tua prova). Sul Wi-Fi di casa si apre come sempre.",
+    "You're away from home": "Sei fuori casa",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "Sei fuori casa. Usare CasaTorch ovunque fa parte di Pro (incluso nella tua prova).",
     "Add a home": "Aggiungi una casa",
     "Add to Apple Passwords": "Aggiungi ad Apple Passwords",
     "Address": "Indirizzo",
@@ -791,6 +806,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n} minuti fa",
   },
   nl: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "CasaTorch overal gebruiken hoort bij Pro (je proefperiode bevat het). Op je wifi thuis opent hij zoals altijd.",
+    "You're away from home": "Je bent niet thuis",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "Je bent niet thuis. CasaTorch overal gebruiken hoort bij Pro (je proefperiode bevat het).",
     "Add a home": "Huis toevoegen",
     "Add to Apple Passwords": "Toevoegen aan Apple Passwords",
     "Address": "Adres",
@@ -947,6 +965,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n} minuten geleden",
   },
   ja: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "どこからでも CasaTorch を使う機能は Pro に含まれます (トライアルでも使えます)。自宅の Wi-Fi ではいつもどおり開きます。",
+    "You're away from home": "外出中です",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "外出中です。どこからでも CasaTorch を使う機能は Pro に含まれます (トライアルでも使えます)。",
     "Add a home": "家を追加",
     "Add to Apple Passwords": "Apple Passwordsに追加",
     "Address": "アドレス",
@@ -1103,6 +1124,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n}分前",
   },
   zh: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "随时随地使用 CasaTorch 是 Pro 的功能（试用期包含）。在家中 Wi-Fi 上照常打开。",
+    "You're away from home": "你不在家",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "你不在家。随时随地使用 CasaTorch 是 Pro 的功能（试用期包含）。",
     "Add a home": "添加一个家",
     "Add to Apple Passwords": "添加到 Apple Passwords",
     "Address": "地址",
@@ -1259,6 +1283,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n} 分钟前",
   },
   ko: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "어디서나 CasaTorch를 사용하는 기능은 Pro에 포함됩니다(체험에도 포함). 집 Wi-Fi에서는 평소처럼 열립니다.",
+    "You're away from home": "집 밖에 있습니다",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "집 밖에 있습니다. 어디서나 CasaTorch를 사용하는 기능은 Pro에 포함됩니다(체험에도 포함).",
     "Add a home": "집 추가",
     "Add to Apple Passwords": "Apple Passwords에 추가",
     "Address": "주소",
@@ -1415,6 +1442,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n}분 전",
   },
   hi: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "कहीं से भी CasaTorch इस्तेमाल करना Pro का हिस्सा है (आपके ट्रायल में शामिल)। घर के Wi-Fi पर यह हमेशा की तरह खुलता है।",
+    "You're away from home": "आप घर से बाहर हैं",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "आप घर से बाहर हैं। कहीं से भी CasaTorch इस्तेमाल करना Pro का हिस्सा है (आपके ट्रायल में शामिल)।",
     "Add a home": "घर जोड़ें",
     "Add to Apple Passwords": "Apple Passwords में जोड़ें",
     "Address": "पता",
@@ -1571,6 +1601,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n} मिनट पहले",
   },
   pl: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Korzystanie z CasaTorch z dowolnego miejsca jest częścią Pro (okres próbny to obejmuje). W domowym Wi-Fi otwiera się jak zwykle.",
+    "You're away from home": "Jesteś poza domem",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "Jesteś poza domem. Korzystanie z CasaTorch z dowolnego miejsca jest częścią Pro (okres próbny to obejmuje).",
     "Add a home": "Dodaj dom",
     "Add to Apple Passwords": "Dodaj do Apple Passwords",
     "Address": "Adres",
@@ -1727,6 +1760,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n} min temu",
   },
   sv: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Att använda CasaTorch var som helst ingår i Pro (din provperiod inkluderar det). På ditt Wi-Fi hemma öppnas den som vanligt.",
+    "You're away from home": "Du är inte hemma",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "Du är inte hemma. Att använda CasaTorch var som helst ingår i Pro (din provperiod inkluderar det).",
     "Add a home": "Lägg till ett hem",
     "Add to Apple Passwords": "Lägg till i Apple Passwords",
     "Address": "Adress",
@@ -1883,6 +1919,9 @@ window.CASA_WORDS = {
     "{n} minutes ago": "för {n} minuter sedan",
   },
   tr: {
+    "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "CasaTorch'u her yerden kullanmak Pro'nun bir parçasıdır (denemeniz bunu içerir). Ev Wi-Fi'nizde her zamanki gibi açılır.",
+    "You're away from home": "Evden uzaktasınız",
+    "You're away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).": "Evden uzaktasınız. CasaTorch'u her yerden kullanmak Pro'nun bir parçasıdır (denemeniz bunu içerir).",
     "Add a home": "Ev ekle",
     "Add to Apple Passwords": "Apple Passwords'e ekle",
     "Address": "Adres",

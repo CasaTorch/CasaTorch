@@ -1,7 +1,7 @@
 /* ======================================================================
  * Backup and restore: everything this CasaTorch knows, in one file.
  *
- * Settings > Backup makes a file protected by a passphrase the owner picks:
+ * Settings › Updates & backup › Backup makes a file protected by a passphrase the owner picks:
  * settings and connections, sign-ins, the calendar, floor plans and 3D scans,
  * photos (optional), history and alerts. It's encrypted with AES-256-GCM using
  * a key made from the passphrase (scrypt), so the file is useless without it -
@@ -108,6 +108,15 @@ function swapIn(staged) {
   return keep;
 }
 
+function bkLastActivity() {
+  try {
+    const st = fs.statSync(AUDIT_FILE), len = Math.min(st.size, 64 * 1024), buf = Buffer.alloc(len), fd = fs.openSync(AUDIT_FILE, 'r');
+    try { fs.readSync(fd, buf, 0, len, st.size - len); } finally { fs.closeSync(fd); }
+    const lines = buf.toString('utf8').trim().split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) { try { const at = JSON.parse(lines[i]).at; if (at && Number.isFinite(Date.parse(at))) return at; } catch { /* a cut line */ } }
+  } catch { /* no log in the backup */ }
+  return null;
+}
 let bkBusy = false;
 const bkPass = (p) => (typeof p === 'string' && p.length >= 10 && p.length <= 200 ? p : null);
 app.post('/api/backup', requireRole('owner'), express.json({ limit: '2kb' }), async (req, res) => {
@@ -136,8 +145,10 @@ async function restoreHandler(req, res) {
     await pipeline(req, new Transform({ transform(c, _e, cb) { got += c.length; cb(got > MAX ? new Error('too big') : null, c); } }), fs.createWriteStream(file, { mode: 0o600 }));
     fs.mkdirSync(staged, { mode: 0o700 });
     const files = await openBackup(file, pass, staged);
-    if (req.user) audit(req, 'backup-restored', { files });
     const kept = swapIn(staged);
+    /* Written into the restored activity log (the old one is in the kept folder), with the backup's date - the last thing
+       recorded in it - so Health counts this backup instead of saying "No backup file yet" (79-doctor.js lastBackupAt). */
+    audit(req, 'backup-restored', { files, backupAt: bkLastActivity() });
     res.json({ ok: true, files, kept: path.basename(kept), restart: INSTALL === 'manual' ? 'manual' : 'auto' });
     console.log(`Restored a backup (${files} files); the previous data is in ${kept}. Restarting.`);
     setTimeout(() => process.exit(0), 800);   // the service (launchd, systemd, Windows, Docker, Home Assistant) starts it again
@@ -147,7 +158,7 @@ async function restoreHandler(req, res) {
   } finally { fs.rmSync(file, { force: true }); bkBusy = false; }
 }
 app.post('/api/restore', requireRole('owner'), restoreHandler);
-app.post('/api/setup/restore', (req, res) => (isConfigured() ? res.status(403).json({ error: 'This CasaTorch is already set up - restore from Settings › Backup instead.' }) : restoreHandler(req, res)));
+app.post('/api/setup/restore', (req, res) => (isConfigured() ? res.status(403).json({ error: 'This CasaTorch is already set up - restore from Settings › Updates & backup › Backup instead.' }) : restoreHandler(req, res)));
 /* Leftovers from an interrupted backup or restore. */
 try { for (const f of fs.readdirSync(DATA_DIR)) if (/^\.(backup|restore)-[0-9a-f]+(\.ctbk)?$/.test(f)) fs.rmSync(path.join(DATA_DIR, f), { recursive: true, force: true }); } catch { /* fine */ }
 /* The data kept from before each restore is a whole copy (photos and scans too): the newest two stay, older ones go

@@ -17,7 +17,7 @@ Legend: **Direct** = CasaTorch talks to it itself · **Via HA** = needs Home Ass
 | Sports scores + schedules | Direct | ESPN public scoreboard JSON | Pick leagues and teams. Unofficial endpoints: kept behind a provider so it can be swapped (TheSportsDB) if ESPN changes. |
 | News headlines | Direct | RSS feeds the user picks | Defaults: AP, NPR, BBC, Reuters-style feeds; any RSS link. |
 | Notes, reminders, clock | Direct | Local | Trash night, recurring reminders, a family note. |
-| Internet status | Direct | Public IP, ISP and city (ipinfo.io), latency to 1.1.1.1 / 8.8.8.8 / gateway, Cloudflare speed test | Works on every network with no router access. |
+| Internet status | Direct | Public IP and country (Cloudflare), ISP (RIPEstat), latency to 1.1.1.1 / 8.8.8.8 / gateway, Cloudflare speed test | Works on every network with no router access. |
 
 ## Devices
 

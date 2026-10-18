@@ -182,6 +182,31 @@ function rpPut(plan, files) {
   if (!isDemo()) for (const name of pzFilesOf(plan)) { const own = path.join(FP_DIR, name), kept = path.join(RP_FILES, name); if (!fs.existsSync(own) && fs.existsSync(kept)) { try { fs.linkSync(kept, own); } catch { fs.copyFileSync(kept, own); } } }
   fpWrite(plan); rpLastSig = null;
 }
+/* A damaged plan at start: the start-up check (00b-heal.js) kept the damaged floorplan.json aside and removed it, so the
+   plan would start empty. Put back the newest restore point that reads instead, and say so in Health. Runs only when
+   the plan file is missing AND a damaged copy of it sits beside it - never over a plan that is there. */
+function rpHealPlan() {
+  try {
+    if (isDemo() || fs.existsSync(FP_FILE)) return null;
+    const damaged = (() => { try { return fs.readdirSync(FP_DIR).filter((n) => n.startsWith('floorplan.json.damaged-')); } catch { return []; } })();
+    if (!damaged.length) return null;
+    const newest = Math.max(...damaged.map((n) => { try { return fs.statSync(path.join(FP_DIR, n)).mtimeMs; } catch { return 0; } }));
+    for (const id of rpList()) {
+      let plan; try { plan = JSON.parse(rpRead(id) || ''); } catch { continue; }
+      if (!plan || typeof plan !== 'object' || !Array.isArray(plan.floors)) continue;
+      if (shTime(id) > newest + 60_000) continue;   // made after the damage was found: not the plan that was lost
+      rpPut(plan, null);
+      const when = new Date(shTime(id)).toISOString().slice(0, 16).replace('T', ' ');
+      /* the start-up note said the plan "starts again empty": that is no longer true */
+      for (let i = HEAL.length - 1; i >= 0; i--) if (HEAL[i].what === 'data-damaged' && /^Your 3D Home plan couldn't be read/.test(HEAL[i].detail)) HEAL.splice(i, 1);
+      healNote('plan-restored', `Your 3D Home plan was damaged (often by a power cut), so CasaTorch put back its newest restore point, from ${when} UTC. Changes after that may be missing; the damaged file was kept (named ...damaged-...). Other restore points are in 3D Home › Edit › Backups.`);
+      console.warn(`Self-check: the 3D Home plan was damaged; restore point ${id} was put back.`);
+      return id;
+    }
+  } catch (e) { console.warn('3D Home plan repair:', String(e.message || e).slice(0, 200)); }
+  return null;
+}
+if (process.env.CASATORCH_TEST !== '1') rpHealPlan();
 /* A few seconds after the plan changes (and stays put), it is kept. Checking costs one stat of the file (in the
    demo, one look at the plan in memory) every 4 seconds. */
 let rpSeen = null, rpPending = false;
@@ -228,4 +253,4 @@ app.post('/api/floorplan/restore-points/:id', requirePro, requireRole('admin'), 
   try { rpPut(plan, null); } catch (e) { return res.status(500).json({ error: String(e.message || e).slice(0, 160) }); }
   res.json({ ok: true });
 });
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchPlan = { pzWrite, pzRead, pzParse, pzExport, pzTemplate, pzClean, pzCrc, rpPrune, rpSnapshot, rpList, rpRead, rpPut, rpInfo, RP_DIR, FP_DIR };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchPlan = { pzWrite, pzRead, pzParse, pzExport, pzTemplate, pzClean, pzCrc, rpPrune, rpSnapshot, rpList, rpRead, rpPut, rpInfo, rpHealPlan, RP_DIR, FP_DIR, FP_FILE };

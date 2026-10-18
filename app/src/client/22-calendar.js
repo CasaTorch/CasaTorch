@@ -4,27 +4,27 @@ function eventEditor(ev, done, date) {
   const e = ev ? { ...ev } : { title: '', date: date || dayKey(new Date().toISOString()), time: '18:00', minutes: 60, repeat: 'none', color: '#a78bfa', who: '' };
   let allDay = !e.time;
   const f = (label, input) => el('label', { class: 'field' }, el('span', {}, label), input);
-  const title = el('input', { value: e.title, placeholder: 'Soccer practice', maxlength: 120 });
+  const title = el('input', { value: e.title, placeholder: T('Soccer practice'), maxlength: 120 });
   const dateI = el('input', { type: 'date', value: e.date }), timeI = el('input', { type: 'time', value: e.time || '18:00' });
   const dur = el('select', {}, [[30, '30 min'], [60, '1 hour'], [90, '1.5 hours'], [120, '2 hours'], [180, '3 hours'], [240, '4 hours']].map(([v, l]) => el('option', { value: v, selected: Number(e.minutes || 60) === v }, l)));
   const days = el('input', { type: 'number', min: 1, max: 60, value: e.days || 1 });
   const rep = el('select', {}, [['none', 'Does not repeat'], ['daily', 'Every day'], ['weekly', 'Every week'], ['monthly', 'Every month'], ['yearly', 'Every year']].map(([v, l]) => el('option', { value: v, selected: e.repeat === v }, l)));
-  const who = el('input', { value: e.who || '', placeholder: 'Family, Kids, Mom...', maxlength: 40 }), where = el('input', { value: e.where || '', placeholder: 'Optional', maxlength: 120 });
+  const who = el('input', { value: e.who || '', placeholder: T('Family, Kids, Mom...'), maxlength: 40 }), where = el('input', { value: e.where || '', placeholder: T('Optional'), maxlength: 120 });
   const color = el('select', {}, EV_COLORS.map(([v, l]) => el('option', { value: v, selected: e.color === v }, l)));
-  const timeRow = el('div', { class: 'row' }, el('div', { class: 'grow' }, f('Starts', timeI)), el('div', { class: 'grow' }, f('Length', dur)));
-  const dayRow = el('div', {}, f('How many days', days));
+  const timeRow = el('div', { class: 'row' }, el('div', { class: 'grow' }, f(T('Starts'), timeI)), el('div', { class: 'grow' }, f(T('Length'), dur)));
+  const dayRow = el('div', {}, f(T('How many days'), days));
   const ad = el('input', { type: 'checkbox', checked: allDay, style: 'width:auto' });
   const sync = () => { timeRow.hidden = allDay; dayRow.hidden = !allDay; }; ad.onchange = () => { allDay = ad.checked; sync(); }; sync();
   const msg = el('div', { class: 'small', style: 'color:var(--bad);min-height:18px' });
-  const save = el('button', { class: 'btn primary' }, ev ? 'Save' : 'Add event');
+  const save = el('button', { class: 'btn primary' }, ev ? T('Save') : T('Add event'));
   save.onclick = async () => {
     const body = { title: title.value, date: dateI.value, time: allDay ? null : timeI.value, minutes: Number(dur.value), days: Number(days.value), repeat: rep.value, who: who.value, where: where.value, color: color.value };
-    try { if (ev) await post(`/api/mycal/${encodeURIComponent(ev.id)}`, body, 'PUT'); else await post('/api/mycal', body); m.remove(); toast(ev ? 'Saved' : 'Added to the calendar'); done?.(); } catch (err) { msg.textContent = err.message; }
+    try { if (ev) await post(`/api/mycal/${encodeURIComponent(ev.id)}`, body, 'PUT'); else await post('/api/mycal', body); m.remove(); toast(ev ? T('Saved') : T('Added to the calendar')); done?.(); } catch (err) { msg.textContent = err.message; }
   };
-  const del = ev ? el('button', { class: 'btn danger', onclick: async () => { await api(`/api/mycal/${encodeURIComponent(ev.id)}`, { method: 'DELETE' }); m.remove(); toast('Deleted'); done?.(); } }, 'Delete') : null;
-  const m = modal(el('div', {}, f('What', title), el('div', { class: 'row' }, el('div', { class: 'grow' }, f('Date', dateI)), el('label', { class: 'row small', style: 'margin-top:18px' }, ad, 'All day')), timeRow, dayRow,
-    el('div', { class: 'row' }, el('div', { class: 'grow' }, f('Repeats', rep)), el('div', { class: 'grow' }, f('Color', color))), el('div', { class: 'row' }, el('div', { class: 'grow' }, f('Whose', who)), el('div', { class: 'grow' }, f('Where', where))),
-    msg, el('div', { class: 'row', style: 'justify-content:flex-end' }, del, el('span', { class: 'grow' }), el('button', { class: 'btn ghost', onclick: () => m.remove() }, 'Cancel'), save)), { title: ev ? 'Edit event' : 'New event' });
+  const del = ev ? el('button', { class: 'btn danger', onclick: async () => { await api(`/api/mycal/${encodeURIComponent(ev.id)}`, { method: 'DELETE' }); m.remove(); toast(T('Deleted')); done?.(); } }, T('Delete')) : null;
+  const m = modal(el('div', {}, f(T('What'), title), el('div', { class: 'row' }, el('div', { class: 'grow' }, f(T('Date'), dateI)), el('label', { class: 'row small', style: 'margin-top:18px' }, ad, T('All day'))), timeRow, dayRow,
+    el('div', { class: 'row' }, el('div', { class: 'grow' }, f(T('Repeats'), rep)), el('div', { class: 'grow' }, f(T('Color'), color))), el('div', { class: 'row' }, el('div', { class: 'grow' }, f(T('Whose'), who)), el('div', { class: 'grow' }, f(T('Where'), where))),
+    msg, el('div', { class: 'row', style: 'justify-content:flex-end' }, del, el('span', { class: 'grow' }), el('button', { class: 'btn ghost', onclick: () => m.remove() }, T('Cancel')), save)), { title: ev ? T('Edit event') : T('New event') });
   setTimeout(() => title.focus(), 50);
 }
 tab({ id: 'calendar', label: 'Calendar', icon: 'calendar', async render(main) {
@@ -41,19 +41,19 @@ tab({ id: 'calendar', label: 'Calendar', icon: 'calendar', async render(main) {
     for (let i = 0; i < 42; i++) {
       const d = new Date(gridStart.getTime() + i * 86400_000), k = d.toISOString().slice(0, 10), list = byDay.get(k) || [];
       cells.push(el('div', { class: `day${d.getUTCMonth() !== m - 1 ? ' other' : ''}${k === today ? ' today' : ''}`, onclick: (ev) => { if (ev.target.closest('.chip')) return; eventEditor(null, draw, k); } },
-        el('span', { class: 'n', role: 'button', tabindex: 0, 'aria-label': `${d.getUTCDate()} - ${fmt(d.toISOString(), { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' })}: add an event` }, d.getUTCDate()), ...list.slice(0, 4).map((e) => el('div', { class: 'chip', role: 'button', tabindex: 0, style: `background:${safeColor(e.color)}`, title: `${e.title}${e.allDay ? '' : ` - ${fmtTime(e.start)}`}`,
-          onclick: () => (e.mine && myById.get(e.id) ? eventEditor(myById.get(e.id), draw) : modal(el('div', {}, el('p', {}, e.allDay ? 'All day' : `${fmtWhen(e.start)} - ${fmtTime(e.end)}`), e.location ? el('p', { class: 'muted' }, e.location) : null, el('p', { class: 'small muted' }, `From ${e.calendar || 'a linked calendar'} - change it there.`)), { title: e.title })) }, e.allDay ? e.title : `${fmtTime(e.start).replace(':00', '')} ${e.title}`)),
-        list.length > 4 ? el('span', { class: 'tiny muted' }, `+${list.length - 4} more`) : null));
+        el('span', { class: 'n', role: 'button', tabindex: 0, 'aria-label': T('{day} - {date}: add an event', { day: d.getUTCDate(), date: fmt(d.toISOString(), { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' }) }) }, d.getUTCDate()), ...list.slice(0, 4).map((e) => el('div', { class: 'chip', role: 'button', tabindex: 0, style: `background:${safeColor(e.color)}`, title: `${e.title}${e.allDay ? '' : ` - ${fmtTime(e.start)}`}`,
+          onclick: () => (e.mine && myById.get(e.id) ? eventEditor(myById.get(e.id), draw) : modal(el('div', {}, el('p', {}, e.allDay ? T('All day') : `${fmtWhen(e.start)} - ${fmtTime(e.end)}`), e.location ? el('p', { class: 'muted' }, e.location) : null, el('p', { class: 'small muted' }, T('From {calendar} - change it there.', { calendar: e.calendar || T('a linked calendar') }))), { title: e.title })) }, e.allDay ? e.title : `${fmtTime(e.start).replace(':00', '')} ${e.title}`)),
+        list.length > 4 ? el('span', { class: 'tiny muted' }, T('+{n} more', { n: list.length - 4 })) : null));
     }
     const title = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(first);
     const step = (n) => { const d = new Date(Date.UTC(y, m - 1 + n, 1)); ym = d.toISOString().slice(0, 7); draw(); };
     if (!main.isConnected) return;   // left for another page while this was loading
-    setTop(T('Calendar'), 'Your linked calendars plus the CasaTorch calendar', [el('button', { class: 'btn primary', onclick: () => eventEditor(null, draw) }, icon('plus'), T('New event'))]);
+    setTop(T('Calendar'), T('Your linked calendars plus the CasaTorch calendar'), [el('button', { class: 'btn primary', onclick: () => eventEditor(null, draw) }, icon('plus'), T('New event'))]);
     main.replaceChildren(el('div', { class: 'card' },
-      el('div', { class: 'row', style: 'margin-bottom:14px' }, el('button', { class: 'btn small', 'aria-label': 'Previous month', onclick: () => step(-1) }, icon('chevl')), el('b', { style: 'font-size:18px;min-width:170px;text-align:center' }, title), el('button', { class: 'btn small', 'aria-label': 'Next month', onclick: () => step(1) }, icon('chevr')), el('button', { class: 'btn small ghost', onclick: () => { ym = today.slice(0, 7); draw(); } }, 'Today')),
+      el('div', { class: 'row', style: 'margin-bottom:14px' }, el('button', { class: 'btn small', 'aria-label': T('Previous month'), onclick: () => step(-1) }, icon('chevl')), el('b', { style: 'font-size:18px;min-width:170px;text-align:center' }, title), el('button', { class: 'btn small', 'aria-label': T('Next month'), onclick: () => step(1) }, icon('chevr')), el('button', { class: 'btn small ghost', onclick: () => { ym = today.slice(0, 7); draw(); } }, T('Today'))),
       el('div', { class: 'month' }, ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => el('div', { class: 'dow' }, d)), cells),
-      el('p', { class: 'small muted', style: 'margin:14px 0 0' }, 'Tap a day to add an event. Events you add here live on your CasaTorch box. Google, iCloud and Outlook calendars linked in setup show here too.'),
-      ...errors.map((er) => el('p', { class: 'small', style: 'color:var(--warn)' }, `${er.calendar} did not load.`))));
+      el('p', { class: 'small muted', style: 'margin:14px 0 0' }, T('Tap a day to add an event. Events you add here live on your CasaTorch box. Google, iCloud and Outlook calendars linked in setup show here too.')),
+      ...errors.map((er) => el('p', { class: 'small', style: 'color:var(--warn)' }, T('{calendar} did not load.', { calendar: er.calendar })))));
   };
   await draw(); return draw;
 } });
@@ -80,22 +80,22 @@ tab({ id: 'photos', label: 'Photos', icon: 'image', async render(main) {
   async function upload(files) {
     let ok = 0; const list = [...files].filter((f) => /^image\//.test(f.type) || /\.(heic|heif)$/i.test(f.name));
     for (const [i, f] of list.entries()) {
-      status.textContent = `Uploading ${i + 1} of ${list.length}...`;
+      status.textContent = T('Uploading {n} of {n2}...', { n: i + 1, n2: list.length });
       try { const r = await fetch('/api/photos', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: await photoShrink(f) }); const j = await r.json(); if (!r.ok) throw new Error(j.error); ok++; } catch (err) { toast(`${f.name}: ${err.message}`, 4000); }
     }
-    status.textContent = ''; if (ok) toast(`Added ${ok} photo${ok === 1 ? '' : 's'}`); draw();
+    status.textContent = ''; if (ok) toast(T(ok === 1 ? 'Added {n} photo' : 'Added {n} photos', { n: ok })); draw();
   }
   input.onchange = () => upload(input.files);
-  setTop(T('Photos'), 'For the Photo reel on your Home screen', [el('button', { class: 'btn primary', onclick: () => input.click() }, icon('plus'), T('Upload photos'))]);
+  setTop(T('Photos'), T('For the Photo reel on your Home screen'), [el('button', { class: 'btn primary', onclick: () => input.click() }, icon('plus'), T('Upload photos'))]);
   const draw = async () => {
     const { photos = [] } = await api('/api/photos');
-    const drop = el('div', { class: 'card', role: 'button', tabindex: 0, style: 'border-style:dashed;text-align:center;padding:30px;cursor:pointer', onclick: () => input.click() }, el('div', { style: 'font-weight:600;margin-bottom:4px' }, 'Drop photos here, or tap to choose'), el('div', { class: 'small muted' }, 'JPEG, PNG, WebP, GIF or HEIC, up to 30 MB each. They stay on your CasaTorch box.'), status);
+    const drop = el('div', { class: 'card', role: 'button', tabindex: 0, style: 'border-style:dashed;text-align:center;padding:30px;cursor:pointer', onclick: () => input.click() }, el('div', { style: 'font-weight:600;margin-bottom:4px' }, T('Drop photos here, or tap to choose')), el('div', { class: 'small muted' }, T('JPEG, PNG, WebP, GIF or HEIC, up to 30 MB each. They stay on your CasaTorch box.')), status);
     drop.ondragover = (e) => { e.preventDefault(); drop.style.borderColor = 'var(--accent)'; }; drop.ondragleave = () => { drop.style.borderColor = ''; };
     drop.ondrop = (e) => { e.preventDefault(); drop.style.borderColor = ''; upload(e.dataTransfer.files); };
     const grid = el('div', { style: 'display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-top:14px' }, photos.map((p) => el('div', { style: 'position:relative;border-radius:14px;overflow:hidden;aspect-ratio:1;background:#000' },
       el('img', { src: p.url, alt: '', loading: 'lazy', style: 'width:100%;height:100%;object-fit:cover;cursor:zoom-in', onclick: () => modal(el('img', { src: p.url, alt: '' }), { wide: true }) }),
-      p.demo ? null : el('button', { class: 'btn small', style: 'position:absolute;top:6px;right:6px;padding:4px 8px', 'aria-label': 'Remove photo', onclick: async () => { await api(`/api/photos/${encodeURIComponent(p.id)}`, { method: 'DELETE' }); draw(); } }, icon('x')))));
-    main.replaceChildren(input, drop, photos.length ? grid : el('p', { class: 'muted', style: 'text-align:center' }, 'No photos yet.'));
+      p.demo ? null : el('button', { class: 'btn small', style: 'position:absolute;top:6px;right:6px;padding:4px 8px', 'aria-label': T('Remove photo'), onclick: async () => { await api(`/api/photos/${encodeURIComponent(p.id)}`, { method: 'DELETE' }); draw(); } }, icon('x')))));
+    main.replaceChildren(input, drop, photos.length ? grid : el('p', { class: 'muted', style: 'text-align:center' }, T('No photos yet.')));
   };
   await draw(); return null;
 } });

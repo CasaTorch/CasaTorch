@@ -8,7 +8,7 @@
 <main>
 <p class="back"><a href="/">← CasaTorch</a> · <a href="/terms.html">Terms of Use</a></p>
 <h1>CasaTorch Privacy Notice</h1>
-<p class="meta">Version 2026-10-16.</p>
+<p class="meta">Version 2026-10-17.</p>
 
 <h2>The short version</h2>
 <p>CasaTorch runs on your hardware. Your accounts, settings, floor plans, photos, calendars and device data are stored there, in its data folder, and are not sent to us.</p>
@@ -21,29 +21,69 @@
 <li><b>Connections:</b> sign-in tokens for services you connect (for example Home Assistant or Ring), and the keys or passwords for network gear you connect (UniFi, Cisco Meraki, Pi-hole, AdGuard Home), encrypted. Ring and power-company passwords are never stored.</li>
 </ul>
 
-<h2>What leaves your network, and only if you turn it on</h2>
+<h2>What leaves your network</h2>
 <ul>
 <li><b>Sign in with Google:</b> Google tells this CasaTorch your Google account ID, e-mail and name when you choose it. Google's privacy policy applies.</li>
 <li><b>AI assistant and weekly report:</b> your question and a short summary of your home's current state - and, for the weekly report, the week's energy figures, alert titles and device names - go to the AI provider you choose (for example Anthropic or OpenAI), under their terms; or to a model on your own network. Without an AI connected, the report is written on your CasaTorch.</li>
-<li><b>Weather, news, sports, calendars:</b> CasaTorch fetches these from their providers; weather uses your home's approximate location.</li>
+<li><b>Weather, news, sports, calendars:</b> CasaTorch fetches these from their providers; weather uses your home's approximate location. Calendar links you add (including a city's trash and recycling calendar in Household) are fetched from the address you gave.</li>
+<li><b>Rain radar</b> (if you add the widget): your CasaTorch downloads radar pictures from RainViewer - or, if you choose it, the US National Weather Service - and map pictures from OpenStreetMap, for the area around your home. Like any map, those services can tell roughly which area is being looked at; they don't get your name or exact address.</li>
+<li><b>Voice</b> (the microphone button, where your browser supports it): speech is turned into text by your browser's own speech service - in Chrome and Edge that is Google or Microsoft, in Safari Apple - under their privacy policies. CasaTorch only receives the text, and never records audio.</li>
+<li><b>Internet status and speed tests</b> (on unless you turn them off in setup): your public address and country are read from Cloudflare, your internet provider is looked up at RIPEstat (the RIPE NCC's public network data), and speed tests download and upload test data from Cloudflare.</li>
+<li><b>Town search</b> (in setup and in widgets): when you press Find, your CasaTorch looks up the town or ZIP code you typed with OpenStreetMap (Nominatim) to find its map position. The search goes from your CasaTorch, not your browser.</li>
+<li><b>Philips Hue setup:</b> finding your Hue bridge asks Philips' discovery service which bridges are on your internet connection.</li>
+<li><b>Phone alerts</b> (if you turn them on): alerts are encrypted for your phone and delivered by Apple's, Google's, Mozilla's or Microsoft's push service, which can't read them.</li>
+<li><b>Alerts in the CasaTorch phone app</b> (when the app is available, and only if you turn them on): your CasaTorch encrypts each alert for your phone, signs it, and hands it to casatorch.com, which passes it to Apple or Google to deliver. We can't read it and keep no copy. We keep your CasaTorch's public key (so no one else can send alerts as your home) until 400 days after the last alert sent through us, and an hourly count (to stop abuse) for two hours.</li>
 <li><b>Security Center</b>: the list of devices on your home network (their network addresses, hardware addresses and names) and the open-port check results are kept on your CasaTorch only. The check looks only at your home network.</li>
-<li><b>Secure address at home</b> (on by default; an owner can turn it off in Settings): casatorch.com lists a random name for your CasaTorch and its home-network address (like 192.168.1.20) in public DNS, and Let's Encrypt issues a certificate for that name, which is recorded in public certificate logs. Neither includes your name, e-mail or anything about your home; the address can't be reached from the internet.</li>
+<li><b>Secure address at home</b> (on by default; an owner can turn it off in Settings): casatorch.com lists a random name for your CasaTorch and its home-network address (like 192.168.1.20) in public DNS, and Let's Encrypt issues a certificate for that name, which is recorded in public certificate logs. Neither includes your name, e-mail or anything about your home; the address can't be reached from the internet. If your CasaTorch stops checking in (it does when it renews its certificate, about every 60 days), the name is removed 180 days after the last check-in.</li>
 <li><b>Cisco Meraki</b> (if you connect it): CasaTorch reads your devices' status from Meraki's online service with your API key.</li>
 <li><b>Pro license checks</b> happen offline - the key is verified on your hardware.</li>
+<li><b>Secure access away from home</b> (coming; Pro, only if you turn it on): your CasaTorch keeps an encrypted connection open to Cloudflare, and your phone reaches it through a random address (home-xxxxxxxx.casatorch.com). Traffic passes through Cloudflare's network, which decrypts and re-encrypts it in transit, as it does for any website using Cloudflare; Cloudflare's privacy policy applies. casatorch.com keeps only the random address, a hashed secret, the time it was made and the home name you gave, so it can be turned off later.</li>
+<li><b>3D scans and plans, family and household data</b> - LiDAR room scans, floor plans, chores, stars, lists, meal plans and kids' routines - are stored only on your CasaTorch and in backups you make. They are never sent to us.</li>
 </ul>
 
 <h2>What CasaTorch sends to casatorch.com (each can be turned off)</h2>
 <ul>
 <li><b>Update check, once a day:</b> the version number and how CasaTorch was installed (for example "Windows" or "Raspberry Pi"). Nothing else. Settings &gt; Updates.</li>
-<li><b>App tests</b> (only the ones you add): your CasaTorch connects straight to each app you choose to test (its sign-in or home page, without signing in) and traces the route there. Those apps and the routers along the way see a connection from your home, like any visit. Nothing goes through casatorch.com; the results stay on your CasaTorch.</li>
-<li><b>Find my CasaTorch, every 10 minutes:</b> its address on your home network (like 192.168.1.50), a random ID and the version. We keep it for 30 minutes (or until CasaTorch shuts down) and show it only to browsers on the same home internet connection, at casatorch.com/find and casatorch.com/home. Settings &gt; Updates.</li>
-<li><b>Pro keys:</b> when you use "Get my key by e-mail", the e-mail address and the code you type; for monthly and yearly plans, the key itself, so a renewed key can be fetched.</li>
+<li><b>App tests</b> (only the ones you add): your CasaTorch connects straight to each app you choose to test (its sign-in or home page, without signing in) and traces the route there. Those apps and the routers along the way see a connection from your home, like any visit. To show who runs each network along the way, your CasaTorch looks up each router's public address in Team Cymru's free network directory (a DNS lookup, cached for a week). Nothing goes through casatorch.com; the results stay on your CasaTorch.</li>
+<li><b>Find my CasaTorch, every 10 minutes:</b> its address on your home network (like 192.168.1.50), a random ID and the version. We show it for 40 minutes after the last check-in and delete it within an hour (or at once when CasaTorch shuts down) and show it only to browsers on the same home internet connection, at casatorch.com/find and casatorch.com/home. Settings &gt; Updates.</li>
+<li><b>Pro keys:</b> when you use "Get my key by e-mail", the e-mail address and the code you type; for monthly and yearly plans, the key itself, so a renewed key can be fetched. CasaTorch 0.8.1 and later also send a one-way code made from its random ID (not the ID itself), so one purchase can be counted per home; we keep each code with the purchase and drop it after 90 days without a check-in. Your keys are kept with your e-mail address until 2 years after the last one ends (lifetime keys for as long as we offer CasaTorch, so we can send them again).</li>
 <li><b>Automatic updates</b> (Raspberry Pi and Linux): the new version is downloaded from casatorch.com and GitHub, where CasaTorch's releases are published.</li>
 </ul>
 <p>When you buy something on casatorch.com, payment is handled by Stripe and our e-mails are sent through Resend; they process what's needed to do that under their own privacy policies. We never see your card details.</p>
 
+<h2 id="website">This website (casatorch.com)</h2>
+<p>casatorch.com is hosted by Cloudflare. It has no advertising, no analytics and no tracking, and it loads nothing from Google or other third parties - even its font is served from casatorch.com.</p>
+<ul>
+<li><b>Early-access list:</b> if you join, we keep your e-mail address, the date, which form you used and your country (from Cloudflare, not your exact location). We use it only to e-mail you about CasaTorch. Every e-mail has a one-click unsubscribe link, which deletes your address from the list.</li>
+<li><b>Abuse protection:</b> to stop spam, password guessing and overload, your internet address (and, for "Get my key by e-mail", the e-mail address) is counted for up to an hour (up to two days for new secure addresses) when you use a form, the insider-preview password or one of CasaTorch's online services, then forgotten.</li>
+<li><b>Buying:</b> checkout happens on Stripe's own pages. We receive your name, e-mail, what you bought and, for a Box, your shipping address and phone number - never your card details. To ship a Box, your name, address, phone and e-mail also go to Shippo, our shipping service, for live carrier prices and the shipping label. We keep a Box order (name, shipping address, phone, e-mail) for 13 months - long enough for returns and the one-year warranty; Stripe keeps the payment records it must keep. After you pay for Pro, the thank-you page shows your key once, only in the browser you paid in, for 30 minutes (and never more than a day later); after that the e-mail we sent is your copy.</li>
+<li><b>Cloudflare</b> processes every visit to deliver the site and protect it from attacks, under its own privacy policy.</li>
+</ul>
+<h3 id="cookies">Cookies</h3>
+<p>We don't use cookies for tracking, advertising or analytics. The only ones are those the site needs to work, so they don't need your consent:</p>
+<table class="cookie-table">
+<tr><th>Name</th><th>What it's for</th><th>How long</th></tr>
+<tr><td><code>__Host-ct_preview</code></td><td>Keeps you signed in to the insider preview after you enter its password. Set only if you do, and only for the site you signed in on (casatorch.com and docs.casatorch.com each ask once). It replaces the older <code>ct_preview</code>, which is removed on your next visit.</td><td>30 days</td></tr>
+<tr><td><code>__Host-ct_co</code></td><td>Set when you start a checkout, so only this browser can see your Pro key on the thank-you page.</td><td>1 day</td></tr>
+<tr><td><code>__cf_bm</code></td><td>Set by Cloudflare, only when its bot protection needs it, to tell people from automated attacks.</td><td>30 minutes</td></tr>
+<tr><td><code>ct_cookie_notice</code></td><td>Remembers that you closed the cookie notice. Stored in your browser, never sent to us.</td><td>Until you clear it</td></tr>
+</table>
+<p>Stripe sets its own cookies on its checkout and billing pages, under its own cookie policy.</p>
 <h2>Us</h2>
 <p>We receive personal data only when you buy from us, contact support or use our services (name, e-mail, order and payment details via our payment provider, and what you send us). We use it to provide what you bought and to support you, keep it only as long as needed, and do not sell it. Contact: support@casatorch.com. <!-- scrub-ok: public support address --> Depending on where you live you may have rights to access, correct or delete it.</p>
+
+<h3 id="retention">How long we keep it</h3>
+<table class="cookie-table">
+<tr><th>What</th><th>How long</th></tr>
+<tr><td>Early-access list (e-mail, date, form, country)</td><td>Until you unsubscribe - every e-mail has a one-click link that deletes it</td></tr>
+<tr><td>Find my CasaTorch (home-network address, random ID, version)</td><td>1 hour after the last check-in</td></tr>
+<tr><td>Pro keys and the purchase they belong to</td><td>2 years after the last key ends; lifetime keys while we offer CasaTorch</td></tr>
+<tr><td>Thank-you page copy of a new key</td><td>Shown once (30 minutes, in the browser you paid in); gone after 30 days</td></tr>
+<tr><td>Box orders (name, shipping address, phone, e-mail)</td><td>13 months</td></tr>
+<tr><td>App alert relay (your CasaTorch's random ID and public key)</td><td>400 days after the last alert</td></tr>
+<tr><td>Secure address at home (random name, home-network address)</td><td>Until you turn it off, or 180 days after your CasaTorch last checks in</td></tr>
+<tr><td>Abuse counters (internet address, e-mail for key requests)</td><td>Up to an hour; up to two days for new secure addresses</td></tr>
+</table>
 
 <h2>E-mail list</h2>
 <p>If you join our e-mail list, we keep your e-mail address, when and on which page you signed up, and the country your internet connection is in (from Cloudflare), only to tell you about CasaTorch (for example when the Box goes on sale). Every e-mail has a one-click unsubscribe link, and unsubscribing deletes your address from the list.</p>

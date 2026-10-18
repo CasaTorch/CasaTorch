@@ -80,7 +80,7 @@ function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize }) {
     if (L.widget.live && !force && L.painted) return;
     if (L.busy && !force) return;   // still drawing the last one: a live refresh can skip a beat
     L.painted = true; L.busy = true;
-    try { await L.widget.render(L.body, ctx, sizeOf(L.t)); } catch (err) { L.body.replaceChildren(el('div', { class: 'muted small' }, `Could not load: ${err.message}`)); }
+    try { await L.widget.render(L.body, ctx, sizeOf(L.t)); } catch (err) { L.body.replaceChildren(el('div', { class: 'muted small' }, T('Could not load: {message}', { message: err.message }))); }
     finally { L.busy = false; }
   }
   const save = () => onSave();
@@ -93,10 +93,10 @@ function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize }) {
     const node = el('section', { class: tileClass(t), 'data-id': t.id, role: 'listitem', 'aria-label': t.title || T(w.title) },
       head, body,
       el('div', { class: 'tools' },
-        el('button', { class: 'grip', title: 'Drag to move', 'aria-label': `Move ${t.title || T(w.title)}` }, icon('grip')),
-        el('button', { title: 'Customize', 'aria-label': `Customize ${t.title || T(w.title)}`, onclick: () => onCustomize(t, () => { applyLook(node, t); place(node, t); const ttl = node.querySelector('.ttl'); if (ttl) ttl.textContent = t.title || T(w.title); node.setAttribute('aria-label', t.title || T(w.title)); save(); paint(node, true); }) }, icon('sliders')),
-        el('button', { class: 'rm', title: 'Remove', 'aria-label': `Remove ${t.title || T(w.title)}`, onclick: () => remove(node, t) }, icon('x'))),
-      el('div', { class: 'sizer', title: 'Drag to resize' }), el('div', { class: 'size-tag' }));
+        el('button', { class: 'grip', title: T('Drag to move'), 'aria-label': T('Move {title}', { title: t.title || T(w.title) }) }, icon('grip')),
+        el('button', { title: T('Customize'), 'aria-label': T('Customize {title}', { title: t.title || T(w.title) }), onclick: () => onCustomize(t, () => { applyLook(node, t); place(node, t); const ttl = node.querySelector('.ttl'); if (ttl) ttl.textContent = t.title || T(w.title); node.setAttribute('aria-label', t.title || T(w.title)); save(); paint(node, true); }) }, icon('sliders')),
+        el('button', { class: 'rm', title: T('Remove'), 'aria-label': T('Remove {title}', { title: t.title || T(w.title) }), onclick: () => remove(node, t) }, icon('x'))),
+      el('div', { class: 'sizer', title: T('Drag to resize') }), el('div', { class: 'size-tag' }));
     applyLook(node, t);
     live.set(node, { t, body, widget: w });
     place(node, t);
@@ -208,7 +208,7 @@ function renameBox(title, value, original, done) {
   const input = el('input', { value: value || '', placeholder: original, maxlength: 60 });
   const ok = () => { m.remove(); done(input.value.trim()); };
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') ok(); });
-  const m = modal(el('div', {}, input, el('p', { class: 'small muted' }, `Leave empty to use "${original}".`), el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { class: 'btn ghost', onclick: () => m.remove() }, 'Cancel'), el('button', { class: 'btn primary', onclick: ok }, 'Save'))), { title });
+  const m = modal(el('div', {}, input, el('p', { class: 'small muted' }, T('Leave empty to use "{original}".', { original })), el('div', { class: 'row', style: 'justify-content:flex-end' }, el('button', { class: 'btn ghost', onclick: () => m.remove() }, T('Cancel')), el('button', { class: 'btn primary', onclick: ok }, T('Save')))), { title });
   setTimeout(() => { input.focus(); input.select(); }, 50);
 }
 
@@ -222,7 +222,7 @@ function previewBox(t, w, ctx) {
   const stage = el('div', { class: 'wprev' }, node);
   const fit = () => { const avail = Math.max(200, stage.clientWidth - 8), s = Math.min(1, avail / pw, 340 / ph); node.style.transform = `scale(${s})`; stage.style.height = `${Math.round(ph * s) + 8}px`; };
   requestAnimationFrame(fit);
-  const p = w.noPreview ? Promise.resolve(body.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon(w.icon), el('div', { class: 'small muted', style: 'margin-top:6px' }, w.blurb || ''))))) : Promise.resolve(w.render(body, ctx, { w: t.w, h: t.h, narrow: false, span: t.w, cols: 12, preview: true })).catch((err) => body.replaceChildren(el('div', { class: 'muted small' }, err.message)));
+  const p = w.noPreview ? Promise.resolve(body.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon(w.icon), el('div', { class: 'small muted', style: 'margin-top:6px' }, w.blurb ? T(w.blurb) : ''))))) : Promise.resolve(w.render(body, ctx, { w: t.w, h: t.h, narrow: false, span: t.w, cols: 12, preview: true })).catch((err) => body.replaceChildren(el('div', { class: 'muted small' }, err.message)));
   return { stage, ready: p, fit };
 }
 function customizeTile(t, ctx, done) {
@@ -232,23 +232,23 @@ function customizeTile(t, ctx, done) {
   let pv = null, pt = null;
   const repaint = () => { clearTimeout(pt); pt = setTimeout(() => { pv = previewBox(t, w, ctx); holder.replaceChildren(pv.stage); requestAnimationFrame(() => pv.fit()); }, 120); };
   const fields = el('div', { class: 'wopts' });
-  const section = (label, ...kids) => el('div', { class: 'wopt' }, el('label', { class: 'wopt-l' }, label), ...kids);
+  const section = (label, ...kids) => el('div', { class: 'wopt' }, el('label', { class: 'wopt-l' }, T(label)), ...kids);
   const draw = () => {
     const out = [];
-    out.push(section('Name', el('input', { value: t.title || '', placeholder: T(w.title), maxlength: 40, oninput: (e) => { t.title = e.target.value.trim() || undefined; repaint(); } })));
-    out.push(section('Size', el('div', { class: 'seg seg-wrap' }, presetsFor(w).map(([k, label, [pw, ph]]) => el('button', { type: 'button', class: t.w === pw && t.h === ph ? 'on' : '', onclick: () => { t.w = pw; t.h = ph; draw(); repaint(); } }, label))),
-      el('div', { class: 'tiny muted', style: 'margin-top:6px' }, 'Or drag a widget\'s corner while arranging for any size in between.')));
-    out.push(section('Look', el('div', { class: 'seg seg-wrap' }, LOOK_NAMES.map(([k, label]) => el('button', { type: 'button', class: (t.look || 'default') === k ? 'on' : '', onclick: () => { t.look = k === 'default' ? undefined : k; draw(); repaint(); } }, label))),
-      t.look === 'tint' ? el('div', { class: 'swatches' }, TINTS.map((c) => el('button', { type: 'button', class: `swatch${(t.tint || TINTS[0]) === c ? ' on' : ''}`, style: `background:${c}`, 'aria-label': `Tint ${c}`, onclick: () => { t.tint = c; draw(); repaint(); } }))) : null));
+    out.push(section(T('Name'), el('input', { value: t.title || '', placeholder: T(w.title), maxlength: 40, oninput: (e) => { t.title = e.target.value.trim() || undefined; repaint(); } })));
+    out.push(section(T('Size'), el('div', { class: 'seg seg-wrap' }, presetsFor(w).map(([k, label, [pw, ph]]) => el('button', { type: 'button', class: t.w === pw && t.h === ph ? 'on' : '', onclick: () => { t.w = pw; t.h = ph; draw(); repaint(); } }, T(label)))),
+      el('div', { class: 'tiny muted', style: 'margin-top:6px' }, T('Or drag a widget\'s corner while arranging for any size in between.'))));
+    out.push(section(T('Look'), el('div', { class: 'seg seg-wrap' }, LOOK_NAMES.map(([k, label]) => el('button', { type: 'button', class: (t.look || 'default') === k ? 'on' : '', onclick: () => { t.look = k === 'default' ? undefined : k; draw(); repaint(); } }, T(label)))),
+      t.look === 'tint' ? el('div', { class: 'swatches' }, TINTS.map((c) => el('button', { type: 'button', class: `swatch${(t.tint || TINTS[0]) === c ? ' on' : ''}`, style: `background:${c}`, 'aria-label': T('Tint {c}', { c }), onclick: () => { t.tint = c; draw(); repaint(); } }))) : null));
     const opts = typeof w.options === 'function' ? w.options(t, ctx) : w.options || [];
-    for (const f of opts) { const node = optField(f, t, ctx, () => { repaint(); if (f.redraw) draw(); }); if (node) out.push(section(f.label, node, f.help ? el('div', { class: 'tiny muted', style: 'margin-top:6px' }, f.help) : null)); }
+    for (const f of opts) { const node = optField(f, t, ctx, () => { repaint(); if (f.redraw) draw(); }); if (node) out.push(section(f.label, node, f.help ? el('div', { class: 'tiny muted', style: 'margin-top:6px' }, T(f.help)) : null)); }
     if (typeof famCondField === 'function') out.push(section(T('Show only when…'), famCondField(t, ctx, repaint)));   // conditional widgets (38-family.js)
     fields.replaceChildren(...out);
   };
   draw(); repaint();
   const cancel = () => { Object.keys(t).forEach((k) => delete t[k]); Object.assign(t, JSON.parse(before)); m.remove(); };
   const m = modal(el('div', { class: 'wcustom' }, holder, fields, el('div', { class: 'row', style: 'justify-content:flex-end;margin-top:14px;gap:8px' },
-    el('button', { class: 'btn ghost', onclick: cancel }, 'Cancel'), el('button', { class: 'btn primary', onclick: () => { m.remove(); done(); } }, 'Done'))), { title: `Customize ${T(w.title)}`, wide: true });
+    el('button', { class: 'btn ghost', onclick: cancel }, T('Cancel')), el('button', { class: 'btn primary', onclick: () => { m.remove(); done(); } }, T('Done')))), { title: T('Customize {title}', { title: T(w.title) }), wide: true });
   m.addEventListener('click', (e) => { if (e.target === m) { e.stopImmediatePropagation(); } }, true);   // a stray tap outside doesn't throw your changes away
 }
 /* One option field. f: { key, type, label, ...}. Types: select, toggle, text, textarea, number, date, datetime, place, symbols,
@@ -257,25 +257,26 @@ function optField(f, t, ctx, changed) {
   const o = optsOf(t), val = o[f.key] ?? f.default;
   const set = (v) => { if (v === undefined || v === '' || (Array.isArray(v) && !v.length && f.default === undefined)) delete o[f.key]; else o[f.key] = v; changed(); };
   switch (f.type) {
-    case 'select': return el('select', { onchange: (e) => set(f.numeric ? Number(e.target.value) : e.target.value) }, f.choices.map(([v, l]) => el('option', { value: v, selected: String(val) === String(v) || null }, l)));
-    case 'toggle': return el('label', { class: 'switch-row' }, el('input', { type: 'checkbox', checked: !!val, onchange: (e) => set(e.target.checked) }), el('span', {}, f.text || 'On'));
-    case 'text': return el('input', { value: val || '', placeholder: f.placeholder || '', maxlength: f.max || 80, oninput: (e) => set(e.target.value) });
-    case 'textarea': return el('textarea', { rows: f.rows || 4, maxlength: f.max || 400, placeholder: f.placeholder || '', oninput: (e) => set(e.target.value) }, val || '');
-    case 'number': return el('div', { class: 'row', style: 'gap:8px' }, el('input', { type: 'number', value: val ?? '', min: f.min, max: f.max, step: f.step || 1, style: 'max-width:140px', oninput: (e) => { const n = Number(e.target.value); set(e.target.value === '' ? undefined : Math.max(f.min ?? -Infinity, Math.min(f.max ?? Infinity, n))); } }), f.suffix ? el('span', { class: 'muted small' }, f.suffix) : null);
+    case 'select': return el('select', { onchange: (e) => set(f.numeric ? Number(e.target.value) : e.target.value) }, f.choices.map(([v, l]) => el('option', { value: v, selected: String(val) === String(v) || null }, T(String(l)))));
+    case 'toggle': return el('label', { class: 'switch-row' }, el('input', { type: 'checkbox', checked: !!val, onchange: (e) => set(e.target.checked) }), el('span', {}, T(f.text || 'On')));
+    case 'text': return el('input', { value: val || '', placeholder: f.placeholder ? T(f.placeholder) : '', maxlength: f.max || 80, oninput: (e) => set(e.target.value) });
+    case 'textarea': return el('textarea', { rows: f.rows || 4, maxlength: f.max || 400, placeholder: f.placeholder ? T(f.placeholder) : '', oninput: (e) => set(e.target.value) }, val || '');
+    case 'number': return el('div', { class: 'row', style: 'gap:8px' }, el('input', { type: 'number', value: val ?? '', min: f.min, max: f.max, step: f.step || 1, style: 'max-width:140px', oninput: (e) => { const n = Number(e.target.value); set(e.target.value === '' ? undefined : Math.max(f.min ?? -Infinity, Math.min(f.max ?? Infinity, n))); } }), f.suffix ? el('span', { class: 'muted small' }, T(f.suffix)) : null);
     case 'date': return el('input', { type: 'date', value: val || '', onchange: (e) => set(e.target.value) });
     case 'datetime': return el('input', { type: 'datetime-local', value: val || '', onchange: (e) => set(e.target.value) });
     case 'chips': {
       const cur = new Set(Array.isArray(val) ? val : []);
-      return el('div', { class: 'chips' }, f.choices.map(([v, l]) => el('button', { type: 'button', class: `chip${cur.has(v) ? ' on' : ''}`, onclick: (e) => { if (cur.has(v)) cur.delete(v); else cur.add(v); e.currentTarget.classList.toggle('on'); set([...cur]); } }, l)));
+      return el('div', { class: 'chips' }, f.choices.map(([v, l]) => el('button', { type: 'button', class: `chip${cur.has(v) ? ' on' : ''}`, onclick: (e) => { if (cur.has(v)) cur.delete(v); else cur.add(v); e.currentTarget.classList.toggle('on'); set([...cur]); } }, T(String(l)))));
     }
     case 'place': {
       const out = el('div', { class: 'place-pick' });
       const show = () => {
-        const q = el('input', { type: 'search', placeholder: 'Search for a town or city…', 'aria-label': 'Search for a place' }), list = el('div', { class: 'pick-list' });
-        let tq = null;
-        q.oninput = () => { clearTimeout(tq); tq = setTimeout(async () => { const s = q.value.trim(); if (s.length < 2) return list.replaceChildren(); try { const { places = [] } = await api(`/api/w/places?q=${encodeURIComponent(s)}`); list.replaceChildren(...places.map((p) => el('button', { type: 'button', class: 'pick-item', onclick: () => { set({ name: p.name, lat: p.lat, lon: p.lon }); show(); } }, icon('home', 14), p.name))); if (!places.length) list.replaceChildren(el('div', { class: 'tiny muted' }, 'Nothing found.')); } catch (err) { list.replaceChildren(el('div', { class: 'tiny muted' }, err.message)); } }, 350); };
+        const q = el('input', { type: 'search', placeholder: T('Search for a town or city…'), 'aria-label': T('Search for a place') }), list = el('div', { class: 'pick-list' });
+        // One search when you press Find or Enter (OpenStreetMap's search asks apps not to search while you type).
+        const find = async () => { const s = q.value.trim(); if (s.length < 3) return list.replaceChildren(); try { const { places = [], credit } = await api(`/api/w/places?q=${encodeURIComponent(s)}`); list.replaceChildren(...places.map((p) => el('button', { type: 'button', class: 'pick-item', onclick: () => { set({ name: p.name, lat: p.lat, lon: p.lon }); show(); } }, icon('home', 14), p.name))); if (!places.length) list.replaceChildren(el('div', { class: 'tiny muted' }, T('Nothing found.'))); if (credit) list.append(placeCredit(credit)); } catch (err) { list.replaceChildren(el('div', { class: 'tiny muted' }, err.message)); } };
+        q.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); find(); } };
         const curv = o[f.key];
-        out.replaceChildren(el('div', { class: 'row', style: 'gap:8px;margin-bottom:8px' }, el('b', { class: 'grow' }, curv?.name || f.homeLabel || 'Your home'), curv ? el('button', { type: 'button', class: 'btn small ghost', onclick: () => { set(undefined); show(); } }, 'Use home') : null), q, list);
+        out.replaceChildren(el('div', { class: 'row', style: 'gap:8px;margin-bottom:8px' }, el('b', { class: 'grow' }, curv?.name || f.homeLabel || T('Your home')), curv ? el('button', { type: 'button', class: 'btn small ghost', onclick: () => { set(undefined); show(); } }, T('Use home')) : null), el('div', { class: 'row', style: 'gap:8px' }, el('div', { class: 'grow' }, q), el('button', { type: 'button', class: 'btn small', onclick: find }, T('Find'))), list);
       };
       show(); return out;
     }
@@ -283,10 +284,10 @@ function optField(f, t, ctx, changed) {
       const cur = Array.isArray(val) ? [...val] : [];
       const box = el('div');
       const draw = () => {
-        const inp = el('input', { placeholder: 'Add a symbol: AAPL, ^GSPC, BTC-USD, EURUSD=X…', 'aria-label': 'Add a symbol', maxlength: 15, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(inp.value); } } });
+        const inp = el('input', { placeholder: T('Add a symbol: AAPL, ^GSPC, BTC-USD, EURUSD=X…'), 'aria-label': T('Add a symbol'), maxlength: 15, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); add(inp.value); } } });
         const add = (s) => { s = String(s || '').trim().toUpperCase(); if (!/^[\^A-Z0-9][A-Z0-9.=\-^]{0,14}$/.test(s) || cur.includes(s) || cur.length >= 12) return; cur.push(s); set([...cur]); draw(); };
-        box.replaceChildren(el('div', { class: 'chips' }, cur.map((s, i) => el('span', { class: 'chip on' }, s, el('button', { type: 'button', class: 'chip-x', 'aria-label': `Remove ${s}`, onclick: () => { cur.splice(i, 1); set([...cur]); draw(); } }, '×')))),
-          el('div', { class: 'row', style: 'gap:8px;margin-top:8px' }, inp, el('button', { type: 'button', class: 'btn small', onclick: () => add(inp.value) }, 'Add')),
+        box.replaceChildren(el('div', { class: 'chips' }, cur.map((s, i) => el('span', { class: 'chip on' }, s, el('button', { type: 'button', class: 'chip-x', 'aria-label': T('Remove {s}', { s }), onclick: () => { cur.splice(i, 1); set([...cur]); draw(); } }, '×')))),
+          el('div', { class: 'row', style: 'gap:8px;margin-top:8px' }, inp, el('button', { type: 'button', class: 'btn small', onclick: () => add(inp.value) }, T('Add'))),
           el('div', { class: 'chips', style: 'margin-top:8px' }, (f.suggest || []).filter(([s]) => !cur.includes(s)).map(([s, l]) => el('button', { type: 'button', class: 'chip', onclick: () => add(s) }, `+ ${l}`))));
       };
       draw(); return box;
@@ -295,14 +296,14 @@ function optField(f, t, ctx, changed) {
       const cur = Array.isArray(val) ? [...val] : [];
       const box = el('div');
       const draw = async () => {
-        const league = el('select', { 'aria-label': 'League' }, el('option', { value: '' }, 'Pick a league…'));
-        const teamSel = el('select', { 'aria-label': 'Team', disabled: true }, el('option', { value: '' }, 'Then a team'));
-        const chips = el('div', { class: 'chips' }, cur.length ? cur.map((x, i) => el('span', { class: 'chip on' }, x.logo ? el('img', { src: x.logo, alt: '', style: 'width:16px;height:16px;margin-right:4px' }) : null, x.name, el('button', { type: 'button', class: 'chip-x', 'aria-label': `Remove ${x.name}`, onclick: () => { cur.splice(i, 1); set([...cur]); draw(); } }, '×'))) : el('span', { class: 'tiny muted' }, 'No teams picked - shows the teams from Settings.'));
+        const league = el('select', { 'aria-label': T('League') }, el('option', { value: '' }, T('Pick a league…')));
+        const teamSel = el('select', { 'aria-label': T('Team'), disabled: true }, el('option', { value: '' }, T('Then a team')));
+        const chips = el('div', { class: 'chips' }, cur.length ? cur.map((x, i) => el('span', { class: 'chip on' }, x.logo ? el('img', { src: x.logo, alt: '', style: 'width:16px;height:16px;margin-right:4px' }) : null, x.name, el('button', { type: 'button', class: 'chip-x', 'aria-label': T('Remove {name}', { name: x.name }), onclick: () => { cur.splice(i, 1); set([...cur]); draw(); } }, '×'))) : el('span', { class: 'tiny muted' }, T('No teams picked - shows the teams from Settings.')));
         box.replaceChildren(chips, el('div', { class: 'row', style: 'gap:8px;margin-top:8px;flex-wrap:wrap' }, league, teamSel));
         try { const { leagues = [] } = await wget('/api/w/leagues', 3600_000); league.append(...leagues.map((l) => el('option', { value: l.id }, l.name))); } catch { /* offline */ }
         league.onchange = async () => {
-          teamSel.disabled = true; teamSel.replaceChildren(el('option', { value: '' }, 'Loading…'));
-          try { const { teams = [] } = await wget(`/api/w/teams?league=${encodeURIComponent(league.value)}`, 3600_000); teamSel.replaceChildren(el('option', { value: '' }, 'Pick a team…'), ...teams.map((x) => el('option', { value: x.id }, x.name))); teamSel.disabled = false; teamSel._teams = teams; } catch (err) { teamSel.replaceChildren(el('option', { value: '' }, err.message)); }
+          teamSel.disabled = true; teamSel.replaceChildren(el('option', { value: '' }, T('Loading…')));
+          try { const { teams = [] } = await wget(`/api/w/teams?league=${encodeURIComponent(league.value)}`, 3600_000); teamSel.replaceChildren(el('option', { value: '' }, T('Pick a team…')), ...teams.map((x) => el('option', { value: x.id }, x.name))); teamSel.disabled = false; teamSel._teams = teams; } catch (err) { teamSel.replaceChildren(el('option', { value: '' }, err.message)); }
         };
         teamSel.onchange = () => { const x = (teamSel._teams || []).find((y) => y.id === teamSel.value); if (!x || cur.some((c) => c.league === x.league && c.id === x.id) || cur.length >= 12) return; cur.push({ league: x.league, id: x.id, name: x.name, logo: x.logo }); set([...cur]); draw(); };
       };
@@ -313,22 +314,22 @@ function optField(f, t, ctx, changed) {
       let all = []; try { all = Intl.supportedValuesOf('timeZone'); } catch { all = ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Tokyo', 'Australia/Sydney']; }
       const box = el('div');
       const draw = () => {
-        const q = el('input', { type: 'search', placeholder: 'Add a city: London, Tokyo, Chicago…', 'aria-label': 'Add a city' }), list = el('div', { class: 'pick-list' });
+        const q = el('input', { type: 'search', placeholder: T('Add a city: London, Tokyo, Chicago…'), 'aria-label': T('Add a city') }), list = el('div', { class: 'pick-list' });
         q.oninput = () => { const s = q.value.trim().toLowerCase().replace(/\s+/g, '_'); list.replaceChildren(...(s.length < 2 ? [] : all.filter((z) => z.toLowerCase().includes(s)).slice(0, 8).map((z) => el('button', { type: 'button', class: 'pick-item', onclick: () => { if (!cur.some((c) => c.tz === z) && cur.length < 8) { cur.push({ tz: z, label: zoneCity(z) }); set([...cur]); } draw(); } }, zoneCity(z), el('span', { class: 'tiny muted', style: 'margin-left:auto' }, z))))); };
-        box.replaceChildren(el('div', { class: 'chips' }, cur.map((c, i) => el('span', { class: 'chip on' }, c.label, el('button', { type: 'button', class: 'chip-x', 'aria-label': `Remove ${c.label}`, onclick: () => { cur.splice(i, 1); set([...cur]); draw(); } }, '×')))), el('div', { style: 'margin-top:8px' }, q), list);
+        box.replaceChildren(el('div', { class: 'chips' }, cur.map((c, i) => el('span', { class: 'chip on' }, c.label, el('button', { type: 'button', class: 'chip-x', 'aria-label': T('Remove {label}', { label: c.label }), onclick: () => { cur.splice(i, 1); set([...cur]); draw(); } }, '×')))), el('div', { style: 'margin-top:8px' }, q), list);
       };
       draw(); return box;
     }
     case 'devices': case 'device': {
       const all = (ctx.data.devices?.devices || []).filter(f.filter || (() => true));
-      if (f.type === 'device') return all.length ? el('select', { onchange: (e) => set(e.target.value || undefined) }, el('option', { value: '' }, f.none || 'Pick one…'), all.map((d) => el('option', { value: d.id, selected: val === d.id || null }, `${d.name}${d.area ? ` · ${d.area}` : ''}`))) : el('div', { class: 'tiny muted' }, f.empty || 'Nothing to pick yet.');
+      if (f.type === 'device') return all.length ? el('select', { onchange: (e) => set(e.target.value || undefined) }, el('option', { value: '' }, f.none || T('Pick one…')), all.map((d) => el('option', { value: d.id, selected: val === d.id || null }, `${d.name}${d.area ? ` · ${d.area}` : ''}`))) : el('div', { class: 'tiny muted' }, f.empty || T('Nothing to pick yet.'));
       const cur = new Set(Array.isArray(val) ? val : []);
-      if (!all.length) return el('div', { class: 'tiny muted' }, f.empty || 'Nothing to pick yet.');
+      if (!all.length) return el('div', { class: 'tiny muted' }, f.empty || T('Nothing to pick yet.'));
       return el('div', { class: 'pick-checks' }, all.slice(0, 200).map((d) => el('label', { class: 'pick-check' }, el('input', { type: 'checkbox', checked: cur.has(d.id), onchange: (e) => { if (e.target.checked) cur.add(d.id); else cur.delete(d.id); set([...cur]); } }), el('span', { class: 'ellipsis' }, d.name), d.area ? el('span', { class: 'tiny muted' }, d.area) : null)));
     }
     case 'calendars': {
       const names = [...new Set((ctx.data.home?.calendar?.events || []).map((e) => e.calendar).filter(Boolean))];
-      if (!names.length) return el('div', { class: 'tiny muted' }, 'Every calendar is shown.');
+      if (!names.length) return el('div', { class: 'tiny muted' }, T('Every calendar is shown.'));
       const cur = new Set(Array.isArray(val) ? val : []);
       const box = el('div');
       const draw = () => box.replaceChildren(el('div', { class: 'chips' }, names.map((n) => el('button', { type: 'button', class: `chip${!cur.size || cur.has(n) ? ' on' : ''}`, onclick: () => {
@@ -336,7 +337,7 @@ function optField(f, t, ctx, changed) {
         if (cur.has(n)) cur.delete(n); else cur.add(n);
         if (cur.size === names.length || !cur.size) cur.clear();   // all (or none) = every calendar
         set([...cur]); draw();
-      } }, n))), el('div', { class: 'tiny muted', style: 'margin-top:6px' }, 'Tap to show or hide a calendar.'));
+      } }, n))), el('div', { class: 'tiny muted', style: 'margin-top:6px' }, T('Tap to show or hide a calendar.')));
       draw(); return box;
     }
     case 'widgets': {
@@ -345,9 +346,9 @@ function optField(f, t, ctx, changed) {
       const pickable = Object.values(WIDGETS).filter((x) => !x.hidden && !x.multi && !['stack', 'photos', 'house3d', 'ask', 'camera', 'doorbell', 'timer'].includes(x.id));
       const draw = () => {
         box.replaceChildren(el('ol', { class: 'stack-list' }, cur.map((x, i) => el('li', {}, icon(WIDGETS[x.id]?.icon || 'dotc', 16), el('span', { class: 'grow' }, WIDGETS[x.id]?.title ? T(WIDGETS[x.id].title) : x.id),
-          el('button', { type: 'button', class: 'btn small ghost', disabled: i === 0 || null, 'aria-label': 'Move up', onclick: () => { [cur[i - 1], cur[i]] = [cur[i], cur[i - 1]]; set(cur.map((y) => ({ ...y }))); draw(); } }, '↑'),
-          el('button', { type: 'button', class: 'btn small ghost', 'aria-label': 'Remove', onclick: () => { cur.splice(i, 1); set(cur.map((y) => ({ ...y }))); draw(); } }, '×')))),
-        cur.length < 8 ? el('select', { onchange: (e) => { if (e.target.value) { cur.push({ id: e.target.value }); set(cur.map((y) => ({ ...y }))); draw(); } } }, el('option', { value: '' }, '+ Add a widget to the stack'), pickable.map((x) => el('option', { value: x.id }, T(x.title)))) : null);
+          el('button', { type: 'button', class: 'btn small ghost', disabled: i === 0 || null, 'aria-label': T('Move up'), onclick: () => { [cur[i - 1], cur[i]] = [cur[i], cur[i - 1]]; set(cur.map((y) => ({ ...y }))); draw(); } }, '↑'),
+          el('button', { type: 'button', class: 'btn small ghost', 'aria-label': T('Remove'), onclick: () => { cur.splice(i, 1); set(cur.map((y) => ({ ...y }))); draw(); } }, '×')))),
+        cur.length < 8 ? el('select', { onchange: (e) => { if (e.target.value) { cur.push({ id: e.target.value }); set(cur.map((y) => ({ ...y }))); draw(); } } }, el('option', { value: '' }, T('+ Add a widget to the stack')), pickable.map((x) => el('option', { value: x.id }, T(x.title)))) : null);
       };
       draw(); return box;
     }
@@ -355,3 +356,5 @@ function optField(f, t, ctx, changed) {
   }
 }
 const zoneCity = (z) => String(z).split('/').pop().replace(/_/g, ' ');
+/* The OpenStreetMap credit under town-search results (the server sends the text and link). */
+function placeCredit(c) { return el('a', { class: 'tiny muted', style: 'display:block;margin-top:6px', href: /^https:\/\//.test(c?.href || '') ? c.href : 'https://www.openstreetmap.org/copyright', target: '_blank', rel: 'noopener' }, String(c?.text || '© OpenStreetMap contributors')); }

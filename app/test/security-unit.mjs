@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import dnsP from 'node:dns/promises';
+import crypto from 'node:crypto';
 
 export default async function securityUnit(t) {
   const S = globalThis.__casatorchGuard;
@@ -84,6 +85,108 @@ export default async function securityUnit(t) {
     t('nonPublicIp: v4 and v6 ranges', () => {
       for (const ip of ['10.1.2.3', '127.0.0.1', '169.254.1.1', '172.31.0.1', '192.168.0.1', '100.64.0.1', '0.0.0.0', '224.0.0.1', '::1', 'fc00::1', 'fe80::1', '::ffff:10.0.0.1']) assert.ok(S.nonPublicIp(ip), ip);   // scrub-ok: example addresses for the range checks
       for (const ip of ['8.8.8.8', '172.32.0.1', '100.128.0.1', '2606:4700::1111']) assert.ok(!S.nonPublicIp(ip), ip);
+    });
+    const Z = globalThis.__casatorchSec;
+    await t('passwords: async scrypt reads and writes the same hashes as before, without blocking the event loop', async () => {
+      const old = Z.hashSecret('correct horse battery'), neu = await Z.hashSecretAsync('correct horse battery');
+      assert.match(neu, /^scrypt\$[0-9a-f]{32}\$[0-9a-f]{64}$/);
+      assert.equal(await Z.verifySecretAsync(old, 'correct horse battery'), true, 'old (sync) hash, async check');
+      assert.equal(Z.verifySecret(neu, 'correct horse battery'), true, 'new (async) hash, old check - downgrades keep working');
+      assert.equal(await Z.verifySecretAsync(neu, 'wrong horse'), false);
+      assert.equal(await Z.verifySecretAsync('scrypt$00$zz', 'x'), false, 'a damaged hash is a wrong password, not a crash');
+      assert.equal(await Z.verifySecretAsync('', 'x'), false);
+      let ticks = 0; const iv = setInterval(() => ticks++, 1);
+      await Promise.all(Array.from({ length: 6 }, () => Z.verifySecretAsync(old, 'nope')));
+      clearInterval(iv); assert.ok(ticks > 0, 'timers ran while six checks were worked out');
+      const rc = await Z.rcHashAsync('abcde-12345');
+      assert.equal(Z.rcMatch(rc, 'abcde-12345'), true); assert.equal(await Z.rcMatchAsync(Z.rcHash('abcde-12345'), 'abcde-12345'), true);
+      assert.equal(await Z.rcMatchAsync(rc, 'abcde-12346'), false);
+    });
+    t('rate limits: a try is counted before the slow check, so parallel requests cannot slip under the limit', () => {
+      const k = `unit-rt-${Date.now()}`, undos = [];
+      for (let i = 0; i < 5; i++) { assert.equal(Z.limited(k, 5), false); undos.push(Z.reserveTry(k)); }
+      assert.equal(Z.limited(k, 5), true, 'five in flight already fill the limit');
+      undos[2](); assert.equal(Z.limited(k, 5), false, 'a right password takes its try back');
+    });
+    t('secure access: the box sends its Pro key with a tunnel request (and nothing extra without one)', () => {
+      const RM = globalThis.__casatorchRemote;
+      const withKey = RM.remoteRequestBody({ house: { name: 'Home' }, license: ' CT1.payload.sig ', remote: { secret: 's3' } });
+      assert.equal(withKey.key, 'CT1.payload.sig'); assert.equal(withKey.secret, 's3'); assert.ok(withKey.id);
+      const trial = RM.remoteRequestBody({ house: { name: 'Home' } });
+      assert.ok(!('key' in trial) && !('secret' in trial));
+    });
+    t('push relay: the home id sent to the relay is bound to the box key (nothing to squat)', () => {
+      const k = Z.relayKey(), id = Z.relayHomeId(k.pub);
+      assert.match(id, /^k[A-Za-z0-9_-]{32}$/);
+      assert.equal(id, `k${crypto.createHash('sha256').update(Buffer.from(k.pub, 'base64')).digest('base64url').slice(0, 32)}`);
+      assert.notEqual(Z.relayHomeId(Buffer.alloc(32, 7).toString('base64')), id);
+    });
+    await t('town search: Nominatim only from the box, 3+ characters, one request a second, cached, with credit', async () => {
+      const P = globalThis.__casatorchPlaces, real = globalThis.fetch, seen = [];
+      globalThis.fetch = async (u, o = {}) => { const url = String(u); if (!url.startsWith('https://nominatim.openstreetmap.org/')) return real(u, o); seen.push({ url, ua: o.headers?.['User-Agent'], at: Date.now() }); return new Response(JSON.stringify([{ lat: '47.6062', lon: '-122.3321', name: 'Springfield', address: { city: 'Springfield', state: 'Oregon', country_code: 'us' } }]), { headers: { 'Content-Type': 'application/json' } }); };
+      try {
+        assert.deepEqual(await P.placeSearch('ab'), []); assert.equal(seen.length, 0, 'fewer than 3 characters never leave the box');
+        const tag = Date.now().toString(36);
+        const a = await P.placeSearch(`Springfield ${tag}`), b = await P.placeSearch(`springfield  ${tag.toUpperCase()}`.toLowerCase());
+        assert.equal(a[0].name, 'Springfield, Oregon, US'); assert.equal(a[0].cc, 'US'); assert.deepEqual(a, b); assert.equal(seen.length, 1, 'the same search is answered from the cache');
+        assert.match(seen[0].ua, /^CasaTorch\/[\d.]+ \(\+https:\/\/casatorch\.com\)$/, 'CasaTorch\'s own User-Agent');
+        await P.placeSearch(`Shelbyville ${tag}`);
+        assert.equal(seen.length, 2); assert.ok(seen[1].at - seen[0].at >= 1000, `at most one request a second (${seen[1].at - seen[0].at} ms)`);
+        assert.match(P.PLACE_CREDIT.text, /OpenStreetMap/); assert.equal(P.PLACE_MIN, 3);
+      } finally { globalThis.fetch = real; }
+    });
+    await t('internet: provider from Cloudflare trace + RIPEstat (no ipinfo.io), with credit', async () => {
+      const P = globalThis.__casatorchPlaces, real = globalThis.fetch, hosts = [];
+      const J = (b) => new Response(JSON.stringify(b), { headers: { 'Content-Type': 'application/json' } });
+      globalThis.fetch = async (u, o = {}) => { const url = new URL(String(u)); hosts.push(url.hostname);
+        if (url.href === 'https://1.1.1.1/cdn-cgi/trace') return new Response('fl=1\nip=203.0.113.9\nloc=US\n');   // scrub-ok: documentation address
+        if (url.pathname.endsWith('/network-info/data.json')) return J({ data: { asns: ['64500'], prefix: '203.0.113.0/24' } });   // scrub-ok: documentation prefix
+        if (url.pathname.endsWith('/as-overview/data.json')) return J({ data: { holder: 'EXAMPLE-NET - Example Internet, Inc.' } });
+        return real(u, o); };
+      try {
+        const i = await P.ispInfo();
+        assert.deepEqual(i, { ip: '203.0.113.9', country: 'United States', asn: 64500, provider: 'Example Internet, Inc.' });   // scrub-ok: documentation address
+        assert.ok(!hosts.some((h) => /ipinfo/.test(h)));
+      } finally { globalThis.fetch = real; }
+    });
+    await t('releases: installers and the add-on build check the source against the signed release (verify-release.js)', async () => {
+      const fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path'), crypto = await import('node:crypto'), { spawnSync } = await import('node:child_process');
+      const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..'), canon = fs.readFileSync(path.join(root, 'deploy/packaging/verify-release.js'), 'utf8');
+      // One verifier everywhere: the add-on's copy, the one inside install.sh and the one inside install.ps1.
+      assert.equal(fs.readFileSync(path.join(root, 'ha-addon/verify-release.js'), 'utf8'), canon);
+      assert.ok(fs.readFileSync(path.join(root, 'deploy/install.sh'), 'utf8').includes(`<<'VERIFY_JS'\n${canon}VERIFY_JS\n`), 'install.sh carries the same verifier');
+      assert.ok(fs.readFileSync(path.join(root, 'deploy/install.ps1'), 'utf8').includes(`@'\n${canon}'@`), 'install.ps1 carries the same verifier');
+      const pub = fs.readFileSync(path.join(root, 'deploy/packaging/release-key.pub.pem'), 'utf8').trim();
+      assert.ok(canon.includes(pub.split('\n')[1]), 'the built-in key is the release key');
+      const rd = (f) => fs.readFileSync(path.join(root, f), 'utf8'), addonVer = rd('ha-addon/config.yaml').match(/^version:\s*"?([\d.]+)/m)[1];
+      assert.match(rd('deploy/install.sh'), /REF="\$\{CASATORCH_REF:-\$\{CASATORCH_BRANCH:-\}\}"/, 'install.sh: the newest release unless asked');
+      assert.match(rd('deploy/install.ps1'), /elseif \(\$env:CASATORCH_BRANCH\) \{ \$env:CASATORCH_BRANCH \} else \{ '' \}/, 'install.ps1: the newest release unless asked');
+      assert.match(rd('ha-addon/build.yaml'), new RegExp(`CASATORCH_REF: v${addonVer.replace(/\./g, '\\.')}\\b`), 'the add-on builds the release tag of its own version');
+      assert.match(rd('ha-addon/Dockerfile'), /ARG CASATORCH_REF=v\d/); assert.ok(!/refs\/heads\//.test(rd('ha-addon/Dockerfile') + rd('deploy/install.ps1')));
+      // A made-up release signed with a throwaway key.
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-rel-')), src = path.join(tmp, 'src'), rel = path.join(tmp, 'rel');
+      try {
+        fs.mkdirSync(path.join(src, 'app/src'), { recursive: true }); fs.mkdirSync(rel);
+        fs.writeFileSync(path.join(src, 'app/src/a.js'), 'one'); fs.writeFileSync(path.join(src, 'README.md'), 'two');
+        const sh = (b) => crypto.createHash('sha256').update(b).digest('hex');
+        const list = `${sh('two')}  README.md\n${sh('one')}  app/src/a.js\n`;
+        fs.writeFileSync(path.join(rel, 'casatorch-source-files.sha256'), list);
+        const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
+        fs.writeFileSync(path.join(tmp, 'k.pem'), publicKey.export({ type: 'spki', format: 'pem' }));
+        const sign = (sums) => { fs.writeFileSync(path.join(rel, 'SHA256SUMS'), sums); fs.writeFileSync(path.join(rel, 'SHA256SUMS.sig'), crypto.sign(null, Buffer.from(sums), privateKey)); };
+        sign(`${sh('deb')}  casatorch_amd64.deb\n${sh(list)}  casatorch-source-files.sha256\n`);
+        const run = (extra = [], env = { CASATORCH_RELEASE_KEY_FILE: path.join(tmp, 'k.pem') }) => spawnSync(process.execPath, [path.join(root, 'deploy/packaging/verify-release.js'), src, path.join(rel, 'SHA256SUMS'), path.join(rel, 'SHA256SUMS.sig'), path.join(rel, 'casatorch-source-files.sha256'), ...extra], { env: { ...process.env, ...env } }).status;
+        assert.equal(run(), 0, 'a matching download');
+        assert.equal(run([], {}), 1, 'signed with another key than CasaTorch\'s');
+        fs.writeFileSync(path.join(src, 'app/src/zz-extra.js'), 'evil'); assert.equal(run(), 1, 'an added file (it would be built in)');
+        fs.writeFileSync(path.join(tmp, 'names'), 'README.md\napp/src/a.js\n'); assert.equal(run([path.join(tmp, 'names')]), 0, 'a git checkout: only tracked files count');
+        fs.rmSync(path.join(src, 'app/src/zz-extra.js'));
+        fs.writeFileSync(path.join(src, 'README.md'), 'changed'); assert.equal(run(), 1, 'a changed file'); fs.writeFileSync(path.join(src, 'README.md'), 'two');
+        fs.writeFileSync(path.join(rel, 'casatorch-source-files.sha256'), list.replace('README.md', 'OTHER.md')); assert.equal(run(), 1, 'a file list that isn\'t the signed one');
+        fs.writeFileSync(path.join(rel, 'casatorch-source-files.sha256'), list);
+        sign(`${sh('deb')}  casatorch_amd64.deb\n`); assert.equal(run(), 2, 'a release from before signed file lists');
+        fs.rmSync(path.join(rel, 'SHA256SUMS.sig')); assert.equal(run(), 2, 'no signature at all');
+      } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
     });
   } finally { dnsP.lookup = realLookup; srv.close(); }
 }

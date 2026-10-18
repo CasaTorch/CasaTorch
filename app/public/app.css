@@ -120,6 +120,7 @@ label.field { display: block; margin: 10px 0; } label.field > span { display: bl
 .team { display: flex; align-items: center; gap: 8px; min-width: 0; } .team img { width: 22px; height: 22px; object-fit: contain; }
 .score { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; } .lost { color: var(--muted); font-weight: 500; }
 .alert { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); border-left: 3px solid var(--faint); margin-bottom: 8px; color: inherit; text-decoration: none; }
+.alert .clamp2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.25; }
 .alert.critical { border-color: var(--bad); background: rgba(251, 113, 133, .08); } .alert.warning { border-color: var(--warn); } .alert.notice { border-color: var(--accent); } .alert.ok { border-color: var(--good); }
 .allclear { flex: 1; display: grid; place-items: center; text-align: center; color: var(--muted); } .allclear svg { width: 36px; height: 36px; color: var(--good); }
 .switches { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }

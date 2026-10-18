@@ -38,7 +38,7 @@ const api = async (url, opts = {}) => {
   const r = await fetch(url, o);
   if (r.status === 401) { location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.hash)}`; throw new Error('sign in first'); }
   const j = await r.json().catch(() => ({}));
-  if (r.status === 403 && j.terms) { location.href = '/login.html?step=terms'; throw new Error(j.error); }
+  if (r.status === 403 && j.terms) { location.href = `/login.html?step=terms&next=${encodeURIComponent(location.pathname + location.search + location.hash)}`; throw new Error(j.error); }   // updated terms: one tap, then back here
   /* The server's error in the home's language when it's a known sentence (body.error keeps the English). */
   if (!r.ok) throw Object.assign(new Error(j.error ? TM(j.error, j.msg, j.vars) : `HTTP ${r.status}`), { status: r.status, body: j });
   return j;
@@ -54,7 +54,7 @@ const S = { status: null, tz: undefined, units: 'F', alertsOpen: 0, settings: nu
 const isPro = () => !!S.status?.pro?.pro;
 function toast(msg, ms = 2800) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ms); }
 function modal(content, { wide = false, title } = {}) {
-  const box = el('div', { class: `box${wide ? ' wide' : ''}` }, title ? el('div', { class: 'row between', style: 'margin-bottom:12px' }, el('h3', { style: 'margin:0' }, title), el('button', { class: 'btn ghost small', 'aria-label': 'Close', onclick: () => m.remove() }, icon('x'))) : null, content);
+  const box = el('div', { class: `box${wide ? ' wide' : ''}` }, title ? el('div', { class: 'row between', style: 'margin-bottom:12px' }, el('h3', { style: 'margin:0' }, title), el('button', { class: 'btn ghost small', 'aria-label': T('Close'), onclick: () => m.remove() }, icon('x'))) : null, content);
   const m = el('div', { id: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': typeof title === 'string' ? title : null, onclick: (e) => { if (e.target === m) m.remove(); } }, box);
   // a real dialog for keyboards and screen readers: focus moves in, Tab stays inside, and closing returns focus to where it was
   const back = $('#modal')?._back || document.activeElement, rm = m.remove.bind(m); m._back = back; box.tabIndex = -1;
@@ -84,6 +84,30 @@ const fmtTime = (iso) => fmt(iso, { hour: 'numeric', minute: '2-digit' });
 const dayKey = (iso, tz = S.tz) => dtf('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
 const fmtWhen = (iso) => { const k = dayKey(iso), today = dayKey(new Date().toISOString()), tom = dayKey(new Date(Date.now() + 86400_000).toISOString()); return k === today ? `${T('Today')} ${fmtTime(iso)}` : k === tom ? `${T('Tomorrow')} ${fmtTime(iso)}` : `${fmt(iso, { weekday: 'short', month: 'short', day: 'numeric' })} ${fmtTime(iso)}`; };
 const ago = (iso) => { const s = Math.round((Date.now() - Date.parse(iso)) / 1000); if (!(s >= 0)) return ''; if (s < 60) return T('just now'); if (s < 3600) return T('{n} min ago', { n: Math.round(s / 60) }); if (s < 86400) return T('{n} h ago', { n: Math.round(s / 3600) }); return T('{n} d ago', { n: Math.round(s / 86400) }); };
+/* Alert titles are kept in English (the history stores them as they were raised); they show in the home's language.
+   A title with a stable key (msg/vars) uses it; the usual ones are recognized by their wording; anything else as is. */
+const ALERT_SAY = [[/^Cleared: (.+)$/s, 'Cleared: {what}', ['what'], true], [/^Still happening: (.+)$/s, 'Still happening: {what}', ['what'], true],
+  [/^Water detected: (.+)$/s, 'Water detected: {name}', ['name']], [/^Smoke alarm: (.+)$/s, 'Smoke alarm: {name}', ['name']], [/^Low battery \((\d+)%\): (.+)$/s, 'Low battery ({n}%): {name}', ['n', 'name']],
+  [/^(\d+) more devices are not responding$/, '{n} more devices are not responding', ['n']], [/^(.+) is not responding$/s, '{name} is not responding', ['name']],
+  [/^(.+) is near freezing$/s, '{name} is near freezing', ['name']], [/^(.+) is very hot$/s, '{name} is very hot', ['name']],
+  [/^Someone at the (.+)$/s, 'Someone at the {name}', ['name']], [/^Motion at the (.+)$/s, 'Motion at the {name}', ['name']],
+  [/^Fixed: (.+) is fine again$/s, 'Fixed: {what} is fine again', ['what'], 'T'], [/^Fixed: (.+) no longer needs a look$/s, 'Fixed: {what} no longer needs a look', ['what'], 'T'],
+  [/^Fixed: (.+) is answering again$/s, 'Fixed: {what} is answering again', ['what'], 'T'], [/^(\d+) things need a look: (.+)$/s, '{n} things need a look: {list}', ['n', 'list']],
+  [/^New device on your network: (.+)$/s, 'New device on your network: {name}', ['name']], [/^(.+) has (.+) open$/s, '{name} has {service} open', ['name', 'service'], 'T'],
+  [/^(Wrong password|Too many sign-in tries - paused|Wrong two-step code|Google sign-in from an unknown account|Recovery code used|Someone's role changed|Person added) \((.+)\)$/s, '{what} ({user})', ['what', 'user'], 'T'],
+  [/^(\d+) found - see "Devices on your network" below\.$/, '{n} found - see "Devices on your network" below.', ['n']], [/^(\d+) new - say whether each is yours below\.$/, '{n} new - say whether each is yours below.', ['n']],
+  [/^Version (.+) is ready - Settings › Updates & backup\.$/s, 'Version {version} is ready - Settings › Updates & backup.', ['version']]];
+function alertTitle(a) {
+  const t = String((typeof a === 'string' ? a : a?.title) || '');
+  if (a && typeof a === 'object' && a.msg) return TM(t, a.msg, a.vars);
+  if (CasaI18n.lang === 'en') return t;
+  for (const [re, key, names, inner] of ALERT_SAY) {
+    const m = re.exec(t); if (!m) continue;
+    const v = {}; names.forEach((n, k) => { const x = m[k + 1]; v[n] = inner === true ? alertTitle(x) : inner === 'T' ? T(x) : x; });
+    return T(key, v);
+  }
+  return T(t);
+}
 const hm = (t) => { const [h, m] = String(t).split(':').map(Number); return Number.isFinite(h) ? `${(h % 12) || 12}:${String(m || 0).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}` : t; };
 const tempOf = (c) => (c == null ? '-' : S.units === 'C' ? `${c.toFixed(1)}°` : `${Math.round(c * 9 / 5 + 32)}°`);
 const devIconName = (d) => (d.kind === 'sensor' && d.tempC != null ? 'thermo' : d.kind === 'sensor' && d.humidity != null && d.water == null ? 'drop' : d.water != null ? 'drop' : d.smoke != null ? 'fire' : d.kind === 'cover' ? (d.risky ? 'door' : 'blinds') : d.open != null ? 'door' : d.meter ? 'bolt' : { light: 'bulb', switch: 'plug', plug: 'plug', media: 'music', climate: 'thermo', lock: 'lock', camera: 'camera', fan: 'fan', action: 'play', vacuum: 'vacuum', alarm: 'shield', presence: 'user', value: 'gauge' }[d.kind] || 'dotc');
@@ -162,7 +186,11 @@ function drawBanner() {
   else if (S.updates?.available && !updSnoozed(S.updates.latest)) b.append(icon('spark', 16), S.updates.auto ? T('CasaTorch {v} is available - it installs itself overnight.', { v: S.updates.latest }) : T('CasaTorch {v} is available.', { v: S.updates.latest }), el('a', { href: '#settings/updates' }, S.updates.auto ? T('Details') : T('How to update')), updSnoozeBtn(S.updates.latest));
   else if (p.plan === 'trial') b.append(icon('spark', 16), p.trialDaysLeft === 1 ? T('Pro trial: 1 day left - 3D Home, your Home AI Agent and Ring are unlocked.') : T('Pro trial: {n} days left - 3D Home, your Home AI Agent and Ring are unlocked.', { n: p.trialDaysLeft }), el('a', { href: '#settings/pro' }, T('Enter a license key')));
   else if (p.grace) b.append(T('Your Pro subscription has ended - Pro keeps working for a few more days.'), el('a', { href: '#settings/pro' }, T('Renew')));
-  else if (!p.pro) { b.className = 'free'; b.append(T('CasaTorch Free.'), el('a', { href: '#settings/pro' }, T('See what Pro adds'))); }
+  else if (!p.pro) {
+    /* Right after Pro or the trial ends, say once (per browser) what that means: nothing was deleted. */
+    let once = false; try { if (p.note && localStorage.getItem('casatorch-pro-ended') !== p.note) { localStorage.setItem('casatorch-pro-ended', p.note); once = true; } } catch { /* fine */ }
+    b.className = 'free'; b.append(once ? `${T('CasaTorch Basic.')} ${T(p.note)}` : T('CasaTorch Basic.'), el('a', { href: '#settings/pro' }, T('See what Pro adds')));
+  }
   b.hidden = !b.textContent;
 }
 function tick() { $('#clock').textContent = fmt(new Date().toISOString(), { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }

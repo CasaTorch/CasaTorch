@@ -32,13 +32,13 @@ setTimeout(() => checkUpdates().catch(() => {}), 90_000).unref?.();
 setInterval(() => checkUpdates().catch(() => {}), 24 * 3600_000).unref?.();
 const HOW_TO_UPDATE = {
   'ha-addon': 'Home Assistant shows the update under Settings > Add-ons > CasaTorch - click Update. Your settings are kept.',
-  docker: 'Pull the new image and recreate the container - in Portainer or your NAS app choose "Pull and redeploy" (or run docker compose pull, then docker compose up -d). Your settings are kept.',
+  docker: 'Pull the new image and recreate the container - in Portainer or your NAS app choose "Pull and redeploy". Your settings are kept.',
   deb: 'It installs itself overnight. To update now, download the new .deb from casatorch.com/download and open it.',
   'pi-image': 'It installs itself overnight - nothing to do.',
   windows: 'Download the new installer from casatorch.com/download and run it. Your settings are kept.',
   macos: 'Download the new installer from casatorch.com/download and open it. Your settings are kept.',
-  manual: 'Pull the latest code (git pull), then restart CasaTorch.',
-};
+  manual: 'Get the latest version the same way you installed it (from GitHub), then restart CasaTorch.',
+};   // English here; the app shows them through T() (30-settings.js, 39s-support.js) - each one needs a row in tools/i18n-strings.tsv
 function updateView() {
   const l = upd.latest, prefs = updatePrefs();
   return {

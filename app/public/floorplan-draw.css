@@ -18,6 +18,10 @@
 #drawer.dz .dz-top { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--d-panel); border-bottom: 1px solid var(--d-line); min-width: 0; }
 #drawer.dz .dz-top .dz-name { max-width: 220px; font-weight: 650; }
 #drawer.dz .dz-top .dz-sp { flex: 1; }
+#drawer.dz .dz-saved { font-size: 12px; color: var(--d-muted); white-space: nowrap; flex: none; overflow: hidden; text-overflow: ellipsis; max-width: 18ch; }
+#drawer.dz .dz-saved.ok::before { content: '✓ '; color: var(--d-good, #16a34a); }
+#drawer.dz .dz-saved.bad { color: var(--d-bad); font-weight: 600; max-width: 34ch; }
+@media (max-width: 480px) { #drawer.dz .dz-saved { max-width: 11ch; } }
 #drawer.dz .dz-status { font-size: 12px; color: var(--d-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #drawer.dz .dz-status.bad { color: var(--d-bad); font-weight: 600; cursor: pointer; }
 /* tools */

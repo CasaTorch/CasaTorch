@@ -53,23 +53,28 @@ function appProceed(req, res, t) {
   audit(req, 'signed-in', { user: u.username, via: 'app', device: t.device?.name });
   res.json({ ok: true, token: tok, user: safeUser(u), home: appHome(req), ...(t.recovery ? { recovery: t.recovery } : {}) });
 }
-app.post('/api/app/login', express.json({ limit: '4kb' }), (req, res) => {
+app.post('/api/app/login', express.json({ limit: '4kb' }), asyncRoute(async (req, res) => {
   if (!signInOn()) return res.status(409).json({ error: isDemo() ? 'This is the demo - it has no accounts. Pair with a real CasaTorch.' : 'Set up sign-in on this CasaTorch first (it is set up during setup).' });
   const { username, password } = req.body || {}, ip = clientIp(req), name = String(username || '').trim().toLowerCase();
   if (limited(`ip:${ip}`, 30) || limited(`u:${name}|${ip}`, 5)) { audit(req, 'login-limited', { user: name, via: 'app' }); return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' }); }
-  const u = findLogin(name), ok = verifySecret(u?.password || DUMMY_HASH, String(password || ''));
-  if (!u || !ok || u.invite || u.panel) { failed(`ip:${ip}`, `u:${name}|${ip}`); audit(req, 'login-failed', { user: name, via: 'app' }); return res.status(401).json({ error: 'Wrong name or password.' }); }
+  const undo = reserveTry(`ip:${ip}`, `u:${name}|${ip}`);
+  const u0 = findLogin(name), ok = await verifySecretAsync(u0?.password || DUMMY_HASH, String(password || ''));   // off the main thread; same work for unknown names
+  const u = u0 && findLogin(name) === u0 ? u0 : null;
+  if (!u || !ok || u.invite || u.panel) { audit(req, 'login-failed', { user: name, via: 'app' }); return res.status(401).json({ error: 'Wrong name or password.' }); }
+  undo();
   appProceed(req, res, newTicket(u, { app: true, via: 'app', device: cleanDevice(req.body?.device) }));
-});
-app.post('/api/app/mfa', express.json({ limit: '4kb' }), (req, res) => {
+}));
+app.post('/api/app/mfa', express.json({ limit: '4kb' }), asyncRoute(async (req, res) => {
   const t = ticketOf(req.body?.ticket); if (!t?.app) return res.status(401).json({ error: 'That took too long - sign in again.' });
   const u = userById(t.userId), ip = clientIp(req); if (!u) return res.status(401).json({ error: 'Sign in again.' });
   if (limited(`mfa:${u.id}`, 6) || limited(`ip:${ip}`, 30)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' });
-  const how = secondFactorOk(u, req.body?.code);
-  if (!how) { failed(`mfa:${u.id}`, `ip:${ip}`); audit(req, 'code-failed', { user: u.username, via: 'app' }); return res.status(401).json({ error: 'That code isn\'t right.' }); }
+  const undo = reserveTry(`mfa:${u.id}`, `ip:${ip}`);
+  const how = await secondFactorAsync(u, req.body?.code);
+  if (!how) { audit(req, 'code-failed', { user: u.username, via: 'app' }); return res.status(401).json({ error: 'That code isn\'t right.' }); }
+  undo();
   if (how === 'recovery') audit(req, 'recovery-code-used', { user: u.username, left: u.totp.recovery.length });
   t.passed.add('mfa'); appProceed(req, res, t);
-});
+}));
 /* No two-step sign-in yet: set it up right here (an authenticator app on this or another device). */
 app.post('/api/app/enroll', express.json({ limit: '4kb' }), async (req, res) => {
   const t = ticketOf(req.body?.ticket); if (!t?.app) return res.status(401).json({ error: 'That took too long - sign in again.' });
@@ -79,7 +84,7 @@ app.post('/api/app/enroll', express.json({ limit: '4kb' }), async (req, res) => 
   if (!req.body?.code) { const e = await totpEnrolment(u); t.pending = e.secret; return res.json({ uri: e.uri, qr: e.qr, secret: e.secret }); }
   if (!t.pending || !totpOk(t.pending, req.body.code)) return res.status(400).json({ error: 'That code isn\'t right - check the time on your phone and try again.' });
   const codes = recoveryCodes();
-  u.totp = { on: true, secret: seal(t.pending), recovery: codes.map(rcHash), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
+  u.totp = { on: true, secret: seal(t.pending), recovery: await rcHashAllAsync(codes), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
   saveUsers(); audit(req, '2fa-on', { user: u.username, via: 'app' }); t.passed.add('enroll'); t.recovery = codes;
   appProceed(req, res, t);
 });
@@ -166,6 +171,10 @@ function relayKey() {
   if (!push.relay) { const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519'); push.relay = { pub: publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64'), priv: seal(privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64')) }; savePush(); }
   return { pub: push.relay.pub, priv: crypto.createPrivateKey({ key: Buffer.from(unseal(push.relay.priv), 'base64'), format: 'der', type: 'pkcs8' }) };
 }
+/* The id this home uses at the relay: made from its own public key ("k" + 32 characters of base64url SHA-256), so
+   nobody who learns the public install id can claim the home there first (the relay checks it - api/push/send.js).
+   Boxes before 0.8.1 sent the install id (trust on first use); phones never see this id. */
+const relayHomeId = (pub) => `k${crypto.createHash('sha256').update(Buffer.from(pub, 'base64')).digest('base64url').slice(0, 32)}`;
 function sealFor(pd, msg) {
   const key = Buffer.from(unseal(pd.key), 'base64'), iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', key, iv);
   const body = Buffer.concat([c.update(JSON.stringify({ ...msg, home: config.house?.name || 'Home', hid: installId() })), c.final(), c.getAuthTag()]);
@@ -185,7 +194,7 @@ async function appPushSend(list, msg) {
   if (keep.length !== list.length) { const gone = new Set(list.filter((pd) => !live.has(pd.session)).map((pd) => pd.id)); push.apps = push.apps.filter((x) => !gone.has(x.id)); savePush(); }
   if (!keep.length) return { ok: false, error: 'This phone is signed out.' };
   const k = relayKey();
-  const body = JSON.stringify({ home: installId(), pub: k.pub, ts: Date.now(), msgs: keep.map((pd) => ({ p: pd.platform, t: pd.token, ...sealFor(pd, msg), crit: msg.sev === 'critical', tag: pushTagFor(pd, msg.tag) })) });
+  const body = JSON.stringify({ home: relayHomeId(k.pub), pub: k.pub, ts: Date.now(), msgs: keep.map((pd) => ({ p: pd.platform, t: pd.token, ...sealFor(pd, msg), crit: msg.sev === 'critical', tag: pushTagFor(pd, msg.tag) })) });
   const sig = crypto.sign(null, Buffer.from(body), k.priv).toString('base64');
   try {
     const r = await fetch(RELAY_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CT-Sig': sig }, body, signal: AbortSignal.timeout(15_000) });
@@ -202,4 +211,4 @@ async function appPushAll(msg) {
   if (list.length && !isDemo()) await appPushSend(list, msg);
 }
 /* For the unit tests (test/unit.mjs): the encryption, key and redaction helpers. */
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchSec = { keyOf, KEY_FILE, loadKeyFile, tightenDataModes, logMask, verifySecret, hashSecret, sealFor, pushTagFor, relayKey, cookieFlags, rcHash, rcMatch };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchSec = { keyOf, KEY_FILE, loadKeyFile, tightenDataModes, logMask, verifySecret, hashSecret, verifySecretAsync, hashSecretAsync, rcHashAsync, rcMatchAsync, secondFactorAsync, reserveTry, limited, sealFor, pushTagFor, relayKey, relayHomeId, cookieFlags, rcHash, rcMatch };

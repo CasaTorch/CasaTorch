@@ -114,13 +114,13 @@ function securityAlerts() {
 function securityChecklist() {
   const items = [], add = (id, ok, title, how, href) => items.push({ id, ok: !!ok, title, how, href });
   const admins = (typeof users !== 'undefined' && users?.list ? users.list : []).filter((u) => ['owner', 'admin'].includes(u.role) && u.password);
-  add('signin', isDemo() || signInOn(), 'Everyone signs in', 'Settings › Security: CasaTorch asks for a password on every phone and computer.', '#settings');
-  add('2fa', admins.length && admins.every((u) => u.totp?.on), 'Two-step sign-in for owners and admins', 'Settings › Your account & security › Two-step sign-in. Takes two minutes with any authenticator app.', '#settings');
-  add('https', ltConf()?.on && LOCAL_TLS.url, 'Secure address at home (https)', 'Settings › Secure address at home: sign-ins and everything else are encrypted on your Wi-Fi.', '#settings');
+  add('signin', isDemo() || signInOn(), 'Everyone signs in', 'Settings › People & sign-in: CasaTorch asks for a password on every phone and computer.', '#settings');
+  add('2fa', admins.length && admins.every((u) => u.totp?.on), 'Two-step sign-in for owners and admins', 'Settings › People & sign-in › Your account & security › Two-step sign-in. Takes two minutes with any authenticator app.', '#settings');
+  add('https', ltConf()?.on && LOCAL_TLS.url, 'Secure address at home (https)', 'Settings › Connections & AI › Secure address at home: sign-ins and everything else are encrypted on your Wi-Fi.', '#settings');
   const up = typeof updateView === 'function' ? updateView() : null;
-  add('updates', !up?.available, 'CasaTorch is up to date', up?.available ? `Version ${up.latest} is ready - Settings › Updates.` : 'Updates fix security problems; automatic updates keep you current.', '#settings');
+  add('updates', !up?.available, 'CasaTorch is up to date', up?.available ? `Version ${up.latest} is ready - Settings › Updates & backup.` : 'Updates fix security problems; automatic updates keep you current.', '#settings');
   let backup = false; try { backup = fs.readFileSync(AUDIT_FILE, 'utf8').split('\n').slice(-5000).some((l) => l.includes('"backup-made"') && Date.now() - Date.parse(JSON.parse(l).at) < 90 * 86400_000); } catch { /* none */ }
-  add('backup', backup, 'A backup in the last 3 months', 'Settings › Backup: one file, protected by a passphrase you choose.', '#settings');
+  add('backup', backup, 'A backup in the last 3 months', 'Settings › Updates & backup › Backup: one file, protected by a passphrase you choose.', '#settings');
   const devs = isDemo() ? DEMO_LAN() : Object.values(sec.devices);
   const risky = devs.flatMap((d) => (d.ports || []).filter((p) => !sec.expected[`${d.mac}:${p}`] && portInfo(p).level === 'warning'));
   if ((sec.portsAt && sec.available) || isDemo()) add('ports', !risky.length, 'No risky services open on your network', risky.length ? `${risky.length} found - see "Devices on your network" below.` : 'Checked once a day.', '#security');

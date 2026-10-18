@@ -28,6 +28,8 @@ const STEPS = [
   ['chaos', ROOT, ['tools/test-chaos.mjs']],   // Home Assistant down/silent/slow/flapping, damaged files, a full disk (about 80 s)   // attack checks against a fresh server (its browser part is skipped with --no-e2e)
   ['e2e-wizard', ROOT, ['tools/test-setup-wizard.cjs'], true],
   ['e2e-noha', ROOT, ['tools/test-setup-noha.cjs'], true],
+  ['3d-compat', APP, ['test/floorplan-compat-browser.cjs'], true],   // the 3D home on older browsers (about 1 min on a software GPU)
+  ['3d-perf', APP, ['test/floorplan-perf-budget.cjs'], true],       // the 3D home's draw-call/triangle budget (1-3 min)
 ];
 
 const run = (name, cwd, argv, limitMs) => new Promise((ok) => {

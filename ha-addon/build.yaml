@@ -1,5 +1,7 @@
 build_from:
   aarch64: node:22-bookworm-slim
   amd64: node:22-bookworm-slim
+# The release this add-on version is built from (a version tag, never `main`); keep it equal to `version` in
+# config.yaml. The build checks every file against the release's signed checksums (verify-release.js).
 args:
-  CASATORCH_REF: main
+  CASATORCH_REF: v0.8.0

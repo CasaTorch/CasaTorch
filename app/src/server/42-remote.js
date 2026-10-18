@@ -295,12 +295,18 @@ async function remoteInfo(req) {
   };
 }
 app.get('/api/remote', async (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json(await remoteInfo(req)); });
+/** What the box sends to casatorch.com to make (or re-make) its tunnel. The Pro key goes along when there is one, so
+    casatorch.com can require Pro for new addresses (REMOTE_REQUIRE_KEY there); it already checks such keys when a
+    box renews. Without a key (the trial) nothing extra is sent. */
+function remoteRequestBody(cfg = config) {
+  return { id: installId(), name: cfg.house?.name || null, port: Number(PORT) || 8090, ...(cfg.remote?.secret ? { secret: cfg.remote.secret } : {}), ...(typeof cfg.license === 'string' && cfg.license.trim() ? { key: cfg.license.trim() } : {}) };
+}
 /** Turn secure access on (or repair it): this home's address and tunnel key from casatorch.com, then the tunnel itself. */
 async function remoteOn() {
   if (remote.busy) return remote.busy;
   remote.busy = (async () => {
     await ensureCloudflared();
-    const body = { id: installId(), name: config.house?.name || null, port: Number(PORT) || 8090, ...(config.remote?.secret ? { secret: config.remote.secret } : {}) };
+    const body = remoteRequestBody();
     let r;
     try { r = await fetch(REMOTE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) }); }
     catch (e) { throw Object.assign(new Error(`casatorch.com couldn't be reached (${e.cause?.code || e.name})`), { code: 'service' }); }
@@ -356,4 +362,4 @@ function remoteBoot(n = 0) {
 }
 setTimeout(() => remoteBoot(), RT.boot).unref?.();
 process.on('exit', () => { try { remote.proc?.kill(); } catch { /* gone */ } });
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchRemote = { remoteView, remoteCheckResult, remoteLineKind, remoteMask, remoteNonceOk, remote, REMOTE_WHY, patchConfig: (p) => { const was = config; config = { ...config, ...p }; return () => { config = was; }; } };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchRemote = { remoteRequestBody, remoteView, remoteCheckResult, remoteLineKind, remoteMask, remoteNonceOk, remote, REMOTE_WHY, patchConfig: (p) => { const was = config; config = { ...config, ...p }; return () => { config = was; }; } };

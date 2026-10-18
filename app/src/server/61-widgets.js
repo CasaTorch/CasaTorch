@@ -25,15 +25,33 @@ app.get('/api/w/weather', async (req, res) => {
   if (W_LIMIT(req)) return res.status(429).json({ error: 'slow down' });
   try { res.json(await weatherAt(lat, lon, name)); } catch (err) { res.status(502).json({ error: String(err.message) }); }
 });
+/* Town search, for setup (/api/setup/geocode) and the widgets: OpenStreetMap's Nominatim, used the way its usage
+   policy asks - only from this server (CasaTorch's own User-Agent, never the browser), one search when the person
+   presses Find or Enter (no search-as-you-type), at least 3 characters, at most one request a second from this box,
+   answers cached for a week, and the OpenStreetMap credit shown with the results. */
+const PLACE_CREDIT = { text: 'Search © OpenStreetMap contributors', href: 'https://www.openstreetmap.org/copyright' };
+const PLACE_MIN = 3;
+let nominatimNext = 0;
+async function nominatimSlot() {   // one request a second for the whole box; a queue longer than a few seconds says "busy"
+  const now = Date.now(), at = Math.max(now, nominatimNext);
+  if (at - now > 5000) throw Object.assign(new Error('town search is busy - try again in a few seconds'), { status: 429 });
+  nominatimNext = at + 1100;
+  if (at > now) await new Promise((ok) => setTimeout(ok, at - now));
+}
+const placeView = (p) => { const a = p.address || {}; const town = a.city || a.town || a.village || a.hamlet || a.county || p.name; return { name: [town, a.state || a.region, a.country_code?.toUpperCase()].filter(Boolean).join(', '), cc: a.country_code ? String(a.country_code).toUpperCase().slice(0, 2) : null, lat: Math.round(Number(p.lat) * 1e4) / 1e4, lon: Math.round(Number(p.lon) * 1e4) / 1e4 }; };
+async function placeSearch(q) {
+  const key = String(q || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 120);
+  if (key.length < PLACE_MIN) return [];
+  const j = await cached(`places:${key}`, 7 * 86400_000, async () => { await nominatimSlot(); return { list: await getJSON(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&q=${encodeURIComponent(key)}`) }; });
+  return (j.list || []).map(placeView);
+}
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchPlaces = { placeSearch, PLACE_CREDIT, PLACE_MIN, ispInfo };
 app.get('/api/w/places', async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 120);
-  if (q.length < 2) return res.json({ places: [] });
-  if (isDemo()) return res.json({ places: [{ name: `${q.replace(/^\w/, (c) => c.toUpperCase())} (demo)`, lat: 40.7128, lon: -74.006 }] });
-  if (overLimit(`wplaces:${typeof clientIp === 'function' ? clientIp(req) : req.ip}`, 20, 60_000)) return res.status(429).json({ error: 'slow down' });   // Nominatim asks for at most one search a second
-  try {
-    const j = await cached(`places:${q.toLowerCase()}`, 24 * 3600_000, async () => ({ list: await getJSON(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&q=${encodeURIComponent(q)}`) }));
-    res.json({ places: (j.list || []).map((p) => { const a = p.address || {}; const town = a.city || a.town || a.village || a.hamlet || a.county || p.name; return { name: [town, a.state || a.region, a.country_code?.toUpperCase()].filter(Boolean).join(', '), lat: Math.round(Number(p.lat) * 1e4) / 1e4, lon: Math.round(Number(p.lon) * 1e4) / 1e4 }; }) });
-  } catch (err) { res.status(502).json({ error: String(err.message) }); }
+  if (q.length < PLACE_MIN) return res.json({ places: [], credit: PLACE_CREDIT });
+  if (isDemo()) return res.json({ places: [{ name: `${q.replace(/^\w/, (c) => c.toUpperCase())} (demo)`, lat: 40.7128, lon: -74.006 }], credit: PLACE_CREDIT });
+  if (overLimit(`wplaces:${typeof clientIp === 'function' ? clientIp(req) : req.ip}`, 20, 60_000)) return res.status(429).json({ error: 'slow down' });
+  try { res.json({ places: (await placeSearch(q)).map(({ cc: _cc, ...p }) => p), credit: PLACE_CREDIT }); } catch (err) { res.status(err.status === 429 ? 429 : 502).json({ error: String(err.message) }); }
 });
 
 /* ---- stocks, funds, indexes, currencies and crypto (one source for all: Yahoo Finance's chart answers) ---- */

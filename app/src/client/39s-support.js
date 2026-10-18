@@ -40,7 +40,7 @@ const SUP_GUIDES = [
   ['ha', 'home', 'Home Assistant stopped working'],
   ['cameras', 'camera', 'Cameras aren\'t showing'],
   ['slow3d', 'cube', 'The 3D home is slow on a tablet', true],
-  ['remote', 'lock', 'Secure access isn\'t working'],
+  ['remote', 'lock', 'Secure access (beta) isn\'t working'],
   ['locked', 'user', 'Forgot a password or locked out'],
   ['alerts', 'bell', 'Alerts don\'t reach my phone'],
   ['tablet', 'phone', 'The wall tablet goes to sleep', true],
@@ -76,7 +76,7 @@ async function supCopy(text) {
 }
 /* The support file: what's in it, the whole thing to read, then download or copy. */
 const SUP_SECTIONS = [
-  ['casatorch', 'Version, how it was installed, Free or Pro'],
+  ['casatorch', 'Version, how it was installed, Basic or Pro'],
   ['system', 'The computer: system, memory, storage, uptime'],
   ['timings', 'How fast it answers'],
   ['health', 'The Health checks and what fixed itself'],
@@ -183,26 +183,26 @@ const SUP_HERE = {
     let gl = null, renderer = '';
     try { const c = document.createElement('canvas'); gl = c.getContext('webgl2') || c.getContext('webgl'); const dbg = gl?.getExtension('WEBGL_debug_renderer_info'); renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '') : ''; } catch { gl = null; }
     const soft = /swiftshader|llvmpipe|software|basic render/i.test(renderer);
-    out.push(!gl ? supStep('bad', 'Graphics', 'This browser can\'t draw 3D (WebGL is off or not supported).', { why: 'Update the browser, or turn on hardware acceleration in its settings.' })
-      : soft ? supStep('bad', 'Graphics', 'The browser is drawing 3D without the graphics chip, so it\'s slow.', { why: 'Turn on hardware acceleration in the browser\'s settings, then restart it.' })
+    out.push(!gl ? supStep('bad', 'Graphics', 'This browser can\'t draw 3D (WebGL is off or not supported).', { why: T('Update the browser, or turn on hardware acceleration in its settings.') })
+      : soft ? supStep('bad', 'Graphics', 'The browser is drawing 3D without the graphics chip, so it\'s slow.', { why: T('Turn on hardware acceleration in the browser\'s settings, then restart it.') })
         : supStep('ok', 'Graphics', renderer ? TM(`3D works (${renderer.slice(0, 60)}).`, '3D works ({gpu}).', { gpu: renderer.slice(0, 60) }) : T('3D works.')));
     const mem = navigator.deviceMemory, cores = navigator.hardwareConcurrency || 0;
-    out.push(mem && mem <= 2 || cores && cores <= 4 ? supStep('warn', 'This device', TM(`A smaller device (${mem ? `${mem} GB memory, ` : ''}${cores} cores).`, 'A smaller device ({cores} cores).', { cores }), { why: 'Use the Old tablet quality below - it draws fewer pixels and no shadows.' }) : supStep('ok', 'This device', TM(`${cores || '?'} cores${mem ? `, ${mem} GB memory` : ''}.`, '{cores} cores.', { cores: cores || '?' })));
+    out.push(mem && mem <= 2 || cores && cores <= 4 ? supStep('warn', 'This device', TM(`A smaller device (${mem ? `${mem} GB memory, ` : ''}${cores} cores).`, 'A smaller device ({cores} cores).', { cores }), { why: T('Use the Old tablet quality below - it draws fewer pixels and no shadows.') }) : supStep('ok', 'This device', TM(`${cores || '?'} cores${mem ? `, ${mem} GB memory` : ''}.`, '{cores} cores.', { cores: cores || '?' })));
     const fps = await new Promise((ok) => { let n = 0; const t0 = performance.now(); const f = (t) => { n++; if (t - t0 < 1000) requestAnimationFrame(f); else ok(Math.round((n * 1000) / (t - t0))); }; requestAnimationFrame(f); });
-    out.push(fps < 40 ? supStep('warn', 'Smoothness', TM(`This screen draws ${fps} frames a second while idle.`, 'This screen draws {n} frames a second while idle.', { n: fps }), { why: 'Close other apps and tabs; on a tablet, turn off battery saver.' }) : supStep('ok', 'Smoothness', TM(`${fps} frames a second.`, '{n} frames a second.', { n: fps })));
+    out.push(fps < 40 ? supStep('warn', 'Smoothness', TM(`This screen draws ${fps} frames a second while idle.`, 'This screen draws {n} frames a second while idle.', { n: fps }), { why: T('Close other apps and tabs; on a tablet, turn off battery saver.') }) : supStep('ok', 'Smoothness', TM(`${fps} frames a second.`, '{n} frames a second.', { n: fps })));
     const px = Math.round(screen.width * screen.height * (devicePixelRatio || 1) ** 2 / 1e6 * 10) / 10;
-    if (px > 4 && (mem && mem <= 4 || cores && cores <= 6)) out.push(supStep('warn', 'Screen', TM(`A sharp screen (${px} million pixels) for this device's chip.`, 'A sharp screen ({n} million pixels) for this device\'s chip.', { n: px }), { why: 'The Old tablet quality draws at a lower sharpness - hardly visible on a wall, much faster.' }));
+    if (px > 4 && (mem && mem <= 4 || cores && cores <= 6)) out.push(supStep('warn', 'Screen', TM(`A sharp screen (${px} million pixels) for this device's chip.`, 'A sharp screen ({n} million pixels) for this device\'s chip.', { n: px }), { why: T('The Old tablet quality draws at a lower sharpness - hardly visible on a wall, much faster.') }));
     let level = 'auto'; try { level = JSON.parse(localStorage.getItem('casatorch-3d-qlevel') || '"auto"'); } catch { /* default */ }
     const QW = { auto: 'Auto', old: 'Old tablet', normal: 'Normal', high: 'High' };
-    out.push(level === 'old' ? supStep('ok', '3D quality on this screen', T('Old tablet - the fastest.')) : supStep('info', '3D quality on this screen', TM(`${QW[level] || level}. Old tablet is the fastest.`, '{level}. Old tablet is the fastest.', { level: T(QW[level] || level) }), { fix: { label: 'Use Old tablet quality', local: () => { try { localStorage.setItem('casatorch-3d-qlevel', '"old"'); } catch { /* private window */ } } } }));
+    out.push(level === 'old' ? supStep('ok', '3D quality on this screen', T('Old tablet - the fastest.')) : supStep('info', '3D quality on this screen', TM(`${QW[level] || level}. Old tablet is the fastest.`, '{level}. Old tablet is the fastest.', { level: T(QW[level] || level) }), { fix: { label: T('Use Old tablet quality'), local: () => { try { localStorage.setItem('casatorch-3d-qlevel', '"old"'); } catch { /* private window */ } } } }));
     out.push(supStep('info', 'Still slow?', T('Use the regular Home screen on this tablet and the 3D home on a newer screen - each screen can have its own layout.')));
     return { steps: out };
   },
   async tablet() {
     const out = [], ua = navigator.userAgent, ipad = /iPad|Macintosh/.test(ua) && navigator.maxTouchPoints > 1, ios = /iPhone|iPad/.test(ua) || ipad, android = /Android/.test(ua);
     const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-    out.push(isPanel() ? supStep('ok', 'Panel mode', T('On - CasaTorch asks the screen to stay on.')) : supStep('warn', 'Panel mode', T('Off on this screen.'), { why: 'Panel mode keeps the screen on and hides the bars.', fix: { label: 'Turn on panel mode', local: () => setPanel(true) } }));
-    out.push('wakeLock' in navigator ? supStep('ok', 'Keep the screen on', T('This browser can keep the screen on.')) : supStep('warn', 'Keep the screen on', T('This browser can\'t keep the screen on by itself.'), { why: ios ? 'Set Auto-Lock to Never on the iPad.' : 'Use the device\'s own "stay awake" setting, or a kiosk browser.' }));
+    out.push(isPanel() ? supStep('ok', 'Panel mode', T('On - CasaTorch asks the screen to stay on.')) : supStep('warn', 'Panel mode', T('Off on this screen.'), { why: T('Panel mode keeps the screen on and hides the bars.'), fix: { label: T('Turn on panel mode'), local: () => setPanel(true) } }));
+    out.push('wakeLock' in navigator ? supStep('ok', 'Keep the screen on', T('This browser can keep the screen on.')) : supStep('warn', 'Keep the screen on', T('This browser can\'t keep the screen on by itself.'), { why: ios ? T('Set Auto-Lock to Never on the iPad.') : T('Use the device\'s own "stay awake" setting, or a kiosk browser.') }));
     if (location.protocol !== 'https:' && 'wakeLock' in navigator === false && !/^(localhost|127\.)/.test(location.hostname)) out.push(supStep('info', 'Secure address', T('Browsers only keep the screen on for a secure (https) address - use the secure address at home on this tablet.')));
     if (ios) out.push(supStep('info', 'iPad settings', T('Settings › Display & Brightness › Auto-Lock › Never. For a wall: Settings › Accessibility › Guided Access keeps CasaTorch on screen.')));
     else if (android) out.push(supStep('info', 'Android settings', T('Settings › Display › Screen timeout to the longest, or Developer options › Stay awake while charging. A kiosk browser such as Fully Kiosk can keep it on and restart CasaTorch.')));
@@ -304,7 +304,7 @@ async function updateStatusCard() {
   if (!u || !st) return null;
   const rows = [];
   if (u.available && u.notes) rows.push(el('h3', {}, T('What\'s in {v}', { v: u.latest })), el('div', { class: 'small sup-notes' }, String(u.notes).slice(0, 3000)));
-  const L = st.last, STATE = { checking: 'Checking', downloading: 'Downloading', installing: 'Installing', verifying: 'Checking that it starts', done: 'Done', 'rolled-back': 'Went back to the version you had', failed: 'Didn\'t finish' };
+  const L = st.last, STATE = { checking: 'Checking', downloading: 'Downloading', installing: 'Installing', verifying: 'Checking that it starts', done: T('Done'), 'rolled-back': 'Went back to the version you had', failed: 'Didn\'t finish' };
   if (L?.state && L.state !== 'done' && !/fail|rolled/.test(L.state)) rows.push(el('p', { class: 'small' }, el('b', {}, T('Updating now:')), ' ', T(STATE[L.state] || L.state), L.to ? ` - ${L.to}` : ''));
   if (L && /fail|rolled/.test(L.state)) rows.push(el('div', { class: 'small', style: 'padding:10px 12px;border-radius:10px;background:color-mix(in srgb, var(--bad) 12%, transparent);margin:6px 0' }, el('b', {}, T(STATE[L.state] || L.state)), L.to ? ` (${L.to})` : '', L.message ? el('div', { class: 'muted' }, L.message) : null, el('button', { class: 'btn small', style: 'margin-top:8px', onclick: () => supGuideModal('update') }, T('What to do'))));
   if (st.previous) rows.push(el('p', { class: 'small muted' }, T('Updated from {from} {when}.', { from: st.previous, when: st.since ? ago(st.since) : '' })));

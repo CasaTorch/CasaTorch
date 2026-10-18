@@ -23,7 +23,7 @@
  * ====================================================================== */
 const USERS_FILE = path.join(DATA_DIR, 'users.json'), SESS_FILE = path.join(DATA_DIR, 'sessions.json');
 const AUDIT_FILE = path.join(DATA_DIR, 'audit.log');
-const TERMS_VERSION = '2026-10-15';
+const TERMS_VERSION = '2026-10-17';   // = the Version line of public/terms.html and privacy.html (synced from casatorch.com); a new one asks everyone to accept once at their next page load
 const ROLES = ['viewer', 'member', 'admin', 'owner'], rank = (r) => ROLES.indexOf(r);
 const IDLE_DAYS = 30, PANEL_DAYS = 365, APP_DAYS = 120;   // the CasaTorch app: signed in for 120 days of not being used (Face ID guards it on the phone)
 const idleDays = (kind) => (kind === 'panel' ? PANEL_DAYS : kind === 'app' ? APP_DAYS : IDLE_DAYS);
@@ -45,6 +45,18 @@ function verifySecret(stored, given) {
   return want.length === got.length && crypto.timingSafeEqual(got, want);   // a damaged hash is a wrong password, not a crash
 }
 const DUMMY_HASH = `scrypt$${'00'.repeat(16)}$${'00'.repeat(32)}`;
+/* The same hashes, worked out off the main thread (libuv's pool): a burst of sign-ins never stalls live updates.
+   Same format and parameters (scrypt N=16384, r=8, p=1, 32 bytes), so stored hashes work either way. */
+const scryptAsync = (pw, salt, len, opts = {}) => new Promise((ok, bad) => crypto.scrypt(pw, salt, len, opts, (e, k) => (e ? bad(e) : ok(k))));
+async function verifySecretAsync(stored, given) {
+  const [kind, salt, hash] = String(stored || '').split('$');
+  if (kind !== 'scrypt' || !salt || !hash) return false;
+  const got = await scryptAsync(String(given), Buffer.from(salt, 'hex'), 32), want = Buffer.from(hash, 'hex');
+  return want.length === got.length && crypto.timingSafeEqual(got, want);
+}
+async function hashSecretAsync(s) { const salt = crypto.randomBytes(16); return `scrypt$${salt.toString('hex')}$${(await scryptAsync(String(s), salt, 32)).toString('hex')}`; }
+/** Express 4 doesn't catch a rejected async handler: pass the error on (99-start's error handler answers). */
+const asyncRoute = (fn) => (req, res, next) => { Promise.resolve(fn(req, res, next)).catch(next); };
 
 /* ---- the audit log: one JSON line per event, trimmed to the last 5,000 ---- */
 function audit(req, event, detail = {}) {
@@ -135,6 +147,12 @@ const endSessionsOf = (userId, exceptKey) => { for (const [k, v] of Object.entri
 const tries = new Map();
 function limited(key, max, windowMs = 15 * 60_000) { const now = Date.now(), list = (tries.get(key) || []).filter((t) => now - t < windowMs); if (list.length) tries.set(key, list); else tries.delete(key); return list.length >= max; }   // only keys with recent failures are kept
 const failed = (...keys) => { for (const k of keys) tries.set(k, [...(tries.get(k) || []), Date.now()]); };
+/** Count a try *before* the slow (async) password check, so parallel requests can't all slip under a limit;
+    call the returned function to take it back when the try turns out right. */
+const reserveTry = (...keys) => {
+  const at = Date.now(); for (const k of keys) tries.set(k, [...(tries.get(k) || []), at]);
+  return () => { for (const k of keys) { const l = tries.get(k); const i = l ? l.lastIndexOf(at) : -1; if (i >= 0) l.splice(i, 1); if (l && !l.length) tries.delete(k); } };
+};
 /** A plain rate limit (every call counts, not only failures): true when this call is over `max` in the window. */
 const overLimit = (key, max, windowMs) => { if (limited(key, max, windowMs)) return true; failed(key); return false; };
 setInterval(() => { const now = Date.now(); for (const [k, v] of tries) if (!v.some((t) => now - t < 15 * 60_000)) tries.delete(k); }, 10 * 60_000).unref?.();
@@ -158,6 +176,14 @@ function totpOk(secret, code, lastStep = 0) {
 const recoveryCodes = () => Array.from({ length: 10 }, () => { const r = crypto.randomBytes(5).toString('hex'); return `${r.slice(0, 5)}-${r.slice(5)}`; });
 /* Recovery codes are stored with a slow, salted hash, so a stolen users.json can't be turned back into codes. */
 const rcHash = (code) => { const salt = crypto.randomBytes(12).toString('base64url'); return `rc1$${salt}$${crypto.scryptSync(String(code), salt, 32, { N: 16384 }).toString('base64url')}`; };
+const rcHashAsync = async (code) => { const salt = crypto.randomBytes(12).toString('base64url'); return `rc1$${salt}$${(await scryptAsync(String(code), salt, 32, { N: 16384 })).toString('base64url')}`; };
+const rcHashAllAsync = (codes) => Promise.all(codes.map(rcHashAsync));
+const rcMatchAsync = async (stored, code) => {
+  if (!String(stored).startsWith('rc1$')) return stored === sha256(code);
+  const [, salt, h] = String(stored).split('$');
+  const a = await scryptAsync(String(code), salt, 32, { N: 16384 }), b = Buffer.from(h, 'base64url');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+};
 const rcMatch = (stored, code) => {
   if (!String(stored).startsWith('rc1$')) return stored === sha256(code);   // codes made before 0.4.3
   const [, salt, h] = String(stored).split('$');
@@ -170,11 +196,13 @@ async function totpEnrolment(u) {
   return { secret, uri, qr: await QRCode.toString(uri, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) };
 }
 /* A second step for a signed-in user: their authenticator code or one recovery code (used up). */
-function secondFactorOk(u, code) {
+async function secondFactorAsync(u, code) {
   if (!u.totp?.on) return false;
   const c = String(code || '').trim().toLowerCase();
   if (/^[0-9a-f]{5}-[0-9a-f]{5}$/.test(c)) {
-    const i = (u.totp.recovery || []).findIndex((h) => rcMatch(h, c)); if (i < 0) return false;
+    const list = [...(u.totp.recovery || [])];
+    let hit = null; for (const h of list) if (await rcMatchAsync(h, c)) { hit = h; break; }
+    const i = hit && u.totp?.recovery ? u.totp.recovery.indexOf(hit) : -1; if (i < 0) return false;   // used up by a parallel request meanwhile
     u.totp.recovery.splice(i, 1); saveUsers(); return 'recovery';
   }
   const step = totpOk(unseal(u.totp.secret), c, u.totp.lastStep || 0); if (!step) return false;
@@ -248,24 +276,29 @@ const me = (req, res) => { if (!req.user || req.user.panel) { res.status(403).js
 
 /* ---- signing in ---- */
 app.get('/api/auth/state', (req, res) => res.json({ signIn: signInOn(), google: !!users.google?.clientId, terms: TERMS_VERSION, house: config.house?.name || null }));
-app.post('/api/auth/login', express.json({ limit: '4kb' }), (req, res) => {
+app.post('/api/auth/login', express.json({ limit: '4kb' }), asyncRoute(async (req, res) => {
   const { username, password, remember, next } = req.body || {}, ip = clientIp(req), name = String(username || '').trim().toLowerCase();
   if (limited(`ip:${ip}`, 30) || limited(`u:${name}|${ip}`, 5)) { audit(req, 'login-limited', { user: name }); return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' }); }
-  const u = findLogin(name);
-  const ok = verifySecret(u?.password || DUMMY_HASH, String(password || ''));   // same work whether or not the account exists
-  if (!u || !ok || u.invite) { failed(`ip:${ip}`, `u:${name}|${ip}`); audit(req, 'login-failed', { user: name }); return res.status(401).json({ error: 'Wrong username or password.' }); }
+  const undo = reserveTry(`ip:${ip}`, `u:${name}|${ip}`);
+  const u0 = findLogin(name);
+  const ok = await verifySecretAsync(u0?.password || DUMMY_HASH, String(password || ''));   // same work whether or not the account exists
+  const u = u0 && findLogin(name) === u0 ? u0 : null;   // still the same person after the wait
+  if (!u || !ok || u.invite) { audit(req, 'login-failed', { user: name }); return res.status(401).json({ error: 'Wrong username or password.' }); }
+  undo();
   proceed(req, res, newTicket(u, { remember: !!remember, via: 'password', next: typeof next === 'string' && /^\/(?![\/\\])[^\\]*$/.test(next) ? next : '/' }));
-});
-app.post('/api/auth/mfa', express.json({ limit: '4kb' }), (req, res) => {
+}));
+app.post('/api/auth/mfa', express.json({ limit: '4kb' }), asyncRoute(async (req, res) => {
   const t = ticketOf(req.body?.ticket); if (!t) return res.status(401).json({ error: 'That took too long - sign in again.' });
   const u = userById(t.userId), ip = clientIp(req);
   if (!u) { tickets.delete(t.id); return res.status(401).json({ error: 'Sign in again.' }); }   // removed while signing in
   if (limited(`mfa:${u.id}`, 6) || limited(`ip:${ip}`, 30)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' });
-  const how = secondFactorOk(u, req.body?.code);
-  if (!how) { failed(`mfa:${u.id}`, `ip:${ip}`); audit(req, 'code-failed', { user: u.username }); return res.status(401).json({ error: 'That code is not right.' }); }
+  const undo = reserveTry(`mfa:${u.id}`, `ip:${ip}`);
+  const how = await secondFactorAsync(u, req.body?.code);
+  if (!how) { audit(req, 'code-failed', { user: u.username }); return res.status(401).json({ error: 'That code is not right.' }); }
+  undo();
   if (how === 'recovery') audit(req, 'recovery-code-used', { user: u.username, left: u.totp.recovery.length });
   t.passed.add('mfa'); proceed(req, res, t);
-});
+}));
 /* Two-step sign-in is required here and this person has not set it up yet: do it now. */
 app.post('/api/auth/enroll', express.json({ limit: '4kb' }), async (req, res) => {
   const t = ticketOf(req.body?.ticket); if (!t) return res.status(401).json({ error: 'That took too long - sign in again.' });
@@ -274,7 +307,7 @@ app.post('/api/auth/enroll', express.json({ limit: '4kb' }), async (req, res) =>
   if (!req.body?.code) { const e = await totpEnrolment(u); t.pending = e.secret; return res.json({ uri: e.uri, qr: e.qr, secret: e.secret }); }
   if (!t.pending || !totpOk(t.pending, req.body.code)) return res.status(400).json({ error: 'That code is not right - check the time on your phone and try again.' });
   const codes = recoveryCodes();
-  u.totp = { on: true, secret: seal(t.pending), recovery: codes.map(rcHash), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
+  u.totp = { on: true, secret: seal(t.pending), recovery: await rcHashAllAsync(codes), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
   saveUsers(); audit(req, '2fa-on', { user: u.username }); t.passed.add('enroll'); t.recovery = codes;
   const step = nextStep(t, u);
   if (step) return res.json({ step, ticket: t.id, recovery: codes, terms: TERMS_VERSION });
@@ -299,7 +332,7 @@ app.get('/api/auth/invite', (req, res) => {
   if (!u) return res.status(404).json({ error: 'This invite link has expired or was already used. Ask for a new one.' });
   res.json({ name: u.name, email: u.email, username: u.username, house: config.house?.name || null, reset: !!u.invite.reset, terms: TERMS_VERSION });
 });
-app.post('/api/auth/invite', express.json({ limit: '4kb' }), (req, res) => {
+app.post('/api/auth/invite', express.json({ limit: '4kb' }), asyncRoute(async (req, res) => {
   const b = req.body || {}, ip = clientIp(req);
   if (limited(`ip:${ip}`, 30)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes.' });
   const u = users.list.find((x) => x.invite && x.invite.hash === sha256(b.token || '') && Date.parse(x.invite.exp) > Date.now());
@@ -309,10 +342,12 @@ app.post('/api/auth/invite', express.json({ limit: '4kb' }), (req, res) => {
   if (users.list.some((x) => x !== u && (x.username === name || (x.email && x.email.toLowerCase() === name)))) return res.status(409).json({ error: 'That username is taken.' });
   const pwErr = passwordProblem(b.password, name); if (pwErr) return res.status(400).json({ error: pwErr });
   if (b.accept !== true) return res.status(400).json({ error: 'Please read and accept the terms to use CasaTorch.' });
-  Object.assign(u, { username: name, password: hashSecret(b.password), invite: undefined, terms: { version: TERMS_VERSION, at: nowIso() } });
+  const hash = await hashSecretAsync(b.password);
+  if (!u.invite || u.invite.hash !== sha256(b.token || '')) return res.status(404).json({ error: 'This invite link has expired or was already used.' });   // used meanwhile
+  Object.assign(u, { username: name, password: hash, invite: undefined, terms: { version: TERMS_VERSION, at: nowIso() } });
   delete u.invite; saveUsers(); endSessionsOf(u.id); audit(req, 'invite-accepted', { user: name });
   proceed(req, res, newTicket(u, { via: 'invite' }));
-});
+}));
 /* Long, not complicated: 10+ characters, not the username, not a well-known one. */
 const COMMON = new Set(['password', 'password1', 'password123', '1234567890', '12345678910', 'qwertyuiop', 'iloveyou12', 'letmein123', 'welcome123', 'casatorch123', 'administrator', 'passw0rd!', 'football12', 'baseball12']);
 function passwordProblem(pw, username) {
@@ -331,50 +366,60 @@ app.get('/api/auth/me', (req, res) => {
   const mine = Object.entries(sessions).filter(([, s]) => s.userId === u.id).map(([k, s]) => ({ id: s.id, kind: s.kind, created: s.created, seen: s.seen, ip: s.ip, agent: s.agent, current: k === req.session.key }));
   res.json({ signIn: true, user: safeUser(u), recoveryLeft: u.totp?.recovery?.length ?? null, policy: users.policy, google: { configured: !!users.google?.clientId, linked: !!u.google?.sub }, terms: TERMS_VERSION, needsTerms: needsTerms(u), sessions: mine });
 });
-app.post('/api/auth/password', express.json({ limit: '4kb' }), (req, res) => {
+app.post('/api/auth/password', express.json({ limit: '4kb' }), asyncRoute(async (req, res) => {
   const u = me(req, res); if (!u) return;
   if (limited(`pw:${u.id}`, 5)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes.' });
-  if (!verifySecret(u.password, req.body?.current || '')) { failed(`pw:${u.id}`); return res.status(403).json({ error: 'Your current password is not right.' }); }
+  const undo = reserveTry(`pw:${u.id}`);
+  if (!await verifySecretAsync(u.password, req.body?.current || '')) return res.status(403).json({ error: 'Your current password is not right.' });
+  undo();
   const err = passwordProblem(req.body?.next, u.username); if (err) return res.status(400).json({ error: err });
-  u.password = hashSecret(req.body.next); saveUsers(); endSessionsOf(u.id, req.session.key); audit(req, 'password-changed');
+  u.password = await hashSecretAsync(req.body.next); saveUsers(); endSessionsOf(u.id, req.session.key); audit(req, 'password-changed');
   res.json({ ok: true });
-});
+}));
 app.post('/api/auth/2fa/start', express.json({ limit: '4kb' }), async (req, res) => {
   const u = me(req, res); if (!u) return;
   /* Your password again first: someone using a browser you left signed in can't put two-step sign-in on their own phone and lock you out. */
   if (u.password) {
     if (limited(`pw:${u.id}`, 5)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes.' });
-    if (!verifySecret(u.password, req.body?.password || '')) { failed(`pw:${u.id}`); return res.status(403).json({ error: 'Your password is not right.' }); }
+    const undo = reserveTry(`pw:${u.id}`);
+    if (!await verifySecretAsync(u.password, req.body?.password || '')) return res.status(403).json({ error: 'Your password is not right.' });
+    undo();
   }
   const e = await totpEnrolment(u); req.session && (pendingTotp.set(u.id, { secret: e.secret, exp: Date.now() + 10 * 60_000 }));
   res.json({ uri: e.uri, qr: e.qr, secret: e.secret });
 });
 const pendingTotp = new Map();
-app.post('/api/auth/2fa/enable', express.json({ limit: '4kb' }), (req, res) => {
+app.post('/api/auth/2fa/enable', express.json({ limit: '4kb' }), asyncRoute(async (req, res) => {
   const u = me(req, res); if (!u) return;
   const p = pendingTotp.get(u.id);
   if (!p || p.exp < Date.now()) return res.status(400).json({ error: 'Start again - that took too long.' });
   if (!totpOk(p.secret, req.body?.code)) return res.status(400).json({ error: 'That code is not right - check the time on your phone and try again.' });
   const codes = recoveryCodes();
-  u.totp = { on: true, secret: seal(p.secret), recovery: codes.map(rcHash), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
+  const recovery = await rcHashAllAsync(codes);
+  u.totp = { on: true, secret: seal(p.secret), recovery, since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
   pendingTotp.delete(u.id); saveUsers(); endSessionsOf(u.id, req.session.key); audit(req, '2fa-on');
   res.json({ ok: true, recovery: codes });
-});
-app.post('/api/auth/2fa/disable', express.json({ limit: '4kb' }), (req, res) => {
+}));
+app.post('/api/auth/2fa/disable', express.json({ limit: '4kb' }), asyncRoute(async (req, res) => {
   const u = me(req, res); if (!u) return;
   if (users.policy?.require2fa) return res.status(403).json({ error: 'Two-step sign-in is required on this CasaTorch - an admin can change that.' });
   if (limited(`pw:${u.id}`, 5)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes.' });
-  if (!verifySecret(u.password, req.body?.password || '') || !secondFactorOk(u, req.body?.code)) { failed(`pw:${u.id}`); return res.status(403).json({ error: 'Your password or code is not right.' }); }
-  delete u.totp; saveUsers(); audit(req, '2fa-off'); res.json({ ok: true });
-});
-app.post('/api/auth/2fa/recovery', express.json({ limit: '4kb' }), (req, res) => {
+  const undo = reserveTry(`pw:${u.id}`);
+  if (!await verifySecretAsync(u.password, req.body?.password || '') || !await secondFactorAsync(u, req.body?.code)) return res.status(403).json({ error: 'Your password or code is not right.' });
+  undo(); delete u.totp; saveUsers(); audit(req, '2fa-off'); res.json({ ok: true });
+}));
+app.post('/api/auth/2fa/recovery', express.json({ limit: '4kb' }), asyncRoute(async (req, res) => {
   const u = me(req, res); if (!u) return;
   if (!u.totp?.on) return res.status(400).json({ error: 'Turn on two-step sign-in first.' });
   if (limited(`pw:${u.id}`, 5)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes.' });
-  if (!verifySecret(u.password, req.body?.password || '')) { failed(`pw:${u.id}`); return res.status(403).json({ error: 'Your password is not right.' }); }
-  const codes = recoveryCodes(); u.totp.recovery = codes.map(rcHash); saveUsers(); audit(req, 'recovery-codes-new');
+  const undo = reserveTry(`pw:${u.id}`);
+  if (!await verifySecretAsync(u.password, req.body?.password || '')) return res.status(403).json({ error: 'Your password is not right.' });
+  undo();
+  const codes = recoveryCodes(), hashes = await rcHashAllAsync(codes);
+  if (!u.totp?.on) return res.status(400).json({ error: 'Turn on two-step sign-in first.' });
+  u.totp.recovery = hashes; saveUsers(); audit(req, 'recovery-codes-new');
   res.json({ ok: true, recovery: codes });
-});
+}));
 app.delete('/api/auth/sessions/:id', (req, res) => {
   if (!req.user) return res.status(401).end();
   const admin = rank(req.user.role) >= rank('admin');
@@ -432,7 +477,7 @@ app.put('/api/users/:id', requireRole('admin'), express.json({ limit: '4kb' }), 
 app.post('/api/users/:id/reset', requireRole('admin'), (req, res) => {
   const u = users.list.find((x) => x.id === req.params.id); if (!u) return res.status(404).json({ error: 'no such person' });
   if (u.role === 'owner' && req.user?.role !== 'owner') return res.status(403).json({ error: 'Only the owner can reset an owner.' });
-  if (!users.list.some((x) => x !== u && x.password && (x.role === 'owner' || x.role === 'admin'))) return res.status(400).json({ error: 'That would leave nobody who can sign in and manage CasaTorch. Change your password in Settings › Security instead.' });
+  if (!users.list.some((x) => x !== u && x.password && (x.role === 'owner' || x.role === 'admin'))) return res.status(400).json({ error: 'That would leave nobody who can sign in and manage CasaTorch. Change your password in Settings › People & sign-in instead.' });
   const link = inviteLink(req, u, true); u.password = null; delete u.totp; saveUsers(); endSessionsOf(u.id); audit(req, 'user-reset', { of: u.username });
   res.json({ ok: true, link });
 });

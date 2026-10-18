@@ -372,7 +372,7 @@ function heard(alts) {
 /* Everything else: the Home AI Agent. It answers, and can line up a switch for you to tap - never a lock, a garage door, a gate or an alarm. */
 async function ask(q) {
   vbox(X.el('p', { class: 'said' }, `"${q}"`), X.el('span', { class: 'typing' }, X.el('i'), X.el('i'), X.el('i')));
-  let r; try { r = await X.send('/api/ask', 'POST', { question: q, history: [] }); } catch (e) { r = { answer: e.body?.setup ? T('Connect an AI first: Settings > Home AI Agent.') : e.message, actions: [] }; }
+  let r; try { r = await X.send('/api/ask', 'POST', { question: q, history: [] }); } catch (e) { r = { answer: e.body?.setup ? T('Connect an AI first: Settings › Connections & AI › Home AI Agent.') : e.message, actions: [] }; }
   const acts = (r.actions || []).filter((a) => ['on', 'off', 'toggle'].includes(a.action));
   vbox(X.el('p', { class: 'said' }, `"${q}"`), X.el('p', {}, r.answer || ''),
     acts.length ? X.el('div', { class: 'acts' }, acts.map((a) => { const b = X.el('button', { type: 'button', class: 'mini' }, a.label); b.onclick = async () => { b.disabled = true; try { await X.send(`/api/devices/${encodeURIComponent(a.deviceId)}/${encodeURIComponent(a.action)}`, 'POST', {}); b.textContent = T('Done'); } catch (e) { X.toast(e.message); b.disabled = false; } }; return b; })) : null);

@@ -33,7 +33,7 @@ async function setPanel(on) {
   try { localStorage.setItem('casatorch-panel', on ? '1' : '0'); } catch { /* ignore */ }
   if (!on && new URLSearchParams(location.search).has('panel')) { history.replaceState(null, '', location.pathname + location.hash); }
   applyUi();
-  if (on) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* not supported */ } toast('Panel mode - the screen stays on. Tap × in the top bar to leave.'); }
+  if (on) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* not supported */ } toast(T('Panel mode - the screen stays on. Tap × in the top bar to leave.')); }
   else { try { await wakeLock?.release(); } catch { /* ignore */ } wakeLock = null; if (document.fullscreenElement) document.exitFullscreen?.(); }
   show(current);
 }
@@ -57,13 +57,13 @@ const statusBar = {
     const now = new Date().toISOString();
     const dot = { ok: 'good', warn: 'warn', down: 'bad', off: '' };
     const items = (this.conns || []).map((c) => el('span', { class: 'sb-item', title: `${c.name}: ${c.detail || c.state}` }, el('span', { class: `dot ${dot[c.state] || ''}` }), c.name, c.detail && c.state !== 'ok' ? el('small', {}, c.detail) : null));
-    if (S.alertsOpen) items.unshift(el('a', { class: 'sb-item', href: '#alerts', style: 'color:var(--bad);text-decoration:none' }, icon('bell', 14), `${S.alertsOpen} alert${S.alertsOpen === 1 ? '' : 's'}`));
+    if (S.alertsOpen) items.unshift(el('a', { class: 'sb-item', href: '#alerts', style: 'color:var(--bad);text-decoration:none' }, icon('bell', 14), T(S.alertsOpen === 1 ? '{n} alert' : '{n} alerts', { n: S.alertsOpen })));
     const kids = [el('div', {}, el('div', { class: 'sb-clock' }, fmt(now, { hour: 'numeric', minute: '2-digit' }))), el('div', { class: 'sb-date' }, fmt(now, { weekday: 'short', month: 'short', day: 'numeric' })),
       this.wx ? el('span', { class: 'sb-wx' }, `${wxIcon(this.wx.symbol)} ${this.wx.temp}°`) : null];
     if (S.ui.panelAsk !== false && isPro() && isPanel()) kids.push(this.askBar());
     kids.push(el('div', { class: 'sb-items grow' }, items));
-    if (isPanel()) kids.push(el('button', { class: 'btn ghost small', title: 'Full screen', 'aria-label': 'Full screen', onclick: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()) }, icon('expand')),
-      el('button', { class: 'btn ghost small', title: 'Leave panel mode', 'aria-label': 'Leave panel mode', onclick: () => setPanel(false) }, icon('x')));
+    if (isPanel()) kids.push(el('button', { class: 'btn ghost small', title: T('Full screen'), 'aria-label': T('Full screen'), onclick: () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.()) }, icon('expand')),
+      el('button', { class: 'btn ghost small', title: T('Leave panel mode'), 'aria-label': T('Leave panel mode'), onclick: () => setPanel(false) }, icon('x')));
     const keepInput = bar.querySelector('.sb-ask input'); const val = keepInput?.value || ''; const focused = document.activeElement === keepInput;
     bar.replaceChildren(...kids.filter(Boolean));
     const inp = bar.querySelector('.sb-ask input'); if (inp) { inp.value = val; if (focused) inp.focus(); }
@@ -71,7 +71,7 @@ const statusBar = {
   },
   askBar() {
     const input = el('input', { type: 'text', placeholder: T('Ask your Home AI Agent…'), 'aria-label': T('Ask your Home AI Agent'), maxlength: 1000 });
-    const wrap = el('div', { class: 'sb-ask' }, input, el('button', { class: 'btn primary', 'aria-label': 'Ask', onclick: () => go() }, icon('send')));
+    const wrap = el('div', { class: 'sb-ask' }, input, el('button', { class: 'btn primary', 'aria-label': T('Ask'), onclick: () => go() }, icon('send')));
     if (this.answerEl) wrap.append(this.answerEl);
     const close = () => { this.answerEl?.remove(); this.answerEl = null; };
     const go = async () => {
@@ -81,8 +81,8 @@ const statusBar = {
       let r; try { r = await post('/api/ask', { question: q, history: askHistory.slice(0, -1).slice(-8).map(({ role, content }) => ({ role, content })) }); } catch (err) { r = { answer: err.body?.setup ? T('Connect an AI first: Settings › Connections & AI.') : err.message, actions: [] }; }
       askPush({ role: 'assistant', content: r.answer, actions: r.actions });
       input.value = '';
-      const box = el('div', { class: 'sb-answer' }, el('div', { class: 'row between', style: 'align-items:flex-start;gap:12px' }, el('div', {}, r.answer), el('button', { class: 'btn ghost small', 'aria-label': 'Close', onclick: close }, icon('x'))));
-      if (r.actions?.length) box.append(el('div', { class: 'acts' }, r.actions.map((a) => { const b = el('button', { class: 'btn small' }, icon('check'), a.label); b.onclick = async () => { b.disabled = true; try { await post(`/api/devices/${encodeURIComponent(a.deviceId)}/${encodeURIComponent(a.action)}`); b.replaceChildren(icon('check'), 'Done'); } catch (err) { toast(err.message); b.disabled = false; } }; return b; })));
+      const box = el('div', { class: 'sb-answer' }, el('div', { class: 'row between', style: 'align-items:flex-start;gap:12px' }, el('div', {}, r.answer), el('button', { class: 'btn ghost small', 'aria-label': T('Close'), onclick: close }, icon('x'))));
+      if (r.actions?.length) box.append(el('div', { class: 'acts' }, r.actions.map((a) => { const b = el('button', { class: 'btn small' }, icon('check'), a.label); b.onclick = async () => { b.disabled = true; try { await post(`/api/devices/${encodeURIComponent(a.deviceId)}/${encodeURIComponent(a.action)}`); b.replaceChildren(icon('check'), T('Done')); } catch (err) { toast(err.message); b.disabled = false; } }; return b; })));
       this.answerEl.replaceWith(box); this.answerEl = box;
       clearTimeout(this.hideT); this.hideT = setTimeout(close, 45_000);
     };

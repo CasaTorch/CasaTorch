@@ -18,6 +18,13 @@ function alertRaise(a) {
   saveAlerts();
   if (!isDemo()) notify(a).catch(() => {});   // phones: web app alerts and/or the Home Assistant app
 }
+/* Safety is never paywalled: water (leak), smoke (smoke, gas and carbon monoxide sensors map to smoke), freezing/very
+   hot (temp) alerts and their repeats work the same on Basic as on Pro. Only the comfort extras (repeats for other
+   critical alerts, "only when nobody's home") are Pro. Tested in test/unit.mjs. */
+const SAFETY_ALERT_KINDS = Object.freeze(['leak', 'smoke', 'temp']);
+const isSafetyAlert = (id) => SAFETY_ALERT_KINDS.includes(String(id || '').split(':')[0]);
+/* Does this critical alert go out again until someone taps "Got it"? */
+const alertRepeats = (a, pro = proStatus().pro) => a?.severity === 'critical' && !a.acked && config.alerts?.repeat !== false && (pro || isSafetyAlert(a.id));
 async function alertConditions() {
   const found = {};
   const add = (id, x) => { found[id] = { id, ...x }; };
@@ -56,10 +63,12 @@ async function alertConditions() {
   for (const [id, a] of Object.entries(found)) { const o = alerts.open[id]; found[id] = { ...a, since: o?.since || now, ...(o?.acked ? { acked: o.acked } : {}), pushes: o?.pushes || 0, lastPush: o?.lastPush || null }; }
   for (const id of Object.keys(alerts.open)) if (!found[id]) alertRaise({ id: `cleared:${id}`, severity: 'ok', title: `Cleared: ${alerts.open[id].title}`, source: alerts.open[id].source });
   for (const id of Object.keys(found)) if (!alerts.open[id]) { alertRaise({ ...found[id], id: `${id}:${now}` }); found[id].pushes = 1; found[id].lastPush = now; }
-  /* Smart alerts (Pro): a critical alert nobody has acknowledged goes out again every 10 minutes, up to 6 times. */
-  if (proStatus().pro && config.alerts?.repeat !== false && !isDemo()) {
+  /* Smart alerts: a critical alert nobody has acknowledged goes out again every 10 minutes, up to 6 times
+     (water and smoke on every edition, everything else with Pro). */
+  if (!isDemo()) {
+    const pro = proStatus().pro;
     for (const a of Object.values(found)) {
-      if (a.severity !== 'critical' || a.acked || (a.pushes || 0) >= 6 || !a.lastPush || Date.now() - Date.parse(a.lastPush) < 10 * 60_000) continue;
+      if (!alertRepeats(a, pro) || (a.pushes || 0) >= 6 || !a.lastPush || Date.now() - Date.parse(a.lastPush) < 10 * 60_000) continue;
       a.pushes = (a.pushes || 0) + 1; a.lastPush = now;
       notify({ ...a, id: `${a.id}:repeat`, title: `Still happening: ${a.title}`, body: 'Open CasaTorch and tap "Got it" to stop these reminders.' }).catch(() => {});
     }
@@ -70,7 +79,7 @@ setInterval(() => { if (isConfigured() && !isDemo()) alertConditions().catch(() 
 app.get('/api/alerts', (req, res, next) => {
   if (isDemo()) return next();
   const rank = { critical: 0, warning: 1, notice: 2, info: 3, ok: 4 };
-  res.json({ now: Object.values(alerts.open).sort((a, b) => rank[a.severity] - rank[b.severity]).map(({ pushes, lastPush, ...a }) => ({ ...a, repeating: a.severity === 'critical' && !a.acked && proStatus().pro && config.alerts?.repeat !== false })), recent: alerts.events.slice(0, 100) });
+  res.json({ now: Object.values(alerts.open).sort((a, b) => rank[a.severity] - rank[b.severity]).map(({ pushes, lastPush, ...a }) => ({ ...a, repeating: alertRepeats(a) })), recent: alerts.events.slice(0, 100) });
 });
 /* "Got it": stops the reminders for this alert. It stays on the list until the problem clears. */
 app.post('/api/alerts/:id/ack', requireRole('member'), (req, res) => {

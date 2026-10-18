@@ -41,8 +41,8 @@ const $ = (s) => document.querySelector(s);
 const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (v == null || v === false) continue; if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'value') e.value = v; else e.setAttribute(k, v === true ? '' : v); } for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k))); return e; };
 const api = async (url, opts = {}) => { await undoBefore(url, String(opts.method || 'GET').toUpperCase()); const r = await fetch(url, opts); const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || `HTTP ${r.status}`), { status: r.status, body: j }); return j; };
 const send = (url, method, body) => api(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-const toast = (t) => { const x = el('div', { class: 'toast' }, t); document.body.append(x); setTimeout(() => x.remove(), 3500); };
-const proErr = (e) => toast(e.status === 402 ? 'Editing the 3D home is part of CasaTorch Pro.' : e.message);
+const toast = (t, ms = 3500) => { const x = el('div', { class: 'toast' }, t); document.body.append(x); setTimeout(() => x.remove(), ms); };
+const proErr = (e) => toast(e.status === 402 ? T('Editing the 3D home is part of CasaTorch Pro.') : e.message);
 const V3 = THREE.Vector3, deg = THREE.MathUtils.degToRad;
 const fill = (node, ...kids) => { node.replaceChildren(...kids.flat().filter((k) => k != null && k !== false)); return node; };
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
@@ -146,9 +146,33 @@ const realQuality = () => { let l = 'auto'; try { l = JSON.parse(localStorage.ge
 initReal({ renderer, scene, camera, sun, quality: realQuality });
 Scan.initScans({ scene, camera, controls, renderer, S, el, api: (u, o) => api(u, o), send: (u, m, b) => send(u, m, b), toast: (t) => toast(t), kick, reshadow, reload: () => reload(), editor: () => editor(), look: () => look(), quality: realQuality, daylight,
   wallsMode: () => (editLook() ? 'auto' : prefs.walls) });
+/* First load: the house needs 20-50 shader programs. Compiled all at once inside the first picture, that froze the page
+   for seconds on a tablet. warmShaders() compiles them part by part first (one floor, the yard, the sky... with a
+   breather between), in parallel where the browser can (KHR_parallel_shader_compile), and the loop waits meanwhile.
+   It runs when the floors have loaded and when the sky's light (the Real life look's environment) comes or goes -
+   that one change needs every surface compiled again. Programs are kept, so later sky changes cost nothing. */
+let warming = false, warmWant = false, warmEnv = false;
+async function warmShaders() {
+  if (typeof renderer.compileAsync !== 'function' || warming) return;
+  warming = true; const t0 = performance.now(), before = renderer.info.programs?.length || 0, parts = [...scene.children];
+  const until = t0 + 10_000, breathe = () => new Promise((ok) => setTimeout(ok, 0));
+  try {
+    for (const o of parts) {
+      if (performance.now() > until) break;   // a very slow screen: the rest compiles in the first pictures, as before
+      if (o.isLight) continue;
+      try { await renderer.compileAsync(o, camera, scene); } catch { /* compiled at first use instead */ }
+      await breathe();
+    }
+  } finally {
+    warming = false; kick();
+    const r = { at: Math.round(t0), ms: Math.round(performance.now() - t0), programs: (renderer.info.programs?.length || 0) - before, parts: parts.length };
+    if (/[?&]debug3d=1/.test(location.search)) window.__casa3dWarm = r;   // QA: measured in a test browser
+  }
+}
 (function loop(now) {
   requestAnimationFrame(loop);
   if (document.getElementById('drawer')) return;   // drawing on top: let the 3D rest
+  if (warming) return;   // shaders compiling (warmShaders): the first picture comes right after
   if (tween) { const k = Math.min(1, (now - tween.t0) / tween.ms), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; controls.target.lerpVectors(tween.ft, tween.tt, e); camera.position.lerpVectors(tween.fp, tween.tp, e); if (k >= 1) tween = null; }
   controls.update();
   if (wallsDirty && now - wallsAt > 120) { wallsDirty = false; wallsAt = now; for (const F of Object.values(S.F)) applyWalls(F); }
@@ -167,6 +191,7 @@ Scan.initScans({ scene, camera, controls, renderer, S, el, api: (u, o) => api(u,
   if (S.plan) outdoor.tick(now);   // OUTDOOR
   if (now - skyAt > 2000 || flash || flashWas) { skyAt = now; updateSky(); } flashWas = flash;
   if (yard.group.visible && wxOn() && S.sway && now - (S.treeShadowAt || 0) > 500) { S.treeShadowAt = now; renderer.shadowMap.needsUpdate = true; }   // swaying trees
+  if (warmWant || !!scene.environment !== warmEnv) { warmWant = false; warmEnv = !!scene.environment; warmShaders(); if (warming) return; }
   const r0 = performance.now(); Scan.beforeRender(camera); if (!renderReal(scene, camera)) renderer.render(scene, camera); labels.render(scene, camera); dirty = false; drawnAt = now; live.frame(now, why, performance.now() - r0);   // LIVE: frame time
   if (clusterDirty && now - clusterAt > 120) { clusterDirty = false; clusterAt = now; clusterPins(); }
   if (Q.busy) { Q.frames.push(now); if (Q.frames.length >= 24) { const ms = (Q.frames[Q.frames.length - 1] - Q.frames[0]) / (Q.frames.length - 1); Q.frames = []; if (ms > 45) lowerQuality(); } }
@@ -358,7 +383,7 @@ async function loadFloors() {
   for (const f of S.plan.floors) {
     const inner = f.kind === 'drawn' ? await drawnFloor(f) : await new Promise((ok, bad) => loader.load(`/api/floorplan/floors/${encodeURIComponent(f.id)}/model`, (g) => ok(g.scene), undefined, bad)).catch(() => null);
     if (gen !== floorsGen) { disposeTree(inner); return; }
-    if (!inner) { toast(`Could not load ${f.name}`); continue; }
+    if (!inner) { toast(T('Could not load {name}', { name: f.name })); continue; }
     if (f.kind !== 'drawn') { inner.scale.setScalar(f.scale || 1); inner.rotation.y = deg(f.rotationY || 0); }
     const G = new THREE.Group(); G.userData.floor = f.id; G.add(inner); G.position.set(f.offset?.[0] || 0, 0, f.offset?.[1] || 0); scene.add(G); G.updateMatrixWorld(true);
     const fx = makeFx(), clip = new THREE.Plane(new V3(0, -1, 0), 1e6), clipLow = new THREE.Plane(new V3(0, -1, 0), 1e6);
@@ -402,6 +427,7 @@ async function loadFloors() {
   applyLook(); buildRoomLabels(); layout(true);
   live.floorsLoaded();   // LIVE: find the doors, windows and blinds to move
   batchFloors(S.mode === 'view');
+  warmWant = true; kick();   // compile the new floors' shaders before their first picture (warmShaders)
 }
 /* QA: while only looking, a floor's furniture (sofas, tables, beds from a scan, with their outlines) becomes one mesh and one
    set of lines per material. Walls stay separate (they lower as you turn); floors with a photo-real scan are left alone
@@ -442,7 +468,7 @@ async function drawnFloor(f) {
 }
 function drawnRooms(f, inner, G) {
   inner.updateMatrixWorld(true);
-  return roomCentres(f).map((r, i) => { const p = G.worldToLocal(inner.localToWorld(new V3(r.c[0], 0, r.c[1]))); return { name: r.name || `Room ${i + 1}`, color: ROOM_COLORS[i % ROOM_COLORS.length], pos: [+p.x.toFixed(2), +p.z.toFixed(2)] }; });   // EDITOR: any-shape rooms, by their centre
+  return roomCentres(f).map((r, i) => { const p = G.worldToLocal(inner.localToWorld(new V3(r.c[0], 0, r.c[1]))); return { name: r.name || T('Room {n}', { n: i + 1 }), color: ROOM_COLORS[i % ROOM_COLORS.length], pos: [+p.x.toFixed(2), +p.z.toFixed(2)] }; });   // EDITOR: any-shape rooms, by their centre
 }
 const roomAt = (F, x, z) => { let best = -1, bd = Infinity; F.rooms.forEach((r, i) => { const d = Math.hypot(r.pos[0] - x, r.pos[1] - z); if (d < bd) { bd = d; best = i; } }); return best; };
 const curF = () => (S.floorView === 'all' ? null : S.F[S.floorView]);
@@ -498,7 +524,7 @@ function overlayColor(st) {
     default: return null;
   }
 }
-const overlayText = (st) => ({ humidity: st.hum != null ? `${Math.round(st.hum)}%` : '', air: st.co2 != null ? `${Math.round(st.co2)} ppm` : '', temp: st.temp != null ? temp(st.temp) : '', energy: st.watts > 1 ? fmtW(st.watts) : '', lights: st.lights ? `${st.lights} on` : '', presence: st.motion ? 'motion' : '' }[prefs.overlay] ?? null);
+const overlayText = (st) => ({ humidity: st.hum != null ? `${Math.round(st.hum)}%` : '', air: st.co2 != null ? `${Math.round(st.co2)} ppm` : '', temp: st.temp != null ? temp(st.temp) : '', energy: st.watts > 1 ? fmtW(st.watts) : '', lights: st.lights ? T('{lights} on', { lights: st.lights }) : '', presence: st.motion ? 'motion' : '' }[prefs.overlay] ?? null);
 function roomUniforms(F) {
   const n = Math.min(F.rooms.length, MAX_ROOMS), stats = prefs.overlay !== 'rooms' && S.live ? roomStats(F) : null;
   F.mats.floor.userData.tint.value = stats ? 0.75 : look().tint;
@@ -565,16 +591,16 @@ function buildRoomLabels() {
 let units = 'F';
 const temp = (c) => `${Math.round(units === 'C' ? c : c * 9 / 5 + 32)}°`;
 function devState(d) {
-  if (d.water || d.smoke) return { alarm: true, act: true, val: d.water ? 'Water!' : 'Smoke!' };
-  if (d.kind === 'light') return { act: !!d.on, val: d.on ? (d.brightness != null ? `${d.brightness}%` : 'On') : 'Off' };
-  if (d.kind === 'media') return { act: !!d.playing, val: d.playing ? (d.title || 'Playing') : 'Idle' };
-  if (['plug', 'switch'].includes(d.kind) && d.on != null) return { act: !!d.on, val: d.on ? (d.powerW != null ? `${fmtW(d.powerW)}` : 'On') : 'Off' };
+  if (d.water || d.smoke) return { alarm: true, act: true, val: d.water ? T('Water!') : T('Smoke!') };
+  if (d.kind === 'light') return { act: !!d.on, val: d.on ? (d.brightness != null ? `${d.brightness}%` : T('On')) : T('Off') };
+  if (d.kind === 'media') return { act: !!d.playing, val: d.playing ? (d.title || T('Playing')) : T('Idle') };
+  if (['plug', 'switch'].includes(d.kind) && d.on != null) return { act: !!d.on, val: d.on ? (d.powerW != null ? `${fmtW(d.powerW)}` : T('On')) : T('Off') };
   if (d.powerW != null) return { act: d.powerW > 3, val: fmtW(d.powerW) };
-  if (d.open != null) return { act: !!d.open, val: d.open ? 'Open' : 'Closed' };
-  if (d.locked != null) return { act: !d.locked, val: d.locked ? 'Locked' : 'Unlocked' };
+  if (d.open != null) return { act: !!d.open, val: d.open ? T('Open') : T('Closed') };
+  if (d.locked != null) return { act: !d.locked, val: d.locked ? T('Locked') : T('Unlocked') };
   if (d.kind === 'climate' || d.tempC != null) return { act: false, val: d.tempC != null ? temp(d.tempC) : d.state };
-  if (d.motion) return { act: true, val: 'Motion' };
-  if (['plug', 'switch', 'fan'].includes(d.kind)) return { act: !!d.on, val: d.on ? 'On' : 'Off' };
+  if (d.motion) return { act: true, val: T('Motion') };
+  if (['plug', 'switch', 'fan'].includes(d.kind)) return { act: !!d.on, val: d.on ? T('On') : T('Off') };
   return { act: false, val: d.value != null ? `${d.value}${d.unit || ''}` : d.state ?? null };
 }
 const pinName = (p) => p.label || p.device.name;
@@ -596,22 +622,22 @@ function houseNow() {
 }
 const avg = (a) => (a.length ? sum(a) / a.length : null);
 function areaOf(F) { const b = F.box; return b && !b.isEmpty() ? Math.max(0, (b.max.x - b.min.x) * (b.max.z - b.min.z)) : 0; }   // QA: an empty drawn floor was "about ∞ ft²"
-const areaText = (m2) => (units === 'C' ? `${Math.round(m2)} m²` : `${Math.round(m2 * 10.764).toLocaleString()} ft²`);
+const areaText = (m2) => (units === 'C' ? `${Math.round(m2)} m²` : T('{n} ft²', { n: Math.round(m2 * 10.764).toLocaleString() }));
 function tiles() {
   const H = houseNow(), out = [];
   const t = (kind, icon, label, value, sub, tone) => out.push({ kind, icon, label, value, sub, tone });
   { const tt = S.live?.totals || {}, lv = tt.vs?.level, top = (tt.parts || [])[0];
-    if (H.powered.length || H.watts) t('energy', 'bolt', 'Power now', fmtW(H.watts), lv && lv !== 'learning' ? { low: 'Below usual', normal: 'About usual', above: 'Above usual', high: 'Well above usual' }[lv] : top ? `Most: ${top.name}` : '', { low: 'good', normal: 'good', above: 'warn', high: 'bad' }[lv] || ''); }
-  if (H.temps.length) { const v = H.temps.map((p) => p.device.tempC); t('climate', 'thermo', 'Inside', temp(avg(v)), `${temp(Math.min(...v))} to ${temp(Math.max(...v))}${H.hums.length ? ` · ${Math.round(avg(H.hums.map((p) => p.device.humidity)))}% humidity` : ''}`); }
+    if (H.powered.length || H.watts) t('energy', 'bolt', T('Power now'), fmtW(H.watts), lv && lv !== 'learning' ? { low: T('Below usual'), normal: T('About usual'), above: T('Above usual'), high: T('Well above usual') }[lv] : top ? T('Most: {name}', { name: top.name }) : '', { low: 'good', normal: 'good', above: 'warn', high: 'bad' }[lv] || ''); }
+  if (H.temps.length) { const v = H.temps.map((p) => p.device.tempC); t('climate', 'thermo', T('Inside'), temp(avg(v)), `${T('{low} to {high}', { low: temp(Math.min(...v)), high: temp(Math.max(...v)) })}${H.hums.length ? T(' · {n}% humidity', { n: Math.round(avg(H.hums.map((p) => p.device.humidity))) }) : ''}`); }
   if (H.doors.length || H.locks.length || H.alarms.length) {
     const bad = H.alarms.length, warn = H.openDoors.length + H.unlocked.length + H.openCovers.length;
-    t('security', 'shield', 'Safety', bad ? (H.alarms[0].device.water ? 'Water!' : 'Smoke!') : warn ? `${warn} to check` : 'All secure', [H.openDoors.length ? `${H.openDoors.length} open` : '', H.unlocked.length ? `${H.unlocked.length} unlocked` : '', !warn && !bad ? `${H.doors.length + H.locks.length} watched` : ''].filter(Boolean).join(' · '), bad ? 'bad' : warn ? 'warn' : 'good');
+    t('security', 'shield', T('Safety'), bad ? (H.alarms[0].device.water ? T('Water!') : T('Smoke!')) : warn ? T('{warn} to check', { warn }) : T('All secure'), [H.openDoors.length ? T('{n} open', { n: H.openDoors.length }) : '', H.unlocked.length ? T('{n} unlocked', { n: H.unlocked.length }) : '', !warn && !bad ? T('{n} watched', { n: H.doors.length + H.locks.length }) : ''].filter(Boolean).join(' · '), bad ? 'bad' : warn ? 'warn' : 'good');
   }
-  if (H.lights.length) t('lights', 'light', 'Lights', `${H.lit.length} on`, H.lit.length ? [...new Set(H.lit.map(roomOf))].slice(0, 2).join(', ') : 'All off', H.lit.length ? 'warm' : '');
-  if (H.motion.length || H.pins.some((p) => p.device.motion != null)) t('motion', 'walk', 'Movement', H.motion.length ? roomOf(H.motion[0]) : 'Quiet', H.motion.length > 1 ? `and ${H.motion.length - 1} more` : H.motion.length ? 'Movement now' : 'Nobody moving', H.motion.length ? 'warm' : '');
-  for (const { it, s } of H.cars.slice(0, 2)) t(`car:${it.id}`, 'car', it.name || 'Car', s.battery != null ? `${Math.round(s.battery)}%` : s.home === false ? 'Away' : 'Home', s.home === false ? 'Away' : s.powerW > 50 ? `Charging ${fmtW(s.powerW)}` : s.plugged ? 'Plugged in' : 'Parked', s.powerW > 50 ? 'good' : '');
+  if (H.lights.length) t('lights', 'light', T('Lights'), T('{n} on', { n: H.lit.length }), H.lit.length ? [...new Set(H.lit.map(roomOf))].slice(0, 2).join(', ') : T('All off'), H.lit.length ? 'warm' : '');
+  if (H.motion.length || H.pins.some((p) => p.device.motion != null)) t('motion', 'walk', T('Movement'), H.motion.length ? roomOf(H.motion[0]) : T('Quiet'), H.motion.length > 1 ? T('and {n} more', { n: H.motion.length - 1 }) : H.motion.length ? T('Movement now') : T('Nobody moving'), H.motion.length ? 'warm' : '');
+  for (const { it, s } of H.cars.slice(0, 2)) t(`car:${it.id}`, 'car', it.name || T('Car'), s.battery != null ? `${Math.round(s.battery)}%` : s.home === false ? T('Away') : T('Home|presence'), s.home === false ? T('Away') : s.powerW > 50 ? T('Charging {w}', { w: fmtW(s.powerW) }) : s.plugged ? T('Plugged in') : T('Parked'), s.powerW > 50 ? 'good' : '');
   const Fs = Object.values(S.F);
-  if (Fs.length) t('home', 'home', 'Your home', `${sum(Fs.map((F) => F.rooms.length)) || Fs.length} ${sum(Fs.map((F) => F.rooms.length)) ? 'rooms' : Fs.length === 1 ? 'floor' : 'floors'}`, `${H.pins.length} devices${sum(Fs.map(areaOf)) > 0 ? ` · about ${areaText(sum(Fs.map(areaOf)))}` : ''}`);
+  if (Fs.length) t('home', 'home', T('Your home'), sum(Fs.map((F) => F.rooms.length)) ? T(sum(Fs.map((F) => F.rooms.length)) === 1 ? '{n} room' : '{n} rooms', { n: sum(Fs.map((F) => F.rooms.length)) }) : T(Fs.length === 1 ? '{n} floor' : '{n} floors', { n: Fs.length }), `${T(H.pins.length === 1 ? '{n} device' : '{n} devices', { n: H.pins.length })}${sum(Fs.map(areaOf)) > 0 ? T(' · about {areaText}', { areaText: areaText(sum(Fs.map(areaOf))) }) : ''}`);
   return out;
 }
 function drawTiles() { dock.draw(); }
@@ -621,7 +647,7 @@ function tileCard(x) {
 }
 function openInfo(kind) { S.info = S.info?.kind === kind ? null : { kind }; closeCard(); drawInfo(); drawTiles(); }
 function closeInfo() { S.info = null; const side = $('#side'); if (side.dataset.kind === 'info') { side.hidden = true; side.dataset.kind = ''; } document.body.classList.remove('drawer'); drawTiles(); }
-function infoRow(p, extra) { const d = p.device, st = devState(d); return el('div', { class: `drow${st.act ? ' act' : ''}${st.alarm ? ' bad' : ''}` }, el('div', { class: 'dtop' }, el('button', { type: 'button', class: 'dopen', title: `Show ${pinName(p)} on the map`, onclick: () => goToPin(p) }, ic(iconOf(d)), el('span', { class: 'dn' }, pinName(p)), el('small', {}, [roomOf(p), st.val].filter(Boolean).join(' · '))), extra || null)); }
+function infoRow(p, extra) { const d = p.device, st = devState(d); return el('div', { class: `drow${st.act ? ' act' : ''}${st.alarm ? ' bad' : ''}` }, el('div', { class: 'dtop' }, el('button', { type: 'button', class: 'dopen', title: T('Show {pinName} on the map', { pinName: pinName(p) }), onclick: () => goToPin(p) }, ic(iconOf(d)), el('span', { class: 'dn' }, pinName(p)), el('small', {}, [roomOf(p), st.val].filter(Boolean).join(' · '))), extra || null)); }
 const swOff = (p) => { const d = p.device; return ['light', 'plug', 'switch', 'fan'].includes(d.kind) || d.kind === 'media' ? el('label', { class: 'switch' }, el('input', { type: 'checkbox', checked: d.on || d.playing ? true : null, onchange: () => { d.on = !d.on; act(d, d.kind === 'media' ? 'toggle' : d.on ? 'on' : 'off'); drawPinsSoon(); } }), el('span')) : null; };
 function bars(rows) {   // a quiet bar chart: label, bar, value
   const max = Math.max(1, ...rows.map((r) => r[1]));
@@ -634,64 +660,64 @@ function drawInfo() {
   const H = houseNow(), k = S.info.kind, sec = (t) => el('div', { class: 'sechead' }, t);
   let title = '', sub = '', body = [];
   if (k === 'energy') {
-    title = 'Power'; sub = `${fmtW(H.watts)} right now`;
+    title = T('Power'); sub = T('{w} right now', { w: fmtW(H.watts) });
     const tt = S.live?.totals || {}, parts = tt.parts || [], vs = tt.vs || {};
     const byRoom = new Map(); for (const p of H.powered) byRoom.set(roomOf(p), (byRoom.get(roomOf(p)) || 0) + p.device.powerW);
     const placedIds = new Set((S.live?.pins || []).map((p) => p.deviceId));
     body = [el('p', { class: `note vs ${{ low: 'good', normal: 'good', above: 'warn', high: 'bad' }[vs.level] || ''}` }, powerSay(tt)),
       S.live?.energy ? energyCard(S.live.energy) : null,
-      sec(tt.from ? 'Where the number comes from' : `What adds up to ${fmtW(H.watts)}`),
-      tt.from ? el('p', { class: 'note' }, `Your whole-home meter, ${tt.from}. It measures everything at once.`) : null,
-      parts.length ? bars(parts.slice(0, 20).map((x) => [`${x.name}${placedIds.has(x.id) ? '' : ' *'}`, x.w, fmtW(x.w)])) : el('p', { class: 'note' }, 'Nothing is measuring power right now.'),
-      !tt.from && parts.length ? el('p', { class: 'note' }, `Only things that measure their own power are counted: smart plugs and switches with a power reading${parts.some((x) => /charging/.test(x.name)) ? ', and your car charging' : ''}. Lights and appliances without one aren't in the number. * = not placed on the map yet.`) : null,
-      byRoom.size > 1 ? sec('By room') : null, byRoom.size > 1 ? bars([...byRoom].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, w]) => [n, w, fmtW(w)])) : null,
-      sec(`Using power · ${H.powered.length}`), ...H.powered.slice(0, 15).map((p) => infoRow(p, swOff(p))),
-      ...H.cars.filter((c) => c.s.powerW > 50).map((c) => el('div', { class: 'drow act' }, el('div', { class: 'dtop' }, ic('car'), el('span', { class: 'dn' }, c.it.name || 'Car'), el('small', {}, `Charging ${fmtW(c.s.powerW)}`))))];
+      sec(tt.from ? T('Where the number comes from') : T('What adds up to {w}', { w: fmtW(H.watts) })),
+      tt.from ? el('p', { class: 'note' }, T('Your whole-home meter, {from}. It measures everything at once.', { from: tt.from })) : null,
+      parts.length ? bars(parts.slice(0, 20).map((x) => [`${x.name}${placedIds.has(x.id) ? '' : ' *'}`, x.w, fmtW(x.w)])) : el('p', { class: 'note' }, T('Nothing is measuring power right now.')),
+      !tt.from && parts.length ? el('p', { class: 'note' }, T('Only things that measure their own power are counted: smart plugs and switches with a power reading{x}. Lights and appliances without one aren\'t in the number. * = not placed on the map yet.', { x: parts.some((x) => /charging/.test(x.name)) ? T(', and your car charging') : '' })) : null,
+      byRoom.size > 1 ? sec(T('By room')) : null, byRoom.size > 1 ? bars([...byRoom].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, w]) => [n, w, fmtW(w)])) : null,
+      sec(T('Using power · {n}', { n: H.powered.length })), ...H.powered.slice(0, 15).map((p) => infoRow(p, swOff(p))),
+      ...H.cars.filter((c) => c.s.powerW > 50).map((c) => el('div', { class: 'drow act' }, el('div', { class: 'dtop' }, ic('car'), el('span', { class: 'dn' }, c.it.name || T('Car')), el('small', {}, T('Charging {w}', { w: fmtW(c.s.powerW) })))))];
   } else if (k === 'climate') {
-    const v = H.temps.map((p) => p.device.tempC); title = 'Inside'; sub = H.temps.length ? `${temp(avg(v))} on average` : '';
+    const v = H.temps.map((p) => p.device.tempC); title = T('Inside'); sub = H.temps.length ? T('{temp} on average', { temp: temp(avg(v)) }) : '';
     const sorted = [...H.temps].sort((a, b) => b.device.tempC - a.device.tempC);
-    body = [sorted.length > 1 ? el('p', { class: 'note' }, `Warmest: ${roomOf(sorted[0])} (${temp(sorted[0].device.tempC)}). Coolest: ${roomOf(sorted[sorted.length - 1])} (${temp(sorted[sorted.length - 1].device.tempC)}).`) : null,
-      sec('Temperature'), bars(sorted.map((p) => [roomOf(p) || pinName(p), p.device.tempC - Math.min(...v) + 1, temp(p.device.tempC)])),
-      H.hums.length ? sec('Humidity') : null, H.hums.length ? bars(H.hums.map((p) => [roomOf(p) || pinName(p), p.device.humidity, `${Math.round(p.device.humidity)}%`])) : null,
+    body = [sorted.length > 1 ? el('p', { class: 'note' }, T('Warmest: {roomOf} ({temp}). Coolest: {roomOf2} ({temp2}).', { roomOf: roomOf(sorted[0]), temp: temp(sorted[0].device.tempC), roomOf2: roomOf(sorted[sorted.length - 1]), temp2: temp(sorted[sorted.length - 1].device.tempC) })) : null,
+      sec(T('Temperature')), bars(sorted.map((p) => [roomOf(p) || pinName(p), p.device.tempC - Math.min(...v) + 1, temp(p.device.tempC)])),
+      H.hums.length ? sec(T('Humidity')) : null, H.hums.length ? bars(H.hums.map((p) => [roomOf(p) || pinName(p), p.device.humidity, `${Math.round(p.device.humidity)}%`])) : null,
       ...H.pins.filter((p) => p.device.kind === 'climate' && !NOT_ROOM.test(p.device.name || '')).map((p) => infoRow(p))];
   } else if (k === 'security') {
-    title = 'Safety'; sub = H.alarms.length ? 'Needs you now' : H.openDoors.length + H.unlocked.length + H.openCovers.length ? 'A few things to check' : 'Everything is shut and locked';
-    const lockBtn = (p) => el('button', { type: 'button', class: 'mini', onclick: () => { p.device.locked = true; act(p.device, 'lock'); drawPinsSoon(); } }, 'Lock');   // locking only - never unlock
-    body = [H.alarms.length ? sec('Alarms') : null, ...H.alarms.map((p) => infoRow(p)),
-      H.unlocked.length || H.openDoors.length || H.openCovers.length ? sec('To check') : null, ...H.unlocked.map((p) => infoRow(p, lockBtn(p))), ...H.openDoors.map((p) => infoRow(p)), ...H.openCovers.map((p) => infoRow(p)),
-      H.locks.length ? sec('Locks') : null, ...H.locks.filter((p) => !H.unlocked.includes(p)).map((p) => infoRow(p)),
-      H.doors.length ? sec('Doors and windows') : null, ...H.doors.filter((p) => !H.openDoors.includes(p)).map((p) => infoRow(p)),
-      H.cams.length ? sec(`Cameras · ${H.cams.length}`) : null, ...H.cams.map((p) => infoRow(p)),
-      el('p', { class: 'note' }, 'From here CasaTorch can lock, never unlock. Garage doors and gates only close.')];
+    title = T('Safety'); sub = H.alarms.length ? T('Needs you now') : H.openDoors.length + H.unlocked.length + H.openCovers.length ? T('A few things to check') : T('Everything is shut and locked');
+    const lockBtn = (p) => el('button', { type: 'button', class: 'mini', onclick: () => { p.device.locked = true; act(p.device, 'lock'); drawPinsSoon(); } }, T('Lock'));   // locking only - never unlock
+    body = [H.alarms.length ? sec(T('Alarms')) : null, ...H.alarms.map((p) => infoRow(p)),
+      H.unlocked.length || H.openDoors.length || H.openCovers.length ? sec(T('To check')) : null, ...H.unlocked.map((p) => infoRow(p, lockBtn(p))), ...H.openDoors.map((p) => infoRow(p)), ...H.openCovers.map((p) => infoRow(p)),
+      H.locks.length ? sec(T('Locks')) : null, ...H.locks.filter((p) => !H.unlocked.includes(p)).map((p) => infoRow(p)),
+      H.doors.length ? sec(T('Doors and windows')) : null, ...H.doors.filter((p) => !H.openDoors.includes(p)).map((p) => infoRow(p)),
+      H.cams.length ? sec(T('Cameras · {n}', { n: H.cams.length })) : null, ...H.cams.map((p) => infoRow(p)),
+      el('p', { class: 'note' }, T('From here CasaTorch can lock, never unlock. Garage doors and gates only close.'))];
   } else if (k === 'lights') {
-    title = 'Lights'; sub = `${H.lit.length} of ${H.lights.length} on`;
+    title = T('Lights'); sub = T('{n} of {n2} on', { n: H.lit.length, n2: H.lights.length });
     const byFloor = Object.values(S.F).sort((a, b) => (b.f.level || 0) - (a.f.level || 0)).map((F) => [F, H.lights.filter((p) => p.floor === F.f.id)]).filter(([, l]) => l.length);
-    body = [el('div', { class: 'srow' }, el('span', {}, 'All lights'), el('button', { type: 'button', class: 'mini', onclick: () => allLights(H.pins, true) }, 'On'), el('button', { type: 'button', class: 'mini', onclick: () => allLights(H.pins, false) }, 'Off')),
+    body = [el('div', { class: 'srow' }, el('span', {}, T('All lights')), el('button', { type: 'button', class: 'mini', onclick: () => allLights(H.pins, true) }, T('On')), el('button', { type: 'button', class: 'mini', onclick: () => allLights(H.pins, false) }, T('Off'))),
       ...byFloor.flatMap(([F, l]) => [byFloor.length > 1 ? sec(F.f.name) : null, ...l.sort((a, b) => !!b.device.on - !!a.device.on || roomOf(a).localeCompare(roomOf(b))).map((p) => infoRow(p, swOff(p)))])];
   } else if (k === 'motion') {
-    title = 'Movement'; sub = H.motion.length ? `In ${[...new Set(H.motion.map(roomOf))].join(', ')}` : 'Nobody moving right now';
-    body = [sec('Motion sensors'), ...H.pins.filter((p) => p.device.motion != null).sort((a, b) => !!b.device.motion - !!a.device.motion).map((p) => infoRow(p)),
-      el('p', { class: 'note' }, 'Turn on the activity trail in View to see where movement was over the last minutes.')];
+    title = T('Movement'); sub = H.motion.length ? T('In {rooms}', { rooms: [...new Set(H.motion.map(roomOf))].join(', ') }) : T('Nobody moving right now');
+    body = [sec(T('Motion sensors')), ...H.pins.filter((p) => p.device.motion != null).sort((a, b) => !!b.device.motion - !!a.device.motion).map((p) => infoRow(p)),
+      el('p', { class: 'note' }, T('Turn on the activity trail in View to see where movement was over the last minutes.'))];
   } else if (k.startsWith('car:')) {
     const c = H.cars.find((x) => `car:${x.it.id}` === k); if (!c) { closeInfo(); return; }
-    title = c.it.name || 'Car'; sub = c.s.home === false ? 'Away' : 'At home';
+    title = c.it.name || 'Car'; sub = c.s.home === false ? T('Away') : T('At home');
     const row = (n, v) => (v == null ? null : el('div', { class: 'srow' }, el('span', {}, n), el('b', {}, v)));
     body = [c.s.battery != null ? el('div', { class: 'battery' }, el('i', { style: `--w:${Math.max(2, Math.min(100, c.s.battery))}%` }), el('b', {}, `${Math.round(c.s.battery)}%`)) : null,
-      row('Plugged in', c.s.plugged == null ? null : c.s.plugged ? 'Yes' : 'No'), row('Charging', c.s.powerW > 50 ? fmtW(c.s.powerW) : c.s.powerW != null ? 'No' : null), row('Where', c.s.home == null ? null : c.s.home ? 'Home' : 'Away'),
-      el('button', { type: 'button', class: 'mini wide', onclick: () => { const o = yard.cars.find((x) => x.it.id === c.it.id)?.o; if (o) { const w = o.getWorldPosition(new V3()); flyTo(w, w.clone().add(new V3(5, 5, 7))); } } }, 'Show it on the map'),
-      el('p', { class: 'note' }, 'CasaTorch only shows the car - it never unlocks, opens or drives it. Change where it parks in Editor › Yard.')];
+      row(T('Plugged in'), c.s.plugged == null ? null : c.s.plugged ? T('Yes') : T('No')), row(T('Charging'), c.s.powerW > 50 ? fmtW(c.s.powerW) : c.s.powerW != null ? T('No') : null), row(T('Where'), c.s.home == null ? null : c.s.home ? T('Home') : T('Away')),
+      el('button', { type: 'button', class: 'mini wide', onclick: () => { const o = yard.cars.find((x) => x.it.id === c.it.id)?.o; if (o) { const w = o.getWorldPosition(new V3()); flyTo(w, w.clone().add(new V3(5, 5, 7))); } } }, T('Show it on the map')),
+      el('p', { class: 'note' }, T('CasaTorch only shows the car - it never unlocks, opens or drives it. Change where it parks in Editor › Yard.'))];
   } else if (k === 'home') {
     const Fs = Object.values(S.F).sort((a, b) => (b.f.level || 0) - (a.f.level || 0)), byKind = new Map();
-    for (const p of H.pins) { const w = KIND_WORD[p.device.kind] || 'Other'; byKind.set(w, (byKind.get(w) || 0) + 1); }
-    title = 'Your home'; sub = `${Fs.length} floor${Fs.length === 1 ? '' : 's'}${sum(Fs.map(areaOf)) > 0 ? ` · about ${areaText(sum(Fs.map(areaOf)))}` : ''}`;
-    body = [sec('Floors'), ...Fs.map((F) => el('button', { type: 'button', class: 'sroom', onclick: () => { closeInfo(); pickFloor(F.f.id); } }, F.f.name, el('small', {}, [F.rooms.length ? `${F.rooms.length} rooms` : '', `about ${areaText(areaOf(F))}`, `${H.pins.filter((p) => p.floor === F.f.id).length} devices`].filter(Boolean).join(' · ')))),
-      Fs.some((F) => F.rooms.length) ? sec('Rooms') : null, ...Fs.flatMap((F) => F.rooms.map((r, i) => el('button', { type: 'button', class: 'sroom', onclick: () => { closeInfo(); focusRoom(F.f.id, i); } }, el('i', { class: 'swatch', style: `--rc:${r.color}` }), r.name, el('small', {}, F.f.name)))),
-      sec(`On the map · ${H.pins.length}`), bars([...byKind].sort((a, b) => b[1] - a[1]).map(([n, c]) => [n, c, String(c)])),
-      H.cars.length || (S.plan?.yard?.items || []).length ? el('p', { class: 'note' }, `Outside: ${[H.cars.length ? `${H.cars.length} car${H.cars.length > 1 ? 's' : ''}` : '', (S.pins || []).filter((p) => p.beam).length ? `${(S.pins || []).filter((p) => p.beam).length} flood lights` : '', (S.plan?.yard?.items || []).filter((it) => ['tree', 'pine', 'bush'].includes(it.kind)).length ? `${(S.plan?.yard?.items || []).filter((it) => ['tree', 'pine', 'bush'].includes(it.kind)).length} trees and bushes` : ''].filter(Boolean).join(', ')}.`) : null,
-      S.live?.weather?.temp != null ? el('p', { class: 'note' }, `Outside it's ${Math.round(S.live.weather.temp)}° and ${String(S.live.weather.words || '').toLowerCase()}.`) : null];
+    for (const p of H.pins) { const w = T(KIND_WORD[p.device.kind] || 'Other'); byKind.set(w, (byKind.get(w) || 0) + 1); }
+    title = T('Your home'); sub = `${Fs.length} floor${Fs.length === 1 ? '' : 's'}${sum(Fs.map(areaOf)) > 0 ? T(' · about {areaText}', { areaText: areaText(sum(Fs.map(areaOf))) }) : ''}`;
+    body = [sec(T('Floors')), ...Fs.map((F) => el('button', { type: 'button', class: 'sroom', onclick: () => { closeInfo(); pickFloor(F.f.id); } }, F.f.name, el('small', {}, [F.rooms.length ? `${F.rooms.length} rooms` : '', `about ${areaText(areaOf(F))}`, `${H.pins.filter((p) => p.floor === F.f.id).length} devices`].filter(Boolean).join(' · ')))),
+      Fs.some((F) => F.rooms.length) ? sec(T('Rooms')) : null, ...Fs.flatMap((F) => F.rooms.map((r, i) => el('button', { type: 'button', class: 'sroom', onclick: () => { closeInfo(); focusRoom(F.f.id, i); } }, el('i', { class: 'swatch', style: `--rc:${r.color}` }), r.name, el('small', {}, F.f.name)))),
+      sec(T('On the map · {n}', { n: H.pins.length })), bars([...byKind].sort((a, b) => b[1] - a[1]).map(([n, c]) => [n, c, String(c)])),
+      H.cars.length || (S.plan?.yard?.items || []).length ? el('p', { class: 'note' }, T('Outside: {list}.', { list: [H.cars.length ? T(H.cars.length > 1 ? '{n} cars' : '{n} car', { n: H.cars.length }) : '', (S.pins || []).filter((p) => p.beam).length ? T('{n} flood lights', { n: (S.pins || []).filter((p) => p.beam).length }) : '', (S.plan?.yard?.items || []).filter((it) => ['tree', 'pine', 'bush'].includes(it.kind)).length ? T('{n} trees and bushes', { n: (S.plan?.yard?.items || []).filter((it) => ['tree', 'pine', 'bush'].includes(it.kind)).length }) : ''].filter(Boolean).join(', ') })) : null,
+      S.live?.weather?.temp != null ? el('p', { class: 'note' }, T('Outside it\'s {n}° and {sky}.', { n: Math.round(S.live.weather.temp), sky: T(`${String(S.live.weather.words || '')}|weather`).toLowerCase() })) : null];
   }
   side.hidden = false; side.dataset.kind = 'info'; document.body.classList.add('drawer');
-  fill(side, el('div', { class: 'rhead' }, el('div', {}, el('h2', {}, title), sub ? el('small', {}, sub) : null), el('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Close', onclick: closeInfo }, ic('close'))), ...body);
+  fill(side, el('div', { class: 'rhead' }, el('div', {}, el('h2', {}, title), sub ? el('small', {}, sub) : null), el('button', { type: 'button', class: 'iconbtn', 'aria-label': T('Close'), onclick: closeInfo }, ic('close'))), ...body);
 }
 /* Wall panel mode: the 3D home as the screen you leave on - no editing buttons, tiles a little bigger, the view drifting slowly,
    the screen kept awake where the browser allows, and after two quiet minutes it tidies itself back to the whole house. */
@@ -812,13 +838,13 @@ function cameraModal(d, name = d.name) {
      2. The camera's own MJPEG stream, for cameras CasaTorch reaches directly (Frigate) - about a second.
      3. A fresh picture every 0.7 seconds, each shown only once it has fully loaded.
      Home Assistant's own MJPEG relay is skipped: for Ring and many cloud cameras it runs a minute or more behind. */
-  const box = el('div', { class: 'feedbox' }), badge = el('span', { class: 'livebadge' }, 'Connecting…');
+  const box = el('div', { class: 'feedbox' }), badge = el('span', { class: 'livebadge' }, T('Connecting…'));
   let stop = () => {}, closed = false, lastPic = 0;
   const say = (t) => { badge.textContent = t; };
   const base = /\/stream(\?|$)/.test(d.stream || '') ? d.stream.replace(/\/stream(\?.*)?$/, '') : null;
   function stills() {
     const img = el('img', { alt: name, class: 'feed' }); box.replaceChildren(img); let t = null, gone = false;
-    const tick = () => { if (gone) return; const n = new Image(), u = snapUrl(d); n.onload = () => { if (gone) return; img.src = n.src; lastPic = Date.now(); say('Live (pictures)'); t = setTimeout(tick, 700); }; n.onerror = () => { say('No picture right now - trying again'); t = setTimeout(tick, 3000); }; n.src = `${u}${u.includes('?') ? '&' : '?'}t=${Date.now()}`; };
+    const tick = () => { if (gone) return; const n = new Image(), u = snapUrl(d); n.onload = () => { if (gone) return; img.src = n.src; lastPic = Date.now(); say(T('Live (pictures)')); t = setTimeout(tick, 700); }; n.onerror = () => { say(T('No picture right now - trying again')); t = setTimeout(tick, 3000); }; n.src = `${u}${u.includes('?') ? '&' : '?'}t=${Date.now()}`; };
     tick(); stop = () => { gone = true; clearTimeout(t); img.removeAttribute('src'); };
   }
   function mjpeg() {
@@ -853,8 +879,8 @@ function cameraModal(d, name = d.name) {
     if (closed) return;
     if (d.stream && (d.live || d.provider !== 'ha')) mjpeg(); else stills();
   })();
-  const ago = setInterval(() => { if (lastPic && Date.now() - lastPic > 4000) say(`Picture from ${Math.round((Date.now() - lastPic) / 1000)} s ago`); }, 1000);
-  modal(el('div', { class: 'box cam' }, el('div', { class: 'rhead' }, ic('camera'), el('div', {}, el('h2', {}, name), el('small', {}, badge)), el('button', { type: 'button', class: 'iconbtn', title: 'Close', 'aria-label': 'Close', onclick: closeModal }, ic('close'))), box));
+  const ago = setInterval(() => { if (lastPic && Date.now() - lastPic > 4000) say(T('Picture from {n} s ago', { n: Math.round((Date.now() - lastPic) / 1000) })); }, 1000);
+  modal(el('div', { class: 'box cam' }, el('div', { class: 'rhead' }, ic('camera'), el('div', {}, el('h2', {}, name), el('small', {}, badge)), el('button', { type: 'button', class: 'iconbtn', title: T('Close'), 'aria-label': T('Close'), onclick: closeModal }, ic('close'))), box));
   camStop = () => { closed = true; clearInterval(ago); stop(); camStop = null; };
 }
 let modalFrom = null;   // QA: the window takes the keyboard focus, keeps Tab inside it, and gives the focus back when it closes
@@ -885,7 +911,7 @@ function fillCard(p) {
   if (box.contains(document.activeElement) && ['range', 'color'].includes(document.activeElement.type)) return;   // mid-drag
   const F = S.F[p.floor], ri = F ? roomAt(F, p.pos[0], p.pos[2]) : -1, room = F?.rooms[ri];
   const controls = window.CasaControls.build(d, { units, act: (action, value) => { fillCard(p); drawPinsSoon(); act(d, action, value); } });
-  fill(box, el('div', { class: 'chead' }, ic(iconOf(d)), el('b', {}, pinName(p)), el('button', { type: 'button', class: 'iconbtn sm', title: 'Close', onclick: closeCard }, ic('close'))), ...controls,
+  fill(box, el('div', { class: 'chead' }, ic(iconOf(d)), el('b', {}, pinName(p)), el('button', { type: 'button', class: 'iconbtn sm', title: T('Close'), onclick: closeCard }, ic('close'))), ...controls,
     room ? el('button', { type: 'button', class: 'mini wide', onclick: () => { closeCard(); focusRoom(p.floor, ri); } }, `${T('Open')} ${room.name}`) : null);
 }
 const drawPinsSoon = debounce(() => drawPins(), 50);
@@ -910,18 +936,18 @@ function drawTools() {
   const set = (k) => (v) => { prefs[k] = v; savePrefs(); layout(k === 'stack'); };
   const more = S.moreOpen ? el('div', { class: 'morepop' },
     Object.values(S.F).some((F) => F.roof) ? toggle('Roof', 'roof') : null, isReal() ? null : toggle('Sun & shadows', 'sun'), isReal() ? null : toggle('Weather', 'weatherFx'), !isReal() && (S.plan?.yard?.areas?.length || S.plan?.yard?.items?.length) ? toggle('Yard', 'yard') : null,
-    el('div', { class: 'poprow look' }, el('small', {}, 'Look'), seg(Object.entries(THEMES).map(([k, t]) => [k, t.label]), curTheme(), (v) => { prefs.theme = v; savePrefs(); applyLook(); drawThemeSeg(); drawTools(); })),
-    el('div', { class: 'poprow' }, el('small', {}, 'Power lines'), seg([['off', 'Off'], ['energy', 'Energy view'], ['always', 'Always']], linesMode(), (v) => { prefs.lines = v; prefs.power = v !== 'off'; savePrefs(); drawPower(); drawTools(); })),
-    el('div', { class: 'poprow' }, el('small', {}, 'Words'), seg([['none', 'Icons only'], ['key', 'What needs you'], ['all', 'Everything']], labelMode(), setLabels)), el('button', { type: 'button', class: `tog${document.body.classList.contains('panelmode') ? ' on' : ''}`, title: 'For a wall tablet or a screen you leave on', onclick: () => { setPanelMode(!document.body.classList.contains('panelmode')); S.moreOpen = false; drawTools(); } }, 'Wall panel mode'), toggle('Activity trail', 'trail'), toggle('Cameras', 'cameras'), toggle('Spin', 'spin'),
+    el('div', { class: 'poprow look' }, el('small', {}, T('Look')), seg(Object.entries(THEMES).map(([k, t]) => [k, t.label]), curTheme(), (v) => { prefs.theme = v; savePrefs(); applyLook(); drawThemeSeg(); drawTools(); })),
+    el('div', { class: 'poprow' }, el('small', {}, T('Power lines')), seg([['off', T('Off')], ['energy', T('Energy view')], ['always', T('Always')]], linesMode(), (v) => { prefs.lines = v; prefs.power = v !== 'off'; savePrefs(); drawPower(); drawTools(); })),
+    el('div', { class: 'poprow' }, el('small', {}, T('Words')), seg([['none', T('Icons only')], ['key', T('What needs you')], ['all', T('Everything')]], labelMode(), setLabels)), el('button', { type: 'button', class: `tog${document.body.classList.contains('panelmode') ? ' on' : ''}`, title: T('For a wall tablet or a screen you leave on'), onclick: () => { setPanelMode(!document.body.classList.contains('panelmode')); S.moreOpen = false; drawTools(); } }, T('Wall panel mode')), toggle('Activity trail', 'trail'), toggle('Cameras', 'cameras'), toggle('Spin', 'spin'),
     ...live.viewMenu(),   // LIVE: daylight, quality, wall tablet settings, pet, walk through
-    Object.keys(S.F).length > 1 ? seg([['stacked', 'Stacked'], ['apart', 'Apart'], ['alone', 'Alone']], prefs.stack, set('stack')) : null) : null;
+    Object.keys(S.F).length > 1 ? seg([['stacked', T('Stacked')], ['apart', T('Apart')], ['alone', T('Alone')]], prefs.stack, set('stack')) : null) : null;
   fill(t,
-    seg([['auto', 'Dollhouse'], ['tall', 'Tall'], ['cut', 'Cut']], prefs.walls, set('walls')),
-    seg([['rooms', 'Rooms'], ['temp', 'Temp'], ...(S.live?.pins || []).some((p) => p.device.humidity != null) ? [['humidity', 'Humidity']] : [], ...(S.live?.pins || []).some((p) => p.device.co2 != null) ? [['air', 'Air']] : [], ['energy', 'Energy'], ['lights', 'Lights'], ['presence', 'Motion']], prefs.overlay, (v) => { prefs.overlay = v; savePrefs(); drawPins(); }),
+    seg([['auto', T('Dollhouse')], ['tall', T('Tall')], ['cut', T('Cut')]], prefs.walls, set('walls')),
+    seg([['rooms', T('Rooms')], ['temp', T('Temp')], ...(S.live?.pins || []).some((p) => p.device.humidity != null) ? [['humidity', T('Humidity')]] : [], ...(S.live?.pins || []).some((p) => p.device.co2 != null) ? [['air', T('Air')]] : [], ['energy', T('Energy')], ['lights', T('Lights')], ['presence', T('Motion')]], prefs.overlay, (v) => { prefs.overlay = v; savePrefs(); drawPins(); }),
     el('button', { type: 'button', class: `tog${S.tour ? ' on' : ''}`, onclick: () => (S.tour ? stopTour() : startTour()) }, S.tour ? `■ ${T('Stop')}` : `▶ ${T('Tour')}`),
     ...live.toolsExtra(),   // LIVE: Replay the day
     el('button', { type: 'button', class: `tog${S.moreOpen ? ' on' : ''}`, onclick: () => { S.moreOpen = !S.moreOpen; drawTools(); } }, `${T('View')} ▾`),
-    el('button', { type: 'button', class: 'tog', title: 'Back to the whole house (double-click the map, or press Home)', onclick: resetView }, '⟲'),
+    el('button', { type: 'button', class: 'tog', title: T('Back to the whole house (double-click the map, or press Home)'), onclick: resetView }, '⟲'),
     S.room ? el('button', { type: 'button', class: 'tog on', onclick: () => { S.room = null; layout(true); } }, ic('back'), T('Back')) : null);
   document.querySelector('body > .morepop')?.remove(); if (more && !t.hidden) document.body.append(more);   // on the page, so the scrolling bar can't clip it
   live.legend();   // LIVE: the heat map's legend
@@ -940,16 +966,16 @@ const wIcon = (kind) => { const s = el('span', { class: 'wi' }); s.innerHTML = w
 function weatherBlock() {
   const w = S.live?.weather; if (!w || w.temp == null) return null;
   return el('div', { class: 'weather' },
-    el('div', { class: 'wnow' }, wIcon(w.kind), el('b', {}, `${Math.round(w.temp)}°`), el('div', {}, el('span', {}, w.words || ''), el('small', {}, [w.place, w.hi != null ? `H ${Math.round(w.hi)}° · L ${Math.round(w.lo)}°` : ''].filter(Boolean).join(' · ')))),
-    (w.days || []).length ? el('div', { class: 'wdays' }, ...w.days.slice(0, 5).map((d) => el('div', {}, el('small', {}, d.label), wIcon(d.kind), el('span', {}, d.hi != null ? `${Math.round(d.hi)}°` : ''), el('small', {}, d.lo != null ? `${Math.round(d.lo)}°` : '')))) : null);
+    el('div', { class: 'wnow' }, wIcon(w.kind), el('b', {}, `${Math.round(w.temp)}°`), el('div', {}, el('span', {}, w.words ? T(`${w.words}|weather`) : ''), el('small', {}, [w.place, w.hi != null ? T('H {hi}° L {lo}°', { hi: Math.round(w.hi), lo: Math.round(w.lo) }) : ''].filter(Boolean).join(' · ')))),
+    (w.days || []).length ? el('div', { class: 'wdays' }, ...w.days.slice(0, 5).map((d) => el('div', {}, el('small', {}, T(`${d.label}|weekday`)), wIcon(d.kind), el('span', {}, d.hi != null ? `${Math.round(d.hi)}°` : ''), el('small', {}, d.lo != null ? `${Math.round(d.lo)}°` : '')))) : null);
 }
 /* Scrub through today to see where the sun falls in each room. */
 function sunBlock() {
   const w = S.live?.weather; if (!sunOn() || w?.lat == null) return null;
   const at = S.timeAt || new Date(), mins = at.getHours() * 60 + at.getMinutes();
   const lab = el('b', {}, S.timeAt ? at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : T('Now'));
-  const r = el('input', { type: 'range', min: 0, max: 1439, step: 15, value: mins, 'aria-label': 'Time of day for sunlight', oninput: (e) => { const x = new Date(); x.setHours(0, Number(e.target.value), 0, 0); S.timeAt = x; lab.textContent = x.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); updateSky(); } });
-  return el('div', {}, el('div', { class: 'sunrow' }, el('span', { class: 'small' }, `☀ ${T('Sunlight')}`), r, lab, S.timeAt ? el('button', { type: 'button', class: 'mini', onclick: () => { S.timeAt = null; prefs.skyMode = 'auto'; S.skyFixed = false; savePrefs(); updateSky(); drawLeft(); } }, 'Now') : null),
+  const r = el('input', { type: 'range', min: 0, max: 1439, step: 15, value: mins, 'aria-label': T('Time of day for sunlight'), oninput: (e) => { const x = new Date(); x.setHours(0, Number(e.target.value), 0, 0); S.timeAt = x; lab.textContent = x.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); updateSky(); } });
+  return el('div', {}, el('div', { class: 'sunrow' }, el('span', { class: 'small' }, `☀ ${T('Sunlight')}`), r, lab, S.timeAt ? el('button', { type: 'button', class: 'mini', onclick: () => { S.timeAt = null; prefs.skyMode = 'auto'; S.skyFixed = false; savePrefs(); updateSky(); drawLeft(); } }, T('Now')) : null),
     live.skySeg());   // LIVE: Follow the sun / Day / Night
 }
 /* ---------- tour: a slow fly-through of every room, for wall panels and showing off ---------- */
@@ -974,14 +1000,14 @@ function dockCards() {
   const out = [], H = S.live ? houseNow() : null, card = (c) => out.push(c);
   card({ id: 'clock', title: T('Clock'), icon: 'clock', side: 'left', render: () => { const [t, d] = clockText(); return el('div', { class: 'clock' }, el('b', {}, t), el('small', {}, d)); } });
   card({ id: 'weather', title: T('Weather'), icon: 'sun', side: 'left', render: () => weatherBlock() });
-  card({ id: 'sun', title: T('Sunlight'), icon: 'sun', side: 'left', blurb: 'Scrub through the day to see where the sun falls', render: () => sunBlock() });
-  card({ id: 'control', title: T('House panel'), icon: 'home', side: 'left', blurb: 'Using now, find a device, what\'s on, floors and rooms', render: () => (S.room ? roomBlock() : homeBlock()) });
+  card({ id: 'sun', title: T('Sunlight'), icon: 'sun', side: 'left', blurb: T('Scrub through the day to see where the sun falls'), render: () => sunBlock() });
+  card({ id: 'control', title: T('House panel'), icon: 'home', side: 'left', blurb: T('Using now, find a device, what\'s on, floors and rooms'), render: () => (S.room ? roomBlock() : homeBlock()) });
   for (const x of S.live && Object.keys(S.F).length ? tiles() : []) card({ id: `tile:${x.kind}`, title: x.label, icon: x.icon, kind: 'tile', side: 'right', render: () => tileCard(x) });
-  card({ id: 'cams', title: T('Cameras'), icon: 'camera', extra: true, blurb: 'Live pictures from your cameras, taking turns', render: (size) => camsCard(H, size) });
-  card({ id: 'needs', title: T('What needs you'), icon: 'bell', extra: true, blurb: 'Water, smoke, open doors, unlocked locks, low batteries', render: () => needsCard(H) });
-  card({ id: 'media', title: T('Now playing'), icon: 'media', extra: true, blurb: 'What\'s playing, with play and pause', render: () => mediaCard(H) });
-  if (!agenda.off) card({ id: 'agenda', title: T('Coming up'), icon: 'calendar', extra: true, blurb: 'The next things on your calendars', render: (size) => agendaCard(size) });
-  card({ id: 'note', title: T('Note'), icon: 'note', extra: true, blurb: 'A note for everyone who looks at this screen', render: () => noteCard() });
+  card({ id: 'cams', title: T('Cameras'), icon: 'camera', extra: true, blurb: T('Live pictures from your cameras, taking turns'), render: (size) => camsCard(H, size) });
+  card({ id: 'needs', title: T('What needs you'), icon: 'bell', extra: true, blurb: T('Water, smoke, open doors, unlocked locks, low batteries'), render: () => needsCard(H) });
+  card({ id: 'media', title: T('Now playing'), icon: 'media', extra: true, blurb: T('What\'s playing, with play and pause'), render: () => mediaCard(H) });
+  if (!agenda.off) card({ id: 'agenda', title: T('Coming up'), icon: 'calendar', extra: true, blurb: T('The next things on your calendars'), render: (size) => agendaCard(size) });
+  card({ id: 'note', title: T('Note'), icon: 'note', extra: true, blurb: T('A note for everyone who looks at this screen'), render: () => noteCard() });
   return out;
 }
 /* Extra cards */
@@ -1008,7 +1034,7 @@ function camsCard(H, size) {
 function needsCard(H) {
   if (!H) return null;
   const low = H.pins.filter((p) => typeof p.device.battery === 'number' && p.device.battery <= 20);
-  const rows = [...H.alarms.map((p) => [p, p.device.water ? 'Water!' : 'Smoke!', 'bad']), ...H.unlocked.map((p) => [p, 'Unlocked', 'warn']), ...H.openDoors.map((p) => [p, 'Open', 'warn']), ...H.openCovers.map((p) => [p, 'Open', 'warn']), ...low.map((p) => [p, `Battery ${p.device.battery}%`, ''])];
+  const rows = [...H.alarms.map((p) => [p, p.device.water ? T('Water!') : T('Smoke!'), 'bad']), ...H.unlocked.map((p) => [p, T('Unlocked'), 'warn']), ...H.openDoors.map((p) => [p, T('Open'), 'warn']), ...H.openCovers.map((p) => [p, T('Open'), 'warn']), ...low.map((p) => [p, T('Battery {battery}%', { battery: p.device.battery }), ''])];
   return el('div', {}, el('div', { class: 'eyebrow' }, T('What needs you')), rows.length ? el('div', { class: 'needs' }, ...rows.slice(0, 8).map(([p, why, tone]) => el('button', { type: 'button', class: `nrow ${tone}`, onclick: () => goToPin(p) }, ic(iconOf(p.device)), el('span', { class: 'dn' }, pinName(p)), el('small', {}, why)))) : el('p', { class: 'note good' }, T('All good - nothing needs you.')));
 }
 function mediaCard(H) {
@@ -1028,7 +1054,7 @@ function noteCard() {
   return prefs.dockNote ? el('div', { class: 'dnote' }, prefs.dockNote) : null;
 }
 const dock = createDock({ el, ic, prefs, savePrefs, T, cards: dockCards, isView: () => S.mode === 'view' && !!(S.live || Object.keys(S.F).length), leftReady: () => !leftBusy(), drawerOpen: () => document.body.classList.contains('drawer'),
-  extraRight: () => (document.body.classList.contains('panelmode') ? [el('button', { type: 'button', class: 'tile exit', onclick: () => setPanelMode(false) }, el('small', {}, 'Leave wall panel mode'))] : []),
+  extraRight: () => (document.body.classList.contains('panelmode') ? [el('button', { type: 'button', class: 'tile exit', onclick: () => setPanelMode(false) }, el('small', {}, T('Leave wall panel mode')))] : []),
   onArrange: (on) => { if (on) { closeCard(); closeInfo(); } const b = $('#arrangeBtn'); if (b) b.classList.toggle('on', on); } });
 const FS_CARDS = [['all', 'All cards'], ['tiles', 'Numbers only'], ['none', 'Just the house']];
 const immersive = createImmersive({ el, ic, T,
@@ -1050,9 +1076,9 @@ function energyCard(E) {
     el('div', { class: 'egrid' },
       E.solarW != null ? tile(T('Solar'), fmtW(E.solarW), 'sun') : null,
       tile(T('House'), fmtW(E.useW || 0), 'home'),
-      b ? tile(T('Battery'), b.pct != null ? `${b.pct}%` : fmtW(Math.abs(b.w)), 'batt', b.w ? (b.w > 0 ? `charging ${fmtW(b.w)}` : `giving ${fmtW(-b.w)}`) : null) : null,
-      E.gridW != null ? tile(T('Grid'), fmtW(Math.abs(E.gridW)), E.gridW < 0 ? 'export' : 'grid', E.gridW < 0 ? 'sending out' : 'drawing in') : null),
-    E.selfPct != null ? el('div', { class: 'ebar', title: 'How much of what the house uses right now comes from your solar' }, el('i', { style: `width:${E.selfPct}%` }), el('span', {}, `${E.selfPct}% from your own solar`)) : null);
+      b ? tile(T('Battery'), b.pct != null ? `${b.pct}%` : fmtW(Math.abs(b.w)), 'batt', b.w ? (b.w > 0 ? T('charging {w}', { w: fmtW(b.w) }) : T('giving {w}', { w: fmtW(-b.w) })) : null) : null,
+      E.gridW != null ? tile(T('Grid'), fmtW(Math.abs(E.gridW)), E.gridW < 0 ? 'export' : 'grid', E.gridW < 0 ? T('sending out') : T('drawing in')) : null),
+    E.selfPct != null ? el('div', { class: 'ebar', title: T('How much of what the house uses right now comes from your solar') }, el('i', { style: `width:${E.selfPct}%` }), el('span', {}, T('{selfPct}% from your own solar', { selfPct: E.selfPct }))) : null);
 }
 /* Activity trail: where motion was seen in the last 20 minutes, oldest to newest, as a line along the floors. */
 let trail = null, trailLabs = [];
@@ -1070,7 +1096,7 @@ function drawTrail() {
   if (pts.length > 1) trail.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), pts.length * 20, 0.045, 6), mat));
   hits.forEach(({ p, t }, i) => {
     const dot = new THREE.Mesh(new THREE.SphereGeometry(i === hits.length - 1 ? 0.16 : 0.1, 16, 12), mat.clone()); dot.position.copy(pts[i]); dot.material.opacity = 0.45 + 0.55 * ((i + 1) / hits.length); trail.add(dot);
-    const mins = Math.round((now - t) / 60_000), lab = new CSS2DObject(el('div', { class: 'traillab' }, el('b', {}, pinName(p)), el('small', {}, mins < 1 ? 'now' : `${mins} min ago`)));
+    const mins = Math.round((now - t) / 60_000), lab = new CSS2DObject(el('div', { class: 'traillab' }, el('b', {}, pinName(p)), el('small', {}, mins < 1 ? T('now') : T('{mins} min ago', { mins }))));
     lab.position.copy(pts[i]).add(new V3(0, 0.35, 0)); scene.add(lab); trailLabs.push(lab);
   });
   trail.renderOrder = 5; scene.add(trail);
@@ -1080,20 +1106,20 @@ function onNowBlock(pins) {
     .sort((a, b) => (b.device.powerW || 0) - (a.device.powerW || 0) || pinName(a).localeCompare(pinName(b)));
   if (!live.length) return null;
   const top = S.onNowAll ? live : live.slice(0, 6);
-  const sw = (d) => el('label', { class: 'switch', title: 'Switch off' }, el('input', { type: 'checkbox', checked: true, onchange: () => { d.on = false; if (d.playing) d.playing = false; act(d, d.kind === 'media' ? 'toggle' : 'off'); drawPinsSoon(); drawLeft(); } }), el('span'));
+  const sw = (d) => el('label', { class: 'switch', title: T('Switch off') }, el('input', { type: 'checkbox', checked: true, onchange: () => { d.on = false; if (d.playing) d.playing = false; act(d, d.kind === 'media' ? 'toggle' : 'off'); drawPinsSoon(); drawLeft(); } }), el('span'));
   const go = goToPin;
   return el('div', {}, el('div', { class: 'sechead' }, `${T('On now')} · ${live.length}`),
-    ...top.map((p) => { const d = p.device; return el('div', { class: 'drow act' }, el('div', { class: 'dtop' }, el('button', { type: 'button', class: 'dopen', title: `${pinName(p)}: show it and all its controls`, onclick: () => go(p) }, ic(iconOf(d)), el('span', { class: 'dn' }, pinName(p)), el('small', {}, devState(d).val ?? '')), sw(d))); }),
-    live.length > 6 ? el('button', { type: 'button', class: 'mini wide', onclick: () => { S.onNowAll = !S.onNowAll; drawLeft(); } }, S.onNowAll ? 'Show fewer' : `Show all ${live.length}`) : null);
+    ...top.map((p) => { const d = p.device; return el('div', { class: 'drow act' }, el('div', { class: 'dtop' }, el('button', { type: 'button', class: 'dopen', title: T('{pinName}: show it and all its controls', { pinName: pinName(p) }), onclick: () => go(p) }, ic(iconOf(d)), el('span', { class: 'dn' }, pinName(p)), el('small', {}, devState(d).val ?? '')), sw(d))); }),
+    live.length > 6 ? el('button', { type: 'button', class: 'mini wide', onclick: () => { S.onNowAll = !S.onNowAll; drawLeft(); } }, S.onNowAll ? T('Show fewer') : T('Show all {n}', { n: live.length })) : null);
 }
 function findBlock() {
   const all = S.live?.pins || []; if (all.length < 8) return null;
   const q = norm(S.findQ || ''), hits = q ? all.filter((p) => norm(`${pinName(p)} ${p.device.kind}`).includes(q)).slice(0, 6) : [];
-  const box = el('input', { type: 'search', placeholder: T('Find a device'), value: S.findQ || '', 'aria-label': 'Find a device on the plan',
+  const box = el('input', { type: 'search', placeholder: T('Find a device'), value: S.findQ || '', 'aria-label': T('Find a device on the plan'),
     oninput: (e) => { S.findQ = e.target.value; S.findForce = true; drawLeft(); S.findForce = false; const n = $('#left input[type=search]'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } },
     onkeydown: (e) => { if (e.key === 'Enter' && hits[0]) goToPin(hits[0]); } });
   return el('div', { class: 'findbox' }, box, ...hits.map((p) => el('button', { type: 'button', class: 'sroom', onclick: () => goToPin(p) }, ic(iconOf(p.device)), pinName(p), el('small', {}, devState(p.device).val ?? ''))),
-    q && !hits.length ? el('p', { class: 'note' }, 'Nothing placed by that name.') : null);
+    q && !hits.length ? el('p', { class: 'note' }, T('Nothing placed by that name.')) : null);
 }
 function goToPin(p) {
   const F = S.F[p.floor]; if (!F) return;
@@ -1106,18 +1132,18 @@ function homeBlock() {
   const placedW = pins.filter((p) => p.device.powerW != null && (p.device.on ?? true)).reduce((a, p) => a + p.device.powerW, 0);
   const watts = cur ? placedW : S.live?.totals?.powerW ?? placedW;   // the whole home: the same number as the top bar
   const all = Object.values(S.F).sort((a, b) => (b.f.level || 0) - (a.f.level || 0)), hasRoof = all.some((F) => F.roof);
-  const eye = (on, fn, label) => el('button', { type: 'button', class: `eye${on ? ' on' : ''}`, title: on ? `Hide ${label}` : `Show ${label}`, onclick: fn }, on ? '◉' : '○');
+  const eye = (on, fn, label) => el('button', { type: 'button', class: `eye${on ? ' on' : ''}`, title: on ? T('Hide {label}', { label }) : T('Show {label}', { label }), onclick: fn }, on ? '◉' : '○');
   return el('div', {},
     el('div', { class: 'eyebrow' }, cur ? cur.f.name : all.length > 1 ? T('Whole home') : T('Home|house')),
     el('div', { class: 'kpis' }, el('div', {}, el('small', {}, T('Using now')), el('b', { class: cur ? 'good' : ({ above: 'warm', high: 'bad' }[S.live?.totals?.vs?.level] || 'good'), title: cur ? null : powerSay(S.live?.totals || {}) }, fmtW(watts))), el('div', {}, el('small', {}, T('Lights on')), el('b', { class: 'warm' }, `${on}/${lights.length}`))),
     cur ? null : energyCard(S.live?.energy),
     findBlock(),
     onNowBlock(pins),
-    lights.length ? el('div', { class: 'srow' }, el('span', {}, T('All lights')), el('button', { type: 'button', class: 'mini', onclick: () => allLights(pins, true) }, 'On'), el('button', { type: 'button', class: 'mini', onclick: () => allLights(pins, false) }, 'Off')) : null,
+    lights.length ? el('div', { class: 'srow' }, el('span', {}, T('All lights')), el('button', { type: 'button', class: 'mini', onclick: () => allLights(pins, true) }, T('On')), el('button', { type: 'button', class: 'mini', onclick: () => allLights(pins, false) }, T('Off'))) : null,
     ...wet.map((p) => el('div', { class: 'srow bad' }, ic('drop'), `${pinName(p)}: ${devState(p.device).val}`)),
-    ...open.map((p) => el('div', { class: 'srow warn' }, ic('door'), `${pinName(p)} is open`)),
+    ...open.map((p) => el('div', { class: 'srow warn' }, ic('door'), T('{pinName} is open', { pinName: pinName(p) }))),
     all.length > 1 || hasRoof ? el('div', { class: 'sechead' }, T('Layers')) : null,
-    hasRoof ? el('div', { class: 'layer' }, eye(prefs.roof, () => { prefs.roof = !prefs.roof; savePrefs(); layout(false); }, 'the roof'), el('span', {}, T('Roof'))) : null,
+    hasRoof ? el('div', { class: 'layer' }, eye(prefs.roof, () => { prefs.roof = !prefs.roof; savePrefs(); layout(false); }, T('the roof')), el('span', {}, T('Roof'))) : null,
     ...(all.length > 1 || hasRoof ? all.map((F) => el('div', { class: `layer${cur === F ? ' cur' : ''}` }, eye(!prefs.hidden?.[F.f.id], () => { prefs.hidden = { ...(prefs.hidden || {}), [F.f.id]: !prefs.hidden?.[F.f.id] }; savePrefs(); layout(false); }, F.f.name),
       el('button', { type: 'button', class: 'lname', onclick: () => pickFloor(cur === F ? 'all' : F.f.id) }, F.f.name), el('small', {}, `${F.rooms.length} rooms`))) : []),
     el('div', { class: 'sechead' }, T('Rooms')),
@@ -1131,22 +1157,22 @@ function roomBlock() {
   const t = pins.find((p) => p.device.tempC != null);
   const sw = (d) => el('label', { class: 'switch' }, el('input', { type: 'checkbox', checked: d.on || d.playing ? true : null, onchange: () => { d.on = !d.on; act(d, d.kind === 'media' ? 'toggle' : d.on ? 'on' : 'off'); drawPinsSoon(); } }), el('span'));
   // tap a row for every control, in a card right where the device is on the plan
-  const row = (p, extra) => { const d = p.device, st = devState(d); return el('div', { class: `drow${st.act ? ' act' : ''}` }, el('div', { class: 'dtop' }, el('button', { type: 'button', class: 'dopen', title: `${pinName(p)}: all controls`, onclick: () => openCard(p) }, ic(iconOf(d)), el('span', { class: 'dn' }, pinName(p)), el('small', {}, st.val ?? '')), extra)); };
+  const row = (p, extra) => { const d = p.device, st = devState(d); return el('div', { class: `drow${st.act ? ' act' : ''}` }, el('div', { class: 'dtop' }, el('button', { type: 'button', class: 'dopen', title: T('{pinName}: all controls', { pinName: pinName(p) }), onclick: () => openCard(p) }, ic(iconOf(d)), el('span', { class: 'dn' }, pinName(p)), el('small', {}, st.val ?? '')), extra)); };
   const lights = kinds((d) => d.kind === 'light'), ctl = kinds((d) => ['plug', 'switch', 'fan', 'media'].includes(d.kind)), cams = kinds((d) => d.kind === 'camera');
   const more = kinds((d) => ['climate', 'cover', 'lock', 'alarm', 'vacuum', 'action'].includes(d.kind));
   const other = pins.filter((p) => !lights.includes(p) && !ctl.includes(p) && !cams.includes(p) && !more.includes(p));
   const w = pins.filter((p) => p.device.powerW != null && p.device.on !== false).reduce((a, p) => a + p.device.powerW, 0);
   return el('div', {},
-    el('div', { class: 'rhead' }, el('button', { type: 'button', class: 'iconbtn', title: 'Back to the house', onclick: () => { S.room = null; layout(true); } }, ic('back')), el('i', { class: 'swatch big', style: `--rc:${r.color}` }),
+    el('div', { class: 'rhead' }, el('button', { type: 'button', class: 'iconbtn', title: T('Back to the house'), onclick: () => { S.room = null; layout(true); } }, ic('back')), el('i', { class: 'swatch big', style: `--rc:${r.color}` }),
       el('div', {}, el('h2', {}, r.name), el('small', {}, [t ? temp(t.device.tempC) : '', w ? `${fmtW(w)} now` : '', F.f.name].filter(Boolean).join(' · ')))),
     live.saveViewBtn(S.room.floor, S.room.i),   // LIVE: "Save this view" for the room
-    lights.length ? el('div', { class: 'sechead' }, `Lights · ${lights.filter((p) => p.device.on).length} on`, el('button', { type: 'button', class: 'mini', onclick: () => allLights(lights, false) }, 'All off')) : null,
-    ...lights.map((p) => { const d = p.device, x = row(p, sw(d)); if (d.brightness != null || d.on) x.append(el('input', { type: 'range', min: 1, max: 100, value: d.brightness ?? 100, class: 'bri', 'aria-label': 'Brightness', onchange: (e) => { d.on = true; d.brightness = Number(e.target.value); act(d, 'brightness', d.brightness); drawPinsSoon(); } })); return x; }),
-    ctl.length ? el('div', { class: 'sechead' }, 'Plugs & devices') : null,
-    ...ctl.map((p) => { const d = p.device, x = row(p, sw(d)); if (d.powerW != null || d.energyKWh != null) x.append(el('div', { class: 'meter' }, d.powerW != null ? el('span', {}, el('b', {}, d.on === false ? '0 W' : fmtW(d.powerW)), ' now') : null, d.energyKWh != null ? el('span', {}, el('b', {}, `${(+d.energyKWh).toFixed(2)} kWh`), ' today') : null)); return x; }),
-    more.length ? el('div', { class: 'sechead' }, 'Climate, blinds & more') : null, ...more.map((p) => row(p)),
-    other.length ? el('div', { class: 'sechead' }, 'Sensors') : null, ...other.map((p) => row(p)),
-    cams.length ? el('div', { class: 'sechead' }, 'Cameras') : null, ...cams.map((p) => el('button', { type: 'button', class: 'camthumb', onclick: () => cameraModal(p.device, pinName(p)) }, el('img', { src: `${snapUrl(p.device)}${snapUrl(p.device).includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 30000)}`, alt: pinName(p), loading: 'lazy' }), el('span', {}, pinName(p)))),
+    lights.length ? el('div', { class: 'sechead' }, T('Lights · {n} on', { n: lights.filter((p) => p.device.on).length }), el('button', { type: 'button', class: 'mini', onclick: () => allLights(lights, false) }, T('All off'))) : null,
+    ...lights.map((p) => { const d = p.device, x = row(p, sw(d)); if (d.brightness != null || d.on) x.append(el('input', { type: 'range', min: 1, max: 100, value: d.brightness ?? 100, class: 'bri', 'aria-label': T('Brightness'), onchange: (e) => { d.on = true; d.brightness = Number(e.target.value); act(d, 'brightness', d.brightness); drawPinsSoon(); } })); return x; }),
+    ctl.length ? el('div', { class: 'sechead' }, T('Plugs & devices')) : null,
+    ...ctl.map((p) => { const d = p.device, x = row(p, sw(d)); if (d.powerW != null || d.energyKWh != null) x.append(el('div', { class: 'meter' }, d.powerW != null ? el('span', {}, el('b', {}, d.on === false ? '0 W' : fmtW(d.powerW)), T(' now')) : null, d.energyKWh != null ? el('span', {}, el('b', {}, `${(+d.energyKWh).toFixed(2)} kWh`), T(' today')) : null)); return x; }),
+    more.length ? el('div', { class: 'sechead' }, T('Climate, blinds & more')) : null, ...more.map((p) => row(p)),
+    other.length ? el('div', { class: 'sechead' }, T('Sensors')) : null, ...other.map((p) => row(p)),
+    cams.length ? el('div', { class: 'sechead' }, T('Cameras')) : null, ...cams.map((p) => el('button', { type: 'button', class: 'camthumb', onclick: () => cameraModal(p.device, pinName(p)) }, el('img', { src: `${snapUrl(p.device)}${snapUrl(p.device).includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 30000)}`, alt: pinName(p), loading: 'lazy' }), el('span', {}, pinName(p)))),
     !pins.length ? el('p', { class: 'note' }, T('Nothing placed in this room yet. Open'), ' ', el('b', {}, T('Edit > Devices')), ' ', T('and click where each device is.')) : null);
 }
 
@@ -1252,11 +1278,11 @@ function drawRouteHandles() {
     onmove: (ev) => { const l = floorAt(ev.clientX, ev.clientY, F); if (!l) return; t.pts[idx] = [l.x, l.z]; o.position.set(l.x, y, l.z); drawPowerSoon(); },
     onend: () => { routeSave(); },
   });
-  t.pts.forEach((q, i) => { const o = add(q, 'bend', 'Drag to move this bend. Double-click to remove it.', (e) => drag(i, o)(e), () => { t.pts.splice(i, 1); drawPower(); routeSave(); }); });
+  t.pts.forEach((q, i) => { const o = add(q, 'bend', T('Drag to move this bend. Double-click to remove it.'), (e) => drag(i, o)(e), () => { t.pts.splice(i, 1); drawPower(); routeSave(); }); });
   for (let i = 0; i < seq.length - 1; i++) {
     const a = seq[i], b = seq[i + 1], at = Math.max(0, i - off + 1);
     if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.5) continue;
-    const o = add([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], 'mid', 'Drag to add a bend here', (e) => { if (t.pts.length >= 30) { toast('That\'s the most bends one line can have.'); return; } t.pts.splice(at, 0, [o.position.x, o.position.z]); o.element.classList.replace('mid', 'bend'); drag(at, o)(e); });
+    const o = add([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], 'mid', T('Drag to add a bend here'), (e) => { if (t.pts.length >= 30) { toast(T('That\'s the most bends one line can have.')); return; } t.pts.splice(at, 0, [o.position.x, o.position.z]); o.element.classList.replace('mid', 'bend'); drag(at, o)(e); });
   }
 }
 
@@ -1299,7 +1325,7 @@ function placeAt(d, cx, cy) {
   const l = F.G.worldToLocal(hit.point.clone().add(hit.face.normal.clone().transformDirection(hit.object.matrixWorld).multiplyScalar(0.15)));
   const old = S.pins.find((p) => p.deviceId === d.id);
   S.pins = S.pins.filter((p) => p.deviceId !== d.id).concat({ ...(old || {}), deviceId: d.id, floor: F.f.id, pos: [l.x, l.y, l.z] });
-  S.tool = null; savePins(); toast(`${d.name} placed. Drag it on the house to fine-tune.`);
+  S.tool = null; savePins(); toast(T('{name} placed. Drag it on the house to fine-tune.', { name: d.name }));
   return true;
 }
 function listDrag(e, d) {
@@ -1308,7 +1334,7 @@ function listDrag(e, d) {
   let last = null; const ghost = el('div', { class: 'pin ghost' }, ic(iconOf(d)), el('span', { class: 'val' }, d.name));
   dragging(e, {
     onmove: (ev) => { if (!ghost.isConnected) document.body.append(ghost); ghost.style.left = `${ev.clientX}px`; ghost.style.top = `${ev.clientY}px`; last = ev; },
-    onend: () => { ghost.remove(); if (last && !placeAt(d, last.clientX, last.clientY)) toast('Let go over the house to place it.'); },
+    onend: () => { ghost.remove(); if (last && !placeAt(d, last.clientX, last.clientY)) toast(T('Let go over the house to place it.')); },
   });
 }
 
@@ -1350,7 +1376,7 @@ function fitNudge(P, ahead, right) {   // "away from you" and "to your right", a
 async function joinFit() {
   const t = S.tool, P = S.F[t?.floor], B = S.F[t?.into]; if (!P || !B) return;
   const dx = P.G.position.x - B.G.position.x, dz = P.G.position.z - B.G.position.z, tag = `r${Date.now().toString(36).slice(-4)}`;
-  S.tool = null; editor(); toast(`Joining ${P.f.name} to ${B.f.name}…`);
+  S.tool = null; editor(); toast(T('Joining {name} to {name2}…', { name: P.f.name, name2: B.f.name }));
   try {
     const blob = await mergeGlb([
       { url: `/api/floorplan/floors/${B.f.id}/model`, pos: [0, 0], rotY: B.inner.rotation.y, scale: B.inner.scale.x },
@@ -1364,7 +1390,7 @@ async function joinFit() {
     await send('/api/floorplan/pins', 'PUT', { pins: S.pins });
     const pan = S.plan.settings?.panel; if (pan?.floor === P.f.id) await send('/api/floorplan/settings', 'PUT', { panel: { floor: B.f.id, pos: [pan.pos[0] + dx, pan.pos[1], pan.pos[2] + dz] } });
     await api(`/api/floorplan/floors/${P.f.id}`, { method: 'DELETE' });
-    S.floorView = B.f.id; await reload(); toast(`${P.f.name} is now part of ${B.f.name}.`);
+    S.floorView = B.f.id; await reload(); toast(T('{name} is now part of {name2}.', { name: P.f.name, name2: B.f.name }));
     const next = scans().find((F) => F.f.id !== B.f.id && (F.f.level || 0) === (B.f.level || 0) && F.rooms.length <= 1);
     if (next) startFit(next.f.id, B.f.id);   // more rooms waiting beside it: straight on to the next one
   } catch (e) { proErr(e); await reload(); }
@@ -1391,14 +1417,14 @@ renderer.domElement.addEventListener('click', (e) => {
   if (!S.tool || S.tool.type === 'fit' || S.dragged) return;
   if (S.tool.type === 'aim') {
     const pin = S.pins.find((x) => x.deviceId === S.tool.dev.id), P = pin && beamFrom(pin), g = ray.ray.intersectPlane(new THREE.Plane(new V3(0, 1, 0), -groundY()), new V3());
-    if (!pin?.beam || !P || !g) { toast('Click on the ground outside.'); return; }
+    if (!pin?.beam || !P || !g) { toast(T('Click on the ground outside.')); return; }
     const dx = g.x - P.x, dz = g.z - P.z, dist = Math.hypot(dx, dz);
-    if (dist < 0.5) { toast('Click a little further from the light.'); return; }
+    if (dist < 0.5) { toast(T('Click a little further from the light.')); return; }
     pin.beam = { ...pin.beam, aim: Math.round(Math.atan2(dz, dx) * 180 / Math.PI), reach: Math.min(30, Math.max(2, Math.round(dist * 1.25 * 2) / 2)) };
     S.tool = null; drawBeams(); savePins(); return;
   }
   if (S.tool.type?.startsWith('yard-')) { const g = ray.ray.intersectPlane(new THREE.Plane(new V3(0, 1, 0), -groundY()), new V3()); if (g) yardClick(g); return; }
-  if (!hit) { toast('Click on the model.'); return; }
+  if (!hit) { toast(T('Click on the model.')); return; }
   const F = S.F[hit.object.userData.floor];
   if (S.tool.type === 'device') {
     const local = F.G.worldToLocal(hit.point.clone().add(hit.face.normal.clone().transformDirection(hit.object.matrixWorld).multiplyScalar(0.15)));
@@ -1406,13 +1432,13 @@ renderer.domElement.addEventListener('click', (e) => {
     S.pins = S.pins.filter((p) => p.deviceId !== S.tool.dev.id).concat({ ...(old || {}), deviceId: S.tool.dev.id, floor: F.f.id, pos: [local.x, local.y, local.z] });
     S.tool = null; savePins();
   } else if (S.tool.type === 'erase') {
-    if (F.f.id !== S.tool.floor) { toast(`Click a part of ${S.F[S.tool.floor]?.f.name || 'that floor'}.`); return; }
+    if (F.f.id !== S.tool.floor) { toast(T('Click a part of {floor}.', { floor: S.F[S.tool.floor]?.f.name || T('that floor') })); return; }
     const key = hit.object.userData.key, list = [...(F.f.hiddenParts || [])];
     if (key && !list.includes(key)) { list.push(key); S.tool.done.push(key); for (const m of (F.items.get(key) || [hit.object])) m.visible = false; hit.object.visible = false; saveHidden(F, list); }
   } else if (S.tool.type === 'route') {
     const pin = S.pins.find((p) => p.deviceId === S.tool.dev.id);
-    if (!pin || F.f.id !== pin.floor) { toast('Click on the same floor as the device.'); return; }
-    if (S.tool.pts.length >= 30) { toast('That\'s the most bends one line can have.'); return; }
+    if (!pin || F.f.id !== pin.floor) { toast(T('Click on the same floor as the device.')); return; }
+    if (S.tool.pts.length >= 30) { toast(T('That\'s the most bends one line can have.')); return; }
     const l = F.G.worldToLocal(hit.point.clone()); S.tool.pts.push([+l.x.toFixed(2), +l.z.toFixed(2)]); drawPower(); editor();
   } else if (S.tool.type === 'panel') {
     const l = F.G.worldToLocal(hit.point.clone());
@@ -1420,10 +1446,10 @@ renderer.domElement.addEventListener('click', (e) => {
   } else if (S.tool.type === 'room') {
     const l = F.G.worldToLocal(hit.point.clone()), rooms = F.rooms.map((x) => ({ ...x }));
     if (S.tool.i >= 0 && S.tool.floor === F.f.id) rooms[S.tool.i].pos = [+l.x.toFixed(2), +l.z.toFixed(2)];
-    else rooms.push({ name: `Room ${rooms.length + 1}`, color: ROOM_COLORS[rooms.length % ROOM_COLORS.length], pos: [+l.x.toFixed(2), +l.z.toFixed(2)] });
+    else rooms.push({ name: T('Room {n}', { n: rooms.length + 1 }), color: ROOM_COLORS[rooms.length % ROOM_COLORS.length], pos: [+l.x.toFixed(2), +l.z.toFixed(2)] });
     S.focusName = S.tool.i >= 0 && S.tool.floor === F.f.id ? S.tool.i : rooms.length - 1; S.tool = null; saveRooms(F, rooms);
   } else if (S.tool.type === 'paint') {
-    if (F.original) { toast('This floor uses the scan\'s own colors. Switch it to "Styled" under Floors to paint it.'); return; }
+    if (F.original) { toast(T('This floor uses the scan\'s own colors. Switch it to "Styled" under Floors to paint it.')); return; }
     S.sel = { floor: F.f.id, key: hit.object.userData.key }; showSel(); editor();
   }
 });
@@ -1471,7 +1497,7 @@ function yardClick(g) {
   const t = S.tool, at = [+g.x.toFixed(2), +g.z.toFixed(2)];
   if (t.type === 'yard-area') { if (t.pts.length >= 200) return; t.pts.push(at); yardPreview(); editor(); return; }
   const y = yardData();
-  if (t.type === 'yard-place') { const it = { id: newId(), kind: t.kind, pos: at, rot: 0, scale: 1, ...(t.kind === 'car' ? { name: 'Car', color: '#cfd6df', body: 'sedan', bind: {} } : {}) }; y.items.push(it); S.yardSel = it.id; }
+  if (t.type === 'yard-place') { const it = { id: newId(), kind: t.kind, pos: at, rot: 0, scale: 1, ...(t.kind === 'car' ? { name: T('Car'), color: '#cfd6df', body: 'sedan', bind: {} } : {}) }; y.items.push(it); S.yardSel = it.id; }
   if (t.type === 'yard-move') { const it = y.items.find((x) => x.id === t.id); if (it) it.pos = at; }
   S.tool = null; saveYard(y);
 }
@@ -1526,8 +1552,8 @@ async function autoCars() {
   if (!named.length) return;
   try {
     const r = await send('/api/floorplan/yard', 'PUT', y); S.plan.yard = r.yard; buildYard(); layout(false); fitView(); S.liveSig = null; await refresh(); if (S.mode === 'edit') editor();
-    const where = blankUsed ? 'where you put it' : (y.areas || []).some((a) => a.kind === 'driveway') ? 'on the driveway' : 'next to the house';
-    toast(`Found ${named.join(' and ')} - ${named.length > 1 ? 'they show' : 'it shows'} on your 3D home${blankUsed ? '' : ` ${where}`}. Drag a car in Editor › Yard to change where it parks.`);
+    const where = blankUsed ? T('where you put it') : (y.areas || []).some((a) => a.kind === 'driveway') ? T('on the driveway') : T('next to the house');
+    toast(T(named.length > 1 ? 'Found {names} - they show on your 3D home{where}. Drag a car in Editor › Yard to change where it parks.' : 'Found {names} - it shows on your 3D home{where}. Drag a car in Editor › Yard to change where it parks.', { names: named.join(T(' and ')), where: blankUsed ? '' : ` ${where}` }));
   } catch { /* someone who can only look: nothing is saved */ }
 }
 /* Find a car's sensors by their names - Tesla, and most EVs in Home Assistant, name them the same way. */
@@ -1549,19 +1575,19 @@ function edYard() {
     el('option', { value: '' }, '-'), ...devs.filter(filter).sort((a, b) => a.name.localeCompare(b.name)).map((d) => el('option', { value: d.id, selected: it.bind[key] === d.id ? true : null }, d.name))));
   const row = (it, i) => {
     const sel = S.yardSel === it.id;
-    const head = el('div', { class: 'dtop' }, el('b', {}, it.kind === 'car' ? it.name : ITEM_KINDS[it.kind]), el('small', {}, it.kind === 'car' ? (it.bind.plugged || it.bind.home ? 'linked' : 'not linked') : ''));
-    const btns = el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.yardSel = it.id; S.tool = { type: 'yard-move', id: it.id }; editor(); } }, 'Move'),
-      el('button', { type: 'button', class: 'mini', title: 'Turn 45°', onclick: () => { it.rot = ((it.rot || 0) + 45) % 360; saveYard(y); } }, 'Turn'),
-      el('button', { type: 'button', class: 'mini', onclick: () => { y.items.splice(i, 1); saveYard(y); } }, 'Remove'),
-      el('button', { type: 'button', class: 'mini', onclick: () => { S.yardSel = sel ? null : it.id; editor(); } }, sel ? 'Less' : 'More'));
+    const head = el('div', { class: 'dtop' }, el('b', {}, it.kind === 'car' ? it.name : ITEM_KINDS[it.kind]), el('small', {}, it.kind === 'car' ? (it.bind.plugged || it.bind.home ? T('linked') : T('not linked')) : ''));
+    const btns = el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.yardSel = it.id; S.tool = { type: 'yard-move', id: it.id }; editor(); } }, T('Move')),
+      el('button', { type: 'button', class: 'mini', title: T('Turn 45°'), onclick: () => { it.rot = ((it.rot || 0) + 45) % 360; saveYard(y); } }, T('Turn')),
+      el('button', { type: 'button', class: 'mini', onclick: () => { y.items.splice(i, 1); saveYard(y); } }, T('Remove')),
+      el('button', { type: 'button', class: 'mini', onclick: () => { S.yardSel = sel ? null : it.id; editor(); } }, sel ? T('Less') : T('More')));
     const more = !sel ? null : it.kind === 'car' ? el('div', {},
-      el('div', { class: 'row' }, el('label', {}, 'Name'), el('input', { type: 'text', value: it.name, maxlength: 30, oninput: (e) => { it.name = e.target.value || 'Car'; save(); } }), el('input', { type: 'color', value: it.color, title: 'Paint color', oninput: (e) => { it.color = e.target.value; save(); } })),
+      el('div', { class: 'row' }, el('label', {}, T('Name')), el('input', { type: 'text', value: it.name, maxlength: 30, oninput: (e) => { it.name = e.target.value || 'Car'; save(); } }), el('input', { type: 'color', value: it.color, title: T('Paint color'), oninput: (e) => { it.color = e.target.value; save(); } })),
       seg([['sedan', 'Car'], ['suv', 'SUV']], it.body, (v) => { it.body = v; saveYard(y); }),
-      el('p', { class: 'note' }, 'Link it to your car\'s sensors to show it home or away, plugged in, charging and its battery. Needs your car in Home Assistant (Tesla, and many other EVs). CasaTorch only shows the car - it never controls it.'),
-      el('button', { type: 'button', class: 'mini', onclick: () => { const g = findCars(devs)[0]?.bind || guessCar(devs); const n = Object.values(g).filter(Boolean).length; if (!n) { toast('No car sensors found. Add your car to Home Assistant first (Connect > Add any Home Assistant integration).'); return; } it.bind = Object.fromEntries(Object.entries(g).filter(([, v]) => v)); toast(`Found ${n} of 4 - check them below.`); saveYard(y); } }, 'Find my car\'s sensors'),
-      pick('Home or away', 'home', it, (d) => d.pres), pick('Plugged in', 'plugged', it, (d) => d.bin || d.kind === 'switch'), pick('Charging power', 'power', it, (d) => d.pw), pick('Battery', 'battery', it, (d) => d.bat))
-      : it.kind === 'charger' ? el('p', { class: 'note' }, 'The charging cable runs from here to a car that\'s plugged in, and a power line runs here from your panel.')
-      : el('div', { class: 'row' }, el('label', {}, 'Size'), el('input', { type: 'range', min: 0.4, max: 3, step: 0.1, value: it.scale || 1, oninput: (e) => { it.scale = Number(e.target.value); save(); } }));
+      el('p', { class: 'note' }, T('Link it to your car\'s sensors to show it home or away, plugged in, charging and its battery. Needs your car in Home Assistant (Tesla, and many other EVs). CasaTorch only shows the car - it never controls it.')),
+      el('button', { type: 'button', class: 'mini', onclick: () => { const g = findCars(devs)[0]?.bind || guessCar(devs); const n = Object.values(g).filter(Boolean).length; if (!n) { toast(T('No car sensors found. Add your car to Home Assistant first (Connect > Add any Home Assistant integration).')); return; } it.bind = Object.fromEntries(Object.entries(g).filter(([, v]) => v)); toast(T('Found {n} of 4 - check them below.', { n })); saveYard(y); } }, T('Find my car\'s sensors')),
+      pick(T('Home or away'), 'home', it, (d) => d.pres), pick(T('Plugged in'), 'plugged', it, (d) => d.bin || d.kind === 'switch'), pick(T('Charging power'), 'power', it, (d) => d.pw), pick(T('Battery'), 'battery', it, (d) => d.bat))
+      : it.kind === 'charger' ? el('p', { class: 'note' }, T('The charging cable runs from here to a car that\'s plugged in, and a power line runs here from your panel.'))
+      : el('div', { class: 'row' }, el('label', {}, T('Size')), el('input', { type: 'range', min: 0.4, max: 3, step: 0.1, value: it.scale || 1, oninput: (e) => { it.scale = Number(e.target.value); save(); } }));
     return el('div', { class: `edrow${sel ? ' sel' : ''}` }, head, btns, more);
   };
   return el('div', {},   // OUTDOOR: drawing the ground (lawn, pool, fences...) moved to the Outdoor panel above (floorplan-outdoor.js)
@@ -1601,7 +1627,7 @@ const saveStyleSoon = debounce(saveStyle, 500);
 
 /* ---------- editor ---------- */
 function setMode(m) {
-  if (m === 'edit' && !S.plan.pro?.pro) { toast('The editor is part of CasaTorch Pro.'); return; }
+  if (m === 'edit' && !S.plan.pro?.pro) { toast(T('Editing your 3D home needs CasaTorch Pro. Your plan is saved.')); return; }
   const looked = editLook(); S.mode = m; S.tool = null; clearSel(); S.room = null; closeCard(); if (m === 'edit') { if (S.tour) stopTour(); controls.autoRotate = false; }
   if (looked !== editLook()) { skyAt = 0; applyLook(); drawThemeSeg(); }
   document.body.classList.toggle('editing', m === 'edit');
@@ -1622,7 +1648,7 @@ const edFloor = () => curF() || Object.values(S.F)[0];
    change, not one per letter. Uploading, joining or removing a scan can't be undone; the list starts again after those. */
 S.hist = { undo: [], redo: [], busy: false, last: '', at: 0 };
 const UNDOABLE = /^\/api\/floorplan\/(pins|yard|items|style|settings|floors\/[\w-]+(\/plan)?)$/;   // OUTDOOR: + items (furniture and things)
-const WHAT = (u) => (/pins/.test(u) ? 'devices' : /yard/.test(u) ? 'the yard' : /items/.test(u) ? 'the furniture' :/style/.test(u) ? 'colors' : /settings/.test(u) ? 'house settings' : 'the floor');
+const WHAT = (u) => (/pins/.test(u) ? 'devices' : /yard/.test(u) ? T('the yard') : /items/.test(u) ? T('the furniture') :/style/.test(u) ? 'colors' : /settings/.test(u) ? T('house settings') : T('the floor'));
 async function undoBefore(url, method) {
   const H = S.hist; if (H.busy || method === 'GET' || !url.startsWith('/api/floorplan')) return;
   if ((method === 'POST' && /\/floors/.test(url)) || method === 'DELETE' || /\/model$/.test(url)) { H.undo = []; H.redo = []; return; }   // scans: not undoable
@@ -1655,7 +1681,7 @@ async function undoRedo(dir) {
     const step = from.pop(), cur = await (await fetch('/api/floorplan')).json();
     to.push({ plan: cur, what: step.what });
     S.tool = null; await putPlan(step.plan, cur); await reload();
-    toast(`${dir === 'undo' ? 'Undone' : 'Redone'}: a change to ${step.what}.`);
+    toast(T('{done}: a change to {what}.', { done: dir === 'undo' ? T('Undone') : T('Redone'), what: step.what }));
   } catch (e) { proErr(e); H.queue = []; await reload().catch(() => {}); }
   finally { H.busy = false; editor(); const next = H.queue?.shift(); if (next) undoRedo(next); }
 }
@@ -1666,8 +1692,8 @@ addEventListener('keydown', (e) => {   // Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl+Y
 });
 const undoBar = () => { const H = S.hist, mac = /Mac|iPhone|iPad/.test(navigator.platform), key = mac ? '⌘' : 'Ctrl+';
   return el('div', { class: 'undobar' },
-    el('button', { type: 'button', class: 'mini', disabled: H.undo.length && !H.busy ? null : true, title: H.undo.length ? `Undo a change to ${H.undo[H.undo.length - 1].what} (${key}Z)` : 'Nothing to undo', onclick: () => undoRedo('undo') }, '↶ Undo'),
-    el('button', { type: 'button', class: 'mini', disabled: H.redo.length && !H.busy ? null : true, title: H.redo.length ? `Redo a change to ${H.redo[H.redo.length - 1].what} (${key}${mac ? '⇧Z' : 'Y'})` : 'Nothing to redo', onclick: () => undoRedo('redo') }, '↷ Redo'),
+    el('button', { type: 'button', class: 'mini', disabled: H.undo.length && !H.busy ? null : true, title: H.undo.length ? T('Undo a change to {what} ({key}Z)', { what: H.undo[H.undo.length - 1].what, key }) : T('Nothing to undo'), onclick: () => undoRedo('undo') }, T('↶ Undo')),
+    el('button', { type: 'button', class: 'mini', disabled: H.redo.length && !H.busy ? null : true, title: H.redo.length ? T('Redo a change to {what} ({key}{x})', { what: H.redo[H.redo.length - 1].what, key, x: mac ? '⇧Z' : 'Y' }) : T('Nothing to redo'), onclick: () => undoRedo('redo') }, T('↷ Redo')),
     el('button', { type: 'button', class: 'mini primary addbtn', title: T('What can I add?'), 'aria-haspopup': 'dialog', onclick: openAdd }, sIcon('plus', 14), T('Add'))); };   // QA: + Add; Backups joins from floorplan-net.js
 function editor() {
   const box = $('#left'), a = document.activeElement;
@@ -1692,37 +1718,37 @@ function editorDraw() {
     : { devices: edDevices, rooms: edRooms, furniture: () => outdoor.panelFurniture(), yard: () => outdoor.panelYard(edYard()), colors: edColors, floors: edFloors, network: () => netMod?.panel?.() || el('p', { class: 'note' }, T('Loading…')) }[S.tab]();
   const od = outdoor.hint(); if (od) return fill(box, od);   // OUTDOOR: drawing a lawn, placing a sofa, the wall view
   const er = S.tool?.type === 'erase' ? S.tool : null;
-  if (er) { const F = S.F[er.floor]; return fill(box, el('div', { class: 'hint' }, `Hiding parts of ${F?.f.name}. Click anything that shouldn't be there - a stray chair, scan noise, a wall from next door. ${er.done.length} hidden so far. Nothing is deleted from your scan; you can bring it all back.`,
-    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.tool = null; reload(); } }, 'Done'),
-      el('button', { type: 'button', class: 'mini', disabled: er.done.length ? null : true, onclick: () => { const k = er.done.pop(); saveHidden(F, (F.f.hiddenParts || []).filter((x) => x !== k)); F.inner.traverse((o) => { if (o.isMesh && o.userData.key === k) o.visible = true; }); editor(); } }, 'Undo last')))); }
+  if (er) { const F = S.F[er.floor]; return fill(box, el('div', { class: 'hint' }, T('Hiding parts of {floor}. Click anything that shouldn\'t be there - a stray chair, scan noise, a wall from next door. {n} hidden so far. Nothing is deleted from your scan; you can bring it all back.', { floor: F?.f.name, n: er.done.length }),
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.tool = null; reload(); } }, T('Done')),
+      el('button', { type: 'button', class: 'mini', disabled: er.done.length ? null : true, onclick: () => { const k = er.done.pop(); saveHidden(F, (F.f.hiddenParts || []).filter((x) => x !== k)); F.inner.traverse((o) => { if (o.isMesh && o.userData.key === k) o.visible = true; }); editor(); } }, T('Undo last'))))); }
   if (S.tool?.type === 'scan-align') return fill(box, Scan.alignPanel());   // REALISM: lining up a photo-real scan
   const ft = S.tool?.type === 'fit' ? S.tool : null;
   if (ft) {
     const P = S.F[ft.floor], B = S.F[ft.into], b = (label, fn, cls = 'mini') => el('button', { type: 'button', class: cls, onclick: fn }, label);
     if (P && B) return fill(box, el('div', { class: 'hint col' },
-      el('div', {}, el('b', {}, `Fitting ${P.f.name} into ${B.f.name}`), el('p', { class: 'note' }, 'Press on the room and drag it until its walls meet the rest of the floor. Turn it if it faces the wrong way. Then press Join.')),
-      el('div', { class: 'row' }, el('small', {}, 'Turn'), b('⟲ 90°', () => fitTurn(P, 90)), b('⟳ 90°', () => fitTurn(P, -90)), b('⟲ 5°', () => fitTurn(P, 5)), b('⟳ 5°', () => fitTurn(P, -5))),
-      el('div', { class: 'row' }, el('small', {}, 'Nudge'), b('◀', () => fitNudge(P, 0, -0.1)), b('▶', () => fitNudge(P, 0, 0.1)), b('▲', () => fitNudge(P, 0.1, 0)), b('▼', () => fitNudge(P, -0.1, 0))),
-      el('div', { class: 'row' }, b(`Join to ${B.f.name}`, joinFit, 'mini primary'), b('Keep it separate', () => { S.tool = null; layout(true); editor(); }))));
+      el('div', {}, el('b', {}, T('Fitting {name} into {name2}', { name: P.f.name, name2: B.f.name })), el('p', { class: 'note' }, T('Press on the room and drag it until its walls meet the rest of the floor. Turn it if it faces the wrong way. Then press Join.'))),
+      el('div', { class: 'row' }, el('small', {}, T('Turn')), b('⟲ 90°', () => fitTurn(P, 90)), b('⟳ 90°', () => fitTurn(P, -90)), b('⟲ 5°', () => fitTurn(P, 5)), b('⟳ 5°', () => fitTurn(P, -5))),
+      el('div', { class: 'row' }, el('small', {}, T('Nudge')), b('◀', () => fitNudge(P, 0, -0.1)), b('▶', () => fitNudge(P, 0, 0.1)), b('▲', () => fitNudge(P, 0.1, 0)), b('▼', () => fitNudge(P, -0.1, 0))),
+      el('div', { class: 'row' }, b(T('Join to {name}', { name: B.f.name }), joinFit, 'mini primary'), b(T('Keep it separate'), () => { S.tool = null; layout(true); editor(); }))));
     S.tool = null;
   }
   const re = S.tool?.type === 'route-edit' ? S.tool : null;
-  if (re) return fill(box, el('div', { class: 'hint' }, `Editing the power line to "${re.dev.name}". Drag a dot to move a bend, drag a + to add one, double-click a dot to remove it. Changes are saved as you go.`,
-    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.tool = null; clearRouteHandles(); drawPower(); editor(); } }, 'Done'),
-      el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; clearRouteHandles(); saveRoute(re.dev.id, null); } }, 'Back to automatic'))));
+  if (re) return fill(box, el('div', { class: 'hint' }, T('Editing the power line to "{name}". Drag a dot to move a bend, drag a + to add one, double-click a dot to remove it. Changes are saved as you go.', { name: re.dev.name }),
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.tool = null; clearRouteHandles(); drawPower(); editor(); } }, T('Done')),
+      el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; clearRouteHandles(); saveRoute(re.dev.id, null); } }, T('Back to automatic')))));
   const rt = S.tool?.type === 'route' ? S.tool : null;
-  if (rt) return fill(box, el('div', { class: 'hint' }, `Drawing the power line to "${rt.dev.name}". Click along the floor, in order from the panel to the device, wherever the wire really runs. ${rt.pts.length} bend${rt.pts.length === 1 ? '' : 's'} so far.`,
-    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => saveRoute(rt.dev.id, rt.pts.length ? rt.pts : null) }, 'Done'),
-      el('button', { type: 'button', class: 'mini', disabled: rt.pts.length ? null : true, onclick: () => { rt.pts.pop(); drawPower(); editor(); } }, 'Undo last bend'),
-      el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; drawPower(); editor(); } }, 'Cancel'))));
+  if (rt) return fill(box, el('div', { class: 'hint' }, T(rt.pts.length === 1 ? 'Drawing the power line to "{name}". Click along the floor, in order from the panel to the device, wherever the wire really runs. {n} bend so far.' : 'Drawing the power line to "{name}". Click along the floor, in order from the panel to the device, wherever the wire really runs. {n} bends so far.', { name: rt.dev.name, n: rt.pts.length }),
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => saveRoute(rt.dev.id, rt.pts.length ? rt.pts : null) }, T('Done')),
+      el('button', { type: 'button', class: 'mini', disabled: rt.pts.length ? null : true, onclick: () => { rt.pts.pop(); drawPower(); editor(); } }, T('Undo last bend')),
+      el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; drawPower(); editor(); } }, T('Cancel')))));
   const ya = S.tool?.type === 'yard-area' ? S.tool : null;
-  if (ya) return fill(box, el('div', { class: 'hint' }, `Drawing ${AREA_KINDS[ya.kind][0].toLowerCase()}: click its corners on the ground, one after another. ${ya.pts.length} so far${ya.pts.length < 3 ? ' - at least 3' : ''}.`,
-    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', disabled: ya.pts.length >= 3 ? null : true, onclick: () => { const y = yardData(); y.areas.push({ id: newId(), kind: ya.kind, pts: ya.pts }); S.tool = null; yardPreview(); saveYard(y); } }, 'Finish'),
-      el('button', { type: 'button', class: 'mini', disabled: ya.pts.length ? null : true, onclick: () => { ya.pts.pop(); yardPreview(); editor(); } }, 'Undo last corner'),
-      el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; yardPreview(); editor(); } }, 'Cancel'))));
-  const hint = S.tool?.type === 'yard-place' ? `Click on the ground where the ${ITEM_KINDS[S.tool.kind].toLowerCase()} goes.` : S.tool?.type === 'yard-move' ? 'Click on the ground where it should go.' : S.tool?.type === 'aim' ? `Click the ground where "${S.tool.dev.name}" shines.` : S.tool?.type === 'panel' ? 'Click where the electrical panel is (a wall or the floor next to it).' : S.tool?.type === 'device' ? `Click on the house where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
+  if (ya) return fill(box, el('div', { class: 'hint' }, T('Drawing {area}: click its corners on the ground, one after another. {n} so far{min}.', { area: AREA_KINDS[ya.kind][0].toLowerCase(), n: ya.pts.length, min: ya.pts.length < 3 ? T(' - at least 3') : '' }),
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', disabled: ya.pts.length >= 3 ? null : true, onclick: () => { const y = yardData(); y.areas.push({ id: newId(), kind: ya.kind, pts: ya.pts }); S.tool = null; yardPreview(); saveYard(y); } }, T('Finish')),
+      el('button', { type: 'button', class: 'mini', disabled: ya.pts.length ? null : true, onclick: () => { ya.pts.pop(); yardPreview(); editor(); } }, T('Undo last corner')),
+      el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; yardPreview(); editor(); } }, T('Cancel')))));
+  const hint = S.tool?.type === 'yard-place' ? T('Click on the ground where the {thing} goes.', { thing: ITEM_KINDS[S.tool.kind].toLowerCase() }) : S.tool?.type === 'yard-move' ? T('Click on the ground where it should go.') : S.tool?.type === 'aim' ? T('Click the ground where "{name}" shines.', { name: S.tool.dev.name }) : S.tool?.type === 'panel' ? T('Click where the electrical panel is (a wall or the floor next to it).') : S.tool?.type === 'device' ? T('Click on the house where "{name}" is.', { name: S.tool.dev.name }) : S.tool?.type === 'room' ? T('Click the middle of the room on the model.') : S.tool?.type === 'paint' ? T('Click any wall, floor, door or piece of furniture.') : null;
   fill(box, undoBar(), tabBar({ el }, S.tab, pickTab), tabHint({ el }, S.tab),
-    hint ? el('div', { class: 'hint' }, hint, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; editor(); drawPins(); } }, 'Cancel')) : null, body);
+    hint ? el('div', { class: 'hint' }, hint, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; editor(); drawPins(); } }, T('Cancel'))) : null, body);
 }
 function pickTab(k) {
   const looked = editLook(); S.tab = k; if (looked !== editLook()) { skyAt = 0; applyLook(); }
@@ -1749,62 +1775,62 @@ function openAdd() {
   const inside = has ? (outdoor.catalog?.() || []).map((x) => ({ ...x, run: go(x.tab, x.run) })) : [];
   const yardThings = has ? Object.entries(ITEM_KINDS).map(([k, n]) => ({ group: 'Outdoor', label: T(n), icon: 'tree', words: k === 'car' ? 'vehicle ev driveway' : k === 'charger' ? 'ev car wallbox' : 'garden plant', run: go('yard', () => { S.tool = { type: 'yard-place', kind: k }; editor(); }) })) : [];
   const placed = new Set(S.pins.map((p) => p.deviceId));
-  const devs = has ? [{ group: 'Devices', label: T('Electrical panel'), icon: 'devices', words: 'breaker fuse power', run: go('devices', () => { S.tool = { type: 'panel', dev: { id: '_panel', name: 'the electrical panel' } }; editor(); }) },
-    ...(S.live?.devices || []).filter((d) => !placed.has(d.id)).sort((a, b) => a.name.localeCompare(b.name)).map((d) => ({ group: 'Devices', label: d.name, icon: 'devices', hint: KIND_WORD[d.kind] || '', words: `${d.kind} ${d.area || ''}`, run: go('devices', () => { S.tool = { type: 'device', dev: d }; editor(); drawPins(); }) }))] : [];
+  const devs = has ? [{ group: T('Devices'), label: T('Electrical panel'), icon: 'devices', words: T('breaker fuse power'), run: go('devices', () => { S.tool = { type: 'panel', dev: { id: '_panel', name: T('the electrical panel') } }; editor(); }) },
+    ...(S.live?.devices || []).filter((d) => !placed.has(d.id)).sort((a, b) => a.name.localeCompare(b.name)).map((d) => ({ group: 'Devices', label: d.name, icon: 'devices', hint: KIND_WORD[d.kind] ? T(KIND_WORD[d.kind]) : '', words: `${d.kind} ${d.area || ''}`, run: go('devices', () => { S.tool = { type: 'device', dev: d }; editor(); drawPins(); }) }))] : [];
   const net = has ? (netMod?.addItems?.() || []).map((x) => ({ ...x, group: 'Network', icon: 'network', run: go('network', x.run) })) : [];
   addPicker({ el, modal, closeModal, items: [...house, ...inside, ...yardThings, ...devs, ...net] });
 }
 function floorPicker() {
   if (Object.keys(S.F).length < 2) return null;
   const s = el('select', { onchange: (e) => { pickFloor(e.target.value); editor(); } }, ...Object.values(S.F).map((F) => el('option', { value: F.f.id, selected: edFloor() === F ? true : null }, F.f.name)));
-  return el('div', { class: 'row' }, el('label', {}, 'Floor'), s);
+  return el('div', { class: 'row' }, el('label', {}, T('Floor')), s);
 }
 const pinOf = (id) => S.pins.find((x) => x.deviceId === id);
 function beamRow(d, p0) {
   const p = pinOf(d.id) || p0, cur = () => pinOf(d.id) || p, b = p.beam, bb = () => cur().beam || b, live = () => { drawBeams(); }, keep = () => savePins();
-  const box = el('label', { class: 'chk', title: 'It is outside and shines one way, like a flood light or a porch light' }, el('input', { type: 'checkbox', checked: b ? true : null,
-    onchange: (e) => { const q = cur(); q.beam = e.target.checked ? { aim: autoAim(q), spread: 70, reach: 8 } : null; keep(); if (p.beam) toast(`${pinName({ ...p, device: d })} now shines outward. Click Aim, then the spot on the ground it lights.`); } }), 'Outdoor flood light');
-  if (!b) return el('div', { class: 'row' }, box, /flood|porch|outdoor|outside|exterior|garage|driveway|patio|yard|garden|landscape|security|path|deck|front door|back door/i.test(`${p.label || ''} ${d.name}`) ? el('small', {}, 'Sounds like an outdoor light') : null);
+  const box = el('label', { class: 'chk', title: T('It is outside and shines one way, like a flood light or a porch light') }, el('input', { type: 'checkbox', checked: b ? true : null,
+    onchange: (e) => { const q = cur(); q.beam = e.target.checked ? { aim: autoAim(q), spread: 70, reach: 8 } : null; keep(); if (p.beam) toast(T('{pinName} now shines outward. Click Aim, then the spot on the ground it lights.', { pinName: pinName({ ...p, device: d }) })); } }), T('Outdoor flood light'));
+  if (!b) return el('div', { class: 'row' }, box, /flood|porch|outdoor|outside|exterior|garage|driveway|patio|yard|garden|landscape|security|path|deck|front door|back door/i.test(`${p.label || ''} ${d.name}`) ? el('small', {}, T('Sounds like an outdoor light')) : null);
   const slider = (label, key, min, max, step, unit) => el('div', { class: 'row' }, el('label', {}, label), el('input', { type: 'range', min, max, step, value: b[key], 'aria-label': label,
     oninput: (e) => { bb()[key] = Number(e.target.value); e.target.nextSibling.textContent = `${bb()[key]}${unit}`; live(); }, onchange: keep }), el('small', {}, `${b[key]}${unit}`));
   const turn = (by) => { const x = bb(); x.aim = ((x.aim + by + 540) % 360) - 180; live(); savePinsSoon(); };
   return el('div', { class: 'beamset' }, el('div', { class: 'row' }, box),
-    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', title: 'Then click the ground where it shines', onclick: () => { S.tool = { type: 'aim', dev: { id: d.id, name: p.label || d.name } }; editor(); } }, 'Aim it'),
-      el('button', { type: 'button', class: 'mini', title: 'Turn left 15°', onclick: () => turn(-15) }, '⟲ 15°'), el('button', { type: 'button', class: 'mini', title: 'Turn right 15°', onclick: () => turn(15) }, '⟳ 15°'),
-      el('button', { type: 'button', class: 'mini', title: 'Point straight out from the house', onclick: () => { bb().aim = autoAim(cur()); live(); keep(); } }, 'Straight out')),
-    slider('Width', 'spread', 15, 160, 5, '°'), slider('Reach', 'reach', 2, 30, 0.5, ' m'));
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', title: T('Then click the ground where it shines'), onclick: () => { S.tool = { type: 'aim', dev: { id: d.id, name: p.label || d.name } }; editor(); } }, T('Aim it')),
+      el('button', { type: 'button', class: 'mini', title: T('Turn left 15°'), onclick: () => turn(-15) }, '⟲ 15°'), el('button', { type: 'button', class: 'mini', title: T('Turn right 15°'), onclick: () => turn(15) }, '⟳ 15°'),
+      el('button', { type: 'button', class: 'mini', title: T('Point straight out from the house'), onclick: () => { bb().aim = autoAim(cur()); live(); keep(); } }, T('Straight out'))),
+    slider(T('Width'), 'spread', 15, 160, 5, '°'), slider(T('Reach'), 'reach', 2, 30, 0.5, ' m'));
 }
 function edDevices() {
   const placed = new Map(S.pins.map((p) => [p.deviceId, p])), q = S.q.toLowerCase();
   /* Cars live in the yard (Editor > Yard), not on the device list - a car's headlights or charge switch aren't something to place in a room. */
   const carKeys = new Set(findCars(S.live?.parts || S.live?.devices || []).map((c) => c.key)), carIds = new Set((S.plan.yard?.items || []).filter((it) => it.kind === 'car').flatMap((it) => Object.values(it.bind || {})));
   const devs = (S.live?.devices || []).filter((d) => !(d.dev && carKeys.has(`dev:${d.dev}`)) && !carIds.has(d.id)).filter((d) => !q || `${d.name} ${d.id}`.toLowerCase().includes(q)).sort((a, b) => a.name.localeCompare(b.name));
-  const search = el('input', { type: 'search', placeholder: 'Search devices', value: S.q });
+  const search = el('input', { type: 'search', placeholder: T('Search devices'), value: S.q });
   search.oninput = () => { S.q = search.value; editor(); const n = $('#left input[type=search]'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
   const pick = (d) => { S.tool = { type: 'device', dev: d }; editor(); drawPins(); };
   const placedRow = (d) => { const p = placed.get(d.id), active = S.tool?.dev?.id === d.id;
-    return el('div', { class: `edrow${active ? ' sel' : ''}` }, el('div', { class: 'dtop' }, ic(iconOf(d)), el('input', { type: 'text', value: p.label || '', placeholder: d.name, title: 'Name on the plan', oninput: (e) => { (pinOf(d.id) || p).label = e.target.value.trim() || null; savePinsSoon(); } }),
-      d.kind === 'light' ? el('input', { type: 'color', value: p.color || '#ffc477', title: 'Glow color', oninput: (e) => { (pinOf(d.id) || p).color = e.target.value; savePinsSoon(); } }) : null),
+    return el('div', { class: `edrow${active ? ' sel' : ''}` }, el('div', { class: 'dtop' }, ic(iconOf(d)), el('input', { type: 'text', value: p.label || '', placeholder: d.name, title: T('Name on the plan'), oninput: (e) => { (pinOf(d.id) || p).label = e.target.value.trim() || null; savePinsSoon(); } }),
+      d.kind === 'light' ? el('input', { type: 'color', value: p.color || '#ffc477', title: T('Glow color'), oninput: (e) => { (pinOf(d.id) || p).color = e.target.value; savePinsSoon(); } }) : null),
     d.kind === 'light' ? beamRow(d, p) : null,
     live.editorRow(d, p),   // LIVE: real color or fixed, rain warning, camera view wedge
-    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => pick(d) }, 'Move'), POWERED.has(d.kind) ? el('button', { type: 'button', class: 'mini', title: 'Move the power line\'s bends to where the wire really runs', onclick: () => routeEdit(d) }, 'Edit power line') : null,
-      p.route ? el('button', { type: 'button', class: 'mini', title: 'Back to the automatic route', onclick: () => saveRoute(d.id, null) }, 'Auto line') : null,
-      el('button', { type: 'button', class: 'mini', onclick: () => { S.pins = S.pins.filter((x) => x.deviceId !== d.id); savePins(); } }, 'Remove'), el('small', {}, S.F[p.floor]?.f.name || ''))); };
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => pick(d) }, T('Move')), POWERED.has(d.kind) ? el('button', { type: 'button', class: 'mini', title: T('Move the power line\'s bends to where the wire really runs'), onclick: () => routeEdit(d) }, T('Edit power line')) : null,
+      p.route ? el('button', { type: 'button', class: 'mini', title: T('Back to the automatic route'), onclick: () => saveRoute(d.id, null) }, T('Auto line')) : null,
+      el('button', { type: 'button', class: 'mini', onclick: () => { S.pins = S.pins.filter((x) => x.deviceId !== d.id); savePins(); } }, T('Remove')), el('small', {}, S.F[p.floor]?.f.name || ''))); };
   const free = devs.filter((d) => !placed.has(d.id)), on = devs.filter((d) => placed.has(d.id));
   const sugg = autoPlaces(free);
   return el('div', {}, search,   // QA: the tab's hint line says how; no second paragraph
-    el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, ic('plug'), el('b', {}, 'Electrical panel'), el('small', {}, S.plan.settings?.panel ? 'placed' : 'front corner')),
-      el('p', { class: 'note' }, 'Where the power comes into the house. The power lines start here.'),
-      el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'panel', dev: { id: '_panel', name: 'the electrical panel' } }; editor(); } }, S.plan.settings?.panel ? 'Move' : 'Place it'),
-        S.plan.settings?.panel ? el('button', { type: 'button', class: 'mini', onclick: () => saveSettings({ panel: null }) }, 'Reset') : null)),
-    sugg.length ? el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, ic('dot'), el('b', {}, `${sugg.length} can go straight into their rooms`)),
-      el('p', { class: 'note' }, 'Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.'),
-      el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.pins = S.pins.concat(sugg.map((x) => x.pin)); savePins(); toast(`Placed ${sugg.length} devices. Drag any of them to move it.`); } }, `Place ${sugg.length}`))) : null,
-    el('h3', {}, `Not placed (${groupFree(free).length})`), ...groupFree(free).map((g) => {
-      const open = !!q || S.open?.has(g.k), row = (d, sub) => el('button', { type: 'button', class: `edrow pick${sub ? ' sub' : ''}${S.tool?.dev?.id === d.id ? ' sel' : ''}`, title: 'Drag it onto the house - or click it, then click the spot', onclick: () => { if (!S.dragged) pick(d); }, onpointerdown: (e) => listDrag(e, d) }, ic(iconOf(d)), el('span', { class: 'nm' }, d.name), el('small', {}, KIND_WORD[d.kind] || d.kind));
-      return el('div', { class: 'edgroup' }, row(g.main), g.more.length && !q ? el('button', { type: 'button', class: 'mini wide', 'aria-expanded': String(open), onclick: () => { S.open ||= new Set(); if (open) S.open.delete(g.k); else S.open.add(g.k); editor(); } }, open ? 'Hide its other parts' : `+ ${g.more.length} more from this device`) : null, ...(open ? g.more.map((d) => row(d, true)) : []));
+    el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, ic('plug'), el('b', {}, T('Electrical panel')), el('small', {}, S.plan.settings?.panel ? T('placed') : T('front corner'))),
+      el('p', { class: 'note' }, T('Where the power comes into the house. The power lines start here.')),
+      el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'panel', dev: { id: '_panel', name: T('the electrical panel') } }; editor(); } }, S.plan.settings?.panel ? T('Move') : T('Place it')),
+        S.plan.settings?.panel ? el('button', { type: 'button', class: 'mini', onclick: () => saveSettings({ panel: null }) }, T('Reset')) : null)),
+    sugg.length ? el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, ic('dot'), el('b', {}, T('{n} can go straight into their rooms', { n: sugg.length }))),
+      el('p', { class: 'note' }, T('Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.')),
+      el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => { S.pins = S.pins.concat(sugg.map((x) => x.pin)); savePins(); toast(T('Placed {n} devices. Drag any of them to move it.', { n: sugg.length })); } }, T('Place {n}', { n: sugg.length })))) : null,
+    el('h3', {}, T('Not placed ({n})', { n: groupFree(free).length })), ...groupFree(free).map((g) => {
+      const open = !!q || S.open?.has(g.k), row = (d, sub) => el('button', { type: 'button', class: `edrow pick${sub ? ' sub' : ''}${S.tool?.dev?.id === d.id ? ' sel' : ''}`, title: T('Drag it onto the house - or click it, then click the spot'), onclick: () => { if (!S.dragged) pick(d); }, onpointerdown: (e) => listDrag(e, d) }, ic(iconOf(d)), el('span', { class: 'nm' }, d.name), el('small', {}, KIND_WORD[d.kind] || d.kind));
+      return el('div', { class: 'edgroup' }, row(g.main), g.more.length && !q ? el('button', { type: 'button', class: 'mini wide', 'aria-expanded': String(open), onclick: () => { S.open ||= new Set(); if (open) S.open.delete(g.k); else S.open.add(g.k); editor(); } }, open ? T('Hide its other parts') : T('+ {n} more from this device', { n: g.more.length })) : null, ...(open ? g.more.map((d) => row(d, true)) : []));
     }),
-    el('h3', {}, `On the plan (${on.length})`), ...on.map(placedRow));
+    el('h3', {}, T('On the plan ({n})', { n: on.length })), ...on.map(placedRow));
 }
 /* Devices Home Assistant has in an area whose name matches one of your rooms: placed in a little ring
    around the room's centre, at about light-switch height, ready to drag into place. */
@@ -1832,17 +1858,17 @@ function autoPlaces(free) {
   return out;
 }
 function edRooms() {
-  const F = edFloor(); if (!F) return el('p', { class: 'note' }, 'Add a floor first (Floors tab).');
+  const F = edFloor(); if (!F) return el('p', { class: 'note' }, T('Add a floor first (Floors tab).'));
   const rooms = F.rooms.map((r) => ({ ...r }));
   const save = () => saveRoomsSoon(F, rooms);
   const list = rooms.map((r, i) => el('div', { class: 'edrow' }, el('div', { class: 'dtop' },
-    el('input', { type: 'color', value: r.color || ROOM_COLORS[i % ROOM_COLORS.length], title: 'Room color', oninput: (e) => { r.color = e.target.value; F.rooms = rooms; roomUniforms(F); save(); } }),
+    el('input', { type: 'color', value: r.color || ROOM_COLORS[i % ROOM_COLORS.length], title: T('Room color'), oninput: (e) => { r.color = e.target.value; F.rooms = rooms; roomUniforms(F); save(); } }),
     el('input', { type: 'text', value: r.name, maxlength: 30, 'data-room': i, oninput: (e) => { r.name = e.target.value; save(); } })),
-  el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'room', i, floor: F.f.id }; editor(); } }, 'Move'), el('button', { type: 'button', class: 'mini', onclick: () => focusRoomEdit(F, i) }, 'Show'), el('button', { type: 'button', class: 'mini', onclick: () => { rooms.splice(i, 1); saveRooms(F, rooms); } }, T('Remove')))));
+  el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'room', i, floor: F.f.id }; editor(); } }, T('Move')), el('button', { type: 'button', class: 'mini', onclick: () => focusRoomEdit(F, i) }, T('Show')), el('button', { type: 'button', class: 'mini', onclick: () => { rooms.splice(i, 1); saveRooms(F, rooms); } }, T('Remove')))));
   if (S.focusName != null) setTimeout(() => { const n = $(`#left input[data-room="${S.focusName}"]`); n?.focus(); n?.select(); S.focusName = null; }, 0);
-  return el('div', {}, floorPicker(), el('p', { class: 'note' }, 'Rooms color the floor, group devices, and show up as buttons in the 3D view. Devices belong to the nearest room center.'),
-    ...list, el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => { S.tool = { type: 'room', i: -1, floor: F.f.id }; editor(); } }, 'Add a room'),
-      F.detected.length ? el('button', { type: 'button', onclick: () => { if (confirm('Replace these rooms with the ones found in the scan?')) saveRooms(F, F.detected); } }, 'Use rooms from scan') : null));
+  return el('div', {}, floorPicker(), el('p', { class: 'note' }, T('Rooms color the floor, group devices, and show up as buttons in the 3D view. Devices belong to the nearest room center.')),
+    ...list, el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => { S.tool = { type: 'room', i: -1, floor: F.f.id }; editor(); } }, T('Add a room')),
+      F.detected.length ? el('button', { type: 'button', onclick: () => { if (confirm(T('Replace these rooms with the ones found in the scan?'))) saveRooms(F, F.detected); } }, T('Use rooms from scan')) : null));
 }
 function focusRoomEdit(F, i) { const r = F.rooms[i], w = F.G.localToWorld(new V3(r.pos[0], F.minY, r.pos[1])); flyTo(w, w.clone().add(new V3(3, 7, 5))); }
 function edColors() {
@@ -1850,21 +1876,21 @@ function edColors() {
   style.colors ||= {};
   const F = S.sel && S.F[S.sel.floor], selName = S.sel ? prettyItem(S.sel.key) : null;
   return el('div', {},
-    el('label', { class: 'chk', title: 'A bright, flat look while you place devices and draw - your own look stays for viewing' }, el('input', { type: 'checkbox', checked: prefs.editLook !== false ? true : null, onchange: (e) => { prefs.editLook = e.target.checked; savePrefs(); } }), 'Use the bright editing look on the other tabs'),
-    el('h3', {}, 'Look'), seg(Object.entries(THEMES).map(([k, t]) => [k, t.label]), theme, (v) => { prefs.theme = v; savePrefs(); style.theme = v; saveStyleSoon(); applyLook(); editor(); }),
-    el('p', { class: 'note' }, 'Everyone sees this look unless they pick another one at the top of the 3D view.'),
+    el('label', { class: 'chk', title: T('A bright, flat look while you place devices and draw - your own look stays for viewing') }, el('input', { type: 'checkbox', checked: prefs.editLook !== false ? true : null, onchange: (e) => { prefs.editLook = e.target.checked; savePrefs(); } }), T('Use the bright editing look on the other tabs')),
+    el('h3', {}, T('Look')), seg(Object.entries(THEMES).map(([k, t]) => [k, t.label]), theme, (v) => { prefs.theme = v; savePrefs(); style.theme = v; saveStyleSoon(); applyLook(); editor(); }),
+    el('p', { class: 'note' }, T('Everyone sees this look unless they pick another one at the top of the 3D view.')),
     el('h3', {}, `${THEMES[theme].label} colors`),
-    ...COLOR_KEYS.map(([k, label]) => el('div', { class: 'row' }, el('label', {}, label), el('input', { type: 'color', value: L[k], oninput: (e) => { (style.colors[theme] ||= {})[k] = e.target.value; applyLook(); saveStyleSoon(); } }))),
-    el('button', { type: 'button', class: 'mini', onclick: () => { delete style.colors[theme]; applyLook(); saveStyleSoon(); editor(); } }, 'Reset to defaults'),
-    el('h3', {}, 'Roof, power and glow'),
-    el('div', { class: 'row' }, el('label', {}, 'Roof'), el('input', { type: 'color', value: style.extras?.roof || (theme === 'day' ? '#8a5a44' : '#1e2b4f'), oninput: (e) => { (style.extras ||= {}).roof = e.target.value; buildRoofs(); layout(false); saveStyleSoon(); } })),
-    el('div', { class: 'row' }, el('label', {}, 'Power lines'), el('input', { type: 'color', value: style.extras?.flow || L.flow, oninput: (e) => { (style.extras ||= {}).flow = e.target.value; drawPower(); saveStyleSoon(); } })),
-    el('div', { class: 'row' }, el('label', {}, 'Light glow'), el('input', { type: 'range', min: 0.3, max: 2.5, step: 0.1, value: style.extras?.glow || 1, oninput: (e) => { (style.extras ||= {}).glow = Number(e.target.value); drawPins(); saveStyleSoon(); } })),
-    el('h3', {}, 'Paint one thing'),
-    el('button', { type: 'button', class: S.tool?.type === 'paint' ? 'primary' : '', onclick: () => { S.tool = S.tool?.type === 'paint' ? null : { type: 'paint' }; if (!S.tool) clearSel(); editor(); } }, S.tool?.type === 'paint' ? 'Painting - click things on the model' : 'Pick something to paint'),
+    ...COLOR_KEYS.map(([k, label]) => el('div', { class: 'row' }, el('label', {}, T(label)), el('input', { type: 'color', value: L[k], oninput: (e) => { (style.colors[theme] ||= {})[k] = e.target.value; applyLook(); saveStyleSoon(); } }))),
+    el('button', { type: 'button', class: 'mini', onclick: () => { delete style.colors[theme]; applyLook(); saveStyleSoon(); editor(); } }, T('Reset to defaults')),
+    el('h3', {}, T('Roof, power and glow')),
+    el('div', { class: 'row' }, el('label', {}, T('Roof')), el('input', { type: 'color', value: style.extras?.roof || (theme === 'day' ? '#8a5a44' : '#1e2b4f'), oninput: (e) => { (style.extras ||= {}).roof = e.target.value; buildRoofs(); layout(false); saveStyleSoon(); } })),
+    el('div', { class: 'row' }, el('label', {}, T('Power lines')), el('input', { type: 'color', value: style.extras?.flow || L.flow, oninput: (e) => { (style.extras ||= {}).flow = e.target.value; drawPower(); saveStyleSoon(); } })),
+    el('div', { class: 'row' }, el('label', {}, T('Light glow')), el('input', { type: 'range', min: 0.3, max: 2.5, step: 0.1, value: style.extras?.glow || 1, oninput: (e) => { (style.extras ||= {}).glow = Number(e.target.value); drawPins(); saveStyleSoon(); } })),
+    el('h3', {}, T('Paint one thing')),
+    el('button', { type: 'button', class: S.tool?.type === 'paint' ? 'primary' : '', onclick: () => { S.tool = S.tool?.type === 'paint' ? null : { type: 'paint' }; if (!S.tool) clearSel(); editor(); } }, S.tool?.type === 'paint' ? T('Painting - click things on the model') : T('Pick something to paint')),
     F ? el('div', { class: 'edrow sel' }, el('div', { class: 'dtop' }, el('b', {}, selName), el('small', {}, `${F.items.get(S.sel.key)?.[0]?.userData.cat || ''} · ${F.f.name}`)),
       el('div', { class: 'row' }, el('input', { type: 'color', value: F.f.paint?.[S.sel.key] || '#ffffff', oninput: (e) => { (F.f.paint ||= {})[S.sel.key] = e.target.value; styleFloor(F); savePaintSoon(F); } }),
-        el('button', { type: 'button', class: 'mini', onclick: () => { if (F.f.paint) delete F.f.paint[S.sel.key]; styleFloor(F); savePaintSoon(F); editor(); } }, 'Reset'))) : null);
+        el('button', { type: 'button', class: 'mini', onclick: () => { if (F.f.paint) delete F.f.paint[S.sel.key]; styleFloor(F); savePaintSoon(F); editor(); } }, T('Reset')))) : null);
 }
 /* QA: uploading a scan and scanning here are shared by the Floors tab and the 3-step start. */
 const SCAN_ACCEPT = '.usdz,.usd,.usdc,.usda,.glb,.gltf,.obj,.mtl,.ply,.zip,.bin,.png,.jpg,.jpeg,.webp,model/gltf-binary,model/gltf+json,application/zip';
@@ -1875,15 +1901,15 @@ async function uploadFloorFiles(list, intoId = '', nameValue = '') {
     let base = intoId; const made = [];
     try {
       for (const [i, g] of groups.entries()) {
-        toast(groups.length > 1 ? `Preparing ${i + 1} of ${groups.length}…` : 'Preparing the model…');
-        const m = await toGlb(g); toast(`Uploading (${Math.max(1, Math.round(m.blob.size / 1e6))} MB)…`);
+        toast(groups.length > 1 ? T('Preparing {n} of {n2}…', { n: i + 1, n2: groups.length }) : T('Preparing the model…'));
+        const m = await toGlb(g); toast(T('Uploading ({max} MB)…', { max: Math.max(1, Math.round(m.blob.size / 1e6)) }));
         const lvl = base ? S.plan.floors.find((x) => x.id === base)?.level || 0 : null;
         const r = await api(`/api/floorplan/floors?name=${encodeURIComponent(groups.length > 1 ? m.name : nameValue || m.name)}${lvl != null ? `&level=${lvl}` : ''}`, { method: 'POST', headers: { 'Content-Type': 'model/gltf-binary' }, body: m.blob });
         if (groups.length > 1 && !base) base = r.id; else made.push(r.id);   // several rooms and no floor picked: the first one is the floor, the rest are its rooms
       }
       await reload();
-      if (base && made.length) { for (const id of made) startFit(id, base); toast(made.length > 1 ? `Drag each room into place, then Join. ${made.length - 1} more wait beside the floor.` : 'Drag the room into place, then press Join.'); }
-      else toast('Floor added.');
+      if (base && made.length) { for (const id of made) startFit(id, base); toast(made.length > 1 ? T('Drag each room into place, then Join. {n} more wait beside the floor.', { n: made.length - 1 }) : T('Drag the room into place, then press Join.')); }
+      else toast(T('Floor added.'));
     } catch (e) { proErr(e); await reload().catch(() => {}); }
 }
 /* In the CasaTorch app on an iPhone or iPad with LiDAR: scan a room right here; the scan comes straight in, as if you had uploaded it. */
@@ -1891,11 +1917,11 @@ const canScanHere = () => !!window.CasaNative?.hasLidar;
 async function scanRoomHere(intoId = '', nameValue = '') {
   const N = window.CasaNative;
   try {
-    const avail = await N.lidar(); if (!avail?.available) { toast(avail?.why || 'This phone has no LiDAR scanner.'); return; }
+    const avail = await N.lidar(); if (!avail?.available) { toast(avail?.why || T('This phone has no LiDAR scanner.')); return; }
     const r = await N.scanRoom(); if (!r) return;   // cancelled
     const f = new File([r.bytes], `${(r.name || nameValue || 'Room scan').replace(/[^\w .-]/g, '')}.usdz`, { type: 'model/vnd.usdz+zip' });
     await uploadFloorFiles([f], intoId, nameValue || r.name || '');
-  } catch (e) { toast(e.message || 'The scan didn\'t finish.'); }
+  } catch (e) { toast(e.message || T('The scan didn\'t finish.')); }
 }
 function guideOpts(extra = {}) {
   return { el, pro: !!S.plan.pro?.pro, canScan: canScanHere(), hasFloors: S.plan.floors.length > 0,
@@ -1904,50 +1930,50 @@ function guideOpts(extra = {}) {
 }
 function edFloors() {
   if (!S.plan.floors.length) return startGuide(guideOpts());   // QA: an empty plan: the 3 steps, nothing else
-  const file = el('input', { type: 'file', multiple: true, accept: SCAN_ACCEPT, onchange: () => upload() }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
-  const into = el('select', {}, el('option', { value: '' }, 'A whole floor'), ...scans().map((F) => el('option', { value: F.f.id }, `A room of ${F.f.name}`)));
-  const upload = () => { if (!file.files.length) { toast('Choose the file from your scan first.'); return; } uploadFloorFiles([...file.files], into.value, name.value); };
+  const file = el('input', { type: 'file', multiple: true, accept: SCAN_ACCEPT, onchange: () => upload() }), name = el('input', { type: 'text', placeholder: T('Ground floor') });
+  const into = el('select', {}, el('option', { value: '' }, T('A whole floor')), ...scans().map((F) => el('option', { value: F.f.id }, T('A room of {name}', { name: F.f.name }))));
+  const upload = () => { if (!file.files.length) { toast(T('Choose the file from your scan first.')); return; } uploadFloorFiles([...file.files], into.value, name.value); };
   const canScan = canScanHere(), scanHere = () => scanRoomHere(into.value, name.value);
   const put = (f, body) => send(`/api/floorplan/floors/${f.id}`, 'PUT', body).then(reload).catch(proErr);
   const lone = scans().filter((F) => F.rooms.length <= 1);
   return el('div', {},
-    scans().length > 1 && lone.length ? el('div', { class: 'hint col' }, el('b', {}, 'Scanned one room at a time?'), el('span', {}, `Each room scan shows up as a floor of its own. On each room below, pick "Join to: A room of …" to fit it into its floor.`)) : null,
+    scans().length > 1 && lone.length ? el('div', { class: 'hint col' }, el('b', {}, T('Scanned one room at a time?')), el('span', {}, T('Each room scan shows up as a floor of its own. On each room below, pick "Join to: A room of …" to fit it into its floor.'))) : null,
     ...S.plan.floors.map((f) => { const F = S.F[f.id];
       const n = (k, label, step) => el('div', { class: 'row' }, el('label', {}, label), el('input', { type: 'number', step, value: k === 'offsetX' ? f.offset[0] : k === 'offsetZ' ? f.offset[1] : f[k], onchange: (e) => { const v = Number(e.target.value); put(f, k === 'offsetX' ? { offset: [v, f.offset[1]] } : k === 'offsetZ' ? { offset: [f.offset[0], v] } : { [k]: v }); } }));
-      return el('div', { class: 'card' }, el('div', { class: 'row' }, el('label', {}, 'Name'), el('input', { type: 'text', value: f.name, maxlength: 40, onchange: (e) => put(f, { name: e.target.value }) })),
-        n('level', 'Level (0 = ground)', 1), n('heightM', 'Height (m)', 0.1), n('rotationY', 'Turn (°)', 5), n('scale', 'Scale', 0.01), n('offsetX', 'Shift X (m)', 0.1), n('offsetZ', 'Shift Z (m)', 0.1),
-        F && f.kind !== 'drawn' && scans().length > 1 ? el('div', { class: 'row' }, el('label', {}, 'Join to'), el('select', { title: 'This scan is one room of another floor: fit it in place, then join them', onchange: (e) => { if (e.target.value) startFit(f.id, e.target.value); } },
-          el('option', { value: '' }, 'It is its own floor'), ...scans().filter((x) => x.f.id !== f.id).map((x) => el('option', { value: x.f.id }, `A room of ${x.f.name}`)))) : null,
-        f.kind !== 'drawn' ? el('div', { class: 'row' }, el('label', {}, 'Colors'), el('select', { onchange: (e) => put(f, { look: e.target.value }) }, ...[['auto', 'Automatic'], ['styled', 'Styled (theme)'], ['original', 'Scan\'s own colors']].map(([v, t]) => el('option', { value: v, selected: (f.look || 'auto') === v ? true : null }, t)))) : null,
-        f.kind !== 'drawn' ? el('div', { class: 'row' }, el('label', {}, 'Clean up'), el('button', { type: 'button', class: 'mini', onclick: () => { pickFloor(f.id); S.tool = { type: 'erase', floor: f.id, done: [] }; editor(); } }, 'Hide parts…'),
-          f.hiddenParts?.length ? el('button', { type: 'button', class: 'mini', onclick: () => put(f, { hiddenParts: [] }) }, `Show all ${f.hiddenParts.length} again`) : null) : null,
-        F?.original && f.look !== 'original' ? el('p', { class: 'note' }, 'This scan has no named walls or furniture, so it shows in its own colors.') : null,
+      return el('div', { class: 'card' }, el('div', { class: 'row' }, el('label', {}, T('Name')), el('input', { type: 'text', value: f.name, maxlength: 40, onchange: (e) => put(f, { name: e.target.value }) })),
+        n('level', T('Level (0 = ground)'), 1), n('heightM', T('Height (m)'), 0.1), n('rotationY', T('Turn (°)'), 5), n('scale', T('Scale'), 0.01), n('offsetX', T('Shift X (m)'), 0.1), n('offsetZ', T('Shift Z (m)'), 0.1),
+        F && f.kind !== 'drawn' && scans().length > 1 ? el('div', { class: 'row' }, el('label', {}, T('Join to')), el('select', { title: T('This scan is one room of another floor: fit it in place, then join them'), onchange: (e) => { if (e.target.value) startFit(f.id, e.target.value); } },
+          el('option', { value: '' }, T('It is its own floor')), ...scans().filter((x) => x.f.id !== f.id).map((x) => el('option', { value: x.f.id }, T('A room of {name}', { name: x.f.name }))))) : null,
+        f.kind !== 'drawn' ? el('div', { class: 'row' }, el('label', {}, T('Colors')), el('select', { onchange: (e) => put(f, { look: e.target.value }) }, ...[['auto', 'Automatic'], ['styled', 'Styled (theme)'], ['original', 'Scan\'s own colors']].map(([v, t]) => el('option', { value: v, selected: (f.look || 'auto') === v ? true : null }, t)))) : null,
+        f.kind !== 'drawn' ? el('div', { class: 'row' }, el('label', {}, T('Clean up')), el('button', { type: 'button', class: 'mini', onclick: () => { pickFloor(f.id); S.tool = { type: 'erase', floor: f.id, done: [] }; editor(); } }, T('Hide parts…')),
+          f.hiddenParts?.length ? el('button', { type: 'button', class: 'mini', onclick: () => put(f, { hiddenParts: [] }) }, T('Show all {n} again', { n: f.hiddenParts.length })) : null) : null,
+        F?.original && f.look !== 'original' ? el('p', { class: 'note' }, T('This scan has no named walls or furniture, so it shows in its own colors.')) : null,
         Scan.floorCard(f),   // REALISM: photo-real scans on this floor
-        el('div', { class: 'row' }, f.kind === 'drawn' ? el('button', { type: 'button', class: 'primary', onclick: () => openDrawer(f, drawOpts()) }, 'Edit drawing') : null,
-          el('button', { type: 'button', onclick: async () => { if (!confirm(`Remove ${f.name}?`)) return; await api(`/api/floorplan/floors/${f.id}`, { method: 'DELETE' }).catch(proErr); await reload(); } }, 'Remove floor'))); }),
-    el('h3', {}, 'Which way is north'),
-    el('p', { class: 'note' }, 'So sunlight and shadows fall the way they really do. Pick the direction north is in, looking at the view as it opens.'),
-    seg([[0, 'Ahead'], [90, 'Right'], [180, 'Behind'], [270, 'Left']], S.plan.settings?.northDeg || 0, (v) => saveSettings({ northDeg: v }).then(() => { skyAt = 0; })),
-    el('h3', {}, 'Front of the house'),
-    el('p', { class: 'note' }, 'Which way the 3D view looks into the house when it opens.'),
-    seg([[0, 'Front'], [90, 'Right'], [180, 'Back'], [270, 'Left']], S.plan.settings?.frontDeg || 0, (v) => saveSettings({ frontDeg: v }).then(() => fitView())),
-    el('h3', {}, 'Add a floor'),
-    el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => newDrawnFloor(false) }, 'Draw a floor'), el('button', { type: 'button', onclick: () => newDrawnFloor(true) }, 'Trace a picture')),
+        el('div', { class: 'row' }, f.kind === 'drawn' ? el('button', { type: 'button', class: 'primary', onclick: () => openDrawer(f, drawOpts()) }, T('Edit drawing')) : null,
+          el('button', { type: 'button', onclick: async () => { if (!confirm(T('Remove {name}?', { name: f.name }))) return; await api(`/api/floorplan/floors/${f.id}`, { method: 'DELETE' }).catch(proErr); await reload(); } }, T('Remove floor')))); }),
+    el('h3', {}, T('Which way is north')),
+    el('p', { class: 'note' }, T('So sunlight and shadows fall the way they really do. Pick the direction north is in, looking at the view as it opens.')),
+    seg([[0, T('Ahead')], [90, T('Right')], [180, T('Behind')], [270, T('Left')]], S.plan.settings?.northDeg || 0, (v) => saveSettings({ northDeg: v }).then(() => { skyAt = 0; })),
+    el('h3', {}, T('Front of the house')),
+    el('p', { class: 'note' }, T('Which way the 3D view looks into the house when it opens.')),
+    seg([[0, T('Front')], [90, T('Right')], [180, T('Back')], [270, T('Left')]], S.plan.settings?.frontDeg || 0, (v) => saveSettings({ frontDeg: v }).then(() => fitView())),
+    el('h3', {}, T('Add a floor')),
+    el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => newDrawnFloor(false) }, T('Draw a floor')), el('button', { type: 'button', onclick: () => newDrawnFloor(true) }, T('Trace a picture'))),
     el('div', { class: 'row' }, el('label', {}, T('Import a plan')), el('input', { type: 'file', accept: '.sh3d,.dxf', 'aria-label': T('Import a Sweet Home 3D or DXF plan'), onchange: (e) => { if (e.target.files[0]) Scan.importPlan(e.target.files[0]); } })),   // REALISM
     el('p', { class: 'note' }, T('A Sweet Home 3D home (.sh3d) or a DXF drawing: you see it before anything changes, and can undo it.')),
-    el('h3', {}, canScan ? 'Or scan a room with this phone' : 'Or upload a LiDAR scan'), el('div', { class: 'row' }, el('label', {}, 'This is'), into), el('div', { class: 'row' }, el('label', {}, 'Name'), name),
-    canScan ? el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: scanHere }, 'Scan a room'), el('small', { class: 'note' }, 'Walk the room slowly with the camera on the walls; the scan comes straight in.')) : null,
-    canScan ? el('p', { class: 'note' }, 'Or upload a scan file:') : null, file,
-    el('p', { class: 'note' }, 'USDZ, GLB, GLTF, OBJ, PLY or a .zip of any of them. Scans from Apple RoomPlan apps (LiDarPlan, KIRI Engine Room Scan, Lagarsoft) come with walls, doors, furniture and rooms already named.'),
-    el('p', { class: 'note' }, 'Scanned room by room? Pick all the room files together, or upload each one as "A room of" its floor. You drag each room into place and join them into one floor.'),
-    el('p', { class: 'note' }, 'Floors stack by Level × Height. If a floor sits crooked or off to the side, adjust Turn and Shift until the walls line up.'));
+    el('h3', {}, canScan ? T('Or scan a room with this phone') : T('Or upload a LiDAR scan')), el('div', { class: 'row' }, el('label', {}, T('This is')), into), el('div', { class: 'row' }, el('label', {}, T('Name')), name),
+    canScan ? el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: scanHere }, T('Scan a room')), el('small', { class: 'note' }, T('Walk the room slowly with the camera on the walls; the scan comes straight in.'))) : null,
+    canScan ? el('p', { class: 'note' }, T('Or upload a scan file:')) : null, file,
+    el('p', { class: 'note' }, T('USDZ, GLB, GLTF, OBJ, PLY or a .zip of any of them. Scans from Apple RoomPlan apps (LiDarPlan, KIRI Engine Room Scan, Lagarsoft) come with walls, doors, furniture and rooms already named.')),
+    el('p', { class: 'note' }, T('Scanned room by room? Pick all the room files together, or upload each one as "A room of" its floor. You drag each room into place and join them into one floor.')),
+    el('p', { class: 'note' }, T('Floors stack by Level × Height. If a floor sits crooked or off to the side, adjust Turn and Shift until the walls line up.')));
 }
 /* EDITOR hook: the drawer also gets the other floors (to line up with the one below, and for the whole house) and their outlines,
    and the devices (a door's or window's contact sensor, a blind or curtain - linked in its inspector for the live view). */
 const drawOpts = () => ({ el, api, toast, onSave: reload, devices: () => S.live?.devices || [], floors: () => S.plan.floors, outlines: () => Object.values(S.F).map((F) => ({ id: F.f.id, level: F.f.level || 0, box: [F.box.min.x, F.box.min.z, F.box.max.x, F.box.max.z] })) });
 async function newDrawnFloor(withPicture, extra = {}) {
   try {
-    const r = await send('/api/floorplan/floors/drawn', 'POST', { name: S.plan.floors.length ? `Floor ${S.plan.floors.length + 1}` : 'Ground floor' });
+    const r = await send('/api/floorplan/floors/drawn', 'POST', { name: S.plan.floors.length ? T('Floor {n}', { n: S.plan.floors.length + 1 }) : T('Ground floor') });
     S.plan = await api('/api/floorplan'); openDrawer(r.floor, { ...drawOpts(), ...extra });
     if (withPicture) setTimeout(() => document.querySelector('#drawer input[type=file]')?.click(), 200);
   } catch (e) { proErr(e); }
@@ -1964,7 +1990,7 @@ function guidePanel() {   // QA: Help - the 3 steps (also what an empty plan ope
       el('li', {}, T('Press Edit at the top. The tabs follow the way a home gets built: Floors, Rooms, Furniture, Outdoor, Devices, Network, Colors.')),
       el('li', {}, T('Add (in the editor) finds anything by name - a sofa, a door, a fence, an access point - and starts it for you.')),
       el('li', {}, T('Every change saves by itself. Undo and Redo go back up to 10 changes; Backups keeps restore points.')),
-      el('li', {}, T('Drawn floors open in the drawing editor (Floors > Edit drawing), which has its own Save.'))),
+      el('li', {}, T('Drawn floors open in the drawing editor (Floors > Edit drawing). It saves by itself too; Done closes it.'))),
     S.plan.pro?.pro ? el('p', {}, el('button', { type: 'button', class: 'primary', onclick: () => { close(); setMode('edit'); } }, T('Start editing'))) : el('p', { class: 'note' }, T('Editing the 3D home is part of CasaTorch Pro.')));
 }
 
@@ -1972,17 +1998,17 @@ function guidePanel() {   // QA: Help - the 3 steps (also what an empty plan ope
 /* How now compares with your usual at this hour (the server learns it - 'learning' for the first days). */
 function powerSay(t) {
   const v = t.vs || {}, day = new Date().toLocaleDateString(undefined, { weekday: 'long' }), hr = new Date().toLocaleTimeString(undefined, { hour: 'numeric' });
-  if (!v.level || v.level === 'learning') return 'Learning what is usual for your home at this time - a few days.';
-  const when = v.sameDay ? `on a ${day} around ${hr}` : `around ${hr}`, u = fmtW(v.usual);
-  return { low: `Lower than usual (${u} ${when}).`, normal: `About usual (${u} ${when}).`, above: `Higher than usual (${u} ${when}).`, high: `Much higher than usual (${u} ${when}).` }[v.level];
+  if (!v.level || v.level === 'learning') return T('Learning what is usual for your home at this time - a few days.');
+  const when = v.sameDay ? T('on a {day} around {hr}', { day, hr }) : `around ${hr}`, u = fmtW(v.usual);
+  return { low: T('Lower than usual ({u} {when}).', { u, when }), normal: T('About usual ({u} {when}).', { u, when }), above: T('Higher than usual ({u} {when}).', { u, when }), high: T('Much higher than usual ({u} {when}).', { u, when }) }[v.level];
 }
 function drawTotals() {
   const t = S.live?.totals || {};
   const v = t.vs || {}, tone = { low: 'good', normal: 'good', above: 'warn', high: 'bad' }[v.level] || '';
   const chip = (cls, label, value, kind, title) => el('button', { type: 'button', class: `stat ${cls}`, title, onclick: () => (S.mode === 'view' ? openInfo(kind) : null) }, el('small', {}, label), value);
-  fill($('#totals'), chip(`power ${tone}`, 'Power', fmtW(t.powerW ?? 0), 'energy', powerSay(t)), chip('warm', 'Lights', `${t.lightsOn ?? 0} on`, 'lights', 'Every light, with a switch'),
-    ...(t.playing || []).slice(0, 1).map((p) => el('span', { class: 'stat music' }, el('small', {}, 'Playing'), p.title || p.name)),
-    ...(t.openDoors ? [chip('bad', 'Open', `${t.openDoors}`, 'security', 'What is open')] : []), ...(t.leaks ? [chip('bad', 'Leak', '!', 'security', 'Water or smoke')] : []),
+  fill($('#totals'), chip(`power ${tone}`, T('Power'), fmtW(t.powerW ?? 0), 'energy', powerSay(t)), chip('warm', T('Lights'), T('{lightsOn} on', { lightsOn: t.lightsOn ?? 0 }), 'lights', T('Every light, with a switch')),
+    ...(t.playing || []).slice(0, 1).map((p) => el('span', { class: 'stat music' }, el('small', {}, T('Playing')), p.title || p.name)),
+    ...(t.openDoors ? [chip('bad', T('Open'), `${t.openDoors}`, 'security', T('What is open'))] : []), ...(t.leaks ? [chip('bad', T('Leak'), '!', 'security', T('Water or smoke'))] : []),
     ...live.statusChips());   // LIVE: the status chips the owner picked
 }
 let refreshRun = null, refreshNext = null;
@@ -1998,8 +2024,8 @@ async function refreshOnce() {
     outdoor.live();   // OUTDOOR: bins, mailbox, plants, laundry (GET /api/household, every 20 s at most), awnings and strip lights
     if (!S.autoCarsTried) setTimeout(autoCars, 0); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color, route, beam }) => ({ deviceId, floor, pos, label, color, route, beam })); if (same) return; S.liveSig = sig;   // nothing changed: leave the scene alone
     drawPins(); drawTotals(); if (S.mode === 'edit' && S.tab === 'devices' && !$('#left').contains(document.activeElement) && !S.tool) editor(); }
-  catch { S.misses = (S.misses || 0) + 1; if (S.misses === 3) toast('Can\'t reach your devices right now - trying again every few seconds.'); return; }
-  if (S.misses >= 3) toast('Connected again.'); S.misses = 0;
+  catch { S.misses = (S.misses || 0) + 1; if (S.misses === 3) toast(T('Can\'t reach your devices right now - trying again every few seconds.')); return; }
+  if (S.misses >= 3) toast(T('Connected again.')); S.misses = 0;
 }
 function drawThemeSeg() { $('#themeSeg').replaceChildren(seg(Object.entries(THEMES).map(([k, t]) => [k, t.label]), curTheme(), (v) => { prefs.theme = v; savePrefs(); applyLook(); drawThemeSeg(); drawTools(); if (S.mode === 'edit') editor(); })); }
 async function reload() { S.plan = await api('/api/floorplan'); await loadFloors(); await refresh(); drawThemeSeg(); if (S.mode === 'edit') editor(); }
@@ -2021,7 +2047,8 @@ async function start() {
   if (location.hash === '#edit') setMode('edit');
   if (location.hash === '#panel' || (() => { try { return localStorage.getItem('casatorch-3d-panel') === '1'; } catch { return false; } })()) setPanelMode(true);
   if (new URLSearchParams(location.search).has('embed')) document.querySelector('.brand').target = '_top';
-  if (!S.plan.pro?.pro) toast('3D Home is part of CasaTorch Pro - look around the demo, then upgrade to use your own home.');
+  /* After Pro ends the household's own plan stays on disk and is shown here read-only (nothing is ever deleted). */
+  if (!S.plan.pro?.pro) toast(S.plan.floors.length ? T('Your 3D home is saved and shown here, view only. Editing it needs CasaTorch Pro - nothing was deleted.') : T('3D Home is part of CasaTorch Pro. With Pro you can draw or scan your own home here.'), 9000);
 }
 window.__casa3dReady = true;   // QA: floorplan-compat.js: the modules loaded (a later error is not "too old")
 for (const b of document.querySelectorAll('#modeSeg button')) b.onclick = () => setMode(b.dataset.mode);

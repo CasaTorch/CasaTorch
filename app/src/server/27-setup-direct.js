@@ -5,12 +5,11 @@
  * sign-in. Lives under /api/setup, so it closes with the wizard (05-setup.js).
  * ====================================================================== */
 app.get('/api/setup/geocode', async (req, res) => {
-  const q = String(req.query.q || '').trim().slice(0, 120);
-  if (q.length < 2) return res.json({ places: [] });
-  try {
-    const j = await getJSON(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&q=${encodeURIComponent(q)}`);
-    res.json({ places: (j || []).map((p) => { const a = p.address || {}; const town = a.city || a.town || a.village || a.hamlet || a.county || p.name; return { name: [town, a.state || a.region, a.country_code?.toUpperCase()].filter(Boolean).join(', '), cc: a.country_code ? String(a.country_code).toUpperCase().slice(0, 2) : null, lat: Math.round(Number(p.lat) * 1e4) / 1e4, lon: Math.round(Number(p.lon) * 1e4) / 1e4 }; }) });
-  } catch (err) { res.status(502).json({ error: `town search is not answering (${err.message}) - you can type the latitude and longitude instead` }); }
+  const q = String(req.query.q || '').trim().slice(0, 120);   // OpenStreetMap's Nominatim, used as its policy asks (placeSearch, 61-widgets.js)
+  if (q.length < PLACE_MIN) return res.json({ places: [], credit: PLACE_CREDIT });
+  if (overLimit(`geocode:${clientIp(req)}`, 20, 60_000)) return res.status(429).json({ error: 'slow down - try again in a minute' });
+  try { res.json({ places: await placeSearch(q), credit: PLACE_CREDIT }); }
+  catch (err) { res.status(502).json({ error: `town search is not answering (${err.message}) - you can type the latitude and longitude instead` }); }
 });
 app.get('/api/setup/sports/leagues', (_req, res) => res.json({ leagues: Object.entries(LEAGUES).map(([id, l]) => ({ id, name: l.name })) }));
 app.get('/api/setup/sports/teams', async (req, res) => { try { res.json(await sportsTeams(String(req.query.league || ''))); } catch (err) { res.status(502).json({ error: String(err.message) }); } });

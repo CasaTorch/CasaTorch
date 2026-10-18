@@ -442,7 +442,7 @@ function famMealEditor(x, recent, done) {
 const FAM_VIEWS = [['lists', 'list', 'Lists'], ['chores', 'star', 'Chores'], ['routines', 'sun', 'Routines'], ['meals', 'meal', 'Meals']];
 tab({ id: 'family', label: 'Family', icon: 'star', after: 'reminders', async render(main, sub) {
   const v = FAM_VIEWS.some(([k]) => k === sub) ? sub : FAM.view || 'lists'; FAM.view = v;
-  setTop(tabLabel({ id: 'family', label: 'Family' }), T('Lists, chores, routines and meals'), [el('a', { class: 'btn', href: '#settings/family' }, icon('gear', 14), T('Family settings'))]);
+  setTop(tabLabel({ id: 'family', label: T('Family') }), T('Lists, chores, routines and meals'), [el('a', { class: 'btn', href: '#settings/family' }, icon('gear', 14), T('Family settings'))]);
   const seg = el('div', { class: 'seg fam-seg', role: 'tablist' }, FAM_VIEWS.map(([k, ic, l]) => el('a', { href: `#family/${k}`, role: 'tab', 'aria-selected': String(k === v), class: k === v ? 'on' : '', style: 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;color:inherit;text-decoration:none' + (k === v ? ';background:var(--surface-3);font-weight:600' : ';color:var(--muted)') }, icon(ic, 16), T(l))));
   const host = el('div', { class: 'fam-wrap' });
   main.append(seg, host);
@@ -453,7 +453,7 @@ tab({ id: 'family', label: 'Family', icon: 'star', after: 'reminders', async ren
 
 /* ==================== Home widgets ==================== */
 widget({ id: 'lists', title: 'Lists', icon: 'cart', cat: 'personal', multi: true, blurb: 'Shopping and to-do lists - add, check off, swipe to delete', keywords: 'shopping grocery todo to-do list home assistant', min: [2, 2], size: [3, 4],
-  options: () => [{ key: 'list', type: 'select', label: 'List', choices: [['', T('The first list')], ...((FAM.data?.lists || []).map((l) => [l.id, l.name]))] }, { key: 'add', type: 'toggle', label: 'Quick add', text: 'A box to add things (when there\'s room)', default: true }],
+  options: () => [{ key: 'list', type: 'select', label: T('List'), choices: [['', T('The first list')], ...((FAM.data?.lists || []).map((l) => [l.id, l.name]))] }, { key: 'add', type: 'toggle', label: T('Quick add'), text: T('A box to add things (when there\'s room)'), default: true }],
   async render(b, ctx, { w, h }) {
     const o = optsOf(b._t || {});
     const [d, canAct] = await Promise.all([famLoad(), famRole()]);
@@ -488,7 +488,7 @@ widget({ id: 'chores', title: 'Chores', icon: 'star', cat: 'personal', blurb: 'W
   } });
 
 widget({ id: 'routine', title: 'Routine', icon: 'sun', cat: 'personal', multi: true, blurb: 'A morning or evening routine to tap through', keywords: 'kids routine morning evening checklist bedtime', min: [3, 3], size: [4, 4],
-  options: () => [{ key: 'who', type: 'select', label: 'Whose', choices: [['', T('The first one')], ...((FAM.data?.people || []).map((p) => [p.id, p.name]))] }, { key: 'when', type: 'select', label: 'Which', default: 'auto', choices: [['auto', T('Morning until 2 PM, then evening')], ['morning', T('Morning')], ['evening', T('Evening')]] }],
+  options: () => [{ key: 'who', type: 'select', label: T('Whose'), choices: [['', T('The first one')], ...((FAM.data?.people || []).map((p) => [p.id, p.name]))] }, { key: 'when', type: 'select', label: T('Which'), default: 'auto', choices: [['auto', T('Morning until 2 PM, then evening')], ['morning', T('Morning')], ['evening', T('Evening')]] }],
   async render(b, ctx, { w, h }) {
     const o = optsOf(b._t || {});
     const [d, canAct] = await Promise.all([famLoad(), famRole()]);

@@ -1,5 +1,5 @@
 /* ======================================================================
- * Cisco Meraki cameras (MV) and sensors (MT) - Pro, through the Meraki
+ * Cisco Meraki cameras (MV, Pro) and sensors (MT, also Basic: safety), through the Meraki
  * source connected in Network › Network devices (same API key).
  *
  * Cameras: a fresh picture asked of Meraki's cloud (generateSnapshot), at
@@ -29,8 +29,10 @@ function mtDevice(r, names) {
 integration({
   id: 'meraki', pro: true,
   async list() {
-    const s = merakiSrc(); if (!s || !proStatus().pro) return [];
-    const cams = merakiDevs('camera').map((c) => camDevice('meraki', c.serial, { name: c.name, online: c.online, source: 'Cisco Meraki' }));
+    /* Safety is never Pro: after Pro ends the sensors (water, temperature, battery) keep reading and alerting;
+       only the cameras stop. */
+    const s = merakiSrc(); if (!s) return [];
+    const cams = !proStatus().pro ? [] : merakiDevs('camera').map((c) => camDevice('meraki', c.serial, { name: c.name, online: c.online, source: 'Cisco Meraki' }));
     const names = new Map(merakiDevs('sensor').map((d) => [d.serial, d.name]));
     const sensors = names.size ? (await merakiReadings(s)).filter((r) => r.serial).map((r) => mtDevice(r, names)) : [];
     return [...cams, ...sensors];

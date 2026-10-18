@@ -6,7 +6,7 @@
  * from the same home internet connection, at casatorch.com/home and /find.
  * When CasaTorch shuts down it takes the entry back straight away, so the
  * page never sends anyone to a CasaTorch that's switched off.
- * Settings > Updates > "Help me find this CasaTorch" turns it off.
+ * Settings › Updates & backup › "Help me find this CasaTorch" turns it off.
  * ====================================================================== */
 const FIND_URL = new URL(process.env.CASATORCH_FIND_URL || 'https://casatorch.com/api/find');
 const findOn = () => config.find?.announce !== false;

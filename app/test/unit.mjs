@@ -873,6 +873,29 @@ await t('secure access: Basic, away from home - JSON for the app, a page for bro
   });
 }
 
+t('safety is never paywalled: water, smoke and temperature alerts repeat on Basic as on Pro; Meraki MT sensors keep reading', () => {
+  assert.deepEqual([...H.SAFETY_ALERT_KINDS].sort(), ['leak', 'smoke', 'temp']);
+  for (const k of H.SAFETY_ALERT_KINDS) {
+    const a = { id: `${k}:ha:binary_sensor.x`, severity: 'critical' };
+    assert.equal(H.isSafetyAlert(a.id), true, k);
+    assert.equal(H.alertRepeats(a, false), H.alertRepeats(a, true), `${k}: same on Basic and Pro`);
+    assert.equal(H.alertRepeats(a, false), true, `${k} repeats on Basic`);
+    assert.equal(H.alertRepeats({ ...a, acked: { by: 'x' } }, false), false, `${k}: "Got it" stops it`);
+  }
+  assert.equal(H.alertRepeats({ id: 'internet', severity: 'critical' }, false), false, 'non-safety repeats stay Pro');
+  assert.equal(H.alertRepeats({ id: 'internet', severity: 'critical' }, true), true);
+  assert.equal(H.isSafetyAlert('battery:x'), false);
+  const mt = H.mtDevice({ serial: 'Q2XX-TEST', readings: [{ metric: 'water', water: { present: true } }, { metric: 'temperature', temperature: { celsius: 1 } }] }, new Map());
+  assert.equal(mt.water, true); assert.equal(mt.tempC, 1);
+  /* no Pro check may sit in front of the safety sensor paths */
+  const src = fsMod.readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const meraki = src.slice(src.indexOf("id: 'meraki', pro: true"), src.indexOf('camera: {', src.indexOf("id: 'meraki', pro: true")));
+  assert.doesNotMatch(meraki, /if \(!s \|\| !proStatus\(\)\.pro\) return \[\]/, 'Meraki sensors must not stop when Pro ends');
+  assert.match(src, /runNetwork\(false, !proStatus\(\)\.pro\)/, 'the Meraki source is still read on Basic');
+  const cond = src.slice(src.indexOf('async function alertConditions'), src.indexOf('alerts.open = found; saveAlerts();'));
+  for (const line of cond.split('\n').filter((l) => /leak:|smoke:|temp:/.test(l) && /add\(/.test(l))) assert.doesNotMatch(line, /proStatus/, line);
+});
+
 await (await import('./scan-unit.mjs')).default(t);   // photo-real scans and plan imports (scan-unit.mjs)
 await (await import('./radar-unit.mjs')).default(t);   // the rain radar's tile proxy (radar-unit.mjs)
 await (await import('./live3d-unit.mjs')).default(t);   // the 3D home, live: tweens, glows, replay, rain rule (live3d-unit.mjs)
@@ -884,5 +907,17 @@ await (await import('./floorplan-compat-unit.mjs')).default(t);   // the 3D home
 await (await import('./license-unit.mjs')).default(t);   // Pro keys, grace periods and the trial (license-unit.mjs)
 await (await import('./security-unit.mjs')).default(t);   // the pre-launch security review: outbound-request guard, member links, pre-setup gate (security-unit.mjs)
 await (await import('./support-unit.mjs')).default(t);   // support: the support file's masking, activity log, getting-started checklist (support-unit.mjs)
+t('3D Home: a plan damaged at start comes back from the newest restore point (with a Health note), never over a plan that is there', () => {
+  const PB = globalThis.__casatorchPlan, was = fsMod.existsSync(PB.FP_FILE) ? fsMod.readFileSync(PB.FP_FILE) : null;
+  try {
+    PB.rpPut({ floors: [{ id: 'fh', name: 'Kept floor', kind: 'drawn', level: 0, plan: { rooms: [] } }], pins: [] }, null);
+    const id = PB.rpSnapshot('auto', { force: true, now: new Date(Date.now() - 3600_000) }); assert.ok(id);
+    assert.equal(PB.rpHealPlan(), null, 'the plan is there: nothing to do');
+    const aside = `${PB.FP_FILE}.damaged-unit`; fsMod.writeFileSync(aside, '{"floors": [ cut off'); fsMod.rmSync(PB.FP_FILE);
+    assert.equal(PB.rpHealPlan(), id);
+    assert.equal(JSON.parse(fsMod.readFileSync(PB.FP_FILE, 'utf8')).floors[0].name, 'Kept floor');
+    fsMod.rmSync(aside, { force: true });
+  } finally { if (was) fsMod.writeFileSync(PB.FP_FILE, was); }
+});
 console.log(`\n${n} passed`);
 process.exit(0);

@@ -128,18 +128,21 @@ async function readNetSource(s) {
   }
   return st;
 }
-async function runNetwork(force = false) {
+async function runNetwork(force = false, safetyOnly = false) {
   if (netBusy) return; netBusy = true;
   try {
     const now = Date.now();
-    await Promise.all(netSources().map((s) => {
+    await Promise.all((safetyOnly ? netSafetyOnly() : netSources()).map((s) => {
       const st = netState[s.id], every = s.kind === 'meraki' ? 5 * 60_000 : 2 * 60_000;
       return force || !st?.at || now - Date.parse(st.at) >= every - 5000 ? readNetSource(s) : null;
     }));
     for (const id of Object.keys(netState)) if (!netSources().some((s) => s.id === id)) delete netState[id];
   } finally { netBusy = false; }
 }
-setInterval(() => { if (isConfigured() && !isDemo() && proStatus().pro && netSources().length) runNetwork().catch(() => {}); }, 60_000).unref?.();
+/* Network monitoring is Pro, but a Meraki source keeps being read on Basic: its MT water and temperature sensors are
+   safety alerts, and safety is never paywalled (76-meraki-mv-mt.js only hands out the sensors then). */
+const netSafetyOnly = () => netSources().filter((s) => s.kind === 'meraki');
+setInterval(() => { if (isConfigured() && !isDemo() && (proStatus().pro ? netSources() : netSafetyOnly()).length) runNetwork(false, !proStatus().pro).catch(() => {}); }, 60_000).unref?.();
 
 /* Read by the alert check every minute (40-alerts.js). */
 function networkAlerts() {

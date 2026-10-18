@@ -40,6 +40,8 @@
     try { localStorage.setItem(KEY, JSON.stringify({ lang, dict })); } catch { /* private window */ }
     return true;
   }
+  /* A cached dictionary can be from an older CasaTorch: refresh it quietly in the background (used from the next screen draw on). */
+  if (lang !== 'en') { try { fetch(`/i18n/${lang}.json`, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && typeof d === 'object') { dict = d; try { localStorage.setItem(KEY, JSON.stringify({ lang, dict })); } catch { /* private window */ } } }).catch(() => {}); } catch { /* offline */ } }
   window.CasaI18n = { LANGS, T, TM, use, guess, get lang() { return lang; } };
   window.T = T; window.TM = TM;
 })();

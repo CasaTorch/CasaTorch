@@ -25,7 +25,7 @@ list, casatorch.com and the README follow this table.
 | Fewer false alarms: an alert must still be there a minute later (water and smoke go out at once) | ✓ | ✓ | Now |
 | Security Center: video wall, doors and locks with "Lock all", the alarm (arm only), new-device alerts, open-port check | ✓ | ✓ | Now |
 | Secure address at home (https on your home network), on by default | ✓ | ✓ | Now |
-| **Smart alerts**: doorbell and motion only when nobody's home; critical alerts repeat every 10 minutes until someone taps "Got it" | | ✓ | Now |
+| **Smart alerts**: doorbell and motion only when nobody's home; critical alerts repeat every 10 minutes until someone taps "Got it" (water and smoke repeat on Basic too: safety is never Pro) | | ✓ | Now |
 | **Your day** | | | |
 | Weather, family calendar (built in, plus Google/iCloud/Outlook links), sports scores, headlines | ✓ | ✓ | Now |
 | Rain radar (RainViewer, or the US National Weather Service) and your own weather station | ✓ | ✓ | Now |
@@ -52,7 +52,7 @@ list, casatorch.com and the README follow this table.
 | **Weekly report** every Monday, written by your AI if connected | | ✓ | Now |
 | **Server monitor**: NAS, servers and self-hosted apps, certificates, alerts | | ✓ | Now |
 | **Network monitoring**: UniFi, Cisco Meraki, Pi-hole, AdGuard Home, with alerts | | ✓ | Now |
-| **Cisco Meraki** MV camera pictures and MT sensor readings (through the Meraki network connection) | | ✓ | Now |
+| **Cisco Meraki** MV camera pictures and MT sensor readings (through the Meraki network connection; MT water and temperature alerts keep working on Basic) | | ✓ | Now |
 | **Away from home**: secure remote access from your phone, no port forwarding | At home only | ✓ | Coming |
 | CasaTorch apps for iPhone, iPad and Android | ✓ | ✓ | Coming |
 | Multiple homes in one app; extra panel layouts and theme packs; cloud backup | | ✓ | Coming |

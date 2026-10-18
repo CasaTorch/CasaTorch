@@ -381,7 +381,7 @@ function atZones(hops, { ispAsn = null, destAsn = null } = {}) {
   }
   return hops;
 }
-const atIspAsn = async () => { try { const j = await cached('ipinfo', 30 * 60_000, () => getJSON('https://ipinfo.io/json')); return Number(/^AS(\d+)/.exec(j?.org || '')?.[1]) || null; } catch { return null; } };
+const atIspAsn = async () => { try { return (await ispInfo()).asn || null; } catch { return null; } };   // 24-internet.js
 async function atRunTools(host) {
   const tools = (await atTools()).filter((x) => (at.toolBad[x.tool] || 0) < 3);
   if (!tools.length) return { hops: [], mtu: null, tool: null };

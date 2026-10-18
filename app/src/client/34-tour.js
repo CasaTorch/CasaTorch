@@ -53,7 +53,7 @@ function tour() {
   const navLinks = [...document.querySelectorAll('.nav a[data-tab]')].filter((a) => TOUR_TEXT[a.dataset.tab]);
   const steps = [
     { title: T('A quick look around'), text: T('Each part of CasaTorch has its own place in the menu. Use Next or the arrow keys; Esc ends the tour.') },
-    ...navLinks.map((a) => { const t = TABS.find((x) => x.id === a.dataset.tab); return { tab: t.id, target: a, title: tabLabel(t) + (t.pro && !isPro() ? ' (Pro)' : ''), text: T(TOUR_TEXT[t.id]) }; }),
+    ...navLinks.map((a) => { const t = TABS.find((x) => x.id === a.dataset.tab); return { tab: t.id, target: a, title: tabLabel(t) + (t.pro && !isPro() ? T(' (Pro)') : ''), text: T(TOUR_TEXT[t.id]) }; }),
     { title: T('You\'re all set'), text: S.status?.demo ? T('When you\'re ready, set up your own house from the bar at the top.') : T('Start by connecting the things you own - the Connect page shows what works and how.'), end: true },
   ];
   let i = 0;

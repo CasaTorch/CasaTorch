@@ -8,8 +8,8 @@
  * Basic shows the last 7 days, Pro all of it.
  *
  * The weekly report (Pro) turns the last 7 days into a short summary and a
- * few tips - written by your own AI if one is connected (Settings > Ask the
- * house), otherwise by plain rules. It's made on Monday morning, can be made
+ * few tips - written by your own AI if one is connected (Settings › Connections & AI
+ * › Home AI Agent), otherwise by plain rules. It's made on Monday morning, can be made
  * any time from the Energy tab, and arrives as a phone alert.
  * The report only reads; it never switches anything.
  * ====================================================================== */

@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { roofShape, offsetPoly } from './floorplan-geom.js';
 import { roofOn, roofParams, wallHeight, buildSkylightFor } from './floorplan-drawn.js';
+const TT = (s) => (typeof window !== 'undefined' && typeof window.T === 'function' ? window.T(s) : s);   // the home's language (i18n.js)
 
 /* ---------- roof: a gable over the top floor's footprint, with a little overhang ---------- */
 const ROOF = { real: ['#55595f', '#3c3f45', 1], night: ['#1e2b4f', '#38bdf8', 0.92], blueprint: ['#1d4a8f', '#e8f1ff', 0.35], day: ['#8a5a44', '#5c3a2c', 1] };
@@ -112,7 +113,7 @@ export class PowerNet {
       box.add(new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry), new THREE.LineBasicMaterial({ color: live })));
       this.group.add(box);
       const kw = totalW >= 1000 ? `${(totalW / 1000).toFixed(1)} kW` : `${Math.round(totalW || 0)} W`;
-      this.label = new CSS2DObject(el('div', { class: 'panellab' }, el('small', {}, 'Total now'), el('b', {}, kw)));
+      this.label = new CSS2DObject(el('div', { class: 'panellab' }, el('small', {}, TT('Total now')), el('b', {}, kw)));
       this.label.position.copy(panel).add(new THREE.Vector3(0, 1.1, 0)); this.scene.add(this.label);
     }
   }

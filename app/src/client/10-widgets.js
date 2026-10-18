@@ -15,7 +15,7 @@ widget({ id: 'clock', title: 'Clock', icon: 'clock', bare: true, live: true, cat
   options: [
     { key: 'style', type: 'select', label: 'Style', default: 'digital', choices: [['digital', 'Digital'], ['analog', 'Clock face'], ['both', 'Both']] },
     { key: 'seconds', type: 'toggle', label: 'Seconds', text: 'Show seconds' },
-    { key: 'h24', type: 'toggle', label: '24-hour time', text: 'Use 24-hour time' },
+    { key: 'h24', type: 'toggle', label: '24-hour time', text: 'Use 24-hour time', get default() { return CasaI18n.lang !== 'en'; } },   // what the clock shows when untouched: 24 h outside English
     { key: 'greet', type: 'toggle', label: 'Greeting', text: 'Good morning, good evening…', default: true },
   ],
   render(b, ctx, { w, h }) {
@@ -70,11 +70,11 @@ widget({ id: 'weather', title: 'Weather', icon: 'sun', cat: 'time', essential: t
   async render(b, ctx, { w, h }) {
     const o = optsOf(b._t || {});
     const wx = o.place?.lat != null ? await wget(`/api/w/weather?lat=${o.place.lat}&lon=${o.place.lon}&name=${encodeURIComponent(o.place.name || '')}`, 15 * 60_000).catch((err) => ({ error: err.message })) : ctx.data.home?.weather;
-    if (!wx || wx.error || !wx.now) return b.replaceChildren(empty(wx?.error ? 'Weather is not loading right now.' : 'Add your town in Settings to see the weather.'));
+    if (!wx || wx.error || !wx.now) return b.replaceChildren(empty(wx?.error ? T('Weather is not loading right now.') : T('Add your town in Settings to see the weather.')));
     const today = wx.days?.[0];
     const parts = [el('div', { class: 'wx-now' }, el('span', { class: 'wx-ic', style: w <= 2 ? 'font-size:30px' : null }, wxIcon(wx.now.symbol)),
       el('div', { style: 'min-width:0' }, el('div', { class: 'big', style: w <= 2 ? 'font-size:34px' : null }, `${wx.now.temp}°`), w >= 3 ? el('div', { class: 'muted small ellipsis' }, `${wxWord(wx.now.words)}${today ? ` · ${T('H {hi}° L {lo}°', { hi: today.hi, lo: today.lo })}` : ''}`) : null, w <= 4 && o.place && h >= 2 ? el('div', { class: 'tiny muted ellipsis' }, wx.place || '') : null),
-      w >= 5 ? el('div', { class: 'small muted', style: 'margin-left:auto;text-align:right' }, wx.place || '', o.details !== false ? [el('br'), `${T('Wind')} ${wx.now.wind ?? '-'} ${wx.units === 'C' ? 'km/h' : 'mph'} · ${wx.now.humidity ?? '-'}%`] : null) : null)];
+      w >= 5 ? el('div', { class: 'small muted', style: 'margin-left:auto;text-align:right' }, wx.place || '', o.details !== false ? [el('br'), `${T('Wind')} ${wx.now.wind ?? '-'} ${wx.units === 'C' ? 'km/h' : T('mph')} · ${wx.now.humidity ?? '-'}%`] : null) : null)];
     if (o.hours !== false && h >= 3 && w >= 3) parts.push(el('div', { class: 'hours' }, (wx.hours || []).slice(0, Math.max(3, Math.floor(w * 1.1))).map((x) => el('div', {}, fmt(x.at, { hour: 'numeric' }), el('i', {}, wxIcon(x.symbol)), el('b', {}, `${x.temp}°`)))));
     const weekRoom = o.hours === false ? h >= 3 : (h >= 5 || (h >= 4 && w >= 4));
     if (o.week !== false && weekRoom) {
@@ -89,7 +89,7 @@ widget({ id: 'weather', title: 'Weather', icon: 'sun', cat: 'time', essential: t
   } });
 
 widget({ id: 'calendar', title: 'Coming up', icon: 'calendar', cat: 'personal', essential: true, multi: true, blurb: 'What\'s next on your calendars', min: [3, 2], size: [4, 4],
-  headerExtra: () => el('button', { class: 'btn ghost small', title: 'Add an event', 'aria-label': 'Add an event', onclick: () => eventEditor(null, () => show(current)) }, icon('plus')),
+  headerExtra: () => el('button', { class: 'btn ghost small', title: T('Add an event'), 'aria-label': T('Add an event'), onclick: () => eventEditor(null, () => show(current)) }, icon('plus')),
   options: [
     { key: 'days', type: 'select', label: 'How far ahead', numeric: true, default: 7, choices: [[1, 'Today'], [2, 'Today and tomorrow'], [3, 'Next 3 days'], [7, 'This week']] },
     { key: 'cals', type: 'calendars', label: 'Calendars' },
@@ -98,7 +98,7 @@ widget({ id: 'calendar', title: 'Coming up', icon: 'calendar', cat: 'personal', 
   render(b, ctx, { w, h }) {
     const o = optsOf(b._t || {}), cal = ctx.data.home?.calendar, until = Date.now() + (o.days || 7) * 86400_000, cals = new Set(o.cals || []);
     const ev = (cal?.events || []).filter((e) => Date.parse(e.end || e.start) > Date.now() && Date.parse(e.start) < until && (!cals.size || cals.has(e.calendar)) && (o.allDay !== false || !e.allDay)).slice(0, fits(h, 52));
-    if (!ev.length) return b.replaceChildren(empty(o.days === 1 ? 'Nothing else today.' : 'Nothing coming up.', '#calendar', 'Open the calendar'));
+    if (!ev.length) return b.replaceChildren(empty(o.days === 1 ? T('Nothing else today.') : T('Nothing coming up.'), '#calendar', T('Open the calendar')));
     b.replaceChildren(...ev.map((e) => el('div', { class: 'ev' }, el('span', { class: 'bar', style: `background:${safeColor(e.color)}` }),
       el('div', { class: 'grow', style: 'min-width:0' }, el('div', { class: 'ellipsis' }, e.title), el('div', { class: 'when' }, e.allDay ? `${fmt(e.start, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })} · ${T('all day')}` : fmtWhen(e.start), w >= 4 && e.calendar ? ` · ${e.calendar}` : '')))));
   } });
@@ -114,23 +114,23 @@ widget({ id: 'sports', title: 'Your teams', icon: 'trophy', cat: 'info', multi: 
   async render(b, ctx, { w, h }) {
     const o = optsOf(b._t || {}), mine = Array.isArray(o.teams) && o.teams.length;
     const sp = mine ? await wget(`/api/w/sports?t=${o.teams.map((x) => `${x.league}:${x.id}`).join(',')}`, 60_000).catch((err) => ({ error: err.message })) : ctx.data.home?.sports;
-    if (!sp) return b.replaceChildren(empty('Pick your teams: tap Edit layout, then customize this widget.'));
+    if (!sp) return b.replaceChildren(empty(T('Pick your teams: tap Edit layout, then customize this widget.')));
     let games = sp.games || [];
     if (o.liveOnly) { const live = games.filter((g) => g.state === 'in'); games = live.length ? live : games.filter((g) => g.state === 'pre').slice(0, 1); }
     games = games.slice(0, fits(h, 84));
-    b.replaceChildren(...(games.length ? games.map((g) => gameRow(g, w)) : [empty(sp.error ? 'Scores are not loading right now.' : 'No games this week.')]));
+    b.replaceChildren(...(games.length ? games.map((g) => gameRow(g, w)) : [empty(sp.error ? T('Scores are not loading right now.') : T('No games this week.'))]));
   } });
 
 widget({ id: 'news', title: 'Headlines', icon: 'news', cat: 'info', multi: true, blurb: 'Headlines from your sources', min: [3, 2], size: [4, 4],
   options: (t, ctx) => {
     const srcs = [...new Set((ctx.data.home?.news?.items || []).map((i) => i.source).filter(Boolean))];
-    return [srcs.length > 1 ? { key: 'sources', type: 'chips', label: 'Sources', choices: srcs.map((x) => [x, x]), help: 'Pick none for all of them.' } : null, { key: 'times', type: 'toggle', label: 'Times', text: 'Show the source and how long ago', default: true }].filter(Boolean);
+    return [srcs.length > 1 ? { key: 'sources', type: 'chips', label: T('Sources'), choices: srcs.map((x) => [x, x]), help: T('Pick none for all of them.') } : null, { key: 'times', type: 'toggle', label: T('Times'), text: T('Show the source and how long ago'), default: true }].filter(Boolean);
   },
   render(b, ctx, { w, h }) {
     const o = optsOf(b._t || {}), n = ctx.data.home?.news, want = new Set(o.sources || []);
-    if (!n) return b.replaceChildren(empty('Pick news sources in Settings.'));
+    if (!n) return b.replaceChildren(empty(T('Pick news sources in Settings.')));
     const items = (n.items || []).filter((i) => !want.size || want.has(i.source)).slice(0, fits(h, w >= 5 ? (o.times === false ? 34 : 50) : 62));
-    b.replaceChildren(...(items.length ? [el('ul', { class: 'list' }, items.map((i) => el('li', { style: 'display:block' }, el('a', { href: safeHref(i.link), target: '_blank', rel: 'noopener noreferrer', style: 'color:inherit;text-decoration:none;display:block' }, el('div', { class: w >= 5 ? 'ellipsis' : null }, i.title), o.times === false ? null : el('div', { class: 'tiny muted' }, `${i.source}${i.at ? ` · ${ago(i.at)}` : ''}`)))))] : [empty('Headlines are not loading right now.')]));
+    b.replaceChildren(...(items.length ? [el('ul', { class: 'list' }, items.map((i) => el('li', { style: 'display:block' }, el('a', { href: safeHref(i.link), target: '_blank', rel: 'noopener noreferrer', style: 'color:inherit;text-decoration:none;display:block' }, el('div', { class: w >= 5 ? 'ellipsis' : null }, i.title), o.times === false ? null : el('div', { class: 'tiny muted' }, `${i.source}${i.at ? ` · ${ago(i.at)}` : ''}`)))))] : [empty(T('Headlines are not loading right now.'))]));
   } });
 
 widget({ id: 'internet', title: 'Internet', icon: 'wifi', cat: 'home', blurb: 'Online, speed and ping', min: [2, 2], size: [3, 2], render(b, ctx, { w, h }) {
@@ -145,19 +145,21 @@ widget({ id: 'internet', title: 'Internet', icon: 'wifi', cat: 'home', blurb: 'O
 widget({ id: 'today', title: 'Today', icon: 'list', cat: 'personal', blurb: 'Today\'s reminders and the house note', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
   const d = ctx.data.home || {};
   const items = [d.note ? el('div', { style: 'margin-bottom:8px' }, d.note) : null, ...(d.reminders || []).slice(0, fits(h, 34)).map((r) => el('div', { class: 'row', style: 'padding:4px 0' }, el('span', { class: 'dot warn' }), el('span', { class: 'grow ellipsis' }, r.title), r.at ? el('span', { class: 'tiny muted' }, hm(r.at)) : null))].filter(Boolean);
-  b.replaceChildren(...(items.length ? items : [empty('No reminders today.')]));
+  b.replaceChildren(...(items.length ? items : [empty(T('No reminders today.'))]));
 } });
 
-widget({ id: 'alerts', title: 'Alerts', icon: 'bell', cat: 'safety', essential: true, blurb: 'What needs you right now', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
+widget({ id: 'alerts', title: 'Alerts', icon: 'bell', cat: 'safety', essential: true, blurb: 'What needs you right now', min: [2, 2], size: [3, 2], render(b, ctx, { w, h }) {
   const now = ctx.data.alerts?.now || [];
   if (!now.length) return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('checkc'), el('div', { style: 'margin-top:6px' }, T('All clear')))));
-  b.replaceChildren(...now.slice(0, fits(h, 66)).map((a) => el('a', { href: '#alerts', class: `alert ${a.severity}` }, el('div', { class: 'grow' }, el('div', { class: 'ellipsis' }, a.title), el('div', { class: 'tiny muted' }, a.since ? T('since {when}', { when: fmtWhen(a.since) }) : srcName(a.source))))));
+  /* Small (narrow) on a phone: the title gets two lines instead of "Low battery (1..." */
+  const narrow = (w || 3) <= 2;
+  b.replaceChildren(...now.slice(0, fits(h, narrow ? 84 : 66)).map((a) => el('a', { href: '#alerts', class: `alert ${a.severity}`, title: alertTitle(a) }, el('div', { class: 'grow', style: 'min-width:0' }, el('div', narrow ? { class: 'clamp2' } : { class: 'ellipsis' }, alertTitle(a)), el('div', { class: 'tiny muted' }, a.since ? T('since {when}', { when: fmtWhen(a.since) }) : srcName(a.source))))));
 } });
 
 widget({ id: 'energy', title: 'Energy', icon: 'bolt', cat: 'home', blurb: 'Watts now and what it costs', options: [{ key: 'cost', type: 'toggle', label: 'Cost', text: 'Show what it costs a day', default: true }], min: [2, 2], size: [3, 3], render(b, ctx, { w, h }) {
   const ds = (ctx.data.devices?.devices || []).filter((d) => typeof d.powerW === 'number' && !d.pairedTo).sort((a, c) => c.powerW - a.powerW);
   const total = ctx.data.devices?.power?.watts ?? ds.reduce((s, d) => s + d.powerW, 0), rate = ctx.data.settings?.energy?.ratePerKwh;
-  if (!ds.length) return b.replaceChildren(empty('No power-metering plugs yet.'));
+  if (!ds.length) return b.replaceChildren(empty(T('No power-metering plugs yet.')));
   const parts = [el('div', { class: 'row', style: 'gap:22px;align-items:flex-end' }, el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(total), el('span', { style: 'font-size:18px;color:var(--muted)' }, ' W')), el('span', { class: 'lbl' }, T('using now'))),
     rate && optsOf(b._t || {}).cost !== false && (w >= 4 || h >= 3) ? el('div', { class: 'stat' }, el('span', { style: 'font-size:22px;font-weight:700' }, wMoney(total / 1000 * 24 * rate, ctx.data.settings?.energy?.currency || 'USD')), el('span', { class: 'lbl' }, T('a day at this rate'))) : null)];
   if (h >= 3) { const max = ds[0].powerW || 1; parts.push(el('div', { class: 'bars', style: 'margin-top:14px' }, ds.slice(0, fits(h - 1, 26, 30)).map((d) => el('div', { class: 'bar-row', style: w < 4 ? 'grid-template-columns:1fr 50px' : null }, el('span', { class: 'ellipsis small' }, d.name), w >= 4 ? el('div', { class: 'track' }, el('div', { class: 'fill', style: `width:${(d.powerW / max) * 100}%` })) : null, el('span', { class: 'small num', style: 'text-align:right' }, `${Math.round(d.powerW)} W`))))); }
@@ -168,15 +170,15 @@ async function toggleDevice(d) { await post(`/api/devices/${encodeURIComponent(d
 const TOGGLES = new Set(['light', 'switch', 'plug', 'media', 'fan']);
 const pretty = (s) => String(s || '').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 function devMeta(d, compact) {
-  if (d.kind === 'presence') return d.home ? 'Home' : pretty(d.state === 'not_home' ? 'Away' : d.state);
+  if (d.kind === 'presence') return d.home ? T('Home|presence') : T(pretty(d.state === 'not_home' ? 'Away' : d.state));
   if (d.kind === 'value') return `${d.value ?? '-'}${d.unit ? ` ${d.unit}` : ''}`;
-  if (d.kind === 'alarm') return pretty(d.state);
-  if (d.kind === 'vacuum' || d.kind === 'action') return d.kind === 'action' ? (d.domain === 'scene' ? 'Scene' : d.domain === 'script' ? 'Script' : 'Button') : pretty(d.state);
-  if (d.kind === 'cover') return `${d.open ? 'Open' : pretty(d.state)}${d.position != null && d.open ? ` · ${d.position}%` : ''}`;
-  return [d.on != null && !['sensor', 'climate'].includes(d.kind) ? (d.kind === 'media' ? (d.playing ? (d.title || 'Playing') : d.on ? 'Paused' : 'Off') : d.on ? 'On' : 'Off') : null, d.brightness && d.on ? `${d.brightness}%` : null, d.percent && d.on ? `${d.percent}%` : null,
-    d.powerW != null ? `${Math.round(d.powerW)} W` : null, d.tempC != null ? tempOf(d.tempC) : null, d.targetC != null ? `set ${tempOf(d.targetC)}` : null, d.humidity != null ? `${d.humidity}%` : null,
-    d.open != null ? (d.open ? 'Open' : 'Closed') : null, d.water != null ? (d.water ? 'WATER!' : 'Dry') : null, d.motion != null ? (d.motion ? 'Motion' : 'Clear') : null, d.smoke != null ? (d.smoke ? 'SMOKE!' : 'Clear') : null,
-    d.locked != null ? (d.locked ? 'Locked' : 'Unlocked') : null, d.battery != null && !compact ? `battery ${d.battery}%` : null, d.online === false ? 'offline' : null].filter(Boolean).join(' · ');
+  if (d.kind === 'alarm') return T(pretty(d.state));
+  if (d.kind === 'vacuum' || d.kind === 'action') return d.kind === 'action' ? (d.domain === 'scene' ? T('Scene') : d.domain === 'script' ? T('Script') : T('Button')) : T(pretty(d.state));
+  if (d.kind === 'cover') return `${d.open ? T('Open|state') : T(pretty(d.state))}${d.position != null && d.open ? ` · ${d.position}%` : ''}`;
+  return [d.on != null && !['sensor', 'climate'].includes(d.kind) ? (d.kind === 'media' ? (d.playing ? (d.title || T('Playing')) : d.on ? T('Paused') : T('Off')) : d.on ? T('On') : T('Off')) : null, d.brightness && d.on ? `${d.brightness}%` : null, d.percent && d.on ? `${d.percent}%` : null,
+    d.powerW != null ? `${Math.round(d.powerW)} W` : null, d.tempC != null ? tempOf(d.tempC) : null, d.targetC != null ? T('set {temp}', { temp: tempOf(d.targetC) }) : null, d.humidity != null ? `${d.humidity}%` : null,
+    d.open != null ? (d.open ? T('Open|state') : T('Closed')) : null, d.water != null ? (d.water ? T('WATER!') : T('Dry|leak')) : null, d.motion != null ? (d.motion ? T('Motion') : T('Clear|sensor')) : null, d.smoke != null ? (d.smoke ? T('SMOKE!') : T('Clear|sensor')) : null,
+    d.locked != null ? (d.locked ? T('Locked') : T('Unlocked')) : null, d.battery != null && !compact ? T('battery {n}%', { n: d.battery }) : null, d.online === false ? T('offline') : null].filter(Boolean).join(' · ');
 }
 /* Devices with more than on/off (dimming, colour, speed, volume, thermostats, blinds, locks, alarms...)
    open a sheet with every control (public/device-controls.js, shared with the 3D Home). */
@@ -204,7 +206,7 @@ function devButton(d, compact) {
   const sheet = hasSheet(d), toggles = TOGGLES.has(d.kind) && d.online !== false;
   const act = async (action, label) => { try { await post(`/api/devices/${encodeURIComponent(d.id)}/${action}`); toast(`${d.name}: ${label}`); } catch (err) { toast(err.message, 4000); } };
   const mini = (label, action) => el('button', { class: 'btn small', style: 'padding:3px 9px', onclick: (e) => { e.stopPropagation(); act(action, label); } }, label);
-  const extra = sheet ? null : d.kind === 'cover' ? (d.risky ? [mini('Close', 'close')] : [mini('Open', 'open'), mini('Close', 'close')]) : d.kind === 'vacuum' ? [mini('Start', 'start'), mini('Dock', 'dock')] : d.kind === 'action' ? [mini('Run', 'run')] : null;
+  const extra = sheet ? null : d.kind === 'cover' ? (d.risky ? [mini(T('Close'), 'close')] : [mini(T('Open'), 'open'), mini(T('Close'), 'close')]) : d.kind === 'vacuum' ? [mini(T('Start'), 'start'), mini(T('Dock'), 'dock')] : d.kind === 'action' ? [mini(T('Run'), 'run')] : null;
   const b = el(extra ? 'div' : 'button', { class: cls, role: extra ? 'group' : null, title: d.name }, el('span', { class: 'ic' }, icon(devIconName(d))), el('div', { style: 'min-width:0;flex:1' }, el('div', { class: 'ellipsis' }, d.name), el('div', { class: 'meta ellipsis' }, devMeta(d, compact))), extra ? el('div', { class: 'row', style: 'gap:4px;flex:none' }, extra) : null);
   const root = sheet ? el('div', { class: 'dev-wrap' }, b) : b;
   const redraw = () => { if (root.isConnected) root.replaceWith(devButton(d, compact)); };
@@ -217,20 +219,20 @@ function devButton(d, compact) {
 function pickDevices(selected, done) {
   const sel = new Set(selected || []);
   api('/api/devices').then(({ devices = [] }) => {
-    const q = el('input', { type: 'search', placeholder: 'Search devices and Home Assistant entities…' });
+    const q = el('input', { type: 'search', placeholder: T('Search devices and Home Assistant entities…') });
     const list = el('div', { style: 'max-height:55vh;overflow:auto;margin-top:10px' });
     const draw = () => { const t = q.value.toLowerCase(); list.replaceChildren(...devices.filter((d) => !t || `${d.name} ${d.id}`.toLowerCase().includes(t)).slice(0, 300).map((d) => el('label', { class: 'tab-row', style: 'cursor:pointer' }, icon(devIconName(d)), el('div', { style: 'min-width:0' }, el('div', { class: 'ellipsis' }, d.name), el('div', { class: 'tiny faint ellipsis' }, `${d.id} · ${devMeta(d, true)}`)), el('input', { type: 'checkbox', checked: sel.has(d.id), style: 'width:auto', onchange: (e) => { if (e.target.checked) sel.add(d.id); else sel.delete(d.id); } })))); };
     q.oninput = draw; draw();
-    const m = modal(el('div', {}, q, list, el('div', { class: 'row', style: 'justify-content:flex-end;margin-top:12px' }, el('span', { class: 'small muted grow' }, `${devices.length} devices available`), el('button', { class: 'btn ghost', onclick: () => m.remove() }, 'Cancel'), el('button', { class: 'btn primary', onclick: () => { m.remove(); done([...sel]); } }, 'Done'))), { title: 'Choose devices', wide: true });
+    const m = modal(el('div', {}, q, list, el('div', { class: 'row', style: 'justify-content:flex-end;margin-top:12px' }, el('span', { class: 'small muted grow' }, T('{n} devices available', { n: devices.length })), el('button', { class: 'btn ghost', onclick: () => m.remove() }, T('Cancel')), el('button', { class: 'btn primary', onclick: () => { m.remove(); done([...sel]); } }, T('Done')))), { title: T('Choose devices'), wide: true });
     setTimeout(() => q.focus(), 50);
   });
 }
 widget({ id: 'entities', title: 'Pinned devices', icon: 'sliders', multi: true, cat: 'home', blurb: 'Any devices or Home Assistant entities you pick - add as many as you like', keywords: 'home assistant entity sensor', min: [2, 2], size: [4, 3],
-  headerExtra: (ctx, t, saved) => el('button', { class: 'btn ghost small', title: 'Choose devices', 'aria-label': 'Choose devices', onclick: () => pickDevices(t.ids, (ids) => { t.ids = ids; saved(); }) }, icon('gear')),
+  headerExtra: (ctx, t, saved) => el('button', { class: 'btn ghost small', title: T('Choose devices'), 'aria-label': T('Choose devices'), onclick: () => pickDevices(t.ids, (ids) => { t.ids = ids; saved(); }) }, icon('gear')),
   render(b, ctx, { w, h }) {
     const all = ctx.data.devices?.devices || [];
     const ds = (b._t?.ids || []).map((id) => all.find((d) => d.id === id)).filter(Boolean);
-    if (!ds.length) return b.replaceChildren(empty('Pick any devices or Home Assistant entities to keep here.', null, null), el('div', { style: 'text-align:center' }, el('button', { class: 'btn small primary', onclick: () => pickDevices([], (picked) => { b._t.ids = picked; b._saved(); }) }, 'Choose devices')));
+    if (!ds.length) return b.replaceChildren(empty(T('Pick any devices or Home Assistant entities to keep here.'), null, null), el('div', { style: 'text-align:center' }, el('button', { class: 'btn small primary', onclick: () => pickDevices([], (picked) => { b._t.ids = picked; b._saved(); }) }, T('Choose devices'))));
     const perRow = Math.max(1, Math.floor(w / 2));
     b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr));overflow:auto` }, ds.map((d) => devButton(d, true))));
   } });
@@ -244,15 +246,15 @@ function devHeadline(d) {
   if (d.humidity != null && d.kind === 'sensor') return `${d.humidity}%`;
   if (d.battery != null && d.kind === 'sensor' && d.water == null && d.motion == null && d.open == null) return `${d.battery}%`;
   if (d.kind === 'value') return `${d.value ?? '-'}${d.unit ? ` ${d.unit}` : ''}`;
-  if (d.kind === 'lock') return d.locked ? 'Locked' : 'Unlocked';
-  if (d.kind === 'presence') return d.home ? 'Home' : 'Away';
-  if (d.water != null) return d.water ? 'Water!' : 'Dry';
-  if (d.smoke != null) return d.smoke ? 'Smoke!' : 'Clear';
-  if (d.motion != null) return d.motion ? 'Motion' : 'Clear';
-  if (d.open != null) return d.open ? 'Open' : 'Closed';
-  if (d.kind === 'media') return d.playing ? 'Playing' : d.on ? 'Paused' : 'Off';
-  if (d.kind === 'action') return d.domain === 'scene' ? 'Scene' : d.domain === 'script' ? 'Script' : 'Button';
-  if (d.on != null) return d.on ? (d.brightness ? `On · ${d.brightness}%` : 'On') : 'Off';
+  if (d.kind === 'lock') return d.locked ? T('Locked') : T('Unlocked');
+  if (d.kind === 'presence') return d.home ? T('Home') : T('Away');
+  if (d.water != null) return d.water ? T('Water!') : T('Dry');
+  if (d.smoke != null) return d.smoke ? T('Smoke!') : T('Clear');
+  if (d.motion != null) return d.motion ? T('Motion') : T('Clear');
+  if (d.open != null) return d.open ? T('Open') : T('Closed');
+  if (d.kind === 'media') return d.playing ? T('Playing') : d.on ? T('Paused') : T('Off');
+  if (d.kind === 'action') return d.domain === 'scene' ? T('Scene') : d.domain === 'script' ? T('Script') : T('Button');
+  if (d.on != null) return d.on ? (d.brightness ? T('On · {brightness}%', { brightness: d.brightness }) : T('On')) : T('Off');
   return pretty(d.state || '-');
 }
 function deviceCard(d, { w, h }) {
@@ -261,11 +263,11 @@ function deviceCard(d, { w, h }) {
   const sub = devMeta(d, false), head = devHeadline(d);
   const lit = d.on || d.playing || (d.kind === 'presence' && d.home) || (d.kind === 'cover' && d.open);
   const controls = [];
-  if (TOGGLES.has(d.kind) && d.online !== false) controls.push(el('button', { class: `btn small${lit ? ' primary' : ''}`, onclick: async (e) => { try { await toggleDevice(d); e.target.closest('.devcard').replaceWith(deviceCard(d, { w, h })); } catch (err) { toast(err.message); } } }, d.kind === 'media' ? (d.playing ? 'Pause' : 'Play') : d.on ? 'Turn off' : 'Turn on'));
-  if (d.kind === 'cover') { if (!d.risky) controls.push(el('button', { class: 'btn small', onclick: () => act('open', 'opening') }, 'Open')); controls.push(el('button', { class: 'btn small', onclick: () => act('close', 'closing') }, 'Close')); }
-  if (d.kind === 'action') controls.push(el('button', { class: 'btn small primary', onclick: () => act('run', 'done') }, 'Run'));
-  if (d.kind === 'vacuum') controls.push(el('button', { class: 'btn small', onclick: () => act('start', 'starting') }, 'Start'), el('button', { class: 'btn small', onclick: () => act('dock', 'going home') }, 'Dock'));
-  if (hasSheet(d)) controls.push(el('button', { class: 'btn small', title: 'Every control for this device', onclick: () => deviceSheet(d) }, icon('sliders', 14), T('More')));
+  if (TOGGLES.has(d.kind) && d.online !== false) controls.push(el('button', { class: `btn small${lit ? ' primary' : ''}`, onclick: async (e) => { try { await toggleDevice(d); e.target.closest('.devcard').replaceWith(deviceCard(d, { w, h })); } catch (err) { toast(err.message); } } }, d.kind === 'media' ? (d.playing ? T('Pause') : T('Play')) : d.on ? T('Turn off') : T('Turn on')));
+  if (d.kind === 'cover') { if (!d.risky) controls.push(el('button', { class: 'btn small', onclick: () => act('open', 'opening') }, T('Open'))); controls.push(el('button', { class: 'btn small', onclick: () => act('close', 'closing') }, T('Close'))); }
+  if (d.kind === 'action') controls.push(el('button', { class: 'btn small primary', onclick: () => act('run', 'done') }, T('Run')));
+  if (d.kind === 'vacuum') controls.push(el('button', { class: 'btn small', onclick: () => act('start', 'starting') }, T('Start')), el('button', { class: 'btn small', onclick: () => act('dock', T('going home')) }, T('Dock')));
+  if (hasSheet(d)) controls.push(el('button', { class: 'btn small', title: T('Every control for this device'), onclick: () => deviceSheet(d) }, icon('sliders', 14), T('More')));
   const dim = d.kind === 'light' && d.on && h >= 3 ? el('input', { type: 'range', min: 1, max: 100, value: d.brightness || 100, 'aria-label': `${d.name} brightness`, style: 'margin-top:10px', onchange: (e) => { d.brightness = Number(e.target.value); act('brightness', `${d.brightness}%`, d.brightness); } }) : null;
   return el('div', { class: `devcard${lit ? ' on' : ''}${d.water || d.smoke || d.triggered ? ' alarm' : ''}${d.online === false ? ' offline' : ''}` },
     el('div', { class: 'row', style: 'gap:12px;align-items:center' }, el('span', { class: 'ic' }, icon(devIconName(d), 22)),
@@ -275,13 +277,13 @@ function deviceCard(d, { w, h }) {
 }
 widget({ id: 'device', title: 'Device', icon: 'plug', multi: true, hidden: true, min: [2, 1], size: [3, 2], render(b, ctx, size) {
   const d = (ctx.data.devices?.devices || []).find((x) => x.id === b._t?.device);
-  if (!d) return b.replaceChildren(empty('This device is not reporting right now. If it was removed from Home Assistant, remove this tile.'));
+  if (!d) return b.replaceChildren(empty(T('This device is not reporting right now. If it was removed from Home Assistant, remove this tile.')));
   b.replaceChildren(deviceCard(d, size));
 } });
 /* A whole room (a Home Assistant area): every device in it, its temperature and what is on. */
 widget({ id: 'room', title: 'Room', icon: 'home', multi: true, hidden: true, min: [2, 2], size: [4, 3], render(b, ctx, { w, h }) {
   const area = b._t?.area, ds = (ctx.data.devices?.devices || []).filter((d) => d.area === area);
-  if (!ds.length) return b.replaceChildren(empty(`Nothing is in "${area || 'this room'}" right now.`));
+  if (!ds.length) return b.replaceChildren(empty(T('Nothing is in "{area}" right now.', { area: area || T('this room') })));
   const temp = ds.find((d) => d.tempC != null && d.kind !== 'climate')?.tempC ?? ds.find((d) => d.tempC != null)?.tempC;
   const on = ds.filter((d) => d.kind === 'light' && d.on).length, lights = ds.filter((d) => d.kind === 'light').length, watts = ds.reduce((s, d) => s + (typeof d.powerW === 'number' && !d.pairedTo ? d.powerW : 0), 0);
   const facts = [temp != null ? el('b', {}, tempOf(temp)) : null, lights ? el('span', {}, `${on}/${lights} lights on`) : null, watts ? el('span', {}, `${Math.round(watts)} W`) : null, el('span', {}, `${ds.length} device${ds.length === 1 ? '' : 's'}`)].filter(Boolean);
@@ -292,15 +294,15 @@ widget({ id: 'room', title: 'Room', icon: 'home', multi: true, hidden: true, min
 widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', cat: 'home', essential: true, multi: true, blurb: 'Tap to switch lights, plugs and speakers', min: [2, 2], size: [4, 3],
   options: (t, ctx) => {
     const areas = [...new Set((ctx.data.devices?.devices || []).map((d) => d.area).filter(Boolean))].sort();
-    return [{ key: 'kinds', type: 'chips', label: 'What to show', choices: [['light', 'Lights'], ['switch', 'Switches'], ['plug', 'Plugs'], ['fan', 'Fans'], ['media', 'Speakers & TVs']], help: 'Pick none for lights, switches, plugs and speakers.' },
-      areas.length ? { key: 'area', type: 'select', label: 'Room', default: '', choices: [['', 'Every room'], ...areas.map((a) => [a, a])] } : null,
-      { key: 'onFirst', type: 'toggle', label: 'Order', text: 'What\'s on comes first' }].filter(Boolean);
+    return [{ key: 'kinds', type: 'chips', label: T('What to show'), choices: [['light', T('Lights')], ['switch', T('Switches')], ['plug', T('Plugs')], ['fan', T('Fans')], ['media', T('Speakers & TVs')]], help: T('Pick none for lights, switches, plugs and speakers.') },
+      areas.length ? { key: 'area', type: 'select', label: T('Room'), default: '', choices: [['', T('Every room')], ...areas.map((a) => [a, a])] } : null,
+      { key: 'onFirst', type: 'toggle', label: T('Order'), text: T('What\'s on comes first') }].filter(Boolean);
   },
   render(b, ctx, { w, h }) {
     const o = optsOf(b._t || {}), kinds = new Set(o.kinds?.length ? o.kinds : ['light', 'switch', 'plug', 'media']);
     let ds = (ctx.data.devices?.devices || []).filter((d) => kinds.has(d.kind) && (!o.area || d.area === o.area));
     if (o.onFirst) ds = [...ds].sort((a, c) => (c.on || c.playing ? 1 : 0) - (a.on || a.playing ? 1 : 0));
-    if (!ds.length) return b.replaceChildren(empty(o.area ? `Nothing to switch in ${o.area}.` : 'No lights or plugs yet.'));
+    if (!ds.length) return b.replaceChildren(empty(o.area ? T('Nothing to switch in {area}.', { area: o.area }) : T('No lights or plugs yet.')));
     const perRow = Math.max(1, Math.floor(w / 2)), rows = fits(h, 66);
     b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr))` }, ds.slice(0, perRow * rows).map((d) => devButton(d, true))));
   } });
@@ -329,7 +331,7 @@ async function camFetch(c, force = false) {
   try {
     const r = await fetch(snapUrl(c.d), { cache: 'no-store', headers: c.etag ? { 'If-None-Match': c.etag } : {} });
     const age = Number(r.headers.get('X-Snapshot-Age') || 0);
-    c.age.textContent = age > 15 ? (age > 120 ? `${Math.round(age / 60)} min ago` : `${age} s ago`) : '';
+    c.age.textContent = age > 15 ? (age > 120 ? T('{n} min ago', { n: Math.round(age / 60) }) : T('{n} s ago', { n: age })) : '';
     if (r.status === 304) { c.wrap.classList.remove('cam-err'); return; }
     if (!r.ok) throw new Error('no picture');
     const url = URL.createObjectURL(await r.blob()), tmp = new Image(); tmp.src = url;
@@ -362,11 +364,11 @@ function camView(d) {
 }
 /* Full screen: live video where the camera has it (Frigate), otherwise a new picture every second. */
 function camModal(d, onClose) {
-  const img = el('img', { alt: d.name, class: 'cam-full' }), note = el('div', { class: 'tiny muted', style: 'margin-top:8px' }, d.stream ? 'Live video' : 'A new picture every second');
+  const img = el('img', { alt: d.name, class: 'cam-full' }), note = el('div', { class: 'tiny muted', style: 'margin-top:8px' }, d.stream ? T('Live video') : T('A new picture every second'));
   const m = modal(el('div', {}, img, note), { wide: true, title: d.name });
   let started = false;
   const stills = () => { if (started) return; started = true; let etag = null; const tick = async () => { if (!m.isConnected) return; try { const r = await fetch(snapUrl(d), { cache: 'no-store', headers: etag ? { 'If-None-Match': etag } : {} }); if (r.ok && m.isConnected) { const u = URL.createObjectURL(await r.blob()), t = new Image(); t.src = u; await t.decode().catch(() => {}); const o = img.src; img.src = u; etag = r.headers.get('ETag'); if (o.startsWith('blob:')) URL.revokeObjectURL(o); } } catch { /* next tick */ } setTimeout(tick, 1000); }; tick(); };
-  if (d.stream) { img.src = `${d.stream}${d.stream.includes('?') ? '&' : '?'}t=${Date.now()}`; img.onerror = () => { if (!m.isConnected) return; note.textContent = 'Live video unavailable - showing pictures'; stills(); }; }
+  if (d.stream) { img.src = `${d.stream}${d.stream.includes('?') ? '&' : '?'}t=${Date.now()}`; img.onerror = () => { if (!m.isConnected) return; note.textContent = T('Live video unavailable - showing pictures'); stills(); }; }
   else stills();
   // closing the window stops a live stream at once
   new MutationObserver((_, o) => { if (!m.isConnected) { img.onerror = null; const u = img.src; img.removeAttribute('src'); if (u.startsWith('blob:')) URL.revokeObjectURL(u); o.disconnect(); onClose?.(); } }).observe(document.body, { childList: true });
@@ -380,7 +382,7 @@ widget({ id: 'camera', title: 'Cameras', icon: 'camera', cat: 'safety', essentia
     const o = optsOf(b._t || {}), want = o.ids?.length ? o.ids : null;
     const all = (ctx.data.devices?.devices || []).filter((d) => d.kind === 'camera');
     const cams = want ? want.map((id) => all.find((d) => d.id === id)).filter(Boolean) : all;
-    if (!cams.length) return b.replaceChildren(empty('No cameras yet.'));
+    if (!cams.length) return b.replaceChildren(empty(T('No cameras yet.')));
     const across = w >= 8 ? 2 : 1, down = h >= 6 ? 2 : 1, fit = across * down;
     clearInterval(b._cycle);
     const shown = () => { const start = cams.length > fit && o.cycle ? ((b._at || 0) % cams.length) : 0; return Array.from({ length: Math.min(fit, cams.length) }, (_, i) => cams[(start + i) % cams.length]); };
@@ -395,24 +397,24 @@ widget({ id: 'photos', title: 'Photo reel', icon: 'camera', bare: true, live: tr
     const o = optsOf(b._t || {});
     const { photos = [] } = await api('/api/photos').catch(() => ({}));
     clearInterval(b._reel);
-    if (!photos.length) { b.parentElement.style.padding = ''; return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('camera'), el('div', { style: 'margin:8px 0' }, 'Your photos, on a slow loop'), el('a', { class: 'btn small primary', href: '#photos' }, 'Add photos')))); }
+    if (!photos.length) { b.parentElement.style.padding = ''; return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('camera'), el('div', { style: 'margin:8px 0' }, T('Your photos, on a slow loop')), el('a', { class: 'btn small primary', href: '#photos' }, T('Add photos'))))); }
     const order = [...photos].sort(() => Math.random() - 0.5);
     const mk = () => el('img', { alt: '', style: `position:absolute;inset:0;width:100%;height:100%;object-fit:${o.fit === 'contain' ? 'contain' : 'cover'};transition:opacity 1.4s` });
     let front = mk(), back = mk(), i = 0; front.src = order[0].url; back.style.opacity = 0;
     /* Sample photos carry their photographer and license; your own photos show nothing over them. */
     const credit = el('a', { class: 'photo-credit', target: '_blank', rel: 'noopener' });
-    const label = (p) => { credit.hidden = !p.credit; credit.textContent = p.credit ? `Sample photo · ${p.credit}` : ''; const src = safeHref(p.source); if (src) credit.href = src; else credit.removeAttribute('href'); };
+    const label = (p) => { credit.hidden = !p.credit; credit.textContent = p.credit ? T('Sample photo · {credit}', { credit: p.credit }) : ''; const src = safeHref(p.source); if (src) credit.href = src; else credit.removeAttribute('href'); };
     label(order[0]);
     b.replaceChildren(el('div', { style: 'position:absolute;inset:0;overflow:hidden;background:#000' }, front, back, credit)); b.parentElement.style.padding = '0';
     if (order.length > 1) b._reel = setInterval(() => { if (!b.isConnected) return clearInterval(b._reel); if (document.hidden) return; i = (i + 1) % order.length; const p = order[i]; back.onload = () => { back.style.opacity = 1; front.style.opacity = 0; [front, back] = [back, front]; label(p); }; back.src = p.url; }, (o.every || 9) * 1000);
   } });
 
 widget({ id: 'ask', title: 'Home AI Agent', icon: 'spark', pro: true, live: true, cat: 'home', blurb: 'Ask anything about your home', noPreview: true, min: [3, 2], size: [5, 3], render(b) {
-  if (!isPro()) return b.replaceChildren(empty('Ask anything about your home - included with Pro.', '#settings', 'See Pro'));
+  if (!isPro()) return b.replaceChildren(empty(T('Ask anything about your home - included with Pro.'), '#settings', T('See Pro')));
   b.replaceChildren(askBox({ compact: true }));
 } });
 
 widget({ id: 'house3d', title: '3D Home', icon: 'cube', pro: true, live: true, cat: 'home', blurb: 'Your LiDAR floor plan, live', noPreview: true, min: [4, 3], size: [6, 5], render(b) {
-  if (!isPro()) return b.replaceChildren(empty('Your LiDAR scan as a live floor plan - included with Pro.', '#house3d', 'Learn more'));
-  b.replaceChildren(el('iframe', { src: '/floorplan.html?embed=1', title: '3D floor plan', style: 'flex:1;border:0;border-radius:14px;background:#05070d;width:100%' }));
+  if (!isPro()) return b.replaceChildren(empty(T('Your LiDAR scan as a live floor plan - included with Pro.'), '#house3d', T('Learn more')));
+  b.replaceChildren(el('iframe', { src: '/floorplan.html?embed=1', title: T('3D floor plan'), style: 'flex:1;border:0;border-radius:14px;background:#05070d;width:100%' }));
 } });

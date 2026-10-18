@@ -41,13 +41,13 @@ export function createDock(o) {
     let body = null; try { body = c.render(size, where); } catch (err) { body = el('div', { class: 'note' }, String(err.message || err)); }
     if (!body && !arranging) return null;
     const node = el('div', { class: `dcard sz-${size} k-${c.kind || 'panel'}${where === 'float' ? ' float' : ''}`, 'data-id': c.id, style: where === 'float' ? `left:${f.x}%;top:${f.y}%;width:${FLOAT_W[size]}px` : null },
-      body || el('div', { class: 'note' }, `${c.title} - nothing to show right now`));
+      body || el('div', { class: 'note' }, T('{title} - nothing to show right now', { title: c.title })));
     if (arranging) {
       node.append(el('div', { class: 'dbar' },
-        el('button', { type: 'button', class: 'dgrip', title: T('Drag to move'), 'aria-label': `Move ${c.title}` }, ic('grip')),
+        el('button', { type: 'button', class: 'dgrip', title: T('Drag to move'), 'aria-label': T('Move {title}', { title: c.title }) }, ic('grip')),
         el('span', { class: 'dname' }, c.title),
         el('div', { class: 'dsz', role: 'group', 'aria-label': `${c.title} size` }, ...SIZES.map(([k, s, long]) => el('button', { type: 'button', class: size === k ? 'on' : '', title: long, onclick: () => { L().size[c.id] = k; save(); } }, s))),
-        el('button', { type: 'button', class: 'dx', title: T('Hide'), 'aria-label': `Hide ${c.title}`, onclick: () => hide(c.id) }, ic('close'))));
+        el('button', { type: 'button', class: 'dx', title: T('Hide'), 'aria-label': T('Hide {title}', { title: c.title }), onclick: () => hide(c.id) }, ic('close'))));
       node.querySelector('.dgrip').addEventListener('pointerdown', (e) => startDrag(e, c.id, node));
     }
     return node;
@@ -96,7 +96,7 @@ export function createDock(o) {
   function addSheet() {
     const defs = byId(), p = placement(defs), shown = new Set([...p.left, ...p.right, ...p.float.map((f) => f.id)]);
     const list = [...defs.values()].filter((c) => !shown.has(c.id));
-    const box = el('div', { class: 'addsheet' }, el('div', { class: 'rhead' }, el('h2', {}, T('Add a card')), el('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Close', onclick: () => box.remove() }, ic('close'))),
+    const box = el('div', { class: 'addsheet' }, el('div', { class: 'rhead' }, el('h2', {}, T('Add a card')), el('button', { type: 'button', class: 'iconbtn', 'aria-label': T('Close'), onclick: () => box.remove() }, ic('close'))),
       list.length ? null : el('p', { class: 'note' }, T('Every card is on the screen.')),
       ...list.map((c) => el('div', { class: 'addrow' }, ic(c.icon || 'dot'), el('div', { class: 'grow' }, el('b', {}, c.title), c.blurb ? el('small', {}, c.blurb) : null),
         el('button', { type: 'button', class: 'mini', onclick: () => { box.remove(); add(c.id, 'left'); } }, T('Left')),
