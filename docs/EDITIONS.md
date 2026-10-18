@@ -6,8 +6,7 @@ ship, the things that cost money to run (remote access, cloud backups).
 **Pro: $5/month or $49/year.** Every new install gets a **14-day Pro trial** - no card, nothing to
 cancel. A Pro key is checked on your box, offline; CasaTorch never phones home to check it.
 
-This table is the single source of truth for what is in each edition. It follows the code (the
-`requirePro` route guards and `proStatus()` checks in `app/src/server/`); the Settings › CasaTorch Pro
+This table is the single source of truth for what is in each edition. It follows the code; the Settings › CasaTorch Pro
 list, casatorch.com and the README follow this table.
 
 ✓ = included · **Now** = in the current release · **Coming** = on the roadmap (Pro buyers get it when it ships, no extra cost)

@@ -66,6 +66,8 @@ async function lanScan() {
       if (d) { d.ip = ip; d.lastSeen = now; if (!d.host) d.host = await nameOf(ip); }
       else sec.devices[mac] = { mac, ip, host: await nameOf(ip), firstSeen: now, lastSeen: now, known: !sec.baseline, privateMac: privateMac(mac) };
     }
+    // names the network already knows (Home Assistant, Bonjour, Windows, UPnP) - for "Who is it?" (44m-makers.js)
+    await gatherHints(list.map(({ mac }) => sec.devices[mac]).filter(Boolean)).catch(() => {});
     sec.baseline = true; sec.scanAt = now;
     // keep it tidy: forget devices not seen for 90 days
     for (const [mac, d] of Object.entries(sec.devices)) if (Date.now() - Date.parse(d.lastSeen) > 90 * 86400_000) delete sec.devices[mac];
@@ -83,6 +85,8 @@ const RISKY_PORTS = [
   [445, 'Windows file sharing (SMB)', 'notice', 'Normal on a NAS or a computer that shares folders. Make sure guest access is off and every share needs a password.'],
   [554, 'Camera video stream (RTSP)', 'notice', 'Normal for many cameras. Make sure the camera\'s video needs a password - some ship with it open to anyone on the network.'],
   [1883, 'MQTT without encryption', 'notice', 'A messaging service many smart-home gadgets use. Fine at home; make sure it needs a username and password.'],
+  [631, 'Printing (IPP)', 'info', 'Accepts print jobs from the network. Normal on a printer; on a computer, it means printer sharing is on.'],
+  [9100, 'Printing (raw)', 'info', 'Accepts print jobs from the network. Normal on a printer.'],
 ];
 const probe = (ip, port, ms = 800) => new Promise((ok) => { const s = net.connect({ host: ip, port }); const done = (v) => { s.destroy(); ok(v); }; s.setTimeout(ms, () => done(false)); s.once('connect', () => done(true)); s.once('error', () => done(false)); });
 async function portCheck() {
@@ -96,8 +100,9 @@ async function portCheck() {
     sec.portsAt = nowIso(); saveSec();
   } finally { sec.portsRunning = false; }
 }
-const portInfo = (port) => { const r = RISKY_PORTS.find(([p]) => p === port); return r ? { port, name: r[1], level: r[2], how: r[3] } : { port, name: `Port ${port}`, level: 'notice', how: '' }; };
-const devLabel = (d) => d.name || d.host || d.ip;
+/* One open port, explained for this device (what kind of device it is changes the advice - 44m-makers.js). */
+const portInfo = (port, d) => (d ? portView(port, deviceGuess(d), d) : portView(port, null, null));
+const devLabel = (d) => d.name || announcedName(d) || (makerOf(d.mac) ? `${makerOf(d.mac).name} device (${d.ip})` : d.ip);
 
 /* For the alerts list (40-alerts.js): new devices to look at, and risky ports nobody has marked as expected. */
 function securityAlerts() {
@@ -105,7 +110,7 @@ function securityAlerts() {
   const out = [];
   for (const d of Object.values(sec.devices)) {
     if (!d.known) out.push({ id: `newdev:${d.mac}`, severity: 'notice', title: `New device on your network: ${devLabel(d)}`, source: 'network' });
-    for (const p of d.ports || []) if (!sec.expected[`${d.mac}:${p}`]) { const i = portInfo(p); out.push({ id: `port:${d.mac}:${p}`, severity: i.level, title: `${devLabel(d)} has ${i.name} open`, source: 'network' }); }
+    for (const p of d.ports || []) if (!sec.expected[`${d.mac}:${p}`]) { const i = portInfo(p, d); if (i.level === 'info') continue; out.push({ id: `port:${d.mac}:${p}`, severity: i.level, title: `${devLabel(d)} has ${i.name} open`, source: 'network' }); }
   }
   return out.slice(0, 20);
 }
@@ -122,7 +127,7 @@ function securityChecklist() {
   let backup = false; try { backup = fs.readFileSync(AUDIT_FILE, 'utf8').split('\n').slice(-5000).some((l) => l.includes('"backup-made"') && Date.now() - Date.parse(JSON.parse(l).at) < 90 * 86400_000); } catch { /* none */ }
   add('backup', backup, 'A backup in the last 3 months', 'Settings › Updates & backup › Backup: one file, protected by a passphrase you choose.', '#settings');
   const devs = isDemo() ? DEMO_LAN() : Object.values(sec.devices);
-  const risky = devs.flatMap((d) => (d.ports || []).filter((p) => !sec.expected[`${d.mac}:${p}`] && portInfo(p).level === 'warning'));
+  const risky = devs.flatMap((d) => (d.ports || []).filter((p) => !sec.expected[`${d.mac}:${p}`] && portInfo(p, d).level === 'warning'));
   if ((sec.portsAt && sec.available) || isDemo()) add('ports', !risky.length, 'No risky services open on your network', risky.length ? `${risky.length} found - see "Devices on your network" below.` : 'Checked once a day.', '#security');
   const fresh = devs.filter((d) => !d.known).length;
   if ((sec.scanAt && sec.available) || isDemo()) add('newdevices', !fresh, 'Every device on your network is one you know', fresh ? `${fresh} new - say whether each is yours below.` : 'You\'ll get an alert when a new one joins.', '#security');
@@ -150,22 +155,27 @@ function securityEvents() {
 const DEMO_LAN = () => {
   const t = (h) => new Date(Date.now() - h * 3600_000).toISOString();   // scrub-ok: sample addresses below
   return [
-    { mac: '3c:22:fb:10:00:01', ip: '192.168.1.1', host: 'router', name: 'Router', known: true, firstSeen: t(2000), lastSeen: t(0) },   // scrub-ok
+    { mac: '00:ab:48:10:00:01', ip: '192.168.1.1', host: 'router', name: 'Router', known: true, firstSeen: t(2000), lastSeen: t(0) },   // scrub-ok
     { mac: '00:11:32:aa:00:02', ip: '192.168.1.20', host: 'nas', name: 'NAS', known: true, ports: [445], firstSeen: t(1800), lastSeen: t(0) },   // scrub-ok
     { mac: 'b8:27:eb:00:00:03', ip: '192.168.1.30', host: 'casatorch', name: 'CasaTorch', known: true, firstSeen: t(900), lastSeen: t(0) },   // scrub-ok
     { mac: '9c:8e:cd:00:00:04', ip: '192.168.1.41', host: null, name: 'Driveway camera', known: true, ports: [23, 554], firstSeen: t(1500), lastSeen: t(0) },   // scrub-ok
+    { mac: '00:06:78:00:00:07', ip: '192.168.1.44', host: null, name: null, known: true, ports: [23], firstSeen: t(1300), lastSeen: t(0) },   // scrub-ok: sample AV receiver (public maker prefix)
+    { mac: '6c:1f:f7:00:00:08', ip: '192.168.1.46', host: null, name: null, known: true, ports: [445, 1883], firstSeen: t(1250), lastSeen: t(0) },   // scrub-ok: sample NAS (public maker prefix)
     { mac: 'f4:f5:d8:00:00:05', ip: '192.168.1.52', host: 'living-room-tv', name: null, known: true, firstSeen: t(1200), lastSeen: t(1) },   // scrub-ok
+    { mac: '3c:2a:f4:00:00:09', ip: '192.168.1.60', host: null, name: null, known: true, ports: [631, 9100], hints: { upnp: { name: 'Office printer', maker: 'Brother', model: 'HL-L2350DW' } }, firstSeen: t(1100), lastSeen: t(0) },   // scrub-ok
+    { mac: '08:a6:f7:00:00:0a', ip: '192.168.1.63', host: null, name: null, known: true, hints: { ha: { name: 'Kitchen plug', maker: 'Shelly', model: 'Plug S' } }, firstSeen: t(1000), lastSeen: t(0) },   // scrub-ok
     { mac: 'da:a1:19:00:00:06', ip: '192.168.1.77', host: null, name: null, known: false, privateMac: true, firstSeen: t(0.6), lastSeen: t(0) },   // scrub-ok
+    { mac: '9a:1e:4c:00:00:0b', ip: '192.168.1.81', host: null, name: null, known: true, privateMac: true, ports: [445], firstSeen: t(700), lastSeen: t(0) },   // scrub-ok
   ];
 };
 
 /* ---- routes ---- */
 app.get('/api/security', async (_req, res) => {
   const list = isDemo() ? DEMO_LAN() : Object.values(sec.devices);
-  const devices = list.map((d) => ({ ...d, ports: (d.ports || []).map((p) => ({ ...portInfo(p), expected: !!sec.expected[`${d.mac}:${p}`] })) }))
-    .sort((a, b) => Number(a.known) - Number(b.known) || (b.ports.filter((p) => !p.expected).length - a.ports.filter((p) => !p.expected).length) || String(a.ip).localeCompare(String(b.ip), undefined, { numeric: true }));
+  const devices = list.map((d) => ({ ...d, who: whoIsIt(d), announced: announcedName(d), ports: (d.ports || []).map((p) => ({ ...portInfo(p, d), expected: !!sec.expected[`${d.mac}:${p}`] })) }))
+    .sort((a, b) => Number(a.known) - Number(b.known) || (b.ports.filter((p) => !p.expected && p.level !== 'info').length - a.ports.filter((p) => !p.expected && p.level !== 'info').length) || String(a.ip).localeCompare(String(b.ip), undefined, { numeric: true }));
   res.json({ available: isDemo() ? true : sec.available, scanning: sec.scanning || !!sec.portsRunning, scanAt: isDemo() ? nowIso() : sec.scanAt, portsAt: isDemo() ? nowIso() : sec.portsAt,
-    devices, wall: sec.wall, checklist: securityChecklist(), events: isDemo() ? DEMO_SEC_EVENTS() : securityEvents(), watch: config.security?.watch !== false });
+    devices, types: Object.entries(DEV_TYPES).map(([id, t]) => ({ id, label: t.label, short: t.short })), wall: sec.wall, checklist: securityChecklist(), events: isDemo() ? DEMO_SEC_EVENTS() : securityEvents(), watch: config.security?.watch !== false });
 });
 const DEMO_SEC_EVENTS = () => { const t = (m) => new Date(Date.now() - m * 60_000).toISOString(); return [
   { at: t(14), title: 'Someone at the Front door', severity: 'notice', source: 'ring' }, { at: t(36), title: 'New device on your network: 192.168.1.77', severity: 'notice', source: 'network' },   // scrub-ok
@@ -176,6 +186,7 @@ app.post('/api/security/devices/:mac', requireRole('member'), express.json({ lim
   const mac = normMac(req.params.mac), d = Object.hasOwn(sec.devices, mac) ? sec.devices[mac] : null; if (!d) return res.status(404).json({ error: 'That device isn\'t on the list any more.' });
   if ('known' in (req.body || {})) d.known = !!req.body.known;
   if ('name' in (req.body || {})) d.name = String(req.body.name || '').trim().slice(0, 40) || null;
+  if ('type' in (req.body || {})) d.type = Object.hasOwn(DEV_TYPES, String(req.body.type)) ? String(req.body.type) : null;   // "This is my receiver" (null: let CasaTorch guess again)
   saveSec(); res.json({ ok: true });
 });
 app.post('/api/security/expected', requireRole('member'), express.json({ limit: '4kb' }), (req, res) => {

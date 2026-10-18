@@ -906,6 +906,7 @@ await (await import('./outdoor-unit.mjs')).default(t);
 await (await import('./floorplan-compat-unit.mjs')).default(t);   // the 3D home on older browsers: no newer JS/CSS without a fallback (floorplan-compat-unit.mjs)   // 3D home outside and furniture: polygons, pools, slopes, fences, models, saved items (outdoor-unit.mjs)
 await (await import('./license-unit.mjs')).default(t);   // Pro keys, grace periods and the trial (license-unit.mjs)
 await (await import('./security-unit.mjs')).default(t);   // the pre-launch security review: outbound-request guard, member links, pre-setup gate (security-unit.mjs)
+await (await import('./makers-unit.mjs')).default(t);   // Security Center "Who is it?": makers, likely kind, normal ports (makers-unit.mjs)
 await (await import('./support-unit.mjs')).default(t);   // support: the support file's masking, activity log, getting-started checklist (support-unit.mjs)
 t('3D Home: a plan damaged at start comes back from the newest restore point (with a Health note), never over a plan that is there', () => {
   const PB = globalThis.__casatorchPlan, was = fsMod.existsSync(PB.FP_FILE) ? fsMod.readFileSync(PB.FP_FILE) : null;

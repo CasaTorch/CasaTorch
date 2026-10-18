@@ -61,6 +61,7 @@ The apps must also show their own open-source notices screen before store releas
 | What | Source | License |
 | --- | --- | --- |
 | Land, borders and US states outline for the radar (`app/catalog/radar-outline.json`) | Natural Earth | Public domain |
+| Device makers by hardware-address prefix, for the Security Center's "Who is it?" (`app/catalog/oui.txt.gz`, built by `tools/make-oui.mjs`; company names shortened, MA-L block only) | IEEE Registration Authority public MA-L (OUI) listing, standards-oui.ieee.org/oui/oui.csv, read here from the oui-data npm package that mirrors it (copyright silverwind, BSD-2-Clause) | Facts (company names and the prefixes assigned to them) that IEEE publishes for anyone to look up; oui-data's packaging is BSD-2-Clause. **Owner/lawyer to confirm** IEEE's terms for redistributing the listing |
 | Demo house photos (`demo/photos`) | Wikimedia Commons, credited on each photo (`demo/photos/credits.json`) | CC0 and CC BY 4.0 |
 | App icons, logo, the in-app icon set | CasaTorch | Part of CasaTorch (AGPL-3.0); "CasaTorch" and the logo are the project's marks |
 | Fonts | The app uses the system font of each device (it names Inter first, if installed). casatorch.com serves Inter itself | Inter: SIL Open Font License 1.1 |

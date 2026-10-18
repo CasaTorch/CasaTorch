@@ -229,15 +229,15 @@ Details: [docs/SUPPORT.md](docs/SUPPORT.md).
 - **Two-step sign-in** with any authenticator app, ten one-time recovery codes, and an option to require it
   for everyone. Optional **Sign in with Google** for people you added (needs an https address or localhost).
 - **Wall-panel links** sign a tablet in as a panel (not a person) for a year, and can be revoked.
-- Sessions you can see and end, a **security log**, brute-force limits, encrypted secrets at rest,
-  strict Content-Security-Policy and same-site request checks.
+- Sessions you can see and end, a **security log**, limits on password guessing, encrypted secrets at rest,
+  and strong browser protections. More: [SECURITY.md](SECURITY.md).
 - Locks, garage doors, gates and alarms are never opened or disarmed automatically or by the AI.
 - Accepting the [Terms of Use](app/public/terms.html) and [Privacy Notice](app/public/privacy.html) is part of setup.
 
 ## Privacy
 
-Settings are one file (`config.json`, owner-only) on your box. Device passwords you type during
-setup go to that device or to Home Assistant; Ring and power-company passwords are never stored.
+Settings stay on your box, readable only by CasaTorch, with saved passwords and keys encrypted. Device passwords
+you type during setup go to that device or to Home Assistant; Ring and power-company passwords are never stored.
 More: [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## Development

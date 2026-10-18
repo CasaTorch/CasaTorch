@@ -75,6 +75,37 @@ function alarmCard(devs, redraw) {
 }
 
 /* ---- devices on the home network, and the open-port check ---- */
+/* The name to show: what the person called it, what the network calls it, else its maker. */
+function lanName(d) {
+  const w = d.who || {};
+  if (d.name || d.announced) return d.name || d.announced;
+  if (d.privateMac) return T('Phone, tablet or computer with a private Wi-Fi address');
+  return w.maker ? T('{maker} device', { maker: w.maker.name }) : T('Unknown device');
+}
+/* "Who is it?": maker, likely kind, names, when it was first seen, what each open port is for - and one tap to say what it is. */
+function whoIsItModal(d, s, redraw) {
+  const w = d.who || {}, dl = el('dl', { class: 'kv small' }), add = (k, ...v) => dl.append(el('dt', {}, T(k)), el('dd', {}, ...v));
+  const save = async (body, msg) => { try { await post(`/api/security/devices/${encodeURIComponent(d.mac)}`, body); if (msg) toast(msg); m.remove(); redraw(); } catch (e) { toast(e.message); } };
+  if (w.maker) add('Maker', el('div', {}, w.maker.name), el('div', { class: 'tiny muted' }, T('From the first half of its network address (IEEE list: {ieee}).', { ieee: w.maker.ieee })), w.maker.note ? el('div', { class: 'tiny muted' }, T(w.maker.note)) : null);
+  else add('Maker', el('div', {}, d.privateMac ? T('Hidden') : T('Not known')), el('div', { class: 'tiny muted' }, d.privateMac ? T('It uses a private Wi-Fi address: phones, tablets and computers make one up to protect their owner\'s privacy, so the maker can\'t be read from it.') : T('Its network address isn\'t on the public list of makers.')));
+  if (w.type && (w.sure || !w.maker || w.maker.kinds.length < 2)) add(w.userType ? 'Kind' : 'Likely', el('div', {}, T(w.typeLabel)), w.why && !w.userType ? el('div', { class: 'tiny muted' }, T(w.why)) : null);
+  else if (w.maker?.kinds?.length) add('Could be', el('div', {}, w.maker.kinds.map((k) => T(k)).join(' · ')));
+  if (w.names?.length) add('Names it goes by', ...w.names.map((n) => el('div', {}, el('b', {}, n.name), el('span', { class: 'tiny muted' }, ` · ${T(n.from)}${n.extra ? ` (${n.extra})` : ''}`))));
+  add('First seen', `${fmtWhen(d.firstSeen)} (${ago(d.firstSeen)})`);
+  if (d.lastSeen) add('Last seen', ago(d.lastSeen));
+  add('Network address', `${d.ip} · ${d.mac}`);
+  if (d.ports.length) add('Open services', ...d.ports.map((p) => el('div', { class: 'portline' }, el('b', {}, T(p.name)), el('span', { class: 'tiny muted' }, ` (${T('port {port}', { port: p.port })})`), el('span', { class: `pill${p.level === 'warning' && !p.expected ? ' warn' : p.level === 'info' || p.expected ? ' good' : ''}`, style: 'margin-left:6px' }, p.expected ? T('You use this') : p.level === 'info' ? T('Normal here') : p.level === 'warning' ? T('Fix this') : T('Check this')),
+    p.use ? el('div', { class: 'tiny muted' }, T(p.use)) : null)));
+  else add('Open services', el('span', { class: 'muted' }, T('None of the risky ones CasaTorch checks for.')));
+  const typeName = w.typeShort ? T(w.typeShort) : null;
+  const pick = el('select', { 'aria-label': T('What kind of device is it?'), onchange: (e) => { if (e.target.value) save({ known: true, type: e.target.value === 'auto' ? null : e.target.value }, T('Saved')); } },
+    el('option', { value: '' }, T('Something else…')), ...(s.types || []).filter((t) => t.id !== w.type || !w.userType).map((t) => el('option', { value: t.id }, T(t.label))), w.userType ? el('option', { value: 'auto' }, T('Let CasaTorch guess')) : null);
+  const acts = el('div', { class: 'acts' },
+    w.type && !w.userType ? el('button', { class: 'btn primary', onclick: () => save({ known: true, type: w.type, ...(!d.name && !d.announced ? { name: `${w.maker?.short ? `${w.maker.short} ` : ''}${typeName}` } : {}) }, T('Saved')) }, T('This is my {type}', { type: typeName })) : null,
+    el('button', { class: 'btn ghost', onclick: async () => { const n = prompt(T('Name this device'), d.name || ''); if (n == null) return; save({ known: true, name: n }); } }, icon('edit', 14), T('Name it')),
+    pick);
+  const m = modal(el('div', { class: 'whois' }, dl, acts, el('p', { class: 'tiny faint', style: 'margin:12px 0 0' }, T('Worked out on this CasaTorch from what the device shows on your home network. Nothing is sent anywhere.'))), { title: lanName(d) });
+}
 function lanCard(s, redraw) {
   const card = el('div', { class: 'card wide' });
   const head = el('div', { class: 'row between wrap', style: 'gap:8px;margin-bottom:8px' }, el('h2', { style: 'margin:0' }, icon('wifi', 15), T('Devices on your network')),
@@ -83,18 +114,21 @@ function lanCard(s, redraw) {
   if (!s.watch) { card.append(el('p', { class: 'muted' }, T('Watching for new devices is turned off.')), el('button', { class: 'btn small', onclick: async () => { await post('/api/security/settings', { watch: true }, 'PUT').catch((e) => toast(e.message)); redraw(); } }, T('Turn on'))); return card; }
   if (s.available === false) { card.append(el('p', { class: 'muted' }, T('CasaTorch can\'t see your home network from where it\'s running (for example inside Docker without host networking). Run it with host networking to use this.'))); return card; }
   if (!s.devices.length) { card.append(el('p', { class: 'muted' }, s.scanAt ? T('No devices found yet.') : T('The first look at your network happens a minute after CasaTorch starts. The devices it finds then are taken as yours; anything that joins later shows up here as new.'))); return card; }
-  const fresh = s.devices.filter((d) => !d.known), risky = s.devices.filter((d) => d.ports.some((p) => !p.expected));
+  const fresh = s.devices.filter((d) => !d.known), risky = s.devices.filter((d) => d.ports.some((p) => !p.expected && p.level !== 'info'));
   card.append(el('p', { class: 'small muted', style: 'margin-top:0' }, `${T('{n} devices', { n: s.devices.length })}${fresh.length ? ` · ${T('{n} new', { n: fresh.length })}` : ''}${risky.length ? ` · ${T('{n} with something to look at', { n: risky.length })}` : ''}. ${T('Ports checked {when}.', { when: s.portsAt ? ago(s.portsAt) : T('soon') })}`));
   const list = el('div', { class: 'lanlist' });
   for (const d of s.devices.slice(0, 120)) {
-    const name = d.name || d.host || (d.privateMac ? T('Phone or tablet (private address)') : T('Unknown device'));
+    const w = d.who || {}, name = lanName(d), fromName = !!(d.name || d.announced);
+    const sub = [fromName && w.maker ? w.maker.name : null, w.sure && w.typeLabel ? T(w.typeLabel) : null, d.ip, T('first seen {ago}', { ago: ago(d.firstSeen) })].filter(Boolean).join(' · ');
+    const bad = d.ports.some((p) => !p.expected && p.level === 'warning');
     const row = el('div', { class: `landev${d.known ? '' : ' new'}` },
-      el('div', { class: 'row', style: 'gap:10px;align-items:center' }, el('span', { class: `dot ${d.known ? (d.ports.some((p) => !p.expected && p.level === 'warning') ? 'warn' : 'good') : 'warn'}` }),
-        el('div', { class: 'grow', style: 'min-width:0' }, el('div', { class: 'ellipsis' }, el('b', {}, name), d.known ? null : el('span', { class: 'pill warn', style: 'margin-left:8px' }, T('New'))),
-          el('div', { class: 'tiny muted ellipsis' }, `${d.ip} · ${d.mac}${d.host && d.name ? ` · ${d.host}` : ''} · ${T('first seen {ago}', { ago: ago(d.firstSeen) })}`)),
-        !d.known ? el('button', { class: 'btn small primary', onclick: async () => { const n = prompt(T('What is it? (optional - e.g. "Sam\'s phone")'), ''); await post(`/api/security/devices/${encodeURIComponent(d.mac)}`, { known: true, ...(n ? { name: n } : {}) }).catch((e) => toast(e.message)); redraw(); } }, T('It\'s mine')) : el('button', { class: 'btn small ghost', title: T('Name it'), 'aria-label': T('Name {name}', { name }), onclick: async () => { const n = prompt(T('Name this device'), d.name || ''); if (n == null) return; await post(`/api/security/devices/${encodeURIComponent(d.mac)}`, { name: n }).catch((e) => toast(e.message)); redraw(); } }, icon('edit', 14))),
-      ...d.ports.map((p) => el('div', { class: `portrow${p.expected ? ' ok' : ` ${p.level}`}` }, el('div', {}, el('b', {}, T(p.name)), el('span', { class: 'tiny muted' }, ` (${T('port {port}', { port: p.port })})`), p.expected ? el('span', { class: 'tiny muted' }, T(' · marked as expected')) : null, el('div', { class: 'small muted' }, T(p.how))),
-        el('button', { class: 'btn small ghost', onclick: async () => { await post('/api/security/expected', { mac: d.mac, port: p.port, expected: !p.expected }).catch((e) => toast(e.message)); redraw(); } }, p.expected ? T('Watch it again') : T('I use this')))));
+      el('div', { class: 'row wrap', style: 'gap:8px 10px;align-items:center' }, el('span', { class: `dot ${d.known ? (bad ? 'warn' : 'good') : 'warn'}` }),
+        el('div', { class: 'grow', style: 'min-width:0;flex:1 1 200px' }, el('div', { style: 'overflow-wrap:anywhere' }, el('b', {}, name), d.known ? null : el('span', { class: 'pill warn', style: 'margin-left:8px' }, T('New'))),
+          el('div', { class: 'tiny muted', style: 'overflow-wrap:anywhere' }, sub)),
+        el('div', { class: 'row', style: 'gap:6px;margin-left:auto' }, el('button', { class: 'btn small ghost', onclick: () => whoIsItModal(d, s, redraw) }, T('Who is it?')),
+        !d.known ? el('button', { class: 'btn small primary', onclick: async () => { const n = prompt(T('What is it? (optional - e.g. "Sam\'s phone")'), ''); await post(`/api/security/devices/${encodeURIComponent(d.mac)}`, { known: true, ...(n ? { name: n } : {}) }).catch((e) => toast(e.message)); redraw(); } }, T('It\'s mine')) : null)),
+      ...d.ports.map((p) => el('div', { class: `portrow${p.expected ? ' ok' : ` ${p.level}`}` }, el('div', {}, el('b', {}, T(p.name)), el('span', { class: 'tiny muted' }, ` (${T('port {port}', { port: p.port })})`), p.expected ? el('span', { class: 'tiny muted' }, T(' · marked as expected')) : p.level === 'info' ? el('span', { class: 'tiny muted' }, T(' · normal for this device')) : null, el('div', { class: 'small muted' }, T(p.how))),
+        p.level === 'info' && !p.expected ? null : el('button', { class: 'btn small ghost', onclick: async () => { await post('/api/security/expected', { mac: d.mac, port: p.port, expected: !p.expected }).catch((e) => toast(e.message)); redraw(); } }, p.expected ? T('Watch it again') : T('I use this')))));
     list.append(row);
   }
   card.append(list, el('p', { class: 'tiny faint', style: 'margin:10px 0 0' }, T('CasaTorch looks only at your home network, and only checks a short list of risky services. Nothing about these devices leaves this CasaTorch.')));

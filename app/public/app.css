@@ -389,7 +389,8 @@ input[type=checkbox]:focus-visible, input[type=radio]:focus-visible, input[type=
 .evrow { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
 .lanlist { display: grid; gap: 8px; } .landev { padding: 10px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); } .landev.new { border-color: rgba(251, 191, 36, .45); }
 .portrow { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin: 8px 0 0 20px; padding: 8px 10px; border-radius: 10px; background: rgba(251, 191, 36, .08); }
-.portrow.warning { background: rgba(251, 113, 133, .1); } .portrow.ok { background: var(--surface-3); opacity: .75; }
+.portrow.warning { background: rgba(251, 113, 133, .1); } .portrow.ok { background: var(--surface-3); opacity: .75; } .portrow.info { background: var(--surface-3); }
+.whois .kv { gap: 9px 14px; } .whois .portline { margin: 0 0 8px; } .whois .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; } .whois select { width: auto; max-width: 100%; }
 .cards.sec > .card.wide { grid-column: 1 / -1; }
 
 /* ---- Network > App tests ---- */

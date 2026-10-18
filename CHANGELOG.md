@@ -4,7 +4,15 @@ What changed in each CasaTorch version. The illustrated version, with links into
 [What's new](https://casatorch.com/docs/help/whats-new.html); after an update CasaTorch also shows a short
 "What's new" sheet (find it again in Settings › Help). Items marked **Coming** are not available yet.
 
-## 0.8.0 - unreleased
+## 0.8.1
+
+- **Who is it?** Security Center names each device by its maker (from the first half of its network address) and
+  the names your network already knows, guesses its type, and explains each open service for that kind of device.
+  A receiver's control port is shown as normal information instead of a warning; real risks stay red.
+- CI tests on Node 22 and 24 (Node 20 is end of life).
+- Fresh screenshots and videos everywhere.
+
+## 0.8.0
 
 The biggest update yet: draw your whole home, inside and out, and watch it live in 3D; Household and a Family hub;
 a rain radar; App tests hop by hop - and a release built for trust: attack- and failure-tested on every change,
@@ -54,13 +62,10 @@ water and smoke alerts (gas and carbon monoxide count as smoke) repeat until som
   ipinfo.io's legacy API.
 
 ### Security
-- A penetration test (30+ attack checks against every route) runs on every change, with the unit and security tests.
-- A brand-new box answers almost nothing until setup is finished, closing a way someone on the same network could
-  set up a new box first; the setup code is never in the in-app log.
-- Every redirect is checked when CasaTorch fetches for you; cloud metadata addresses are always refused; member
-  calendar links must be on the internet.
-- Rate limits for setup codes, "Allow this device" requests and widget lookups; password checks no longer pause
-  live updates. Owner reset limits per device; the insider cookie is host-only.
+- Automated security and attack testing runs on every change, with the unit tests.
+- A brand-new box can only be set up by its owner.
+- Safer handling of links and addresses CasaTorch fetches for you.
+- Stronger protection against password guessing; password checks no longer pause live updates.
 - **Signed installers**: install.sh, install.ps1 and the Home Assistant add-on install the newest release (never
   `main`) and check every file against the release's signed file list before anything runs. The add-on no longer
   runs as root.
@@ -104,8 +109,7 @@ A polish release.
 - **Settings › Health**: 15 checks, each green, amber or red, with Fix it where CasaTorch can fix it; automatic
   retry and one combined alert; settings history with one-tap restore; self-repair of damaged settings and sign-in
   files, crash-loop rollback and a watchdog.
-- **Security hardening**: the master key is never overwritten, owner-only data files re-checked hourly, masked logs,
-  HMAC alert tags, Cross-Origin-Opener-Policy, and the Security and encryption page.
+- **Security hardening** across storage, logs, alerts and the browser, and a new Security and encryption page.
 - CasaTorch announces itself on the home network (Bonjour) for the phone apps (**Coming**); phone apps hardened
   (iPad, offline, back button, https first).
 

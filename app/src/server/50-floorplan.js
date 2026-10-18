@@ -24,7 +24,7 @@ const fpRead = () => { try { return JSON.parse(fs.readFileSync(FP_FILE, 'utf8'))
 let demoFp = null;   // the demo can be edited, but only in memory
 const fpWrite = (d) => { if (isDemo()) { demoFp = d; return; } writeFileSafe(FP_FILE, JSON.stringify(d, null, 2), 0o600); };
 const DEMO_FP = path.join(APP_DIR, '..', 'demo', 'floorplan');
-/* The dark look was once called "neon"; plans saved then are read as "night". */
+/* Plans saved with the dark look's old name are read as "night". */
 const fpTheme = (d) => { if (d?.style?.theme === 'neon' || d?.style?.theme === 'blueprint') d.style.theme = 'night'; if (d?.style?.colors?.neon) { d.style.colors.night ||= d.style.colors.neon; delete d.style.colors.neon; } if (d?.view?.theme === 'neon') d.view.theme = 'night'; return d; };
 const fpData = () => fpTheme(isDemo() ? (demoFp ||= JSON.parse(fs.readFileSync(path.join(DEMO_FP, 'floorplan.json'), 'utf8'))) : fpRead());
 /* three.js: compressed (Brotli/gzip, kept in memory) and cached for a week - 2.7 MB becomes about 0.6 MB. */

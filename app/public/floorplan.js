@@ -28,7 +28,7 @@ let card = null;   // the open device card: { id, o }
 let netMod = null;   // QA: floorplan-net.js once loaded - the Network tab and "What can I add?" read from it
 const PREF_KEY = 'casatorch-3d';
 const prefs = { walls: 'auto', stack: 'stacked', names: true, values: false, cameras: true, roof: true, power: true, hidden: {}, theme: null, sun: true, weatherFx: true, yard: true, overlay: 'rooms', spin: false, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
-if (prefs.theme === 'neon') prefs.theme = 'night';   // the old name of the dark look
+if (prefs.theme === 'neon') prefs.theme = 'night';   // an old name of the dark look, read as night
 if (prefs.v !== 2) Object.assign(prefs, { v: 2, walls: 'auto', roof: true, power: true, hidden: {} });   // the dollhouse view is the new default
 /* View choices are kept on the CasaTorch (so every screen and every restart keeps them), with this browser's copy for an instant start. */
 let prefTimer = null;

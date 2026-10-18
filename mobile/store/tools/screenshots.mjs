@@ -106,7 +106,7 @@ const HIDE_CSS = '#banner{display:none!important}';
 async function webContext(browser, d) {
   const ctx = await browser.newContext({ viewport: { width: d.view[0], height: d.view[1] }, deviceScaleFactor: d.dpr, isMobile: d.kind === 'phone', hasTouch: true, colorScheme: 'dark', timezoneId: 'America/Los_Angeles', locale: 'en-US',
     userAgent: d.os === 'ios' ? undefined : 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Mobile Safari/537.36' });
-  await ctx.addInitScript(() => { try { localStorage.setItem('casatorch-tour', 'done'); } catch { /* fine */ } });
+  await ctx.addInitScript(() => { try { localStorage.setItem('casatorch-tour', 'done'); localStorage.setItem('casatorch-whatsnew', '999.0'); } catch { /* fine */ } });   // whatsnew: newer than any version, so no "What's new" popup in the pictures
   await ctx.addInitScript({ content: nativeStub(d.os) });   // the page runs as it does inside the app (html.in-app)
   await ctx.route('**/api/frigate/events?*', (r) => r.fulfill({ json: sampleDetections() }));
   await ctx.route('**/api/frigate/events/*/*/*', (r) => { const id = decodeURIComponent(r.request().url().split('/').slice(-2)[0]); const ev = sampleDetections().recent.find((e) => e.id.endsWith(id)) || { label: 'person' }; return r.fulfill({ contentType: 'image/svg+xml', body: thumbSvg(ev.label, parseInt(id.split('.')[1], 10) || 0) }); });
