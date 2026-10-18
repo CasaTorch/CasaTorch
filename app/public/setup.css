@@ -138,3 +138,6 @@ html.tour-lock { overflow: hidden; }
 .atsetup .atsgroup { margin-top: 14px; } .atsetup .atsgroup > label { display: block; margin-bottom: 6px; }
 .atsetup .opts { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } .atsetup .opt { padding: 10px 12px; }
 .atsetup .atsmore { margin-top: 12px; } .atsetup .atsmore > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+/* "Already bought Pro?" folded away on the login step */
+.card.claim > summary { cursor: pointer; list-style-position: outside; }
+.card.claim[open] > summary { margin-bottom: 12px; }

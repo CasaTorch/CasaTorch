@@ -36,7 +36,7 @@ function setupCode() {
 /* Proof without a code: the same computer, or Home Assistant's own signed-in panel. */
 function setupTrusted(req) {
   const sock = String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
-  const proxied = req.headers['x-forwarded-for'] || req.headers['cf-connecting-ip'] || req.headers['x-real-ip'];
+  const proxied = req.headers['x-forwarded-for'] || req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.headers.forwarded || req.headers['x-casatorch-internal'];   // a proxy, or CasaTorch's own request to itself
   if (/^(127\.|::1$)/.test(sock) && !proxied) return 'this computer';
   if (process.env.SUPERVISOR_TOKEN && sock === '172.30.32.2' && req.headers['x-ingress-path']) return 'Home Assistant';   // scrub-ok: Home Assistant Supervisor's fixed ingress address
   return null;
@@ -72,7 +72,7 @@ app.post('/api/setup/code', express.json({ limit: '2kb' }), (req, res) => {
   const ip = typeof clientIp === 'function' ? clientIp(req) : req.ip;
   if (limited(`setupcode:${ip}`, 8) || limited('setupcode:all', 60)) return res.status(429).json({ error: 'Too many tries. Wait 15 minutes and try again.' });
   const got = cleanCode(req.body?.code);
-  if (got.length !== code.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(code))) return res.status(403).json({ error: 'That code isn\'t right. Check it and try again - it\'s 8 letters and numbers, like ABCD-2345.' });
+  if (got.length !== code.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(code))) return failed(`setupcode:${ip}`, 'setupcode:all'), res.status(403).json({ error: 'That code isn\'t right. Check it and try again - it\'s 8 letters and numbers, like ABCD-2345.' });
   res.setHeader('Set-Cookie', setupCookie(req));
   res.json({ ok: true });
 });
@@ -93,6 +93,7 @@ app.post('/api/setup/ask', (req, res) => {
   askSweep();
   const ip = typeof clientIp === 'function' ? clientIp(req) : req.ip;
   if (limited(`setupask:${ip}`, 5, 60 * 60_000) || setupAsks.size >= 5) return res.status(429).json({ error: 'Too many requests are waiting. Use the setup code instead, or try again in a few minutes.' });
+  failed(`setupask:${ip}`);   // every ask counts toward the 5 an hour
   const a = { id: crypto.randomBytes(18).toString('base64url'), what: askWhat(req.headers['user-agent']), num: String(crypto.randomInt(10, 100)), at: Date.now(), ok: null };
   setupAsks.set(a.id, a);
   res.json({ id: a.id, num: a.num });
@@ -119,8 +120,18 @@ app.use('/api', (req, res, next) => {
   if (setupProven(req)) return next();
   res.status(401).json({ error: 'Enter the setup code first.', needCode: true });
 });
+/* Before setup there is no sign-in yet, so reading is gated too: without the proof (or this computer / Home
+   Assistant's panel), only what the setup and sign-in pages need before the code is entered answers. Otherwise
+   anyone on the network could read the log (which shows the setup code), diagnostics or settings and take the
+   box over by finishing setup first. */
+const PRESETUP_OPEN = /^\/(health|lang|auth\/state|app\/hello|local-https\/(target|ping)|setup\/(state|code|ask|ask\/[\w-]+|asks|asks\/[\w-]+))$/;
+app.use('/api', (req, res, next) => {
+  if (!setupCode() || PRESETUP_OPEN.test(req.path) || setupProven(req)) return next();
+  res.status(401).json({ error: 'Enter the setup code first.', needCode: true });
+});
 /* Say where to find it, where only the owner can see it: the log of the CasaTorch app, the container or the add-on. */
 setTimeout(() => {
   const code = setupCode(); if (!code) return;
-  console.log(`\n  CasaTorch setup code: ${fmtCode(code)}\n  (Needed to set up from a phone or another computer. Setting up on this computer doesn't need it.)\n`);
+  // straight to the system log (stdout), not the in-app log that Settings › Advanced shows
+  process.stdout.write(`\n  CasaTorch setup code: ${fmtCode(code)}\n  (Needed to set up from a phone or another computer. Setting up on this computer doesn't need it.)\n`);
 }, 1500);

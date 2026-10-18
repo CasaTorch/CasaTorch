@@ -96,7 +96,8 @@
 #drawer.dz .dz-help kbd { font: 600 12px ui-monospace, monospace; background: #f1f4f8; border: 1px solid var(--d-line2); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; }
 #drawer.dz .dz-more { display: none; }
 #drawer.dz .dz-picbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 14px 12px; border: 0; }
-#drawer.dz .dz-picbar:empty, #drawer.dz .dz-picbar:not(:has(button)) { padding: 0; }
+#drawer.dz .dz-picbar:empty { padding: 0; }
+#drawer.dz .dz-picbar:not(:has(button)) { padding: 0; }   /* QA: its own rule - a browser without :has() drops only this line, not the one above */
 /* phones and narrow windows: tools along the bottom, the inspector as a sheet above them, the 3D preview on request */
 @media (max-width: 760px) {
   #drawer.dz, #drawer.dz.nopv { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto auto; }

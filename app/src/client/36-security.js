@@ -36,7 +36,7 @@ function wallCard(cams, wall, redraw) {
   if (SEC.wallEdit) {
     const list = el('div', { class: 'wall-edit' }, ...ordered.map((d, i) => el('div', { class: 'row', style: 'gap:8px;padding:6px 0;border-top:1px solid var(--line)' },
       el('input', { type: 'checkbox', checked: !w.hidden.includes(d.id), style: 'width:auto', 'aria-label': `Show ${d.name}`, onchange: (e) => { w.hidden = e.target.checked ? w.hidden.filter((x) => x !== d.id) : [...w.hidden, d.id]; save().then(redraw); } }),
-      el('span', { class: 'grow' }, d.name, el('span', { class: 'tiny muted' }, ` · ${d.source || d.provider}`)),
+      el('span', { class: 'grow' }, d.name, srcName(d.source || d.provider) ? el('span', { class: 'tiny muted' }, ` · ${srcName(d.source || d.provider)}`) : null),
       el('button', { class: 'btn small ghost', 'aria-label': 'Move up', disabled: i === 0 ? true : null, onclick: () => { const o = ordered.map((x) => x.id); [o[i - 1], o[i]] = [o[i], o[i - 1]]; w.order = o; save().then(redraw); } }, '↑'),
       el('button', { class: 'btn small ghost', 'aria-label': 'Move down', disabled: i === ordered.length - 1 ? true : null, onclick: () => { const o = ordered.map((x) => x.id); [o[i + 1], o[i]] = [o[i], o[i + 1]]; w.order = o; save().then(redraw); } }, '↓'))));
     card.append(el('p', { class: 'small muted', style: 'margin-top:0' }, 'Pick which cameras are on the wall and their order. Every screen in the home uses this wall.'), list);
@@ -115,7 +115,7 @@ function eventsCard(events) {
       : el('p', { class: 'muted' }, 'Nothing yet. Doorbell presses, motion, open doors, leaks, new devices and sign-in trouble show up here.'));
 }
 
-tab({ id: 'security', label: 'Security', icon: 'shield', async render(main) {
+tab({ id: 'security', label: 'Security', icon: 'shield', after: 'cameras', async render(main) {
   SEC.wallCard = null; SEC.wallKey = null;   // a new visit: the wall from last time had its live video stopped
   const draw = async () => {
     const [{ devices = [] }, s] = await Promise.all([api('/api/devices'), api('/api/security')]);

@@ -42,7 +42,7 @@ function widgetPicker(have, onPick, { devices = [], tiles = [], ctx, start = 'wi
     pv.__show = () => { if (!w.noPreview && !w.live) paint(); };
     const sizeBar = el('div', { class: 'seg seg-mini' }, sizes.map(([k, label, sz]) => el('button', { type: 'button', class: sz === chosen ? 'on' : '', title: label, onclick: (e) => { chosen = sz; [...sizeBar.children].forEach((x) => x.classList.toggle('on', x === e.currentTarget)); pv.__show(); } }, label.replace('Extra large', 'XL'))));
     const c = el('div', { class: 'wg-card' }, pv,
-      el('div', { class: 'wg-meta' }, el('b', {}, T(w.title), w.pro ? el('span', { class: 'pill pro', style: 'margin-left:6px' }, 'PRO') : null), el('div', { class: 'tiny muted' }, w.blurb || '')),
+      el('div', { class: 'wg-meta' }, el('b', {}, T(w.title), w.pro ? el('span', { class: 'pill pro', style: 'margin-left:6px' }, 'PRO') : null, w.isNew ? el('span', { class: 'newtag' }, T('New')) : null), el('div', { class: 'tiny muted' }, w.blurb ? T(w.blurb) : '')),
       sizes.length > 1 ? sizeBar : null,
       el('button', { class: 'btn small primary wg-add', onclick: () => pick(w.id, { w: chosen[0], h: chosen[1] }) }, icon('plus'), 'Add'));
     io ? io.observe(pv) : pv.__show();
@@ -149,6 +149,7 @@ tab({ id: 'home', label: 'Home', icon: 'home', async render(main) {
       el('div', { class: 'row', style: 'justify-content:flex-end;gap:8px' }, el('button', { class: 'btn ghost', onclick: () => m.remove() }, 'Not now'), el('button', { class: 'btn primary', onclick: () => { m.remove(); own = true; lay.screen = { tiles: JSON.parse(JSON.stringify(tiles)) }; save(); setEdit(true); } }, 'Customize this screen'))), { title: 'Customize Home' });
   }
   main.append(bar); drawBar();
+  if (canShared || !me?.signIn) supportChecklist(main);   // getting started (39s-support.js)
   g = makeGrid(main, { tiles, ctx, onSave: save, onEdit: setEdit, onCustomize: (t, done) => customizeTile(t, ctx, done) });
   addBtn.onclick = () => {
     if (!writable() && !(canScreen && sid)) return toast('Your account can look at Home, but not change it.');

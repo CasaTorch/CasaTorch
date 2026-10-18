@@ -98,7 +98,7 @@ function atSave() {
   const old = Date.now() - 7 * 86400_000, keep = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v.at > old));
   try { writeFileSafe(AT_FILE, JSON.stringify({ v: 1, state, own: keep(at.own), asn: keep(at.asn) }), 0o600); } catch { at.dirty = true; }
 }
-setInterval(atSave, 10 * 60_000).unref?.();
+setInterval(atSave, 30 * 60_000).unref?.();   // up to a few MB with many tests: every 30 minutes (and as CasaTorch stops) spares an SD card
 process.on('exit', () => { try { atSave(); } catch { /* best effort */ } });
 
 /* A host we're willing to hand to traceroute: letters, digits, dots and dashes, never starting with a dash. */

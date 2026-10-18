@@ -8,7 +8,10 @@
 const ALERTS_FILE = path.join(DATA_DIR, 'alerts.json');
 const alerts = { events: [], open: {} };
 try { Object.assign(alerts, JSON.parse(fs.readFileSync(ALERTS_FILE, 'utf8'))); } catch { /* first run */ }
-const saveAlerts = () => { try { writeFileSafe(ALERTS_FILE, JSON.stringify(alerts), 0o600); } catch { /* next time */ } };
+/* Written only when something changed: the conditions are looked at every minute, and rewriting the same file
+   1,440 times a day wears out the SD card a Raspberry Pi runs from. */
+let alertsSaved = '';
+const saveAlerts = () => { try { const j = JSON.stringify(alerts); if (j === alertsSaved) return; writeFileSafe(ALERTS_FILE, j, 0o600); alertsSaved = j; } catch { /* next time */ } };
 function alertRaise(a) {
   alerts.events.unshift({ at: nowIso(), ...a });
   alerts.events = alerts.events.slice(0, 300);

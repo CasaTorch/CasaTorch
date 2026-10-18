@@ -146,7 +146,7 @@
     {
       "id": "account",
       "title": "Your CasaTorch login",
-      "intro": "Your own sign-in for CasaTorch. You'll use it on phones and other screens; later you can add family members, turn on two-step sign-in, or connect Google sign-in in Settings > Security.",
+      "intro": "Your own sign-in for CasaTorch. You'll use it on phones and other screens; later you can add family members, turn on two-step sign-in, or connect Google sign-in in Settings › People & sign-in.",
       "fields": [
         {
           "id": "username",
@@ -409,7 +409,7 @@
           "test": "ai"
         },
         "later": {
-          "note": "Add it any time in Settings › Home AI Agent."
+          "note": "Add it any time in Settings › Connections & AI."
         }
       }
     },
@@ -1170,7 +1170,7 @@
           "provider": {
             "id": "utility",
             "label": "Your power company's bill and usage (needs Home Assistant)",
-            "help": "With Home Assistant, sign in with your power company's website login (your password goes to Home Assistant only); its usage readings then show in CasaTorch. CasaTorch works out costs from your price per kWh - enter it in Settings › Everyday. Without Home Assistant, just enter your price per kWh.",
+            "help": "With Home Assistant, sign in with your power company's website login (your password goes to Home Assistant only); its usage readings then show in CasaTorch. CasaTorch works out costs from your price per kWh - enter it in Settings › General. Without Home Assistant, just enter your price per kWh.",
             "method": "ha",
             "domain": "opower",
             "otherLabel": "Mine isn't listed"

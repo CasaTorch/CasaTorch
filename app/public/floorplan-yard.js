@@ -10,6 +10,8 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { AREA_KINDS, AREA_ITEM_KIND, LINE_KINDS, slopeFn, poolShell, copingPieces, fencePosts, pointInPoly, polyArea } from './floorplan-outdoor.js';
 import { Kit } from './floorplan-furniture.js';
 import { RoundedBoxGeometry as RoundedBox } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { batchStatic, unbatch } from './floorplan-batch.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';   // QA: the still parts of the yard merged while only looking
 export { AREA_KINDS };
 
 export const ITEM_KINDS = { tree: 'Tree', pine: 'Pine', bush: 'Bush', car: 'Car', charger: 'EV charger' };
@@ -53,6 +55,7 @@ const seeded = (str) => { let h = 2166136261; for (const ch of String(str)) h = 
 /* ---- shared, cached geometry (one tree shape for every tree) ---- */
 const G = {};
 const geo = (k, make) => (G[k] ||= make());
+const _tm = new THREE.Matrix4();
 function carBody(suv) {
   const s = new THREE.Shape(), h = suv ? 1.12 : 1;
   const p = suv ? [[-2.35, .32], [2.35, .32], [2.42, .82], [1.75, .95], [1.0, 1.62], [-2.05, 1.66], [-2.38, 1.2], [-2.42, .9]]
@@ -86,7 +89,8 @@ function makeCar(it, mats) {
   const body = new THREE.Mesh(geo(suv ? 'suvBody' : 'carBody', () => carBody(suv)), paint);
   const glass = new THREE.Mesh(geo(suv ? 'suvGlass' : 'carGlass', () => carGlass(suv)), mats.glass.clone()), tire = mats.tire.clone();
   g.add(body, glass);
-  for (const [x, z] of [[1.45, .86], [1.45, -.86], [-1.45, .86], [-1.45, -.86]]) { const w = new THREE.Mesh(geo('wheel', () => new THREE.CylinderGeometry(.34, .34, .24, 16).rotateX(Math.PI / 2)), tire); w.position.set(x, .34, z); g.add(w); }
+  /* QA: the four wheels are one shape (one draw instead of four) */
+  g.add(new THREE.Mesh(geo('wheels4', () => mergeGeometries([[1.45, .86], [1.45, -.86], [-1.45, .86], [-1.45, -.86]].map(([x, z]) => new THREE.CylinderGeometry(.34, .34, .24, 16).rotateX(Math.PI / 2).translate(x, .34, z)))), tire));
   g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   g.userData.paint = paint; g.userData.port = new THREE.Vector3(-2.2, .82, .95);   // rear left, where most EVs (Tesla included) plug in
   return g;
@@ -107,7 +111,7 @@ export class Yard {
     this.labels = []; this.cars = []; this.trees = []; this.charger = null;   // a yard without a charger draws no cable to the old one
     /* Free each build's own shapes and materials; the tree and car shapes are shared by every build and stay. */
     const shared = new Set(Object.values(G)), mats = new Set(Object.values(this.mats || {}));   // (the pool opening's material is shared too: kept)
-    for (const o of [...this.group.children]) { this.group.remove(o); o.traverse((x) => { if ((x.isMesh || x.isLine) && !shared.has(x.geometry)) x.geometry.dispose(); if (x.material) mats.add(x.material); }); }
+    for (const o of [...this.group.children]) { this.group.remove(o); o.traverse((x) => { if ((x.isMesh || x.isLine) && !shared.has(x.geometry)) x.geometry.dispose(); if (x.isInstancedMesh) x.dispose(); if (x.material) mats.add(x.material); }); }
     for (const m of mats) if (m !== PUNCH) m.dispose();
     this.mats = null; this.pools = [];
   }
@@ -121,6 +125,8 @@ export class Yard {
       tire: new THREE.MeshStandardMaterial({ color: '#16181c', roughness: .8, transparent: true }), charger: new THREE.MeshStandardMaterial({ color: '#e8ecf2', roughness: .4, emissive: '#38bdf8', emissiveIntensity: .25 }),
     };
     this.mats = mats;
+    /* QA: one material per kind of ground, edge, fence or flower, shared by every area of that kind (the merge in batch() then makes one draw of them all) */
+    const cache = new Map(); this.shared = (key, make) => { if (!cache.has(key)) cache.set(key, make()); return cache.get(key); };
     this.pools = []; const low = !!this.lowQuality?.();   // an old tablet: plain colors on big ground areas, fewer flowers
     for (const a of yard?.areas || []) {
       if (!AREA_KINDS[a.kind] || (a.pts || []).length < 3) continue;
@@ -128,14 +134,14 @@ export class Yard {
       if (a.kind === 'pool') { this.group.add(this.pool(a, base, tint, theme, tag)); continue; }
       const s = new THREE.Shape(a.pts.map(([x, z]) => new THREE.Vector2(x, -z))), geo = new THREE.ShapeGeometry(s).rotateX(-Math.PI / 2), up = slopeFn(a.pts, a.rise || 0);
       if (a.rise) { const p = geo.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, up(p.getX(i), p.getZ(i))); geo.computeVertexNormals(); }
-      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: tint(AREA_KINDS[a.kind][1]), map: low ? null : groundTex(a.kind), roughness: a.kind === 'patio' ? .8 : .95, polygonOffset: true, polygonOffsetFactor: -1 }));
+      const m = new THREE.Mesh(geo, this.shared(`area:${a.kind}`, () => new THREE.MeshStandardMaterial({ color: tint(AREA_KINDS[a.kind][1]), map: low ? null : groundTex(a.kind), roughness: a.kind === 'patio' ? .8 : .95, polygonOffset: true, polygonOffsetFactor: -1 })));
       m.position.y = base; m.receiveShadow = true; m.userData = { ...tag }; this.group.add(m);
       if (a.rise) {   // the raised edge of a sloped driveway, so it doesn't float
         const pos = []; a.pts.forEach((p, i) => { const q = a.pts[(i + 1) % a.pts.length], hp = up(p[0], p[1]), hq = up(q[0], q[1]); if (hp < 0.02 && hq < 0.02) return; pos.push(p[0], 0, p[1], q[0], 0, q[1], q[0], hq, q[1], p[0], 0, p[1], q[0], hq, q[1], p[0], hp, p[1]); });
-        if (pos.length) { const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); sg.computeVertexNormals(); const sk = new THREE.Mesh(sg, new THREE.MeshStandardMaterial({ color: tint('#8b8f96'), roughness: .9, side: THREE.DoubleSide })); sk.position.y = base - 0.002; sk.receiveShadow = true; sk.castShadow = true; sk.userData = { ...tag }; this.group.add(sk); }
+        if (pos.length) { const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); sg.computeVertexNormals(); const sk = new THREE.Mesh(sg, this.shared('skirt', () => new THREE.MeshStandardMaterial({ color: tint('#8b8f96'), roughness: .9, side: THREE.DoubleSide }))); sk.position.y = base - 0.002; sk.receiveShadow = true; sk.castShadow = true; sk.userData = { ...tag }; this.group.add(sk); }
       }
       if (a.kind === 'garden') this.flowers(a, base, tint, low);
-      if (theme !== 'day') { const e = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(a.pts.map(([x, z]) => new THREE.Vector3(x, up(x, z), z))), new THREE.LineBasicMaterial({ color: tint(AREA_KINDS[a.kind][1]).multiplyScalar(2.2), transparent: true, opacity: .6 })); e.position.y = m.position.y + .005; e.raycast = () => {}; this.group.add(e); }
+      if (theme !== 'day') { const e = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(a.pts.map(([x, z]) => new THREE.Vector3(x, up(x, z), z))), this.shared(`edge:${a.kind}`, () => new THREE.LineBasicMaterial({ color: tint(AREA_KINDS[a.kind][1]).multiplyScalar(2.2), transparent: true, opacity: .6 }))); e.position.y = m.position.y + .005; e.raycast = () => {}; this.group.add(e); }
     }
     for (const ln of yard?.lines || []) {
       if (!LINE_KINDS[ln.kind] || (ln.pts || []).length < 2) continue;
@@ -154,7 +160,33 @@ export class Yard {
       }
       if (it.kind === 'charger') this.charger = o;
     }
+    this.instTrees();
     return this;
+  }
+  /* QA: every tree, pine and bush is drawn as instances - one draw per shape (trunk, each canopy ball, each cone) for the
+     whole yard instead of four or five per tree. The tree groups stay (hidden) for picking and for the wind, which
+     turns them as before; syncTrees() copies their pose into the instances. */
+  instTrees() {
+    this.treeInst = [];
+    if (this.trees.length < 2) return;
+    const by = new Map();
+    for (const tr of this.trees) tr.inner.traverse((m) => { if (!m.isMesh) return; const k = `${m.geometry.uuid}|${m.material.uuid}`; if (!by.has(k)) by.set(k, { geo: m.geometry, mat: m.material, parts: [] }); by.get(k).parts.push({ tr, m }); });
+    for (const b of by.values()) {
+      const im = new THREE.InstancedMesh(b.geo, b.mat, b.parts.length); im.castShadow = true; im.receiveShadow = true; im.raycast = () => {}; im.userData.treeInst = true; im.name = 'trees';
+      this.group.add(im); this.treeInst.push({ im, parts: b.parts });
+    }
+    for (const tr of this.trees) { tr.inner.visible = false; tr.inner.updateMatrix(); for (const m of tr.leaves) m.updateMatrix(); }
+    this.syncTrees();
+    for (const { im } of this.treeInst) im.computeBoundingSphere();
+  }
+  syncTrees() {
+    if (!this.treeInst?.length) return;
+    for (const { im, parts } of this.treeInst) { parts.forEach(({ tr, m }, i) => { _tm.multiplyMatrices(tr.o.matrix, tr.inner.matrix).multiply(m.matrix); im.setMatrixAt(i, _tm); }); im.instanceMatrix.needsUpdate = true; }
+  }
+  /* QA: while only looking, merge the still parts (ground, edges, flower beds, fences, hedges) - see floorplan-batch.js. */
+  batch(on) {
+    if (!on) return unbatch(this.group);
+    return batchStatic(this.group, (o) => !o.userData.yard && o.userData.depth == null && !o.userData.treeInst);
   }
   /* A pool you can look into: tiled walls and floor down to its depth, water a little below the stone edge. */
   pool(a, base, tint, theme, tag) {
@@ -189,7 +221,7 @@ export class Yard {
     for (let t = 0; spots.length < n && t < n * 8; t++) { const p = [x0 + rnd() * (x1 - x0), z0 + rnd() * (z1 - z0)]; if (pointInPoly(p, a.pts)) spots.push(p); }
     if (!spots.length) return;
     /* merged into one shape per color (no instancing: fewer shader variants for an old tablet to compile) */
-    const k = new Kit(null), leaf = new THREE.MeshStandardMaterial({ color: tint('#3f7f3a'), roughness: .9 }), cols = ['#e11d48', '#f59e0b', '#a855f7', '#f472b6', '#fde047', '#ffffff'], bloom = cols.map((c) => new THREE.MeshStandardMaterial({ color: tint(c), roughness: .7 }));
+    const k = new Kit(null), leaf = this.shared('fleaf', () => new THREE.MeshStandardMaterial({ color: tint('#3f7f3a'), roughness: .9 })), cols = low ? ['#f472b6', '#fde047'] : ['#e11d48', '#f59e0b', '#a855f7', '#f472b6', '#fde047', '#ffffff'], bloom = cols.map((c) => this.shared(`bloom:${c}`, () => new THREE.MeshStandardMaterial({ color: tint(c), roughness: .7 })));
     for (const [x, z] of spots) {
       const s = 0.7 + rnd() * 0.6, a = rnd() * 6.28, l = new THREE.IcosahedronGeometry(0.16, 0); l.scale(s, s * 0.8, s); l.rotateY(a); k.put(l, leaf, x, base + 0.1 * s, z, { flat: true });
       const b = new THREE.IcosahedronGeometry(0.06 * s, 0); k.put(b, bloom[(rnd() * cols.length) | 0], x + (rnd() - 0.5) * 0.08, base + 0.2 * s, z + (rnd() - 0.5) * 0.08, { flat: true });
@@ -198,7 +230,7 @@ export class Yard {
   }
   /* A board fence: posts at the corners and every ~1.8 m, horizontal boards with small gaps, a top rail. */
   fence(ln, tint) {
-    const h = Math.max(0.3, Math.min(3, ln.h || 1.2)), k = new Kit(null), wood = new THREE.MeshStandardMaterial({ color: tint(ln.color || LINE_KINDS.fence[1]), map: groundTex('garden'), roughness: .85 }), post = new THREE.MeshStandardMaterial({ color: tint('#5b4636'), roughness: .8 });
+    const h = Math.max(0.3, Math.min(3, ln.h || 1.2)), k = new Kit(null), wood = this.shared(`fence:${ln.color || ''}`, () => new THREE.MeshStandardMaterial({ color: tint(ln.color || LINE_KINDS.fence[1]), map: groundTex('garden'), roughness: .85 })), post = this.shared('post', () => new THREE.MeshStandardMaterial({ color: tint('#5b4636'), roughness: .8 }));
     const put = (g, m, x, yy, z, ang = 0) => { g.rotateY(-ang); g.translate(x, yy, z); k.put(metreUV(g), m); };
     for (const [x, z] of fencePosts(ln.pts, 1.8)) put(new THREE.BoxGeometry(0.09, h + 0.06, 0.09), post, x, (h + 0.06) / 2, z);
     for (let i = 0; i < ln.pts.length - 1; i++) {
@@ -211,7 +243,7 @@ export class Yard {
   }
   /* A clipped hedge: one rounded block per side, overlapping at the corners. */
   hedge(ln, tint) {
-    const h = Math.max(0.3, Math.min(3, ln.h || 1.4)), k = new Kit(null), leaf = new THREE.MeshStandardMaterial({ color: tint(ln.color || LINE_KINDS.hedge[1]), map: groundTex('hedge'), roughness: .95 });
+    const h = Math.max(0.3, Math.min(3, ln.h || 1.4)), k = new Kit(null), leaf = this.shared(`hedge:${ln.color || ''}`, () => new THREE.MeshStandardMaterial({ color: tint(ln.color || LINE_KINDS.hedge[1]), map: groundTex('hedge'), roughness: .95 }));
     for (let i = 0; i < ln.pts.length - 1; i++) {
       const [x1, z1] = ln.pts[i], [x2, z2] = ln.pts[i + 1], len = Math.hypot(x2 - x1, z2 - z1); if (len < 0.05) continue;
       const g = new RoundedBox(len + 0.55, h, 0.7); g.rotateY(-Math.atan2(z2 - z1, x2 - x1)); g.translate((x1 + x2) / 2, h / 2, (z1 + z2) / 2); k.put(metreUV(g), leaf);
@@ -233,11 +265,14 @@ export class Yard {
       const stiff = tr.kind === 'pine' ? 0.55 : tr.kind === 'bush' ? 0.35 : 1, a = base * stiff;
       const sway = a * (0.55 + 0.45 * gust) + a * 0.35 * Math.sin(t * tr.f * (1 + w / 12) + tr.ph) + a * 0.12 * Math.sin(t * tr.f * 2.7 + tr.ph2);
       const ang = Math.atan2(toward.x, toward.z) - tr.o.rotation.y;   // the wind in this tree's own frame
-      tr.inner.rotation.x = sway * Math.cos(ang); tr.inner.rotation.z = -sway * Math.sin(ang);
+      tr.inner.rotation.x = sway * Math.cos(ang); tr.inner.rotation.z = -sway * Math.sin(ang); tr.inner.updateMatrix();
       const flutter = Math.min(0.06, w * 0.004);   // leaves shiver on top of the lean
-      tr.leaves.forEach((m, i) => { m.rotation.x = flutter * Math.sin(t * (3.1 + i) + tr.ph + i); m.rotation.z = flutter * Math.sin(t * (2.6 + i * 0.7) + tr.ph2); });
+      tr.leaves.forEach((m, i) => { m.rotation.x = flutter * Math.sin(t * (3.1 + i) + tr.ph + i); m.rotation.z = flutter * Math.sin(t * (2.6 + i * 0.7) + tr.ph2); m.updateMatrix(); });
     }
+    this.syncTrees();
   }
+  /* QA: worth animating? Only with a real breeze; below 2 m/s the sway is under a degree and not worth a frame. */
+  swaying(windMs) { return this.trees.length > 0 && (windMs || 0) >= 2; }
   get box() { return new THREE.Box3().setFromObject(this.group); }
   set visible(v) { this.group.visible = v; for (const l of this.labels) l.visible = v; }
   /* Live car states -> how each car looks; returns power lines for the charging cables (drawn by PowerNet). */

@@ -12,6 +12,12 @@
  *          use with credit; about 100 requests a minute per address, zoom
  *          7 at most. (Their forecast frames ended on 2026-01-01; if they
  *          come back in the answer they are shown, marked as forecast.)
+ *          RainViewer's free API is for personal and educational use: each home's
+ *          own CasaTorch fetches it for that household, it's part of Basic
+ *          (never sold as a Pro feature) and the credit is always shown.
+ *   Or:    the US National Weather Service's radar mosaic (NOAA, public domain,
+ *          the lower 48 states) - Settings › radar provider "nws"; or "off".
+ *          (config.radar.provider, or CASATORCH_RADAR_PROVIDER to override it.)
  *   Map:   OpenStreetMap's standard tiles, with credit, a CasaTorch
  *          User-Agent and at least a week of caching (their tile policy).
  *   No map at all (offline, the map service down, the demo with no
@@ -24,19 +30,33 @@
  *   GET  /api/radar/tile/:kind/:z/:x/:y    kind = base | radar (radar needs ?f=<frame time>)
  *   GET  /api/radar/outline?z=             the outline near home
  *   POST /api/radar/home {name, lat, lon}  set the home's town (admins) - the weather uses it too
+ *   PUT  /api/radar/provider {provider}    rainviewer | nws | off (admins)
  * ====================================================================== */
 const RADAR_DIR = path.join(DATA_DIR, 'radar-cache');
 const RADAR_ZOOM = { min: 4, max: 9, radarMax: 7, analysis: 7 };   // the view's zooms; radar tiles stop at 7 and are scaled up past it
 const RADAR_RADIUS = 5;                                           // tiles either side of the home's tile (11 x 11: a wall screen at zoom 9)
 const RADAR_KINDS = { base: { min: RADAR_ZOOM.min, max: RADAR_ZOOM.max }, radar: { min: RADAR_ZOOM.min, max: RADAR_ZOOM.radarMax } };
-const RADAR_HOSTS = [/^api\.rainviewer\.com$/, /^tilecache\.rainviewer\.com$/, /^tile\.openstreetmap\.org$/];
+const RADAR_HOSTS = [/^api\.rainviewer\.com$/, /^tilecache\.rainviewer\.com$/, /^tile\.openstreetmap\.org$/, /^opengeo\.ncep\.noaa\.gov$/];
 const RADAR_PATH_RE = /^\/v2\/radar\/[A-Za-z0-9_-]{1,64}$/;
 const RADAR_CREDIT = [{ text: 'RainViewer', href: 'https://www.rainviewer.com/' }, { text: '© OpenStreetMap contributors', href: 'https://www.openstreetmap.org/copyright' }];
+/* Radar providers. "nws": the National Weather Service's base reflectivity mosaic for the lower 48 states, from NOAA's
+   public map server (public domain) - the newest picture, refreshed every 5 minutes. */
+const RADAR_PROVIDERS = ['rainviewer', 'nws', 'off'];
+const RADAR_NWS = { url: 'https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows', box: { s: 20, n: 52, w: -130, e: -60 }, step: 300 };
+const RADAR_NWS_CREDIT = [{ text: 'NOAA / National Weather Service', href: 'https://www.weather.gov/' }, RADAR_CREDIT[1]];
+const radarProviderSetting = () => { const v = String(process.env.CASATORCH_RADAR_PROVIDER || config.radar?.provider || 'rainviewer').toLowerCase(); return RADAR_PROVIDERS.includes(v) ? v : 'rainviewer'; };
+const radarNwsCovers = (h) => !!h && h.lat >= RADAR_NWS.box.s && h.lat <= RADAR_NWS.box.n && h.lon >= RADAR_NWS.box.w && h.lon <= RADAR_NWS.box.e;
+/** The National Weather Service picture for one map tile (a WMS request for the tile's box, in Web Mercator meters). */
+function radarNwsTileUrl(z, x, y) {
+  const R = 20037508.342789244, size = (2 * R) / 2 ** z, minx = -R + x * size, maxy = R - y * size;
+  const q = new URLSearchParams({ service: 'WMS', version: '1.1.1', request: 'GetMap', layers: 'conus_bref_qcd', styles: '', format: 'image/png', transparent: 'true', srs: 'EPSG:3857', width: '256', height: '256', bbox: [minx, maxy - size, minx + size, maxy].map((v) => v.toFixed(2)).join(',') });
+  return `${RADAR_NWS.url}?${q}`;
+}
 const RADAR_DEMO_HOME = { lat: 37.7749, lon: -122.4194, name: 'San Francisco, CA' };
 const RADAR = { frames: null, framesAt: 0, framesErr: null, live: false, mem: new Map(), memBytes: 0, inflight: new Map(), writes: 0, synth: null, outline: null, outlineMemo: new Map(),
-  up: { rainviewer: { calls: [], busy: 0, wait: [], fails: 0, offUntil: 0 }, osm: { calls: [], busy: 0, wait: [], fails: 0, offUntil: 0 } } };
+  up: { rainviewer: { calls: [], busy: 0, wait: [], fails: 0, offUntil: 0 }, osm: { calls: [], busy: 0, wait: [], fails: 0, offUntil: 0 }, nws: { calls: [], busy: 0, wait: [], fails: 0, offUntil: 0 } } };
 const RADAR_MEM_MAX = 24 * 1024 * 1024, RADAR_DISK_MAX = 64 * 1024 * 1024;
-const RADAR_RATE = { rainviewer: 60, osm: 60 };   // upstream requests a minute, at most (RainViewer allows about 100)
+const RADAR_RATE = { rainviewer: 60, osm: 60, nws: 60 };   // upstream requests a minute, at most (RainViewer allows about 100)
 
 /* ---- tile math (Web Mercator, the same on every web map) ---- */
 function radarTileOf(lat, lon, z) {
@@ -75,6 +95,7 @@ function radarParseMaps(j) {
 }
 function radarTileUrl(kind, z, x, y, frame, host = 'https://tilecache.rainviewer.com') {
   if (kind === 'base') return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+  if (kind === 'radar' && radarFrameOk(frame) && host === 'nws') return radarNwsTileUrl(z, x, y);
   if (kind === 'radar' && radarFrameOk(frame)) return `${host}${frame.path}/256/${z}/${x}/${y}/2/1_1.png`;   // 256 px, Universal Blue, smoothed, snow shown
   return null;
 }
@@ -85,7 +106,7 @@ function radarHome() {
 }
 
 /* ---- the upstream: a few at a time, a budget a minute, and a pause after repeated failures ---- */
-const radarProvider = (url) => (/rainviewer\.com$/.test(new URL(url).hostname) ? 'rainviewer' : 'osm');
+const radarProvider = (url) => { const h = new URL(url).hostname; return /rainviewer\.com$/.test(h) ? 'rainviewer' : /noaa\.gov$/.test(h) ? 'nws' : 'osm'; };
 async function radarUpstream(url, { etag, modified, json } = {}) {
   if (!radarUrlAllowed(url)) throw Object.assign(new Error('not an allowed map address'), { status: 400 });
   const p = RADAR.up[radarProvider(url)], now = Date.now();
@@ -140,7 +161,7 @@ async function radarDiskPut(key, e) {
   try {
     await fs.promises.mkdir(RADAR_DIR, { recursive: true, mode: 0o700 });
     const f = radarKeyFile(key);
-    await fs.promises.writeFile(`${f}.bin`, e.body, { mode: 0o600 });
+    await fs.promises.writeFile(`${f}.bin.tmp`, e.body, { mode: 0o600 }); await fs.promises.rename(`${f}.bin.tmp`, `${f}.bin`);   // never half a picture after a power cut
     await fs.promises.writeFile(`${f}.json`, JSON.stringify({ key, type: e.type, exp: e.exp, etag: e.etag, modified: e.modified }), { mode: 0o600 });
     if (++RADAR.writes % 50 === 1) radarDiskPrune();
   } catch { /* a full or read-only disk: memory still works */ }
@@ -178,7 +199,7 @@ async function radarCachedTile(key, url, keepMs) {
       if (r.notModified && e) { e = { ...e, exp: Date.now() + (keepMs ?? radarKeepFor(r.headers)) }; }
       else if (r.notModified) throw Object.assign(new Error('nothing new'), { status: 502 });
       else e = { body: r.body, type: r.type, exp: Date.now() + (keepMs ?? radarKeepFor(r.headers)), etag: r.headers.get('etag') || null, modified: r.headers.get('last-modified') || null };
-      radarMemPut(key, e); radarDiskPut(key, e);
+      radarMemPut(key, e); if (!key.startsWith('radar/')) radarDiskPut(key, e);   // rain frames last 2 hours: memory only (on an SD card each one is wear); map tiles keep on disk for weeks
       return e;
     } catch (err) { if (e) return { ...e, stale: true }; throw err; } finally { RADAR.inflight.delete(key); }
   })();
@@ -188,8 +209,15 @@ async function radarCachedTile(key, url, keepMs) {
 
 /* ---- the frames: RainViewer's list every few minutes; the last good list is kept on disk for when it's offline ---- */
 const RADAR_FRAMES_FILE = path.join(RADAR_DIR, 'frames.json');
+/** NWS: one frame, the newest mosaic, named after the 5-minute step it belongs to (so the cache refreshes with it). */
+function radarNwsFrames() {
+  const t = Math.floor(Date.now() / 1000 / RADAR_NWS.step) * RADAR_NWS.step;
+  return { host: 'nws', provider: 'nws', past: [{ time: t, path: `/v2/radar/nws-${t}` }], nowcast: [], generated: t, fetchedAt: Date.now() };
+}
 async function radarFramesNow() {
   const now = Date.now();
+  if (radarProviderSetting() === 'nws') { RADAR.frames = radarNwsFrames(); RADAR.framesErr = null; RADAR.live = true; RADAR.framesAt = now; return RADAR.frames; }
+  if (RADAR.frames?.provider === 'nws') { RADAR.frames = null; RADAR.framesAt = 0; }   // switched back: fetch RainViewer's list
   if (RADAR.frames && now - RADAR.framesAt < (RADAR.framesErr ? 2 * 60_000 : 4 * 60_000)) return RADAR.frames;
   if (RADAR.inflight.has('frames')) return RADAR.inflight.get('frames');
   const job = (async () => {
@@ -276,10 +304,13 @@ const radarRound = (v) => Math.round(v * 100) / 100;   // about a kilometer: the
 async function radarState() {
   const home = radarHome();
   if (!home) return { state: 'nolocation' };
+  const provider = radarProviderSetting();
+  if (provider === 'off') return { state: 'down', provider, frames: [], home: { lat: radarRound(home.lat), lon: radarRound(home.lon), name: home.name }, zoom: RADAR_ZOOM, radius: RADAR_RADIUS, credit: [RADAR_CREDIT[1]], now: Math.floor(Date.now() / 1000), note: 'The rain radar is switched off on this CasaTorch.' };
+  if (provider === 'nws' && !radarNwsCovers(home) && !isDemo()) return { state: 'down', provider, frames: [], home: { lat: radarRound(home.lat), lon: radarRound(home.lon), name: home.name }, zoom: RADAR_ZOOM, radius: RADAR_RADIUS, credit: RADAR_NWS_CREDIT, now: Math.floor(Date.now() / 1000), note: 'The National Weather Service radar covers the lower 48 US states only - pick RainViewer for radar here.' };
   let f = await radarFramesNow().catch(() => null), synthetic = false;
   if (isDemo() && (!f || RADAR.framesErr)) { f = radarSynthFrames(); synthetic = true; }   // the demo with no internet: made-up rain
   RADAR.synthOn = synthetic;
-  const base = { home: { lat: radarRound(home.lat), lon: radarRound(home.lon), name: home.name }, zoom: RADAR_ZOOM, radius: RADAR_RADIUS, credit: RADAR_CREDIT, now: Math.floor(Date.now() / 1000), demo: isDemo() };
+  const base = { home: { lat: radarRound(home.lat), lon: radarRound(home.lon), name: home.name }, zoom: RADAR_ZOOM, radius: RADAR_RADIUS, credit: provider === 'nws' && !synthetic ? RADAR_NWS_CREDIT : RADAR_CREDIT, provider, providers: RADAR_PROVIDERS, now: Math.floor(Date.now() / 1000), demo: isDemo() };
   if (!f) return { ...base, state: 'down', frames: [], note: 'The radar is not answering right now.' };
   const frames = [...f.past.map((x) => ({ t: x.time, kind: 'past' })), ...f.nowcast.map((x) => ({ t: x.time, kind: 'forecast' }))];
   const stale = !synthetic && !!RADAR.framesErr;
@@ -374,6 +405,16 @@ app.get('/api/radar/outline', (req, res) => {
   } catch (err) { res.status(500).json({ error: String(err.message || err) }); }
 });
 
+/* ---- which radar this home uses (admins) ---- */
+app.put('/api/radar/provider', requireRole('admin'), express.json({ limit: '1kb' }), (req, res) => {
+  const v = String(req.body?.provider || '').toLowerCase();
+  if (!RADAR_PROVIDERS.includes(v)) return res.status(400).json({ error: 'Pick rainviewer, nws or off.' });
+  if (isDemo()) return res.json({ ok: true, demo: true, provider: v });
+  try { saveConfig({ ...config, radar: { ...(config.radar || {}), provider: v } }); } catch (err) { return res.status(500).json({ error: String(err.message || err) }); }
+  RADAR.frames = null; RADAR.framesAt = 0;
+  res.json({ ok: true, provider: radarProviderSetting() });
+});
+
 /* ---- set the home's town from the widget (it's the same town setup asks for; the weather uses it too) ---- */
 app.post('/api/radar/home', requireRole('admin'), express.json({ limit: '2kb' }), (req, res) => {
   const b = req.body || {}, lat = Number(b.lat), lon = Number(b.lon), name = String(b.name || '').trim().slice(0, 80);
@@ -383,4 +424,4 @@ app.post('/api/radar/home', requireRole('admin'), express.json({ limit: '2kb' })
   RADAR.outlineMemo.clear();
   res.json({ ok: true });
 });
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchRadar = { radarTileOf, radarLonLatOf, radarAllowed, radarUrlAllowed, radarParseMaps, radarTileUrl, radarKeepFor, radarClipRing, radarClipLine, radarSynthDbz, radarSynthTile, radarPng, radarCrc, radarOutlineFor, RADAR_ZOOM, RADAR_RADIUS, RADAR_DEMO_HOME };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchRadar = { radarTileOf, radarLonLatOf, radarAllowed, radarUrlAllowed, radarParseMaps, radarTileUrl, radarKeepFor, radarClipRing, radarClipLine, radarSynthDbz, radarSynthTile, radarPng, radarCrc, radarOutlineFor, radarNwsTileUrl, radarNwsCovers, radarProviderSetting, RADAR_ZOOM, RADAR_RADIUS, RADAR_DEMO_HOME };

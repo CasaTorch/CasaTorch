@@ -51,7 +51,7 @@ function audit(req, event, detail = {}) {
   const line = JSON.stringify({ at: nowIso(), event, user: req?.user?.username || detail.user || null, ip: req ? clientIp(req) : null, ...detail });
   try {
     fs.appendFileSync(AUDIT_FILE, `${line}\n`, { mode: 0o600 });
-    if (fs.statSync(AUDIT_FILE).size > 2_000_000) { const keep = fs.readFileSync(AUDIT_FILE, 'utf8').trim().split('\n').slice(-5000); fs.writeFileSync(AUDIT_FILE, `${keep.join('\n')}\n`, { mode: 0o600 }); }
+    if (fs.statSync(AUDIT_FILE).size > 2_000_000) { const keep = fs.readFileSync(AUDIT_FILE, 'utf8').trim().split('\n').slice(-5000); writeFileSafe(AUDIT_FILE, `${keep.join('\n')}\n`, 0o600); }   // swapped in whole: a power cut mid-trim can't empty the log
   } catch { /* never let logging break sign-in */ }
 }
 
@@ -135,6 +135,8 @@ const endSessionsOf = (userId, exceptKey) => { for (const [k, v] of Object.entri
 const tries = new Map();
 function limited(key, max, windowMs = 15 * 60_000) { const now = Date.now(), list = (tries.get(key) || []).filter((t) => now - t < windowMs); if (list.length) tries.set(key, list); else tries.delete(key); return list.length >= max; }   // only keys with recent failures are kept
 const failed = (...keys) => { for (const k of keys) tries.set(k, [...(tries.get(k) || []), Date.now()]); };
+/** A plain rate limit (every call counts, not only failures): true when this call is over `max` in the window. */
+const overLimit = (key, max, windowMs) => { if (limited(key, max, windowMs)) return true; failed(key); return false; };
 setInterval(() => { const now = Date.now(); for (const [k, v] of tries) if (!v.some((t) => now - t < 15 * 60_000)) tries.delete(k); }, 10 * 60_000).unref?.();
 
 /* ---- TOTP (RFC 6238: SHA-1, 6 digits, 30 s) ---- */

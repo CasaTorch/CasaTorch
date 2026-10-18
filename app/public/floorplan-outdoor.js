@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { FURN, FURN_GROUPS, AWNINGS, BIN_COLORS, Palette, buildFurniture, setAwning, sizeOf } from './floorplan-furniture.js';
+import { batchStatic, unbatch } from './floorplan-batch.js';   // QA: still furniture merged per floor while only looking
 
 const T = (s, v) => (typeof window !== 'undefined' && window.T ? window.T(s, v) : String(s).split('|')[0].replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
 
@@ -175,7 +176,8 @@ export function createOutdoor(scene, yard, getCtx) {
   const onTab = () => { const S = C().S; return S.mode === 'edit' && (S.tab === 'yard' || S.tab === 'furniture'); };
 
   /* ---------- building ---------- */
-  function boxOf(o) { const b = new THREE.Box3(); o.traverse((x) => { if (x.isMesh && x.name !== 'halo' && x.name !== 'strip' && x.visible) b.expandByObject(x); }); return b; }
+  function boxOf(o) {   // QA: matrices first - a piece placed a moment ago drew its outline at the house's corner
+    o.updateWorldMatrix(true, true); const b = new THREE.Box3(); o.traverse((x) => { if (x.isMesh && x.name !== 'halo' && x.name !== 'strip' && x.visible) b.expandByObject(x); }); return b; }
   function build() {
     const c = C(), S = c.S;
     for (const g of groups.values()) { scene.remove(g); g.traverse((o) => { if (o.isMesh) o.geometry.dispose(); if (o.isCSS2DObject) o.element.remove(); }); }
@@ -190,7 +192,19 @@ export function createOutdoor(scene, yard, getCtx) {
     }
     for (const m of yard.pools || []) m.emissiveIntensity = c.high() ? 0.4 : 0; yard.high = c.high();
     sync(); if (st.hh) household(st.hh); devices(c.S.live?.devices || [], true); drawSel(); if (st.pick) showHandles(); if (S.tool?.type === 'od-wallview') drawWall();
+    batch(S.mode === 'view');
     c.reshadow();
+  }
+  /* QA: in the 3D view the pieces that never change are merged, one mesh per material per floor (floorplan-batch.js);
+     anything that lights up, moves or shows a tag (bins, the mailbox, plants, awnings, lamps, strip lights, TVs) stays its own. */
+  const isStill = (it) => !(it.binId || it.mail || it.plantId || it.laundryId || it.coverId || it.deviceId) && !['awning', 'led', 'lamp', 'tv'].includes(it.kind);
+  function batch(on) {
+    let changed = false;
+    for (const g of groups.values()) {
+      if (on) { batchStatic(g, (root) => { const b = built.get(root.userData.itemId); return !!b && isStill(b.it) && !root.userData.tag; }); changed = true; }
+      else changed = unbatch(g) || changed;
+    }
+    if (changed) { C().reshadow(); }
   }
   /* Follow the floors: stacked, pulled apart, hidden, or only the one you picked. */
   function sync() {
@@ -692,7 +706,7 @@ export function createOutdoor(scene, yard, getCtx) {
     }
     kids.push(el('div', { class: 'row' }, btn('⟲ 15°', () => turn(-15), T('Turn left')), btn('⟳ 15°', () => turn(15), T('Turn right')), btn('⟳ 90°', () => turn(90), T('Turn a quarter (R)')),
       list.some((x) => x.floor) ? btn(T('Against the wall'), alignToWall) : null));
-    kids.push(el('div', { class: 'row' }, btn(T('Copy'), copy, 'Ctrl+C'), btn(T('Duplicate'), () => paste(list), 'Ctrl+D'), list.length > 1 ? btn(T('Group'), () => group(true)) : null, list.some((x) => x.grp) ? btn(T('Ungroup'), () => group(false)) : null, btn(T('Delete'), remove, 'Delete')));
+    kids.push(el('div', { class: 'row' }, btn(T('Copy'), copy, 'Ctrl+C'), btn(T('Duplicate'), () => paste(list), 'Ctrl+D'), list.length > 1 ? btn(T('Group'), () => group(true)) : null, list.some((x) => x.grp) ? btn(T('Ungroup'), () => group(false)) : null, btn(T('Remove'), remove, 'Delete')));   // QA: "Remove" everywhere in the editor
     return el('div', { class: 'odsel' }, ...kids);
   }
   const itemRow = (it) => el('div', { class: `odrow${st.sel.has(it.id) ? ' on' : ''}`, onclick: (e) => { if (!e.shiftKey) st.sel.clear(); selectWithGroup(it, true); drawSel(); C().editor(); } }, svgIc(it.kind), el('span', { class: 'grow' }, nameOf(it)),
@@ -730,7 +744,7 @@ export function createOutdoor(scene, yard, getCtx) {
         !isLine && a.kind !== 'pool' ? rng(T('Slope up'), a.rise || 0, 0, 1.5, 0.05, 'rise', ' m') : null,
         !isLine && a.kind !== 'pool' && a.rise ? el('p', { class: 'note' }, T('The first side you drew is the low side.')) : null,
         isLine ? rng(T('Height'), a.h || LINE_KINDS[a.kind][2], 0.3, 3, 0.1, 'h', ' m') : null,
-        el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { const y = yd2(); if (isLine) y.lines = (y.lines || []).filter((q) => q.id !== a.id); else y.areas = y.areas.filter((q) => q.id !== a.id); st.pick = null; showHandles(); c.saveYard(y); } }, T('Delete')))));
+        el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { const y = yd2(); if (isLine) y.lines = (y.lines || []).filter((q) => q.id !== a.id); else y.areas = y.areas.filter((q) => q.id !== a.id); st.pick = null; showHandles(); c.saveYard(y); } }, T('Remove')))));
     };
     return el('div', {},
       el('h3', {}, T('Draw on the ground')),
@@ -757,9 +771,9 @@ export function createOutdoor(scene, yard, getCtx) {
       selPanel(),
       floors.length > 1 ? el('div', { class: 'row' }, el('label', {}, T('Floor')), el('select', { onchange: (e) => { c.pickFloor(e.target.value); c.editor(); } }, ...floors.map((x) => el('option', { value: x.f.id, selected: x === F ? true : null }, x.f.name)))) : null,
       rooms.length ? el('div', {}, el('h3', {}, T('Furnish a room')),
-        el('div', { class: 'row wrap' }, el('select', { 'aria-label': T('Room'), onchange: (e) => { st.room = Number(e.target.value); c.editor(); } }, ...rooms.map(([i, n]) => el('option', { value: i, selected: i === st.room ? true : null }, n))),
-          el('select', { 'aria-label': T('Kind of room'), onchange: (e) => { st.rtype = e.target.value; } }, ...ROOM_TYPES.map(([k, n]) => el('option', { value: k, selected: k === st.rtype ? true : null }, T(n)))),
-          el('button', { type: 'button', class: 'mini primary', onclick: () => F && furnish(F, st.room, st.rtype) }, T('Furnish'))),
+        el('div', { class: 'row' }, el('label', {}, T('Room')), el('select', { 'aria-label': T('Room'), onchange: (e) => { st.room = Number(e.target.value); c.editor(); } }, ...rooms.map(([i, n]) => el('option', { value: i, selected: i === st.room ? true : null }, n)))),   // QA: labelled (two look-alike menus before)
+        el('div', { class: 'row' }, el('label', {}, T('Furnish as')), el('select', { 'aria-label': T('Furnish as'), onchange: (e) => { st.rtype = e.target.value; } }, ...ROOM_TYPES.map(([k, n]) => el('option', { value: k, selected: k === st.rtype ? true : null }, T(n))))),
+        el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => F && furnish(F, st.room, st.rtype) }, T('Furnish'))),
         el('p', { class: 'note' }, T('Lays out a starting set against the room\'s walls. Move, turn or delete anything after.'))) : el('p', { class: 'note' }, T('Name your rooms in the Rooms tab to furnish them in one tap.')),
       el('h3', {}, T('Add furniture')),
       el('div', { class: 'odcats' }, ...FURN_GROUPS.map(([k, n]) => el('button', { type: 'button', class: `mini${st.cat === k ? ' on' : ''}`, 'aria-pressed': st.cat === k ? 'true' : 'false', onclick: () => { st.cat = k; c.editor(); } }, T(n)))),
@@ -770,7 +784,19 @@ export function createOutdoor(scene, yard, getCtx) {
       here.length ? el('div', {}, el('h3', {}, T('On this floor')), ...here.map(itemRow)) : null);
   }
 
-  const api = { build, sync, live, tick, moving, hint, panelYard, panelFurniture, household, devices, exitWall, get selection() { return [...st.sel]; } };
+  /* QA: for "What can I add?" - every piece and every outdoor thing, with the tab it lives on and how to start it. */
+  function catalog() {
+    const grpName = (g) => (FURN_GROUPS.find(([k]) => k === g) || [])[1] || '';
+    const furn = Object.entries(FURN).filter(([, v]) => v[1] !== 'outside').map(([k, v]) => ({ group: 'Furniture', tab: 'furniture', label: T(v[0]), iconFn: () => svgIc(k), words: `${grpName(v[1])} ${k} furniture`, run: () => tool({ type: 'od-place', kind: k }) }));
+    const areas = Object.entries(AREA_KINDS).map(([k, [n]]) => ({ group: 'Outdoor', tab: 'yard', label: T(n), iconFn: () => svgIc(k), words: `ground area draw ${k}`, run: () => { st.pick = null; showHandles(); tool({ type: 'od-area', kind: k, shape: st.shape, pts: [] }); } }));
+    const lines = Object.entries(LINE_KINDS).map(([k, [n]]) => ({ group: 'Outdoor', tab: 'yard', label: T(n), iconFn: () => svgIc(k), words: 'border boundary line', run: () => { st.pick = null; showHandles(); tool({ type: 'od-line', kind: k, pts: [] }); } }));
+    const things = [['bin', 'Bin', 'trash garbage recycling compost bin day'], ['mailbox', 'Mailbox', 'post letters mail'], ['planter', 'Garden pot', 'plant flower planter'], ['led', 'Strip light', 'led light strip']]
+      .map(([k, n, w]) => ({ group: 'Outdoor', tab: 'yard', label: T(n), iconFn: () => svgIc(k), words: w, run: () => tool({ type: 'od-place', kind: k }) }));
+    const awn = AWNINGS.map(([sty, n]) => ({ group: 'Outdoor', tab: 'yard', label: T(n), iconFn: () => svgIc('awning'), words: 'awning shade sun blind pergola', run: () => tool({ type: 'od-place', kind: 'awning', style: sty }) }));
+    return [...furn, ...areas, ...lines, ...things, ...awn];
+  }
+
+  const api = { build, sync, live, tick, moving, hint, panelYard, panelFurniture, household, devices, exitWall, batch, catalog, get selection() { return [...st.sel]; } };
   ACTIVE = api;
   return api;
 }

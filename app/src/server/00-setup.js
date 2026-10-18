@@ -100,7 +100,80 @@ let plaintextOnDisk = false;
    through fetch, so this one check covers them. */
 const BLOCKED_HOSTS = /^(169\.254\.\d+\.\d+|\[?fd00:ec2::254\]?|100\.100\.100\.200|\[?::ffff:(a9fe:[0-9a-f]{1,4}|6464:64c8)\]?|metadata\.google\.internal|metadata|instance-data)$/i;   // the IPv6 forms are the same addresses written another way
 const blockedUrl = (u) => { try { return BLOCKED_HOSTS.test(new URL(String(u?.url || u)).hostname.replace(/\.$/, '')); } catch { return false; } };
-{ const realFetch = globalThis.fetch; globalThis.fetch = (u, o) => (blockedUrl(u) ? Promise.reject(new TypeError('That address is not allowed.')) : realFetch(u, o)); }
+/* The same rule for a name that points at one of those addresses (169.254.169.254.nip.io and the like), and for
+   every hop of a redirect - each one is checked before it is fetched. On a redirect to another site, sign-ins
+   (Authorization, Cookie) are dropped, as browsers do. A name's answer is remembered for 5 minutes. */
+const NOT_ALLOWED = () => new TypeError('That address is not allowed.');
+const dnsOk = new Map();
+/* Returns true when the address is this computer itself (127.x, ::1, or a name that points there). */
+const isLoop = (ip) => /^(127\.|::1$|0\.0\.0\.0$|::$)/.test(String(ip).replace(/^::ffff:(?=\d)/i, ''));
+async function assertFetchable(u) {
+  if (blockedUrl(u)) throw NOT_ALLOWED();
+  let h; try { h = new URL(String(u?.url || u)).hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase(); } catch { return false; }   // fetch reports a bad address itself
+  if (!h) return false;
+  if (/^[\d.]+$|:/.test(h)) return isLoop(h);   // an address, already checked above
+  if (h === 'localhost' || h.endsWith('.localhost')) return true;
+  const hit = dnsOk.get(h); if (hit && Date.now() - hit.at < 5 * 60_000) return hit.loop;
+  const addrs = await dnsP.lookup(h, { all: true }).catch(() => []);   // fetch reports a name that doesn't resolve
+  if (addrs.some((a) => BLOCKED_HOSTS.test(String(a.address).replace(/^::ffff:/i, '')) || BLOCKED_HOSTS.test(String(a.address)))) throw NOT_ALLOWED();
+  const loop = addrs.some((a) => isLoop(a.address));
+  if (addrs.length) { dnsOk.set(h, { at: Date.now(), loop }); if (dnsOk.size > 500) dnsOk.delete(dnsOk.keys().next().value); }
+  return loop;
+}
+/* A request CasaTorch itself makes to this computer is marked, so it is never mistaken for the owner sitting at
+   this computer (setupTrusted, 04-setup-code.js) - whatever address or redirect led it there. */
+const INTERNAL_HEADER = 'x-casatorch-internal', SELF_PORTS = new Set();   // CasaTorch's own ports (filled in by 99-start.js)
+const selfPort = (u) => { try { const x = new URL(String(u?.url || u)); return SELF_PORTS.has(Number(x.port || (x.protocol === 'https:' ? 443 : 80))); } catch { return false; } };
+const markInternal = (opts, loop) => { if (!loop) return opts; const h = new Headers(opts?.headers || {}); h.set(INTERNAL_HEADER, '1'); return { ...opts, headers: h }; };
+/* Links anyone signed in can give CasaTorch to read (a member's city bin calendar, say) must be on the internet:
+   not this box, not the home network, not the provider's shared range. Admins' own settings may still point home. */
+const nonPublicIp = (ip) => {
+  const s = String(ip || '').toLowerCase().replace(/^\[|\]$/g, '').replace(/^::ffff:(?=\d+\.)/, '');
+  const m = s.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) { const [a, b] = [Number(m[1]), Number(m[2])]; return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || (a === 198 && (b === 18 || b === 19)); }
+  return s === '::' || s === '::1' || /^(f[c-f]|ff)[0-9a-f]{0,2}:/.test(s) || /^::ffff:/.test(s) || /^64:ff9b:/.test(s);
+};
+async function publicUrlProblem(u) {
+  let url; try { url = new URL(String(u)); } catch { return 'That isn\'t a web address.'; }
+  if (!/^https?:$/.test(url.protocol)) return 'Only http and https links work here.';
+  if (url.username || url.password) return 'Links with a sign-in in them aren\'t accepted here.';
+  const h = url.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
+  const LOCAL = 'Only links on the internet work here - ask an admin to add one from your home network.';
+  if (!h || (!h.includes('.') && !h.includes(':')) || /\.(local|lan|home|home\.arpa|internal|localdomain|localhost|intranet|corp|private)$/.test(h) || h === 'localhost') return LOCAL;
+  if (/^[\d.]+$|:/.test(h)) return nonPublicIp(h) ? LOCAL : null;
+  const addrs = await dnsP.lookup(h, { all: true }).catch(() => null);
+  if (!addrs?.length) return 'That address couldn\'t be found.';
+  return addrs.some((a) => nonPublicIp(a.address)) ? LOCAL : null;
+}
+const REDIRECTS = new Set([301, 302, 303, 307, 308]);
+function dropSignIns(headers) {
+  if (!headers) return headers;
+  const out = new Headers(headers); for (const k of ['authorization', 'cookie', 'proxy-authorization']) out.delete(k); return out;
+}
+{
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (u, o = {}) => {
+    const loop0 = (await assertFetchable(u)) && selfPort(u);
+    const publicOnly = !!o?.publicOnly, pubCheck = async (x) => { const why = publicOnly && await publicUrlProblem(x); if (why) throw new TypeError(why); };
+    await pubCheck(u);
+    if ((o?.redirect && o.redirect !== 'follow') || (typeof u !== 'string' && !(u instanceof URL))) return realFetch(u, markInternal(o, loop0));   // the caller handles redirects (or passed a Request)
+    let url = String(u), opts = markInternal({ ...o, redirect: 'manual' }, loop0); delete opts.publicOnly;
+    for (let hop = 0; ; hop++) {
+      const r = await realFetch(url, opts), loc = r.headers.get('location');
+      if (!REDIRECTS.has(r.status) || !loc) return r;
+      if (hop >= 10) { r.body?.cancel?.(); throw new TypeError('too many redirects'); }
+      const next = new URL(loc, url);
+      if (!/^https?:$/.test(next.protocol)) { r.body?.cancel?.(); throw NOT_ALLOWED(); }
+      r.body?.cancel?.();
+      const loop = (await assertFetchable(next.href)) && selfPort(next.href); await pubCheck(next.href);
+      if (next.origin !== new URL(url).origin) opts = { ...opts, headers: dropSignIns(opts.headers) };
+      opts = markInternal(opts, loop);
+      const method = String(opts.method || 'GET').toUpperCase();
+      if (r.status === 303 ? method !== 'HEAD' : (r.status === 301 || r.status === 302) && method === 'POST') opts = { ...opts, method: 'GET', body: undefined };
+      url = next.href;
+    }
+  };
+}
 
 let config = {};
 /* As a Home Assistant add-on, CasaTorch reaches Home Assistant through the Supervisor with the add-on's
@@ -139,7 +212,8 @@ function saveConfig(next) {
 function writeFileSafe(file, data, mode = 0o600) {
   const tmp = `${file}.${process.pid}.tmp`;
   const fd = fs.openSync(tmp, 'w', mode);
-  try { fs.writeFileSync(fd, data); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  try { try { fs.writeFileSync(fd, data); fs.fsyncSync(fd); } finally { fs.closeSync(fd); } }
+  catch (e) { try { fs.rmSync(tmp, { force: true }); } catch { /* still the same name next time */ } throw e; }   // a full disk: no half file left behind
   fs.renameSync(tmp, file);
   try { const d = fs.openSync(path.dirname(file), 'r'); fs.fsyncSync(d); fs.closeSync(d); } catch { /* Windows can't fsync a folder */ }
 }
@@ -151,7 +225,7 @@ function tightenDataModes(dir = DATA_DIR, depth = 0) {
   let fixed = 0, list = [];
   try { list = fs.readdirSync(dir, { withFileTypes: true }); } catch { return 0; }
   for (const e of list) {
-    if (depth === 0 && e.name === 'bin') continue;
+    if (depth === 0 && (e.name === 'bin' || e.name === 'radar-cache')) continue;   // the map cache: thousands of tiles, always written owner-only
     const p = path.join(dir, e.name);
     try {
       if (e.isDirectory()) { if (fs.lstatSync(p).mode & 0o077) { fs.chmodSync(p, 0o700); fixed++; } fixed += tightenDataModes(p, depth + 1); }

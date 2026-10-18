@@ -12,8 +12,8 @@
  * is saved straight away (onRefreshTokenUpdated) or the next restart could not
  * sign in.
  * ====================================================================== */
-import { RingApi } from 'ring-client-api';
-import { RingRestClient } from 'ring-client-api/rest-client';
+/* Loaded only once Ring is set up: it is the biggest part of starting CasaTorch (one to two seconds on a Raspberry Pi). */
+const ringLib = () => import('ring-client-api');
 const ring = { api: null, cameras: [], pending: null, events: [], error: null };
 /* ring-client-api's push listener logs a full stack trace when Ring sends a notification it can't decode
    (it drops that one and carries on). Say it in one line instead of alarming anyone reading the log. */
@@ -22,6 +22,7 @@ const ring = { api: null, cameras: [], pending: null, events: [], error: null };
 async function ringConnect() {
   if (!config.ring?.refreshToken || ring.api) return;
   try {
+    const { RingApi } = await ringLib(); if (ring.api) return;
     ring.api = new RingApi({ refreshToken: config.ring.refreshToken, controlCenterDisplayName: 'CasaTorch', cameraStatusPollingSeconds: 60 });
     ring.api.onRefreshTokenUpdated.subscribe(({ newRefreshToken }) => { saveConfig({ ...config, ring: { ...config.ring, refreshToken: newRefreshToken } }); });
     ring.cameras = await ring.api.getCameras();
@@ -58,6 +59,7 @@ app.post(['/api/ring/login', '/api/setup/ring/login'], requireRole('admin'), exp
       ring.pending = null;
       return res.json({ ok: true, cameras: await ringSave(auth.refresh_token) });
     }
+    const { RingRestClient } = await import('ring-client-api/rest-client');
     const rc = new RingRestClient({ email: String(email || ''), password: String(password || ''), controlCenterDisplayName: 'CasaTorch' });
     try {
       if (isDemo()) return res.json({ ok: true, demo: true, cameras: [] });

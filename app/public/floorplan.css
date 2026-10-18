@@ -318,3 +318,45 @@ body #left.dock .dcard .dbar .dsz button.on { background: var(--hl); color: var(
 }
 @media (max-width: 760px) { #tiles.dock > .dcard { flex: 0 0 44vw; width: 44vw; min-width: 0; overflow: hidden; } }
 @media (max-width: 760px) { body.cards-open #tiles.dock { left: 10px !important; right: 10px !important; width: auto !important; max-width: none !important; } }
+/* ---------- QA: one editor language (floorplan-start.js) - tabs with icons, a hint per tab, + Add, the 3-step start ---------- */
+.edtabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; }
+.edtabs button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px 5px; font-size: 11.5px; line-height: 1.1; min-height: 44px; justify-content: center; }
+.edtabs button svg { opacity: .85; } .edtabs button.on svg { opacity: 1; }
+.tabs button:focus-visible, .additem:focus-visible, .mini:focus-visible, .way button:focus-visible { outline: 2px solid var(--hl); outline-offset: 2px; }
+.tabhint { display: flex; gap: 7px; align-items: flex-start; margin: -2px 0 10px; color: var(--muted); font-size: 12.5px; line-height: 1.35; } .tabhint svg { flex: none; margin-top: 1px; color: var(--hl); }
+.undobar { flex-wrap: wrap; } .undobar .addbtn { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; } .undobar .nbx { display: inline-flex; gap: 6px; }
+.mini svg, .mini .odic svg { width: 14px; height: 14px; vertical-align: -2px; } .mini .odic { display: inline-flex; width: 14px; height: 14px; }
+.startguide h2 { font-size: 17px; margin: 4px 0 10px; }
+.gsteps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.gstep { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; } .gstep > div > b { display: block; font-size: 14px; margin-top: 3px; } .gstep .note { margin: 3px 0 0; }
+.gnum { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 13px; background: var(--grad); color: var(--hl-ink); }
+.gstep:not(:first-child) .gnum { background: rgba(148, 163, 184, .18); color: var(--text); } .gstep.done .gnum { background: #34d399; color: #04111c; }
+.ways { display: grid; gap: 8px; margin-top: 8px; }
+.way { display: grid; grid-template-columns: 34px 1fr; gap: 10px; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(148, 163, 184, .06); }
+.wayic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(94, 184, 255, .14); color: var(--hl); }
+.waytx b { display: block; font-size: 13.5px; } .waytx small { display: block; color: var(--muted); font-size: 12px; line-height: 1.35; margin: 2px 0 7px; } .waytx .row { display: flex; gap: 6px; flex-wrap: wrap; }
+.way .mini { padding: 5px 10px; font-size: 12.5px; }
+#modal .box.addbox { width: min(560px, 94vw); max-height: min(78vh, 720px); display: flex; flex-direction: column; padding: 14px; }
+.addsearch { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 10px; background: rgba(148, 163, 184, .08); margin: 4px 0 6px; }
+.addsearch input { flex: 1; border: 0; background: none; color: var(--text); font: inherit; font-size: 15px; padding: 10px 0; outline: none; min-width: 0; }
+.addsearch:focus-within { border-color: var(--hl); }
+.addlist { overflow-y: auto; padding-right: 2px; } .addlist h3 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin: 12px 0 6px; font-weight: 650; }
+.addgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.additem { display: grid; grid-template-columns: 20px 1fr; column-gap: 8px; align-items: center; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(148, 163, 184, .06); color: var(--text); min-height: 44px; }
+.additem:hover, .additem:focus-visible { border-color: var(--hl); background: rgba(94, 184, 255, .1); }
+.additem > svg, .additem > .odic { grid-row: span 2; color: var(--hl); } .additem .odic svg { width: 18px; height: 18px; }
+.additem span { font-size: 13px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .additem small { color: var(--muted); font-size: 11px; }
+.rhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+#modal .box.addbox .rhead h2 { margin: 0; }
+ul.guide { padding-left: 18px; } ul.guide li { margin: 6px 0; color: var(--muted); font-size: 13px; }
+.netpanel .nrow { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); } .netpanel .nrow .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; } .netpanel .nrow .nm small { color: var(--muted); font-size: 11.5px; }
+@media (max-width: 760px) { .addgrid { grid-template-columns: 1fr 1fr; } #modal .box.addbox { max-height: 86vh; } }
+/* QA: the top bar stays one row on tablets (it wrapped over the floor chips at 820 px) and fits a 390 px phone */
+@media (min-width: 761px) { .bar { flex-wrap: nowrap; } .bar .totals { flex-wrap: nowrap; overflow: hidden; min-width: 0; flex: 0 1 auto; } .bar .totals > * { flex: none; } }
+@media (max-width: 1100px) { .btxt { display: none; } }
+@media (max-width: 480px) { .brandtx { display: none; } .bar { gap: 6px; padding-left: 10px; padding-right: 10px; } }
+/* QA: too old for the 3D home (floorplan-compat.js) */
+.tooold { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: var(--bg, #070b16); }
+.toooldcard { max-width: 460px; padding: 22px; border-radius: 18px; background: var(--panel-solid, #0e1424); border: 1px solid var(--line, rgba(148, 163, 184, .16)); color: var(--text, #e9eef6); }
+.toooldcard h2 { margin: 0 0 8px; font-size: 18px; } .toooldcard p { color: var(--muted, #8b97ab); margin: 0 0 10px; }
+.toooldbtn { display: inline-block; margin-top: 6px; padding: 9px 14px; border-radius: 10px; background: #5eb8ff; color: #06101e; font-weight: 650; text-decoration: none; }

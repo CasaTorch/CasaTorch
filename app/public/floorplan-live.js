@@ -28,7 +28,7 @@ export function createLive(ctx) {
   addCss();
   const { scene, camera, controls, renderer, S, prefs, el, kick } = ctx;
   const root = new THREE.Group(); root.name = 'live'; scene.add(root);
-  if (/[?&]debug3d=1/.test(location.search)) window.__casa3d = { THREE, scene, camera, controls, S, kick, flyTo: ctx.flyTo, live: () => A };   // for checking the live view in a test browser only
+  if (/[?&]debug3d=1/.test(location.search)) window.__casa3d = { THREE, scene, camera, controls, renderer, S, kick, flyTo: ctx.flyTo, live: () => A };   // for checking the live view in a test browser only
   const A = { ready: false, t: 0, fans: new Map(), tvs: new Map(), vac: new Map(), wedges: new Map(), pulses: new Map(), patches: [], open: new Map(), solar: null, battery: null, pet: null, seenAlarm: new Set(), seenEvents: new Set(), banner: null, pending: null, saveT: null, lastSun: new V3() };
   const pins = () => S.live?.pins || [];
   const l3 = () => ({ ...(S.live?.live3d || {}), ...(A.pending || {}) });

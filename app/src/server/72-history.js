@@ -61,8 +61,12 @@ async function historySample(now = Date.now()) {
   hist.last = { at: now, w: house, dev: Object.fromEntries(devices.filter((x) => Number.isFinite(x.powerW) && !x.pairedTo).map((x) => [x.id, x.powerW])) };
   const oldest = addDays(key, -HIST_KEEP_DAYS);
   for (const k of Object.keys(hist.days)) if (k < oldest) delete hist.days[k];
-  saveHist();
+  // On disk every 30 minutes (and when the day turns over, and as CasaTorch stops), not every sample: the file grows
+  // to a few MB over two years, and rewriting it every 5 minutes would wear out a Raspberry Pi's SD card.
+  histDirty = true; if (now - histSavedAt >= 30 * 60_000 || key !== histSavedDay) { saveHist(); histSavedAt = now; histSavedDay = key; histDirty = false; }
 }
+let histSavedAt = Date.now(), histSavedDay = null, histDirty = false;
+process.on('exit', () => { if (histDirty) saveHist(); });
 setInterval(() => { if (isConfigured() && !isDemo()) historySample().catch(() => {}); }, SAMPLE_MS).unref?.();
 
 /* ---- the demo house: two months of believable, repeatable history ---- */

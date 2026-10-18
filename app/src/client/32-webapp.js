@@ -32,7 +32,7 @@ async function phoneCard() {
     /* 2. Alerts on this device */
     add(el('h3', { class: 'sub' }, 'Alerts on this device'));
     if (!isSecureContext) {
-      const secure = el('p', { class: 'small muted' }, `Phones only allow app installs and alerts on a secure (https) address, and this page is on ${location.host} (http). At home, open CasaTorch at its secure address (Settings › Secure address at home); away from home, use Secure access (Pro).`);
+      const secure = el('p', { class: 'small muted' }, `Phones only allow app installs and alerts on a secure (https) address, and this page is on ${location.host} (http). At home, open CasaTorch at its secure address (Settings › Connections & AI › Secure address at home); away from home, use Secure access (Pro).`);
       api('/api/local-https/target').then((j) => { if (j.url) secure.replaceChildren('Phones only allow app installs and alerts on a secure (https) address. ', el('a', { href: j.url + location.pathname + location.hash }, T('Open the secure address')), ' on this device, then install and turn on alerts there.'); }).catch(() => {});
       add(secure,
         info?.haPhone ? el('p', { class: 'small good' }, '✓ Alerts already go to the Home Assistant app on your phones.') : el('p', { class: 'small muted' }, 'Using Home Assistant? Its phone app can get CasaTorch alerts today - turn it on below.'));
@@ -141,7 +141,7 @@ async function remoteCard() {
       admin && v.fix ? el('div', { class: 'row wrap', style: 'gap:8px;margin-top:10px' }, remoteFixBtn(r, draw)) : null,
       el('p', { style: 'margin:14px 0 8px' }, el('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.url)),
       el('div', { class: 'row wrap', style: 'gap:16px;align-items:center' }, qr, el('div', { style: 'max-width:360px' },
-        el('p', { class: 'small muted', style: 'margin-top:0' }, 'Scan this with your phone\'s camera to open CasaTorch at its secure address, sign in, then add it to your home screen and turn on alerts (Settings › Phone app & alerts).'),
+        el('p', { class: 'small muted', style: 'margin-top:0' }, 'Scan this with your phone\'s camera to open CasaTorch at its secure address, sign in, then add it to your home screen and turn on alerts (Settings › Phones & alerts).'),
         el('p', { class: 'small muted' }, 'Or send it to your phone:'), remoteSendEls(r.url),
         el('p', { class: 'small muted' }, 'The CasaTorch app picks up this address by itself the next time it connects at home.'))),
       v.status === 'working' ? null : el('p', { class: 'small muted' }, r.anywhere ? 'Works from anywhere (Pro).' : 'Works on your home Wi-Fi. From anywhere is part of Pro.'),
@@ -175,7 +175,7 @@ async function localHttpsCard() {
     add(el('div', { class: 'row', style: 'gap:8px;align-items:center' }, el('span', { class: `dot ${st[0]}` }), el('b', {}, st[1])),
       el('p', {}, el('a', { href: r.url }, r.url)),
       r.find ? el('p', {}, 'The easy way in at home: ', el('a', { href: 'https://casatorch.com/home', target: '_blank', rel: 'noopener' }, el('b', {}, 'casatorch.com/home')), el('span', { class: 'small muted' }, ' - on any phone or computer on your Wi-Fi it opens this CasaTorch. Bookmark it or add it to the home screen.')) : null,
-      el('p', { class: 'small muted' }, `Points at ${r.ip}${r.expires ? ` · certificate renews itself before ${fmt(r.expires, { dateStyle: 'medium' })}` : ''}.${r.find ? '' : ' Bookmark this address on your computers and wall tablets (casatorch.com/home needs "Help me find this CasaTorch" on, in Settings › Updates).'}`),
+      el('p', { class: 'small muted' }, `Points at ${r.ip}${r.expires ? ` · certificate renews itself before ${fmt(r.expires, { dateStyle: 'medium' })}` : ''}.${r.find ? '' : ' Bookmark this address on your computers and wall tablets (casatorch.com/home needs "Help me find this CasaTorch" on, in Settings › Updates & backup).'}`),
       r.why ? el('p', { class: 'small bad' }, r.why) : null,
       r.state === 'ready' && location.protocol === 'http:' ? el('p', { class: 'small' }, 'You\'re on the plain address. ', el('a', { href: r.url + location.pathname + location.hash }, 'Switch to the secure one')) : null,
       el('details', {}, el('summary', { class: 'small muted' }, 'Doesn\'t open on some devices?'),

@@ -8,11 +8,11 @@ const UA = `CasaTorch/${VERSION} (+https://casatorch.com)`;
    If one answers "forbidden", CasaTorch asks once more the way a browser would. */
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
 const PICKY_HOSTS = /(^|\.)(espn\.com|espncdn\.com)$/i;
-async function getText(url, { headers = {}, timeout = 12000, method = 'GET', body } = {}) {
+async function getText(url, { headers = {}, timeout = 12000, method = 'GET', body, publicOnly = false } = {}) {
   let host = ''; try { host = new URL(url).hostname; } catch { /* fetch reports it */ }
   const ua = headers['User-Agent'] || (PICKY_HOSTS.test(host) ? BROWSER_UA : UA);
-  let r = await fetch(url, { method, body, headers: { ...headers, 'User-Agent': ua }, signal: AbortSignal.timeout(timeout) });
-  if (r.status === 403 && ua !== BROWSER_UA && method === 'GET') { r.body?.cancel?.(); r = await fetch(url, { method, headers: { ...headers, 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(timeout) }); }
+  let r = await fetch(url, { method, body, headers: { ...headers, 'User-Agent': ua }, signal: AbortSignal.timeout(timeout), publicOnly });
+  if (r.status === 403 && ua !== BROWSER_UA && method === 'GET') { r.body?.cancel?.(); r = await fetch(url, { method, headers: { ...headers, 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(timeout), publicOnly }); }
   // Never read an endless or huge answer into memory (a calendar or feed link pointing at something else).
   const max = 32 * 1024 * 1024, len = Number(r.headers.get('content-length') || 0);
   if (len > max) { r.body?.cancel?.(); throw Object.assign(new Error('that answer is too big'), { status: 413 }); }
@@ -67,4 +67,4 @@ const tempOut = (c) => (config.house?.units === 'C' ? Math.round(c) : Math.round
 const speedOut = (ms) => (config.house?.units === 'C' ? Math.round(ms * 3.6) : Math.round(ms * 2.237));
 
 /* Demo mode answers from demo/fixtures/<name>.json (no outside calls, no real house). */
-const demoFixture = (name) => { try { return JSON.parse(fs.readFileSync(path.join(APP_DIR, '..', 'demo', 'fixtures', `${name}.json`), 'utf8')); } catch { return null; } };
+const demoFixture = (name) => { try { return demoFresh(JSON.parse(fs.readFileSync(path.join(APP_DIR, '..', 'demo', 'fixtures', `${name}.json`), 'utf8'))); } catch { return null; } };   // demoFresh: 90-demo.js

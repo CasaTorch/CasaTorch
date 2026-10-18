@@ -272,10 +272,12 @@ function hhSuggest(states, today, tz) {
 }
 
 /* ---- the city's calendar link ---- */
-async function hhIcalEvents(url) {
+async function hhIcalEvents(url, publicOnly = false) {
   const u = String(url || '').replace(/^webcal:/i, 'https:');
-  return cached(`hh-ics:${u}`, 6 * 3600_000, async () => ({ events: parseIcs((await getText(u, { timeout: 15_000 })).text, houseTz()) }));
+  return cached(`hh-ics:${publicOnly ? 'p:' : ''}${u}`, 6 * 3600_000, async () => ({ events: parseIcs((await getText(u, { timeout: 15_000, publicOnly })).text, houseTz()) }));
 }
+/* A member's link must be on the internet (not this box or the home network); an admin's may point home. */
+const hhAdmin = (req) => !signInOn() || rank(req.user?.role) >= rank('admin');
 const hhIcalDay = (e, tz) => (e.allDay ? String(e.start).slice(0, 10) : hhLocal(Date.parse(e.start), tz).date);
 /* The bins a city calendar has: one per kind of pickup ("Recycling", "Yard waste"), with the next date. */
 function hhIcalKinds(occ, tz) {
@@ -497,10 +499,12 @@ app.get('/api/household/setup', async (_req, res) => {
     .map((s) => ({ id: s.entity_id, name: hhName(s), state: String(s.state).slice(0, 24), unit: s.attributes?.unit_of_measurement || null, cls: s.attributes?.device_class || null }));
   res.json({ ...base, suggest: sug, entities });
 });
-app.put('/api/household/setup', requireRole('member'), express.json({ limit: '64kb' }), (req, res) => {
+app.put('/api/household/setup', requireRole('member'), express.json({ limit: '64kb' }), async (req, res) => {
   if (hh.demo) return hhNotDemo(res);
-  const b = req.body || {}, c = hh.cfg;
+  const b = req.body || {};
   try {
+    if (b.ical && !hhAdmin(req)) { const why = await publicUrlProblem(String(b.ical).trim().replace(/^webcal:/i, 'https:')); if (why) throw new Error(why); }
+    const c = hh.cfg;
     const next = { ...c };
     if (Array.isArray(b.bins)) { if (b.bins.length > 12) throw new Error('Up to 12 bins.'); next.bins = b.bins.map((x) => hhCleanBin(x || {}, c.bins.find((o) => o.id === x?.id) || {})); }
     if (Array.isArray(b.changes)) { const today = hhLocal(Date.now(), houseTz()).date; next.changes = b.changes.slice(0, 40).map(hhCleanChange).filter((x) => (x.holiday ? ymdAdd(x.holiday, 7) : (x.to && x.to > x.date ? x.to : x.date)) >= today); }
@@ -527,12 +531,14 @@ app.put('/api/household/setup', requireRole('member'), express.json({ limit: '64
 /* Read a city calendar link: the kinds of pickup in it (so each can become a bin with one tap). */
 app.post('/api/household/ical', requireRole('member'), express.json({ limit: '4kb' }), async (req, res) => {
   if (hh.demo) return hhNotDemo(res);
-  if (limited(`hh-ics:${req.ip}`, 20, 60_000)) return res.status(429).json({ error: 'Slow down a little.' });
+  if (overLimit(`hh-ics:${req.ip}`, 20, 60_000)) return res.status(429).json({ error: 'Slow down a little.' });
   const raw = req.body?.url ? String(req.body.url).trim() : (hh.cfg.ical ? unseal(hh.cfg.ical) : '');
   const u = String(raw || '').replace(/^webcal:/i, 'https:');
   if (!/^https?:\/\/[^\s]{4,1500}$/i.test(u)) return res.status(400).json({ error: 'That doesn\'t look like a calendar link.' });
   try {
-    const tz = houseTz(), occ = expandEvents((await hhIcalEvents(u)).events, Date.now() - 86400_000, Date.now() + 120 * 86400_000, tz);
+    const pub = !hhAdmin(req) && !!req.body?.url, why = pub && await publicUrlProblem(u);
+    if (why) return res.status(400).json({ error: why });
+    const tz = houseTz(), occ = expandEvents((await hhIcalEvents(u, pub)).events, Date.now() - 86400_000, Date.now() + 120 * 86400_000, tz);
     if (!occ.length) return res.status(400).json({ error: 'That calendar has no pickups in the next four months.' });
     res.json({ kinds: hhIcalKinds(occ, tz) });
   } catch (e) { res.status(400).json({ error: 'That calendar link didn\'t work. Check it opens in a browser.', detail: String(e.message || e).slice(0, 120) }); }

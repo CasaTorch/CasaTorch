@@ -19,10 +19,13 @@ import { createDock, createImmersive } from './floorplan-dock.js';
 import { THEMES, COLOR_KEYS, ROOM_COLORS, lookOf, classify, guessCats, itemOf, prettyItem, sectionRooms, makeFx, fxMaterial, MAX_GLOW, MAX_ROOMS } from './floorplan-look.js';
 import * as Scan from './floorplan-scan.js';   // REALISM: photo-real scans on the floors, plan import (Sweet Home 3D, DXF)
 import { initReal, applyReal, realSky, renderReal, daylight } from './floorplan-materials.js';   // REALISM: the Real life look made real
-import { createLive } from './floorplan-live.js';   // LIVE: doors/blinds/fans/glows/alarms/wedges, replay, walk, wall-tablet quality (hooks marked "LIVE")
+import { createLive } from './floorplan-live.js';
+import { tabBar, tabHint, startGuide, addPicker, icon as sIcon } from './floorplan-start.js';
+import { batchStatic, unbatch } from './floorplan-batch.js';   // QA: a scan's furniture merged per floor while only looking   // QA: one editor language - tabs with hints, the 3-step start, "What can I add?"   // LIVE: doors/blinds/fans/glows/alarms/wedges, replay, walk, wall-tablet quality (hooks marked "LIVE")
 
 const S = { plan: null, live: null, mode: 'view', floorView: 'all', room: null, tool: null, sel: null, F: {}, pins: [], pinObjs: [], q: '', tab: 'devices' };
 let card = null;   // the open device card: { id, o }
+let netMod = null;   // QA: floorplan-net.js once loaded - the Network tab and "What can I add?" read from it
 const PREF_KEY = 'casatorch-3d';
 const prefs = { walls: 'auto', stack: 'stacked', names: true, values: false, cameras: true, roof: true, power: true, hidden: {}, theme: null, sun: true, weatherFx: true, yard: true, overlay: 'rooms', spin: false, ...(() => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } })() };
 if (prefs.theme === 'neon') prefs.theme = 'night';   // the old name of the dark look
@@ -93,6 +96,7 @@ let grid = new THREE.Group(); scene.add(grid);
 /* On a wide screen the house is framed in the space right of the control panel, not behind it. */
 const resize = () => { const w = view.clientWidth, h = view.clientHeight; renderer.setSize(w, h); labels.setSize(w, h); camera.aspect = w / h; if (w > 900) camera.setViewOffset(w, h, -150, 0, w, h); else camera.clearViewOffset(); camera.updateProjectionMatrix(); };
 addEventListener('resize', resize); resize();
+let layoutSig = '';   // QA: what layout() last showed (shadows are redrawn only when it changes)
 let tween = null, wallsDirty = true, wallsAt = 0, lastT = 0, skyAt = 0, flash = 0, flashWas = 0, dirty = true, drawnAt = 0;
 const kick = () => { dirty = true; };
 controls.addEventListener('start', () => { Q.busy = true; Q.frames = []; }); controls.addEventListener('end', () => { Q.busy = false; });
@@ -124,6 +128,9 @@ function zoomToPins(list) {   // fly in until the bubble's devices sit apart
 }
 controls.addEventListener('change', () => { wallsDirty = true; dirty = true; clusterDirty = true; });
 addEventListener('resize', kick);
+for (const ev of ['pointerdown', 'pointerup', 'wheel', 'keydown', 'keyup']) addEventListener(ev, kick, { passive: true, capture: true });   // QA: anything the user does wakes the picture
+addEventListener('pointermove', (e) => { if (e.buttons) kick(); }, { passive: true, capture: true });
+document.addEventListener('visibilitychange', kick);
 const power = new PowerNet(scene), weather = new WeatherFx(scene), yard = new Yard(scene), skyDome = new SkyDome(scene);
 const outdoor = createOutdoor(scene, yard, odCtx);   // OUTDOOR (odCtx is at the end of the yard section)
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -145,10 +152,12 @@ Scan.initScans({ scene, camera, controls, renderer, S, el, api: (u, o) => api(u,
   if (tween) { const k = Math.min(1, (now - tween.t0) / tween.ms), e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; controls.target.lerpVectors(tween.ft, tween.tt, e); camera.position.lerpVectors(tween.fp, tween.tp, e); if (k >= 1) tween = null; }
   controls.update();
   if (wallsDirty && now - wallsAt > 120) { wallsDirty = false; wallsAt = now; for (const F of Object.values(S.F)) applyWalls(F); }
-  const moving = (power.flows.length && power.group.visible) || !!weather.points?.visible || (yard.group.visible && wxOn() && yard.group.children.length) || outdoor.moving();   // OUTDOOR: an awning running out, a pool's shimmer
+  const moving = (power.flows.length && power.group.visible) || !!weather.points?.visible || outdoor.moving(), swaying = yard.group.visible && wxOn() && S.sway;   // QA: trees only sway in a real breeze, never on Old tablet (S.sway, set with the sky)   // OUTDOOR: an awning running out, a pool's shimmer
   const liveBusy = live.busy();   // LIVE: a door swinging, a fan turning, an alarm pulsing
-  if (!dirty && !tween && !flash && !flashWas && now - drawnAt < live.frameMs(moving || liveBusy)) return;   // nothing new to draw yet
-  const why = tween ? 'camera' : dirty ? 'change' : flash || flashWas ? 'lightning' : liveBusy ? 'animation' : 'weather/power';   // LIVE: for the ?fps=1 readout
+  /* QA: asleep when nothing moves - changes kick() it awake (data, the editor, the sky, any touch, key or wheel); the 5-second
+     heartbeat is only a safety net. While something animates, the quality level's frame rate applies. */
+  if (!dirty && !tween && !flash && !flashWas && now - drawnAt < (moving || liveBusy ? live.frameMs(true) : swaying ? Math.max(live.frameMs(true), 83) : 5000)) return;   // nothing new to draw yet (trees alone: 12 pictures a second is plenty)
+  const why = tween ? 'camera' : dirty ? 'change' : flash || flashWas ? 'lightning' : liveBusy ? 'animation' : moving ? 'weather/power' : swaying ? 'trees' : 'heartbeat';   // LIVE: for the ?fps=1 readout
   power.tick(now / 1000);
   const dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
   live.tick(now, dt);   // LIVE
@@ -157,7 +166,7 @@ Scan.initScans({ scene, camera, controls, renderer, S, el, api: (u, o) => api(u,
   if (S.plan && yard.group.visible && wxOn()) yard.wind(now / 1000, S.live?.weather?.windMs, windToward());
   if (S.plan) outdoor.tick(now);   // OUTDOOR
   if (now - skyAt > 2000 || flash || flashWas) { skyAt = now; updateSky(); } flashWas = flash;
-  if (yard.group.visible && wxOn() && yard.group.children.length && now - (S.treeShadowAt || 0) > 500) { S.treeShadowAt = now; renderer.shadowMap.needsUpdate = true; }   // swaying trees
+  if (yard.group.visible && wxOn() && S.sway && now - (S.treeShadowAt || 0) > 500) { S.treeShadowAt = now; renderer.shadowMap.needsUpdate = true; }   // swaying trees
   const r0 = performance.now(); Scan.beforeRender(camera); if (!renderReal(scene, camera)) renderer.render(scene, camera); labels.render(scene, camera); dirty = false; drawnAt = now; live.frame(now, why, performance.now() - r0);   // LIVE: frame time
   if (clusterDirty && now - clusterAt > 120) { clusterDirty = false; clusterAt = now; clusterPins(); }
   if (Q.busy) { Q.frames.push(now); if (Q.frames.length >= 24) { const ms = (Q.frames[Q.frames.length - 1] - Q.frames[0]) / (Q.frames.length - 1); Q.frames = []; if (ms > 45) lowerQuality(); } }
@@ -205,8 +214,13 @@ function windToward() {
   const b = deg(d + 180), north = deg(S.plan?.settings?.northDeg || 0);
   return new V3(Math.sin(b), 0, -Math.cos(b)).applyAxisAngle(new V3(0, 1, 0), -north);
 }
+/* QA: what the sky changed, coarsely - the picture is drawn again only when this moves (the loop otherwise sleeps). */
+const skySig = () => [sun.position.x, sun.position.y, sun.position.z].map((v) => Math.round(v * 20)).join() + [sun.intensity, hemi.intensity, renderer.toneMappingExposure].map((v) => v.toFixed(2)).join()
+  + (scene.background?.getHexString?.() || '') + (scene.fog?.color.getHexString() || '') + sun.color.getHexString() + skyDome.visible + sun.castShadow;
 function updateSky() {
   if (!scene.fog) return;   // the look isn't set up yet (the floors are still loading)
+  const sig0 = skySig();
+  S.sway = realQuality() !== 'low' && yard.swaying(S.live?.weather?.windMs);
   const L = look(), w = S.live?.weather, theme = curTheme();
   let k = 0, el = 0.9, az = 2.4;
   if (sunOn() && w?.lat != null && w?.lon != null) { const sp = sunPosition(S.timeAt || new Date(), w.lat, w.lon); el = sp.el; az = sp.az; k = nightness(el); }
@@ -219,7 +233,7 @@ function updateSky() {
   const B = S.sceneBox || S.houseBox, c = B ? B.getCenter(new V3()) : new V3(), R = B ? B.getSize(new V3()).length() * 0.6 + 4 : 20;
   const sunDir = dir.clone().normalize();
   const sunWas = sun.position.clone(); sun.position.copy(c).add(dir.multiplyScalar(R * 2)); sun.target.position.copy(c); sun.target.updateMatrixWorld();
-  if (sunWas.distanceToSquared(sun.position) > 1e-4) reshadow(); else kick();
+  if (sunWas.distanceToSquared(sun.position) > 1e-4) reshadow();
   const cam = sun.shadow.camera; if (cam.right !== R) { cam.left = -R; cam.right = R; cam.top = R; cam.bottom = -R; cam.near = 0.5; cam.far = R * 4; cam.updateProjectionMatrix(); }
   const lowSun = Math.min(1, Math.max(0, el / 0.45)), day = 1 - k;
   if (Math.abs((S.night ?? -1) - k) > 0.05) { S.night = k; drawBeams(); }
@@ -244,6 +258,7 @@ function updateSky() {
   const boost = 1 + k * 0.9;
   if (Math.abs(boost - (S.glowBoost || 1)) > 0.05) { S.glowBoost = boost; drawPins(); }
   document.documentElement.dataset.night = k > 0.5 ? '1' : '0';
+  if (skySig() !== sig0) kick();
 }
 function applyLook() {
   const L = look();
@@ -266,6 +281,7 @@ const groundY = () => { const F = Object.values(S.F).sort((a, b) => (a.f.level |
 function buildYard() {
   yard.build(S.plan?.yard, groundY(), curTheme(), el);
   S.sceneBox = S.houseBox?.clone(); if (S.sceneBox && yard.group.children.length) S.sceneBox.union(yard.box);
+  yard.batch(S.mode === 'view');   // QA: the still ground, fences and beds as a few draws while only looking
   skyAt = 0;
   outdoor.build();   // OUTDOOR: furniture, bins, awnings... (plan.items)
 }
@@ -334,6 +350,7 @@ function disposeFloor(F) {
 let floorsGen = 0;
 async function loadFloors() {
   const gen = ++floorsGen;   // a newer load (a quick second reload) wins; this one stops and frees what it made
+  layoutSig = '';   // QA: new floors: their shadows get drawn
   S.liveSig = null;   // the pins go with the old floors: draw them again
   for (const F of Object.values(S.F)) disposeFloor(F);
   S.pinObjs = []; closeCard();
@@ -384,6 +401,18 @@ async function loadFloors() {
   S.houseBox = new THREE.Box3(); for (const F of Object.values(S.F)) S.houseBox.union(F.box.clone().translate(new V3(0, (F.f.level || 0) * (F.f.heightM || 3), 0)));
   applyLook(); buildRoomLabels(); layout(true);
   live.floorsLoaded();   // LIVE: find the doors, windows and blinds to move
+  batchFloors(S.mode === 'view');
+}
+/* QA: while only looking, a floor's furniture (sofas, tables, beds from a scan, with their outlines) becomes one mesh and one
+   set of lines per material. Walls stay separate (they lower as you turn); floors with a photo-real scan are left alone
+   (the scan hides the furniture under it piece by piece). */
+function batchFloors(on) {
+  for (const F of Object.values(S.F)) {
+    if (!on || F.original || (F.f.scans || []).length) { unbatch(F.G); continue; }
+    const roots = []; for (const [, ms] of F.items) for (const m of ms) if (m.userData.cat === 'furniture' && m.visible) roots.push(m);
+    batchStatic(F.G, null, roots);
+  }
+  reshadow();
 }
 /* The roof sits on the top floor (and lifts away when you pick a floor or a room). */
 function buildRoofs() {
@@ -407,7 +436,7 @@ async function drawnFloor(f) {
       pic.add(m); pic.position.set(p.bgX || 0, 0, p.bgY || 0); pic.rotation.y = -deg(p.bgRot || 0); g.add(pic);
     }
   }
-  if (!g.children.length) g.add(new CSS2DObject(el('div', { class: 'roomlab' }, `${f.name}: nothing drawn yet - Editor > Floors > Edit drawing`)));
+  if (!g.children.length) g.add(new CSS2DObject(el('div', { class: 'roomlab' }, T('{name}: nothing drawn yet - Edit > Floors > Edit drawing', { name: f.name }))));
   g.scale.setScalar(f.scale || 1); g.rotation.y = deg(f.rotationY || 0);
   return g;
 }
@@ -441,7 +470,10 @@ function layout(fit) {
   wallsDirty = true;
   if (S.houseBox) { weather.set(wxOn() ? S.live?.weather?.kind : null, S.houseBox, S.live?.weather?.rainMm != null ? 0.5 + S.live.weather.rainMm / 4 : 1); weather.visible = wxOn() && !S.room; }
   controls.autoRotate = !!prefs.spin && !S.tour && (!document.body.classList.contains('panelmode') || Date.now() - lastTouch > 120_000); controls.autoRotateSpeed = 0.45;
-  drawChips(); drawTools(); drawLeft(); drawTiles(); drawInfo(); drawPower(); drawBeams(); reshadow(); clusterDirty = true;
+  drawChips(); drawTools(); drawLeft(); drawTiles(); drawInfo(); drawPower(); drawBeams(); clusterDirty = true;
+  /* QA: sun shadows are drawn again only when something that casts them moved or showed/hid - not on every live update */
+  const sig = Object.values(S.F).map((F) => `${F.f.id}${F.G.visible ? 1 : 0}${F.G.position.y}${F.roof?.visible ? 1 : 0}`).join() + yard.group.visible + (S.F && Object.keys(S.F).length);
+  if (sig !== layoutSig) { layoutSig = sig; reshadow(); } else kick();
   if (fit) fitView();
 }
 /* Overlays color each room by what is happening in it, instead of its own color. */
@@ -563,7 +595,7 @@ function houseNow() {
   return { pins, powered, temps, hums, doors, openDoors, locks, unlocked, alarms, covers, openCovers, lights, lit, motion, cams, cars, watts: S.live?.totals?.powerW ?? sum(powered.map((p) => p.device.powerW)) };
 }
 const avg = (a) => (a.length ? sum(a) / a.length : null);
-function areaOf(F) { const b = F.box; return b ? Math.max(0, (b.max.x - b.min.x) * (b.max.z - b.min.z)) : 0; }
+function areaOf(F) { const b = F.box; return b && !b.isEmpty() ? Math.max(0, (b.max.x - b.min.x) * (b.max.z - b.min.z)) : 0; }   // QA: an empty drawn floor was "about ∞ ft²"
 const areaText = (m2) => (units === 'C' ? `${Math.round(m2)} m²` : `${Math.round(m2 * 10.764).toLocaleString()} ft²`);
 function tiles() {
   const H = houseNow(), out = [];
@@ -579,7 +611,7 @@ function tiles() {
   if (H.motion.length || H.pins.some((p) => p.device.motion != null)) t('motion', 'walk', 'Movement', H.motion.length ? roomOf(H.motion[0]) : 'Quiet', H.motion.length > 1 ? `and ${H.motion.length - 1} more` : H.motion.length ? 'Movement now' : 'Nobody moving', H.motion.length ? 'warm' : '');
   for (const { it, s } of H.cars.slice(0, 2)) t(`car:${it.id}`, 'car', it.name || 'Car', s.battery != null ? `${Math.round(s.battery)}%` : s.home === false ? 'Away' : 'Home', s.home === false ? 'Away' : s.powerW > 50 ? `Charging ${fmtW(s.powerW)}` : s.plugged ? 'Plugged in' : 'Parked', s.powerW > 50 ? 'good' : '');
   const Fs = Object.values(S.F);
-  if (Fs.length) t('home', 'home', 'Your home', `${sum(Fs.map((F) => F.rooms.length)) || Fs.length} ${sum(Fs.map((F) => F.rooms.length)) ? 'rooms' : Fs.length === 1 ? 'floor' : 'floors'}`, `${H.pins.length} devices · about ${areaText(sum(Fs.map(areaOf)))}`);
+  if (Fs.length) t('home', 'home', 'Your home', `${sum(Fs.map((F) => F.rooms.length)) || Fs.length} ${sum(Fs.map((F) => F.rooms.length)) ? 'rooms' : Fs.length === 1 ? 'floor' : 'floors'}`, `${H.pins.length} devices${sum(Fs.map(areaOf)) > 0 ? ` · about ${areaText(sum(Fs.map(areaOf)))}` : ''}`);
   return out;
 }
 function drawTiles() { dock.draw(); }
@@ -651,7 +683,7 @@ function drawInfo() {
   } else if (k === 'home') {
     const Fs = Object.values(S.F).sort((a, b) => (b.f.level || 0) - (a.f.level || 0)), byKind = new Map();
     for (const p of H.pins) { const w = KIND_WORD[p.device.kind] || 'Other'; byKind.set(w, (byKind.get(w) || 0) + 1); }
-    title = 'Your home'; sub = `${Fs.length} floor${Fs.length === 1 ? '' : 's'} · about ${areaText(sum(Fs.map(areaOf)))}`;
+    title = 'Your home'; sub = `${Fs.length} floor${Fs.length === 1 ? '' : 's'}${sum(Fs.map(areaOf)) > 0 ? ` · about ${areaText(sum(Fs.map(areaOf)))}` : ''}`;
     body = [sec('Floors'), ...Fs.map((F) => el('button', { type: 'button', class: 'sroom', onclick: () => { closeInfo(); pickFloor(F.f.id); } }, F.f.name, el('small', {}, [F.rooms.length ? `${F.rooms.length} rooms` : '', `about ${areaText(areaOf(F))}`, `${H.pins.filter((p) => p.floor === F.f.id).length} devices`].filter(Boolean).join(' · ')))),
       Fs.some((F) => F.rooms.length) ? sec('Rooms') : null, ...Fs.flatMap((F) => F.rooms.map((r, i) => el('button', { type: 'button', class: 'sroom', onclick: () => { closeInfo(); focusRoom(F.f.id, i); } }, el('i', { class: 'swatch', style: `--rc:${r.color}` }), r.name, el('small', {}, F.f.name)))),
       sec(`On the map · ${H.pins.length}`), bars([...byKind].sort((a, b) => b[1] - a[1]).map(([n, c]) => [n, c, String(c)])),
@@ -825,8 +857,16 @@ function cameraModal(d, name = d.name) {
   modal(el('div', { class: 'box cam' }, el('div', { class: 'rhead' }, ic('camera'), el('div', {}, el('h2', {}, name), el('small', {}, badge)), el('button', { type: 'button', class: 'iconbtn', title: 'Close', 'aria-label': 'Close', onclick: closeModal }, ic('close'))), box));
   camStop = () => { closed = true; clearInterval(ago); stop(); camStop = null; };
 }
-function modal(content) { camStop?.(); const m = $('#modal'); m.replaceChildren(content); m.hidden = false; m.onclick = (e) => { if (e.target === m) closeModal(); }; }   // anything new in the window stops a camera that was in it
-function closeModal() { camStop?.(); $('#modal').hidden = true; $('#modal').replaceChildren(); }
+let modalFrom = null;   // QA: the window takes the keyboard focus, keeps Tab inside it, and gives the focus back when it closes
+function modal(content) { camStop?.(); const m = $('#modal'); if (m.hidden) modalFrom = document.activeElement; m.replaceChildren(content); m.hidden = false; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.onclick = (e) => { if (e.target === m) closeModal(); };   // anything new in the window stops a camera that was in it
+  setTimeout(() => { if (!m.hidden && !m.contains(document.activeElement)) m.querySelector('input:not([type=hidden]), select, textarea, button, [tabindex]:not([tabindex="-1"])')?.focus({ preventScroll: true }); }, 0); }
+function closeModal() { const was = !$('#modal').hidden; camStop?.(); $('#modal').hidden = true; $('#modal').replaceChildren(); if (was && modalFrom?.isConnected) modalFrom.focus({ preventScroll: true }); modalFrom = null; }
+addEventListener('keydown', (e) => {   // Tab stays inside an open window
+  const m = $('#modal'); if (e.key !== 'Tab' || m.hidden) return;
+  const f = [...m.querySelectorAll('input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea, button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')].filter((x) => x.offsetParent !== null);
+  if (!f.length) return; const i = f.indexOf(document.activeElement);
+  if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && (i === f.length - 1 || i < 0)) { e.preventDefault(); f[0].focus(); }
+});
 addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeModal(); closeCard(); } });
 
 /* ---------- tapping a device: a small control card right where it is ---------- */
@@ -915,7 +955,7 @@ function sunBlock() {
 /* ---------- tour: a slow fly-through of every room, for wall panels and showing off ---------- */
 function startTour() {
   const stops = [null, ...Object.values(S.F).sort((a, b) => (a.f.level || 0) - (b.f.level || 0)).flatMap((F) => F.rooms.map((_, i) => [F.f.id, i]))];
-  if (stops.length < 2) { toast('Add rooms first (Editor > Rooms).'); return; }
+  if (stops.length < 2) { toast(T('Add rooms first (Edit > Rooms).')); return; }
   let n = 0; const step = () => { const s = stops[n++ % stops.length]; if (!s) { S.room = null; S.floorView = Object.keys(S.F).length > 1 ? 'all' : S.floorView; layout(true); } else focusRoom(s[0], s[1]); };
   S.tour = setInterval(step, 7000); step(); layout(false);
   renderer.domElement.addEventListener('pointerdown', stopTour, { once: true });
@@ -1083,7 +1123,7 @@ function homeBlock() {
     el('div', { class: 'sechead' }, T('Rooms')),
     ...Fs.flatMap((F) => { const by = pinsByRoom(F); return F.rooms.map((r, i) => { const n = by[i].filter((p) => p.device.kind === 'light' && p.device.on).length, w = by[i].filter((p) => p.device.powerW != null && p.device.on !== false).reduce((a, p) => a + p.device.powerW, 0);
       return el('button', { type: 'button', class: 'sroom', onclick: () => focusRoom(F.f.id, i) }, el('i', { class: 'swatch', style: `--rc:${r.color}` }), r.name, el('small', {}, [n ? `${n} on` : '', w ? fmtW(w) : ''].filter(Boolean).join(' · '))); }); }),
-    !Fs.some((F) => F.rooms.length) ? el('p', { class: 'note' }, 'No rooms yet. Open Editor > Rooms to add them.') : null);
+    !Fs.some((F) => F.rooms.length) ? el('p', { class: 'note' }, T('No rooms yet. Open Edit > Rooms to add them.')) : null);
 }
 function roomBlock() {
   const F = S.F[S.room.floor], r = F?.rooms[S.room.i]; if (!r) return null;
@@ -1107,7 +1147,7 @@ function roomBlock() {
     more.length ? el('div', { class: 'sechead' }, 'Climate, blinds & more') : null, ...more.map((p) => row(p)),
     other.length ? el('div', { class: 'sechead' }, 'Sensors') : null, ...other.map((p) => row(p)),
     cams.length ? el('div', { class: 'sechead' }, 'Cameras') : null, ...cams.map((p) => el('button', { type: 'button', class: 'camthumb', onclick: () => cameraModal(p.device, pinName(p)) }, el('img', { src: `${snapUrl(p.device)}${snapUrl(p.device).includes('?') ? '&' : '?'}t=${Math.floor(Date.now() / 30000)}`, alt: pinName(p), loading: 'lazy' }), el('span', {}, pinName(p)))),
-    !pins.length ? el('p', { class: 'note' }, 'Nothing placed in this room yet. Open ', el('b', {}, 'Editor > Devices'), ' and click where each device is.') : null);
+    !pins.length ? el('p', { class: 'note' }, T('Nothing placed in this room yet. Open'), ' ', el('b', {}, T('Edit > Devices')), ' ', T('and click where each device is.')) : null);
 }
 
 /* ---------- power: from the panel, along the floor, up to every device ---------- */
@@ -1528,7 +1568,7 @@ function edYard() {
     el('h3', {}, T('Trees, cars and the charger')), el('p', { class: 'note' }, T('Cars from Home Assistant park themselves on your driveway. Drag a car, the charger or a tree on the house to where it really is.')),
     el('div', { class: 'row wrap' }, ...Object.entries(ITEM_KINDS).map(([k, n]) => el('button', { type: 'button', class: 'mini', onclick: () => place(k) }, n))),
     ...y.items.map(row),
-    y.areas.length || y.items.length ? el('p', {}, el('button', { type: 'button', class: 'mini', onclick: () => { if (confirm('Clear the whole yard?')) saveYard({ areas: [], items: [] }); } }, 'Clear the yard')) : null);
+    y.areas.length || y.items.length ? el('p', {}, el('button', { type: 'button', class: 'mini', onclick: () => { if (confirm(T('Clear the whole yard?'))) saveYard({ areas: [], lines: [], items: [], seen: y.seen || [] }); } }, T('Clear the yard'))) : null);
 }
 async function saveHidden(F, list) {
   F.f.hiddenParts = list; editor();   // right away, so quick clicks build on each other
@@ -1567,7 +1607,10 @@ function setMode(m) {
   document.body.classList.toggle('editing', m === 'edit');
   $('#side').hidden = true; $('#side').dataset.kind = '';
   for (const b of document.querySelectorAll('#modeSeg button')) b.classList.toggle('on', b.dataset.mode === m);
+  if (m === 'edit' && !S.plan.floors.length) S.tab = 'floors';   // QA: an empty plan starts where the house gets made
   if (m === 'edit') editor(); else $('#left').hidden = true;
+  if (m === 'edit' && $('#side').dataset.kind === 'guide') { $('#side').hidden = true; $('#side').dataset.kind = ''; }
+  outdoor.batch?.(m === 'view'); yard.batch(m === 'view'); batchFloors(m === 'view');   // QA: furniture and the still yard merged into a few draws while only looking; pieces again while editing
   drawPins();
 }
 const edFloor = () => curF() || Object.values(S.F)[0];
@@ -1605,15 +1648,16 @@ async function putPlan(to, from) {   // send only what differs
 }
 async function undoRedo(dir) {
   const H = S.hist, from = dir === 'undo' ? H.undo : H.redo, to = dir === 'undo' ? H.redo : H.undo;
-  if (H.busy || !from.length) return;
+  if (H.busy) { (H.queue ||= []).push(dir); return; }   // QA: a second Ctrl+Z while the first is still saving waits its turn (it was dropped)
+  if (!from.length) { H.queue = []; return; }
   H.busy = true; H.last = '';
   try {
     const step = from.pop(), cur = await (await fetch('/api/floorplan')).json();
     to.push({ plan: cur, what: step.what });
     S.tool = null; await putPlan(step.plan, cur); await reload();
     toast(`${dir === 'undo' ? 'Undone' : 'Redone'}: a change to ${step.what}.`);
-  } catch (e) { proErr(e); await reload().catch(() => {}); }
-  finally { H.busy = false; editor(); }
+  } catch (e) { proErr(e); H.queue = []; await reload().catch(() => {}); }
+  finally { H.busy = false; editor(); const next = H.queue?.shift(); if (next) undoRedo(next); }
 }
 addEventListener('keydown', (e) => {   // Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or Ctrl+Y - except while typing, where they undo the typing
   if (S.mode !== 'edit' || !(e.ctrlKey || e.metaKey) || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
@@ -1624,7 +1668,7 @@ const undoBar = () => { const H = S.hist, mac = /Mac|iPhone|iPad/.test(navigator
   return el('div', { class: 'undobar' },
     el('button', { type: 'button', class: 'mini', disabled: H.undo.length && !H.busy ? null : true, title: H.undo.length ? `Undo a change to ${H.undo[H.undo.length - 1].what} (${key}Z)` : 'Nothing to undo', onclick: () => undoRedo('undo') }, '↶ Undo'),
     el('button', { type: 'button', class: 'mini', disabled: H.redo.length && !H.busy ? null : true, title: H.redo.length ? `Redo a change to ${H.redo[H.redo.length - 1].what} (${key}${mac ? '⇧Z' : 'Y'})` : 'Nothing to redo', onclick: () => undoRedo('redo') }, '↷ Redo'),
-    el('small', {}, H.undo.length ? `${H.undo.length} of the last 10 changes can be undone` : '')); };
+    el('button', { type: 'button', class: 'mini primary addbtn', title: T('What can I add?'), 'aria-haspopup': 'dialog', onclick: openAdd }, sIcon('plus', 14), T('Add'))); };   // QA: + Add; Backups joins from floorplan-net.js
 function editor() {
   const box = $('#left'), a = document.activeElement;
   const typing = a && box.contains(a) && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && !['range', 'checkbox', 'color', 'file', 'button'].includes(a.type)));
@@ -1640,8 +1684,12 @@ function editorDraw() {
   if (S.mode !== 'edit') { clearRouteHandles(); return; }
   if (S.tool?.type !== 'route-edit') clearRouteHandles();
   const box = $('#left'); box.hidden = false;
-  const tabs = [['devices', 'Devices'], ['rooms', 'Rooms'], ['furniture', 'Furniture'], ['yard', 'Outdoor'], ['colors', 'Colors'], ['floors', 'Floors']];   // OUTDOOR: + Furniture; Yard is now Outdoor
-  const body = { devices: edDevices, rooms: edRooms, furniture: () => outdoor.panelFurniture(), yard: () => outdoor.panelYard(edYard()), colors: edColors, floors: edFloors }[S.tab]();
+  /* QA: one editor - Floors, Rooms, Furniture, Outdoor, Devices, Network, Colors (floorplan-start.js). With no floor yet, the tabs that put
+     things on a floor point back to Floors instead of showing empty lists. */
+  if (!['floors', 'rooms', 'furniture', 'yard', 'devices', 'network', 'colors'].includes(S.tab)) S.tab = 'floors';
+  const needsFloor = !S.plan.floors.length && ['rooms', 'furniture', 'yard', 'devices', 'network'].includes(S.tab);
+  const body = needsFloor ? el('div', { class: 'hint col' }, el('b', {}, T('First, the shape of your home')), el('p', { class: 'note' }, T('Draw, scan or upload a floor - then everything else has somewhere to go.')), el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini primary', onclick: () => pickTab('floors') }, T('Go to Floors'))))
+    : { devices: edDevices, rooms: edRooms, furniture: () => outdoor.panelFurniture(), yard: () => outdoor.panelYard(edYard()), colors: edColors, floors: edFloors, network: () => netMod?.panel?.() || el('p', { class: 'note' }, T('Loading…')) }[S.tab]();
   const od = outdoor.hint(); if (od) return fill(box, od);   // OUTDOOR: drawing a lawn, placing a sofa, the wall view
   const er = S.tool?.type === 'erase' ? S.tool : null;
   if (er) { const F = S.F[er.floor]; return fill(box, el('div', { class: 'hint' }, `Hiding parts of ${F?.f.name}. Click anything that shouldn't be there - a stray chair, scan noise, a wall from next door. ${er.done.length} hidden so far. Nothing is deleted from your scan; you can bring it all back.`,
@@ -1673,8 +1721,38 @@ function editorDraw() {
       el('button', { type: 'button', class: 'mini', disabled: ya.pts.length ? null : true, onclick: () => { ya.pts.pop(); yardPreview(); editor(); } }, 'Undo last corner'),
       el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; yardPreview(); editor(); } }, 'Cancel'))));
   const hint = S.tool?.type === 'yard-place' ? `Click on the ground where the ${ITEM_KINDS[S.tool.kind].toLowerCase()} goes.` : S.tool?.type === 'yard-move' ? 'Click on the ground where it should go.' : S.tool?.type === 'aim' ? `Click the ground where "${S.tool.dev.name}" shines.` : S.tool?.type === 'panel' ? 'Click where the electrical panel is (a wall or the floor next to it).' : S.tool?.type === 'device' ? `Click on the house where "${S.tool.dev.name}" is.` : S.tool?.type === 'room' ? 'Click the middle of the room on the model.' : S.tool?.type === 'paint' ? 'Click any wall, floor, door or piece of furniture.' : null;
-  fill(box, undoBar(), el('div', { class: 'tabs' }, ...tabs.map(([k, n]) => el('button', { type: 'button', class: S.tab === k ? 'on' : '', onclick: () => { const looked = editLook(); S.tab = k; if (looked !== editLook()) { skyAt = 0; applyLook(); } S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel(); editor(); drawPins(); } }, n))),
+  fill(box, undoBar(), tabBar({ el }, S.tab, pickTab), tabHint({ el }, S.tab),
     hint ? el('div', { class: 'hint' }, hint, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = null; editor(); drawPins(); } }, 'Cancel')) : null, body);
+}
+function pickTab(k) {
+  const looked = editLook(); S.tab = k; if (looked !== editLook()) { skyAt = 0; applyLook(); }
+  S.tool = k === 'colors' && S.tool?.type === 'paint' ? S.tool : null; if (k !== 'colors') clearSel();
+  editor(); drawPins(); $('#left')?.scrollTo?.(0, 0);
+}
+/* QA: "What can I add?" - everything that can go on the plan, searchable; picking one opens its tab and starts its tool. */
+function openAdd() {
+  const go = (tab, fn) => () => { if (S.mode !== 'edit') setMode('edit'); pickTab(tab); fn?.(); };
+  const has = S.plan.floors.length > 0, cur = edFloor(), drawnF = cur?.f.kind === 'drawn' ? cur : Object.values(S.F).find((F) => F.f.kind === 'drawn');
+  const inDrawer = (tool, extra = {}) => () => { const f = drawnF && S.plan.floors.find((x) => x.id === drawnF.f.id); if (f) openDrawer(f, { ...drawOpts(), tool, ...extra }); else newDrawnFloor(false, { tool, ...extra }); };
+  const house = [
+    { label: T('A floor - draw it'), icon: 'pencil', words: 'level storey story plan new', run: () => newDrawnFloor(false) },
+    { label: T('A floor - trace a picture'), icon: 'picture', words: 'image photo blueprint level', run: () => newDrawnFloor(true) },
+    { label: T('A 3D scan'), icon: 'phone', words: 'lidar usdz glb gltf obj roomplan iphone ipad upload floor', run: () => pickFiles(SCAN_ACCEPT, true, (l) => uploadFloorFiles(l)) },
+    { label: T('A plan file'), icon: 'file', words: 'sweet home 3d sh3d dxf cad import', run: () => pickFiles('.sh3d,.dxf', false, (l) => Scan.importPlan(l[0])) },
+    { label: T('Room'), icon: 'rooms', words: 'bedroom kitchen bathroom space area', run: drawnF || !has ? inDrawer('room') : go('rooms', () => { S.tool = { type: 'room', i: -1, floor: cur.f.id }; editor(); }) },
+    { label: T('Wall'), icon: 'wall', words: 'partition', run: inDrawer('wall') },
+    { label: T('Door'), icon: 'door', words: 'entrance garage slider sliding french', run: inDrawer('opening', { openKind: 'door' }) },
+    { label: T('Window'), icon: 'window', words: 'glass', run: inDrawer('opening', { openKind: 'window' }) },
+    { label: T('Stairs'), icon: 'stairs', words: 'steps staircase', run: inDrawer('stairs') },
+    { label: T('Roof'), icon: 'roof', words: 'gable hip flat pitch', run: inDrawer('floor') },
+  ].map((x) => ({ group: 'The house', ...x }));
+  const inside = has ? (outdoor.catalog?.() || []).map((x) => ({ ...x, run: go(x.tab, x.run) })) : [];
+  const yardThings = has ? Object.entries(ITEM_KINDS).map(([k, n]) => ({ group: 'Outdoor', label: T(n), icon: 'tree', words: k === 'car' ? 'vehicle ev driveway' : k === 'charger' ? 'ev car wallbox' : 'garden plant', run: go('yard', () => { S.tool = { type: 'yard-place', kind: k }; editor(); }) })) : [];
+  const placed = new Set(S.pins.map((p) => p.deviceId));
+  const devs = has ? [{ group: 'Devices', label: T('Electrical panel'), icon: 'devices', words: 'breaker fuse power', run: go('devices', () => { S.tool = { type: 'panel', dev: { id: '_panel', name: 'the electrical panel' } }; editor(); }) },
+    ...(S.live?.devices || []).filter((d) => !placed.has(d.id)).sort((a, b) => a.name.localeCompare(b.name)).map((d) => ({ group: 'Devices', label: d.name, icon: 'devices', hint: KIND_WORD[d.kind] || '', words: `${d.kind} ${d.area || ''}`, run: go('devices', () => { S.tool = { type: 'device', dev: d }; editor(); drawPins(); }) }))] : [];
+  const net = has ? (netMod?.addItems?.() || []).map((x) => ({ ...x, group: 'Network', icon: 'network', run: go('network', x.run) })) : [];
+  addPicker({ el, modal, closeModal, items: [...house, ...inside, ...yardThings, ...devs, ...net] });
 }
 function floorPicker() {
   if (Object.keys(S.F).length < 2) return null;
@@ -1714,7 +1792,7 @@ function edDevices() {
       el('button', { type: 'button', class: 'mini', onclick: () => { S.pins = S.pins.filter((x) => x.deviceId !== d.id); savePins(); } }, 'Remove'), el('small', {}, S.F[p.floor]?.f.name || ''))); };
   const free = devs.filter((d) => !placed.has(d.id)), on = devs.filter((d) => placed.has(d.id));
   const sugg = autoPlaces(free);
-  return el('div', {}, el('p', { class: 'note' }, 'Drag a device from the list onto the house (or tap it, then tap the spot). To move one later, just drag it on the house.'), search,
+  return el('div', {}, search,   // QA: the tab's hint line says how; no second paragraph
     el('div', { class: 'edrow' }, el('div', { class: 'dtop' }, ic('plug'), el('b', {}, 'Electrical panel'), el('small', {}, S.plan.settings?.panel ? 'placed' : 'front corner')),
       el('p', { class: 'note' }, 'Where the power comes into the house. The power lines start here.'),
       el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'panel', dev: { id: '_panel', name: 'the electrical panel' } }; editor(); } }, S.plan.settings?.panel ? 'Move' : 'Place it'),
@@ -1760,7 +1838,7 @@ function edRooms() {
   const list = rooms.map((r, i) => el('div', { class: 'edrow' }, el('div', { class: 'dtop' },
     el('input', { type: 'color', value: r.color || ROOM_COLORS[i % ROOM_COLORS.length], title: 'Room color', oninput: (e) => { r.color = e.target.value; F.rooms = rooms; roomUniforms(F); save(); } }),
     el('input', { type: 'text', value: r.name, maxlength: 30, 'data-room': i, oninput: (e) => { r.name = e.target.value; save(); } })),
-  el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'room', i, floor: F.f.id }; editor(); } }, 'Move'), el('button', { type: 'button', class: 'mini', onclick: () => focusRoomEdit(F, i) }, 'Show'), el('button', { type: 'button', class: 'mini', onclick: () => { rooms.splice(i, 1); saveRooms(F, rooms); } }, 'Delete'))));
+  el('div', { class: 'row' }, el('button', { type: 'button', class: 'mini', onclick: () => { S.tool = { type: 'room', i, floor: F.f.id }; editor(); } }, 'Move'), el('button', { type: 'button', class: 'mini', onclick: () => focusRoomEdit(F, i) }, 'Show'), el('button', { type: 'button', class: 'mini', onclick: () => { rooms.splice(i, 1); saveRooms(F, rooms); } }, T('Remove')))));
   if (S.focusName != null) setTimeout(() => { const n = $(`#left input[data-room="${S.focusName}"]`); n?.focus(); n?.select(); S.focusName = null; }, 0);
   return el('div', {}, floorPicker(), el('p', { class: 'note' }, 'Rooms color the floor, group devices, and show up as buttons in the 3D view. Devices belong to the nearest room center.'),
     ...list, el('div', { class: 'row' }, el('button', { type: 'button', class: 'primary', onclick: () => { S.tool = { type: 'room', i: -1, floor: F.f.id }; editor(); } }, 'Add a room'),
@@ -1788,38 +1866,48 @@ function edColors() {
       el('div', { class: 'row' }, el('input', { type: 'color', value: F.f.paint?.[S.sel.key] || '#ffffff', oninput: (e) => { (F.f.paint ||= {})[S.sel.key] = e.target.value; styleFloor(F); savePaintSoon(F); } }),
         el('button', { type: 'button', class: 'mini', onclick: () => { if (F.f.paint) delete F.f.paint[S.sel.key]; styleFloor(F); savePaintSoon(F); editor(); } }, 'Reset'))) : null);
 }
-function edFloors() {
-  const file = el('input', { type: 'file', multiple: true, accept: '.usdz,.usd,.usdc,.usda,.glb,.gltf,.obj,.mtl,.ply,.zip,.bin,.png,.jpg,.jpeg,.webp,model/gltf-binary,model/gltf+json,application/zip', onchange: () => upload() }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
-  const into = el('select', {}, el('option', { value: '' }, 'A whole floor'), ...scans().map((F) => el('option', { value: F.f.id }, `A room of ${F.f.name}`)));
-  async function upload(given) {
-    if (!given && !file.files.length) { toast('Choose the file from your scan first.'); return; }
-    /* Several scan files at once (RoomPlan apps export one per room): each is its own model. Otherwise the files belong together (an .obj with its .mtl, a .gltf with its .bin). */
-    const list = given || [...file.files], models = list.filter((x) => /\.(usdz|usdc|usda|usd|glb|ply)$/i.test(x.name)), groups = models.length > 1 && models.length === list.length ? models.map((x) => [x]) : [list];
-    let base = into.value; const made = [];
+/* QA: uploading a scan and scanning here are shared by the Floors tab and the 3-step start. */
+const SCAN_ACCEPT = '.usdz,.usd,.usdc,.usda,.glb,.gltf,.obj,.mtl,.ply,.zip,.bin,.png,.jpg,.jpeg,.webp,model/gltf-binary,model/gltf+json,application/zip';
+const pickFiles = (accept, multiple, then) => { const i = el('input', { type: 'file', accept, multiple: multiple || null, style: 'display:none', onchange: () => { if (i.files.length) then([...i.files]); i.remove(); } }); document.body.append(i); i.click(); };
+async function uploadFloorFiles(list, intoId = '', nameValue = '') {
+  /* Several scan files at once (RoomPlan apps export one per room): each is its own model. Otherwise the files belong together (an .obj with its .mtl, a .gltf with its .bin). */
+    const models = list.filter((x) => /\.(usdz|usdc|usda|usd|glb|ply)$/i.test(x.name)), groups = models.length > 1 && models.length === list.length ? models.map((x) => [x]) : [list];
+    let base = intoId; const made = [];
     try {
       for (const [i, g] of groups.entries()) {
         toast(groups.length > 1 ? `Preparing ${i + 1} of ${groups.length}…` : 'Preparing the model…');
         const m = await toGlb(g); toast(`Uploading (${Math.max(1, Math.round(m.blob.size / 1e6))} MB)…`);
         const lvl = base ? S.plan.floors.find((x) => x.id === base)?.level || 0 : null;
-        const r = await api(`/api/floorplan/floors?name=${encodeURIComponent(groups.length > 1 ? m.name : name.value || m.name)}${lvl != null ? `&level=${lvl}` : ''}`, { method: 'POST', headers: { 'Content-Type': 'model/gltf-binary' }, body: m.blob });
+        const r = await api(`/api/floorplan/floors?name=${encodeURIComponent(groups.length > 1 ? m.name : nameValue || m.name)}${lvl != null ? `&level=${lvl}` : ''}`, { method: 'POST', headers: { 'Content-Type': 'model/gltf-binary' }, body: m.blob });
         if (groups.length > 1 && !base) base = r.id; else made.push(r.id);   // several rooms and no floor picked: the first one is the floor, the rest are its rooms
       }
       await reload();
       if (base && made.length) { for (const id of made) startFit(id, base); toast(made.length > 1 ? `Drag each room into place, then Join. ${made.length - 1} more wait beside the floor.` : 'Drag the room into place, then press Join.'); }
       else toast('Floor added.');
     } catch (e) { proErr(e); await reload().catch(() => {}); }
-  }
-  /* In the CasaTorch app on an iPhone or iPad with LiDAR: scan a room right here; the scan comes straight in, as if you had uploaded it. */
-  const N = window.CasaNative, canScan = !!N?.hasLidar;
-  async function scanHere() {
-    try {
-      const avail = await N.lidar(); if (!avail?.available) { toast(avail?.why || 'This phone has no LiDAR scanner.'); return; }
-      const r = await N.scanRoom(); if (!r) return;   // cancelled
-      const f = new File([r.bytes], `${(r.name || name.value || 'Room scan').replace(/[^\w .-]/g, '')}.usdz`, { type: 'model/vnd.usdz+zip' });
-      if (!name.value) name.value = r.name || '';
-      await upload([f]);
-    } catch (e) { toast(e.message || 'The scan didn\'t finish.'); }
-  }
+}
+/* In the CasaTorch app on an iPhone or iPad with LiDAR: scan a room right here; the scan comes straight in, as if you had uploaded it. */
+const canScanHere = () => !!window.CasaNative?.hasLidar;
+async function scanRoomHere(intoId = '', nameValue = '') {
+  const N = window.CasaNative;
+  try {
+    const avail = await N.lidar(); if (!avail?.available) { toast(avail?.why || 'This phone has no LiDAR scanner.'); return; }
+    const r = await N.scanRoom(); if (!r) return;   // cancelled
+    const f = new File([r.bytes], `${(r.name || nameValue || 'Room scan').replace(/[^\w .-]/g, '')}.usdz`, { type: 'model/vnd.usdz+zip' });
+    await uploadFloorFiles([f], intoId, nameValue || r.name || '');
+  } catch (e) { toast(e.message || 'The scan didn\'t finish.'); }
+}
+function guideOpts(extra = {}) {
+  return { el, pro: !!S.plan.pro?.pro, canScan: canScanHere(), hasFloors: S.plan.floors.length > 0,
+    scan: () => scanRoomHere(), uploadScan: () => pickFiles(SCAN_ACCEPT, true, (l) => uploadFloorFiles(l)), draw: () => newDrawnFloor(false), trace: () => newDrawnFloor(true),
+    importPlan: () => pickFiles('.sh3d,.dxf', false, (l) => Scan.importPlan(l[0])), ...extra };
+}
+function edFloors() {
+  if (!S.plan.floors.length) return startGuide(guideOpts());   // QA: an empty plan: the 3 steps, nothing else
+  const file = el('input', { type: 'file', multiple: true, accept: SCAN_ACCEPT, onchange: () => upload() }), name = el('input', { type: 'text', placeholder: 'Ground floor' });
+  const into = el('select', {}, el('option', { value: '' }, 'A whole floor'), ...scans().map((F) => el('option', { value: F.f.id }, `A room of ${F.f.name}`)));
+  const upload = () => { if (!file.files.length) { toast('Choose the file from your scan first.'); return; } uploadFloorFiles([...file.files], into.value, name.value); };
+  const canScan = canScanHere(), scanHere = () => scanRoomHere(into.value, name.value);
   const put = (f, body) => send(`/api/floorplan/floors/${f.id}`, 'PUT', body).then(reload).catch(proErr);
   const lone = scans().filter((F) => F.rooms.length <= 1);
   return el('div', {},
@@ -1857,28 +1945,27 @@ function edFloors() {
 /* EDITOR hook: the drawer also gets the other floors (to line up with the one below, and for the whole house) and their outlines,
    and the devices (a door's or window's contact sensor, a blind or curtain - linked in its inspector for the live view). */
 const drawOpts = () => ({ el, api, toast, onSave: reload, devices: () => S.live?.devices || [], floors: () => S.plan.floors, outlines: () => Object.values(S.F).map((F) => ({ id: F.f.id, level: F.f.level || 0, box: [F.box.min.x, F.box.min.z, F.box.max.x, F.box.max.z] })) });
-async function newDrawnFloor(withPicture) {
+async function newDrawnFloor(withPicture, extra = {}) {
   try {
     const r = await send('/api/floorplan/floors/drawn', 'POST', { name: S.plan.floors.length ? `Floor ${S.plan.floors.length + 1}` : 'Ground floor' });
-    S.plan = await api('/api/floorplan'); openDrawer(r.floor, drawOpts());
+    S.plan = await api('/api/floorplan'); openDrawer(r.floor, { ...drawOpts(), ...extra });
     if (withPicture) setTimeout(() => document.querySelector('#drawer input[type=file]')?.click(), 200);
   } catch (e) { proErr(e); }
 }
-function guidePanel() {
+function guidePanel() {   // QA: Help - the 3 steps (also what an empty plan opens with), then how the editor is laid out
   const side = $('#side'); side.hidden = false; side.dataset.kind = 'guide';
-  fill(side, el('div', { class: 'rhead' }, el('h2', {}, 'Your home in 3D'), el('button', { type: 'button', class: 'iconbtn', onclick: () => { side.hidden = true; side.dataset.kind = ''; } }, ic('close'))),
-    el('p', { class: 'note' }, 'Two ways - pick whichever suits you. You can mix them: scan one floor, draw another.'),
-    el('h3', {}, 'A. Scan it (iPhone Pro / iPad Pro with LiDAR)'),
-    el('ol', { class: 'guide' },
-      el('li', {}, 'Install a free room-scanning app built on Apple RoomPlan, e.g. ', el('b', {}, 'LiDarPlan'), ', ', el('b', {}, 'KIRI Engine'), ' (Room Scan) or ', el('b', {}, 'Lagarsoft LiDAR Scanner'), '.'),
-      el('li', {}, 'Scan one floor at a time: lights on, interior doors open, walk slowly and point at every corner.'),
-      el('li', {}, 'Export as ', el('b', {}, 'GLB'), ' or ', el('b', {}, 'USDZ'), ' and send it to this computer (AirDrop, e-mail, iCloud Drive).'),
-      el('li', {}, 'Open ', el('b', {}, 'Editor > Floors'), ' and upload it. Walls, furniture and rooms are recognized automatically.')),
-    el('h3', {}, 'B. Draw it (any device)'),
-    el('ol', { class: 'guide' }, el('li', {}, el('b', {}, 'Editor > Floors > Draw a floor'), '. Drag to draw each room (grid squares are 1 m), or trace over a picture of your floor plan.')),
-    el('h3', {}, 'Then make it yours'),
-    el('ol', { class: 'guide' }, el('li', {}, el('b', {}, 'Devices'), ': pick one, click where it is.'), el('li', {}, el('b', {}, 'Rooms'), ': rename and color them, or add your own.'), el('li', {}, el('b', {}, 'Colors'), ': choose Real life, Blueprint, or Day, change any color, or paint a single wall or sofa.')),
-    S.plan.pro?.pro ? el('p', {}, el('button', { type: 'button', class: 'primary', onclick: () => { setMode('edit'); S.tab = 'floors'; editor(); } }, 'Open the editor')) : el('p', { class: 'note' }, 'The editor is part of CasaTorch Pro.'));
+  const close = () => { side.hidden = true; side.dataset.kind = ''; };
+  const run = (fn) => () => { close(); fn(); };
+  const g = guideOpts(); for (const k of ['scan', 'uploadScan', 'draw', 'trace', 'importPlan']) g[k] = run(g[k]);
+  fill(side, el('div', { class: 'rhead' }, el('h2', {}, T('Your home in 3D')), el('button', { type: 'button', class: 'iconbtn', 'aria-label': T('Close'), onclick: close }, ic('close'))),
+    startGuide(g),
+    el('h3', {}, T('Editing')),
+    el('ul', { class: 'guide' },
+      el('li', {}, T('Press Edit at the top. The tabs follow the way a home gets built: Floors, Rooms, Furniture, Outdoor, Devices, Network, Colors.')),
+      el('li', {}, T('Add (in the editor) finds anything by name - a sofa, a door, a fence, an access point - and starts it for you.')),
+      el('li', {}, T('Every change saves by itself. Undo and Redo go back up to 10 changes; Backups keeps restore points.')),
+      el('li', {}, T('Drawn floors open in the drawing editor (Floors > Edit drawing), which has its own Save.'))),
+    S.plan.pro?.pro ? el('p', {}, el('button', { type: 'button', class: 'primary', onclick: () => { close(); setMode('edit'); } }, T('Start editing'))) : el('p', { class: 'note' }, T('Editing the 3D home is part of CasaTorch Pro.')));
 }
 
 /* ---------- live data ---------- */
@@ -1904,9 +1991,12 @@ function refresh() {   // one at a time: an older answer can never land after a 
   return (refreshNext ||= refreshRun.catch(() => {}).then(() => { refreshNext = null; return refresh(); }));
 }
 async function refreshOnce() {
-  try { const fresh = await api('/api/floorplan/live'); if (live.replaying()) return; S.live = fresh; live.onLive();   // LIVE: replaying keeps its own moment; the live view follows every answer
+  try { const fresh = await api('/api/floorplan/live'); if (live.replaying()) return; S.live = fresh;
+    /* QA: the same answer as last time changes nothing on screen - no live pass, no new picture (the loop stays asleep) */
+    const sig = JSON.stringify([S.live.pins, S.live.devices, S.live.totals, S.live.cars, S.live.weather, S.live.live3d]), same = sig === S.liveSig;
+    if (!same) live.onLive();   // LIVE: replaying keeps its own moment; the live view follows every answer that changed
     outdoor.live();   // OUTDOOR: bins, mailbox, plants, laundry (GET /api/household, every 20 s at most), awnings and strip lights
-    if (!S.autoCarsTried) setTimeout(autoCars, 0); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color, route, beam }) => ({ deviceId, floor, pos, label, color, route, beam })); const sig = JSON.stringify([S.live.pins, S.live.devices, S.live.totals, S.live.cars, S.live.weather]); if (sig === S.liveSig) return; S.liveSig = sig;   // nothing changed: leave the scene alone
+    if (!S.autoCarsTried) setTimeout(autoCars, 0); S.pins = (S.live.pins || []).map(({ deviceId, floor, pos, label, color, route, beam }) => ({ deviceId, floor, pos, label, color, route, beam })); if (same) return; S.liveSig = sig;   // nothing changed: leave the scene alone
     drawPins(); drawTotals(); if (S.mode === 'edit' && S.tab === 'devices' && !$('#left').contains(document.activeElement) && !S.tool) editor(); }
   catch { S.misses = (S.misses || 0) + 1; if (S.misses === 3) toast('Can\'t reach your devices right now - trying again every few seconds.'); return; }
   if (S.misses >= 3) toast('Connected again.'); S.misses = 0;
@@ -1915,7 +2005,7 @@ function drawThemeSeg() { $('#themeSeg').replaceChildren(seg(Object.entries(THEM
 async function reload() { S.plan = await api('/api/floorplan'); await loadFloors(); await refresh(); drawThemeSeg(); if (S.mode === 'edit') editor(); }
 async function start() {
   try { const { lang } = await api('/api/lang'); if (lang) await CasaI18n.use(lang); } catch { /* keep this browser's choice */ }
-  for (const b of document.querySelectorAll('#modeSeg button')) b.textContent = T(b.dataset.mode === 'edit' ? 'Editor' : '3D');
+  for (const b of document.querySelectorAll('#modeSeg button')) b.textContent = T(b.dataset.mode === 'edit' ? 'Edit' : '3D');
   $('#guideBtn').textContent = T('Help');
   if (!$('#fsBtn')) {   // Arrange and Full screen, next to Help
     const arr = el('button', { type: 'button', id: 'arrangeBtn', class: 'tog', title: T('Move, size, hide and add the cards around the house'), onclick: () => { if (S.mode !== 'view') setMode('view'); dock.setArrange(!dock.arranging()); } }, ic('grid'), el('span', { class: 'btxt' }, T('Arrange')));
@@ -1933,6 +2023,7 @@ async function start() {
   if (new URLSearchParams(location.search).has('embed')) document.querySelector('.brand').target = '_top';
   if (!S.plan.pro?.pro) toast('3D Home is part of CasaTorch Pro - look around the demo, then upgrade to use your own home.');
 }
+window.__casa3dReady = true;   // QA: floorplan-compat.js: the modules loaded (a later error is not "too old")
 for (const b of document.querySelectorAll('#modeSeg button')) b.onclick = () => setMode(b.dataset.mode);
 $('#guideBtn').onclick = guidePanel;
 start(); setInterval(() => { if (!document.hidden) refresh(); }, 5000);
@@ -1957,4 +2048,4 @@ addEventListener('keydown', (e) => {
   if (card) closeCard(); else if (S.info) closeInfo(); else if (S.room) { S.room = null; layout(true); } else if (S.tool) { S.tool = null; editor(); drawPins(); }
 });
 /* Network on the plan, plan backups and restore points, the vacuum's map to trace, and voice "Show me": floorplan-net.js. */
-import('./floorplan-net.js').then((m) => m.init({ S, THREE, camera, controls, renderer, CSS2DObject, el, fill, api, send, toast, flyTo, focusRoom, pickFloor, goToPin, resetView, setMode, kick, reload, modal, closeModal, curF })).catch((e) => console.warn('3D Home extras did not load:', e));
+import('./floorplan-net.js').then((m) => { netMod = m; return m.init({ S, THREE, camera, controls, renderer, CSS2DObject, el, fill, api, send, toast, flyTo, focusRoom, pickFloor, goToPin, resetView, setMode, kick, reload, modal, closeModal, curF, editor: () => editor() }); }).catch((e) => console.warn('3D Home extras did not load:', e));

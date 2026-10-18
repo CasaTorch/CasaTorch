@@ -2,13 +2,13 @@
 tab({ id: 'alerts', label: 'Alerts', icon: 'bell', async render(main) {
   const draw = async () => {
     const a = await api('/api/alerts');
-    const now = el('div', { class: 'card' }, el('h2', {}, 'Right now'));
-    if (!a.now?.length) now.append(el('div', { class: 'row' }, el('span', { class: 'dot good' }), 'All clear - nothing needs you.'));
-    for (const x of a.now || []) now.append(el('div', { class: `alert ${x.severity}` }, el('div', { class: 'grow' }, el('b', {}, x.title), el('div', { class: 'small muted' }, `${x.source || ''}${x.since ? ` · since ${fmtWhen(x.since)}` : ''}${x.acked ? ` · ${x.acked.by} has it (${fmtTime(x.acked.at)})` : ''}`)),
-      x.repeating ? el('button', { class: 'btn small', onclick: async (e) => { e.target.disabled = true; try { await post(`/api/alerts/${encodeURIComponent(x.id)}/ack`); toast('Got it - no more reminders for this one'); draw(); } catch (err) { toast(err.message); e.target.disabled = false; } } }, icon('check'), 'Got it') : null));
-    const past = el('div', { class: 'card' }, el('h2', {}, 'Recent'));
-    past.append(a.recent?.length ? el('ul', { class: 'list' }, a.recent.slice(0, 50).map((x) => el('li', {}, el('span', { class: `dot ${x.severity === 'ok' ? 'good' : x.severity === 'critical' ? 'bad' : 'warn'}` }), el('div', { class: 'grow' }, x.title), el('span', { class: 'small muted' }, fmtWhen(x.at))))) : el('p', { class: 'muted' }, 'Nothing yet.'));
-    main.replaceChildren(el('div', { class: 'cards' }, now, past));
+    const now = el('div', { class: 'card' }, el('h2', {}, T('Right now')));
+    if (!a.now?.length) now.append(el('div', { class: 'row' }, el('span', { class: 'dot good' }), T('All clear - nothing needs you.')));
+    for (const x of a.now || []) now.append(el('div', { class: `alert ${x.severity}` }, el('div', { class: 'grow' }, el('b', {}, x.title), el('div', { class: 'small muted' }, [srcName(x.source), x.since ? T('since {when}', { when: fmtWhen(x.since) }) : '', x.acked ? `${x.acked.by} has it (${fmtTime(x.acked.at)})` : ''].filter(Boolean).join(' · '))),
+      x.repeating ? el('button', { class: 'btn small', onclick: async (e) => { e.target.disabled = true; try { await post(`/api/alerts/${encodeURIComponent(x.id)}/ack`); toast(T('Got it - no more reminders for this one')); draw(); } catch (err) { toast(err.message); e.target.disabled = false; } } }, icon('check'), T('Got it')) : null));
+    const past = el('div', { class: 'card' }, el('h2', {}, T('Recent')));
+    past.append(a.recent?.length ? el('ul', { class: 'list' }, a.recent.slice(0, 50).map((x) => el('li', {}, el('span', { class: `dot ${x.severity === 'ok' ? 'good' : x.severity === 'critical' ? 'bad' : 'warn'}` }), el('div', { class: 'grow' }, x.title), el('span', { class: 'small muted' }, fmtWhen(x.at))))) : el('p', { class: 'muted' }, T('Nothing yet.')));
+    main.replaceChildren(el('div', { class: 'cards' }, now, past), el('p', { class: 'small muted', style: 'margin-top:14px' }, `${T('Which alerts reach your phone, and quiet hours:')} `, el('a', { href: '#settings/phones' }, T('Phones & alerts'))));
   };
   await draw(); return draw;
 } });
@@ -275,7 +275,7 @@ function reportCard(rep, money, redraw) {
   show();
   card.append(el('div', { class: 'row between wrap', style: 'margin-bottom:12px' }, head, el('div', { class: 'row wrap', style: 'gap:8px' }, pick, makeNow)), body,
     el('label', { class: 'row small muted', style: 'margin-top:14px;gap:8px' }, weekly, 'Send it every Monday morning (as a phone alert)'),
-    rep.ai ? null : el('p', { class: 'tiny muted', style: 'margin-top:6px' }, 'Connect an AI in Settings > Home AI Agent and the report is written by it, with tips in plain words.'));
+    rep.ai ? null : el('p', { class: 'tiny muted', style: 'margin-top:6px' }, T('Connect an AI in Settings › Connections & AI and the report is written by it, with tips in plain words.')));
   return card;
 }
 tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {

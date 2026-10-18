@@ -48,7 +48,7 @@ if ($here -and (Test-Path (Join-Path $here '..\app\package.json'))) {
 
 Say 'Installing and building'
 Push-Location (Join-Path $App 'app')
-& npm ci --omit=dev --no-audit --no-fund --loglevel=error
+& npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error
 & $NodeExe build.mjs | Out-Null
 Pop-Location
 

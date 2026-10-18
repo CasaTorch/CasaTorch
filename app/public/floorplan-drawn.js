@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { normalizePlan, planWalls, openingsOnWall, wallPieces, openingFrame, stairSteps, floorToWorld, worldToFloor, holesIn, roofBox, roofShape, centroid, pointInPoly, polyArea, dist } from './floorplan-geom.js';
 import { buildOpening, buildSkylight } from './floorplan-openings.js';
 import { buildStairs } from './floorplan-stairs.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export const wallHeight = (f) => Math.max(1.5, Math.min(4, (f.heightM || 2.7) - 0.1));
 /* Has this floor a roof? Set per floor; when not set, only the top floor has one (as before). */
@@ -79,14 +80,21 @@ export function buildDrawnGroup(f, { floors = [] } = {}) {
     const holesOn = openingsOnWall(s, p).map((h) => ({ ...h, sill: h.o.kind === 'window' ? h.o.sill : 0, height: h.o.height }));
     const pieces = wallPieces(s.len, H, holesOn), ang = -Math.atan2(s.d[1], s.d[0]), T = s.thick, two = (s.colorL || null) !== (s.colorR || null);
     const name = `Wall ${key(s.a)}-${key(s.b)}`;
+    /* QA: the pieces of one stretch of wall (around its doors and windows) are one mesh - one draw and one outline, and the
+       whole stretch lowers together in the cut-away view - instead of up to five. */
+    const parts = new Map();
     for (const pc of pieces) {
       const full = pc.y0 === 0 && pc.y1 >= H - 1e-6, ext0 = full && pc.s0 < 1e-6 ? T / 2 : 0, ext1 = full && pc.s1 > s.len - 1e-6 ? T / 2 : 0;   // the corners filled in
       const len = pc.s1 - pc.s0 + ext0 + ext1, mid = (pc.s0 - ext0 + pc.s1 + ext1) / 2, cx = s.a[0] + s.d[0] * mid, cz = s.a[1] + s.d[1] * mid, h = pc.y1 - pc.y0;
       const add = (thick, off, color, side) => {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(len, h, thick)); m.position.set(cx + s.n[0] * off, pc.y0 + h / 2, cz + s.n[1] * off); m.rotation.y = ang;
-        m.name = side ? `${name} ${side}` : name; m.userData.cat = 'wall'; if (color) m.userData.paint = color; g.add(m);
+        const geo = new THREE.BoxGeometry(len, h, thick).rotateY(ang).translate(cx + s.n[0] * off, pc.y0 + h / 2, cz + s.n[1] * off);
+        const k = side || ''; if (!parts.has(k)) parts.set(k, { color, geos: [] }); parts.get(k).geos.push(geo);
       };
       if (two) { add(T / 2, T / 4, s.colorL, 'a'); add(T / 2, -T / 4, s.colorR, 'b'); } else add(T, 0, s.colorL, null);
+    }
+    for (const [side, { color, geos }] of parts) {
+      const geo = geos.length === 1 ? geos[0] : mergeGeometries(geos, false); if (geos.length > 1) geos.forEach((x) => x.dispose());
+      const m = new THREE.Mesh(geo); m.name = side ? `${name} ${side}` : name; m.userData.cat = 'wall'; if (color) m.userData.paint = color; g.add(m);
     }
   }
   // the doors and windows themselves

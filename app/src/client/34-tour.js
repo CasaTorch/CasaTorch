@@ -1,7 +1,7 @@
 /* ======================================================================
  * The tour: a one-minute look around the dashboard. Offered the first time
  * someone opens CasaTorch in a browser (and straight after setup), never on
- * a wall panel; anyone can take it again from Settings > Help & services.
+ * a wall panel; anyone can take it again from Settings › Help.
  * It walks the menu as this house has it - hidden sections are skipped,
  * renamed ones keep their new names - opening each section as it goes.
  * ====================================================================== */
@@ -12,6 +12,9 @@ const TOUR_TEXT = {
   controls: 'Lights, plugs, fans, thermostats, blinds and scenes in one place. For safety, CasaTorch never unlocks doors, opens garage doors or gates, or disarms alarms.',
   cameras: 'A fresh picture from every camera. Tap one to watch it live.',
   calendar: 'Your linked calendars side by side, plus a household calendar everyone here can add to.',
+  reminders: 'Trash night, the dog\'s dinner, bills, birthdays: at the time, a reminder lights up every screen in the house.',
+  family: 'Shared lists, chores with stars, kids\' routines and the week\'s meals - for everyone in the house.',
+  security: 'Cameras on one wall, doors and locks, and a checklist that keeps your CasaTorch safe.',
   photos: 'Upload photos for the photo reel on your Home screen.',
   energy: 'What the house is using right now, from any plug or meter that reports power.',
   network: 'Is the internet up, and how fast? Connect your router or ad blocker to see more.',

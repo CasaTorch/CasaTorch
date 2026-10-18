@@ -10,8 +10,8 @@
 </head>
 <body>
   <header class="bar">
-    <a class="brand" href="/"><img src="/favicon.svg" alt="" width="20" height="20" style="vertical-align:-4px;margin-right:6px">CasaTorch</a>
-    <div class="seg" id="modeSeg"><button type="button" data-mode="view" class="on">3D</button><button type="button" data-mode="edit">Editor</button></div>
+    <a class="brand" href="/"><img src="/favicon.svg" alt="" width="20" height="20" style="vertical-align:-4px;margin-right:6px"><span class="brandtx">CasaTorch</span></a>
+    <div class="seg" id="modeSeg"><button type="button" data-mode="view" class="on">3D</button><button type="button" data-mode="edit">Edit</button></div>
     <div class="totals" id="totals"></div>
     <span class="spacer"></span>
     <div id="themeSeg"></div>
@@ -24,6 +24,6 @@
   <footer class="tools" id="tools" hidden></footer>
   <div id="modal" hidden></div>
   <script src="i18n.js"></script>
-  <script type="module" src="floorplan.js"></script>
+  <script src="floorplan-compat.js"></script><!-- checks the browser can show the 3D home, then starts floorplan.js -->
 </body>
 </html>

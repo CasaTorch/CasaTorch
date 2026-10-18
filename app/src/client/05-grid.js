@@ -27,7 +27,7 @@ const DEFAULT_LAYOUT = [   // packs edge to edge on a 12-column screen
 ];
 const ROW_PX = 78, GAP_PX = 14;
 const PHONE = () => window.innerWidth <= 760;
-function gridCols(grid) { const w = grid.clientWidth || window.innerWidth; return PHONE() ? 4 : w >= 1050 ? 12 : 8; }
+function gridCols(grid) { const w = grid.clientWidth || window.innerWidth; return PHONE() || w < 720 ? 4 : w >= 1050 ? 12 : 8; }   // a tablet held upright lays out like a big phone: nothing squeezed into thirds
 const toSpan = (w, cols) => (cols === 12 ? w : cols === 4 ? (w <= 4 ? 2 : 4) : Math.max(2, Math.min(cols, Math.round(w * cols / 12))));
 const fromSpan = (s, cols) => (cols === 12 ? s : cols === 4 ? (s <= 2 ? 3 : 6) : Math.max(1, Math.min(12, Math.round(s * 12 / cols))));
 /* The sizes you can pick, like a phone's widget sizes - clamped to what each widget can be. */

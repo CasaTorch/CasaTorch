@@ -7,6 +7,10 @@
  *    the renewed one (only the key itself is sent). Turning renewal off in
  *    config (licenseRenew: false) means pasting each new key by hand.
  * Keys are still checked here, offline (07-license.js).
+ * Both calls also send a short one-way tag of this CasaTorch's random id (never
+ * the id itself), so casatorch.com can count how many homes use one key.
+ * If casatorch.com can't be reached, nothing breaks: Pro keeps working through
+ * a longer grace period (07-license.js) and renewal tries again every 12 hours.
  * ====================================================================== */
 const PRO_API = process.env.CASATORCH_PRO_API || 'https://casatorch.com/api/license';
 async function proApi(part, body) {
@@ -15,6 +19,8 @@ async function proApi(part, body) {
   if (!r.ok) throw Object.assign(new Error(j.error || `casatorch.com answered ${r.status}`), { status: r.status });
   return j;
 }
+/** A one-way tag for this home (casatorch.com never sees the install id itself). */
+const homeTag = () => crypto.createHash('sha256').update(`casatorch-license|${installId()}`).digest('base64url').slice(0, 22);
 const okEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
 app.post('/api/license/claim/start', requireRole('admin'), express.json(), async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
@@ -25,23 +31,29 @@ app.post('/api/license/claim/finish', requireRole('admin'), express.json(), asyn
   const email = String(req.body?.email || '').trim().toLowerCase(), code = String(req.body?.code || '').replace(/\D/g, '');
   if (!okEmail(email) || code.length !== 6) return res.status(400).json({ error: 'enter the 6-digit code from the e-mail' });
   try {
-    const j = await proApi('claim-finish', { email, code });
+    const j = await proApi('claim-finish', { email, code, home: homeTag() });
     const chk = checkLicenseKey(j.key);
     if (!chk.valid) throw new Error('the key that came back is not valid - contact support@casatorch.com');   // scrub-ok: public support address
     if (isConfigured() && !isDemo()) saveConfig({ ...config, license: j.key });   // during first setup, setup saves it
     res.json({ ok: true, key: j.key, plan: chk.payload.plan, expires: chk.payload.expires || null, pro: proStatus() });
-  } catch (err) { res.status(err.status === 400 || err.status === 404 ? 400 : err.status === 429 ? 429 : 502).json({ error: err.message }); }
+  } catch (err) { res.status(err.status === 400 || err.status === 404 ? 400 : err.status === 409 ? 409 : err.status === 429 ? 429 : 502).json({ error: err.message }); }   // 409: the key is already on as many homes as it covers
 });
 async function renewLicense() {
   if (isDemo() || !config.license || config.licenseRenew === false) return;
   const lic = checkLicenseKey(config.license); if (!lic.valid) return;
   const { plan, expires } = lic.payload;
   if (!['monthly', 'yearly'].includes(plan) || !expires || Date.parse(expires) - Date.now() > 7 * 86400_000) return;
+  const at = new Date().toISOString();
   try {
-    const j = await proApi('renew', { key: config.license });
+    const j = await proApi('renew', { key: config.license, home: homeTag() });
+    licState.renew = { at, unreachable: false, answer: j.key ? 'key' : j.why || 'none' }; saveLicState();
     const next = j.key ? checkLicenseKey(j.key) : null;
-    if (next?.valid && Date.parse(next.payload.expires || '9999') > Date.parse(expires)) { saveConfig({ ...config, license: j.key }); console.log('  pro: subscription renewed'); }
-  } catch { /* try again later; the old key keeps working through its grace days */ }
+    if (next?.valid && (next.payload.plan === 'lifetime' || Date.parse(next.payload.expires || '') > Date.parse(expires))) { saveConfig({ ...config, license: j.key }); console.log('  pro: subscription renewed'); }
+  } catch (err) {
+    /* No answer, or casatorch.com itself failing (5xx): that's our outage, so the longer grace applies. A clear
+       "no" (4xx) is not. Either way the old key keeps working through its grace days and we try again later. */
+    licState.renew = { at, unreachable: !err.status || err.status >= 500, answer: String(err.message || err).slice(0, 80) }; saveLicState();
+  }
 }
 setTimeout(() => renewLicense().catch(() => {}), 120_000).unref?.();
 setInterval(() => renewLicense().catch(() => {}), 12 * 3600_000).unref?.();

@@ -5,9 +5,11 @@ function wxIcon(sym) {
   if (/fog/.test(s)) return '\u{1F32B}️'; if (/partlycloudy|fair/.test(s)) return /night/.test(s) ? '☁️' : '⛅'; if (/cloudy/.test(s)) return '☁️';
   if (/clearsky/.test(s)) return /night/.test(s) ? '\u{1F319}' : '☀️'; return '·';
 }
-const dayName = (ymd) => new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short' }).format(new Date(`${ymd}T12:00:00Z`));
+const dayName = (ymd) => dtf(dateLoc(), { timeZone: 'UTC', weekday: 'short' }).format(new Date(`${ymd}T12:00:00Z`));
 const fits = (h, per, head = 46) => Math.max(1, Math.floor((h * ROW_PX + (h - 1) * GAP_PX - head) / per));
-const empty = (text, link, label) => el('div', { class: 'allclear' }, el('div', {}, el('div', { class: 'small' }, text), link ? el('a', { class: 'btn small', href: link, style: 'margin-top:10px' }, label) : null));
+/* Weather words ("Clear") in the home's language - with their own context, so "Clear" isn't read as an alert clearing. */
+const wxWord = (w) => (w ? T(`${w}|weather`) : '');
+const empty = (text, link, label) => el('div', { class: 'allclear' }, el('div', {}, el('div', { class: 'small' }, T(text)), link ? el('a', { class: 'btn small', href: link, style: 'margin-top:10px' }, T(label)) : null));   // T(): a sentence already translated passes through unchanged
 
 widget({ id: 'clock', title: 'Clock', icon: 'clock', bare: true, live: true, cat: 'time', essential: true, blurb: 'The time and date, digital or a clock face', min: [2, 1], size: [4, 2],
   options: [
@@ -27,9 +29,9 @@ widget({ id: 'clock', title: 'Clock', icon: 'clock', bare: true, live: true, cat
       if (!b.isConnected && b._drawn) { clearInterval(b._tick); return; }
       b._drawn = true;
       const now = new Date().toISOString(), hr = Number(fmt(now, { hour: 'numeric', hourCycle: 'h23' }));
-      const greet = hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+      const greet = T(hr < 5 ? 'Good night' : hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening');
       greetEl.textContent = `${greet}${ctx.data.home?.house ? ` · ${ctx.data.home.house}` : ''}`;
-      const parts = dtf('en-US', { timeZone: S.tz, hour: 'numeric', minute: '2-digit', ...(secs ? { second: '2-digit' } : {}), hourCycle: o.h24 ? 'h23' : 'h12' }).formatToParts(new Date(now));
+      const parts = dtf(dateLoc(), { timeZone: S.tz, hour: 'numeric', minute: '2-digit', ...(secs ? { second: '2-digit' } : {}), hourCycle: (o.h24 ?? CasaI18n.lang !== 'en') ? 'h23' : 'h12' }).formatToParts(new Date(now));
       const ampm = parts.find((x) => x.type === 'dayPeriod')?.value;
       big.replaceChildren(parts.filter((x) => x.type !== 'dayPeriod').map((x) => x.value).join('').trim(), ampm && w >= 3 ? el('span', { class: 'clock-ampm' }, ampm) : '');
       const wx = ctx.data.home?.weather?.now;
@@ -71,18 +73,18 @@ widget({ id: 'weather', title: 'Weather', icon: 'sun', cat: 'time', essential: t
     if (!wx || wx.error || !wx.now) return b.replaceChildren(empty(wx?.error ? 'Weather is not loading right now.' : 'Add your town in Settings to see the weather.'));
     const today = wx.days?.[0];
     const parts = [el('div', { class: 'wx-now' }, el('span', { class: 'wx-ic', style: w <= 2 ? 'font-size:30px' : null }, wxIcon(wx.now.symbol)),
-      el('div', { style: 'min-width:0' }, el('div', { class: 'big', style: w <= 2 ? 'font-size:34px' : null }, `${wx.now.temp}°`), w >= 3 ? el('div', { class: 'muted small ellipsis' }, `${wx.now.words}${today ? ` · H ${today.hi}° L ${today.lo}°` : ''}`) : null, w <= 4 && o.place && h >= 2 ? el('div', { class: 'tiny muted ellipsis' }, wx.place || '') : null),
-      w >= 5 ? el('div', { class: 'small muted', style: 'margin-left:auto;text-align:right' }, wx.place || '', o.details !== false ? [el('br'), `Wind ${wx.now.wind ?? '-'} ${wx.units === 'C' ? 'km/h' : 'mph'} · ${wx.now.humidity ?? '-'}%`] : null) : null)];
+      el('div', { style: 'min-width:0' }, el('div', { class: 'big', style: w <= 2 ? 'font-size:34px' : null }, `${wx.now.temp}°`), w >= 3 ? el('div', { class: 'muted small ellipsis' }, `${wxWord(wx.now.words)}${today ? ` · ${T('H {hi}° L {lo}°', { hi: today.hi, lo: today.lo })}` : ''}`) : null, w <= 4 && o.place && h >= 2 ? el('div', { class: 'tiny muted ellipsis' }, wx.place || '') : null),
+      w >= 5 ? el('div', { class: 'small muted', style: 'margin-left:auto;text-align:right' }, wx.place || '', o.details !== false ? [el('br'), `${T('Wind')} ${wx.now.wind ?? '-'} ${wx.units === 'C' ? 'km/h' : 'mph'} · ${wx.now.humidity ?? '-'}%`] : null) : null)];
     if (o.hours !== false && h >= 3 && w >= 3) parts.push(el('div', { class: 'hours' }, (wx.hours || []).slice(0, Math.max(3, Math.floor(w * 1.1))).map((x) => el('div', {}, fmt(x.at, { hour: 'numeric' }), el('i', {}, wxIcon(x.symbol)), el('b', {}, `${x.temp}°`)))));
     const weekRoom = o.hours === false ? h >= 3 : (h >= 5 || (h >= 4 && w >= 4));
     if (o.week !== false && weekRoom) {
       const days = (wx.days || []).slice(0, Math.min(7, fits(h - (o.hours === false ? 1 : 3), 32, 0) + 1));
       const lo = Math.min(...days.map((d) => d.lo)), hi = Math.max(...days.map((d) => d.hi));
       parts.push(el('ul', { class: 'list days' }, days.map((d) => el('li', {}, el('b', {}, dayName(d.date)), el('span', {}, wxIcon(d.symbol)),
-        w >= 5 ? el('div', { style: 'padding:0 12px;align-self:center' }, el('div', { class: 'temp-bar', style: `margin-left:${((d.lo - lo) / Math.max(1, hi - lo)) * 100}%;width:${((d.hi - d.lo) / Math.max(1, hi - lo)) * 100}%` })) : el('span', { class: 'muted small ellipsis' }, d.words || ''),
+        w >= 5 ? el('div', { style: 'padding:0 12px;align-self:center' }, el('div', { class: 'temp-bar', style: `margin-left:${((d.lo - lo) / Math.max(1, hi - lo)) * 100}%;width:${((d.hi - d.lo) / Math.max(1, hi - lo)) * 100}%` })) : el('span', { class: 'muted small ellipsis' }, wxWord(d.words)),
         el('span', { class: 'num' }, `${d.hi}° `, el('span', { class: 'muted' }, `${d.lo}°`))))));
     }
-    if (h >= 4) parts.push(el('div', { class: 'tiny faint', style: 'margin-top:auto' }, wx.credit || ''));
+    if (h >= 4) parts.push(el('div', { class: 'tiny faint', style: 'margin-top:auto' }, wx.credit ? T(wx.credit) : ''));
     b.replaceChildren(...parts);
   } });
 
@@ -98,14 +100,14 @@ widget({ id: 'calendar', title: 'Coming up', icon: 'calendar', cat: 'personal', 
     const ev = (cal?.events || []).filter((e) => Date.parse(e.end || e.start) > Date.now() && Date.parse(e.start) < until && (!cals.size || cals.has(e.calendar)) && (o.allDay !== false || !e.allDay)).slice(0, fits(h, 52));
     if (!ev.length) return b.replaceChildren(empty(o.days === 1 ? 'Nothing else today.' : 'Nothing coming up.', '#calendar', 'Open the calendar'));
     b.replaceChildren(...ev.map((e) => el('div', { class: 'ev' }, el('span', { class: 'bar', style: `background:${safeColor(e.color)}` }),
-      el('div', { class: 'grow', style: 'min-width:0' }, el('div', { class: 'ellipsis' }, e.title), el('div', { class: 'when' }, e.allDay ? `${fmt(e.start, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })} · all day` : fmtWhen(e.start), w >= 4 && e.calendar ? ` · ${e.calendar}` : '')))));
+      el('div', { class: 'grow', style: 'min-width:0' }, el('div', { class: 'ellipsis' }, e.title), el('div', { class: 'when' }, e.allDay ? `${fmt(e.start, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })} · ${T('all day')}` : fmtWhen(e.start), w >= 4 && e.calendar ? ` · ${e.calendar}` : '')))));
   } });
 
 function gameRow(g, w) {
   const side = (t, o) => el('div', { class: 'team' }, t.logo && w >= 3 ? el('img', { src: t.logo, alt: '', loading: 'lazy' }) : null, el('span', { class: `ellipsis${g.state === 'post' && !t.winner && o.winner ? ' lost' : ''}` }, w >= 4 ? t.name || t.abbr : t.abbr || t.name));
   const sc = (t, o) => el('div', { class: `score${g.state === 'post' && !t.winner && o.winner ? ' lost' : ''}` }, g.state === 'pre' ? '' : t.score ?? '');
   return el('div', { class: 'game' }, side(g.away, g.home), sc(g.away, g.home), side(g.home, g.away), sc(g.home, g.away),
-    el('div', { class: 'tiny muted', style: 'grid-column:1/-1;margin-top:2px' }, el('span', { class: `pill${g.state === 'in' ? ' live' : ''}` }, g.state === 'in' ? 'LIVE' : g.state === 'post' ? 'Final' : fmtWhen(g.start)), ` ${g.leagueName || ''}${g.state === 'in' ? ` · ${g.detail}` : ''}${g.broadcast && w >= 4 ? ` · ${g.broadcast}` : ''}`));
+    el('div', { class: 'tiny muted', style: 'grid-column:1/-1;margin-top:2px' }, el('span', { class: `pill${g.state === 'in' ? ' live' : ''}` }, g.state === 'in' ? T('LIVE') : g.state === 'post' ? T('Final') : fmtWhen(g.start)), ` ${g.leagueName || ''}${g.state === 'in' ? ` · ${g.detail}` : ''}${g.broadcast && w >= 4 ? ` · ${g.broadcast}` : ''}`));
 }
 widget({ id: 'sports', title: 'Your teams', icon: 'trophy', cat: 'info', multi: true, blurb: 'Live scores and next games - pick any teams', keywords: 'scores nfl nba mlb nhl soccer', min: [2, 2], size: [3, 4],
   options: [{ key: 'teams', type: 'teams', label: 'Teams', help: 'NFL, NBA, MLB, NHL, college, MLS, Premier League and more.' }, { key: 'liveOnly', type: 'toggle', label: 'Only live', text: 'Only games on right now (and the next one)' }],
@@ -133,10 +135,10 @@ widget({ id: 'news', title: 'Headlines', icon: 'news', cat: 'info', multi: true,
 
 widget({ id: 'internet', title: 'Internet', icon: 'wifi', cat: 'home', blurb: 'Online, speed and ping', min: [2, 2], size: [3, 2], render(b, ctx, { w, h }) {
   const n = ctx.data.home?.internet;
-  if (!n || n.error) return b.replaceChildren(el('div', { class: 'muted' }, 'Checking...'));
-  const parts = [el('div', { class: 'row' }, el('span', { class: `dot ${n.online ? 'good' : 'bad'}` }), el('b', {}, n.online ? 'Online' : 'Down'), w >= 3 ? el('span', { class: 'muted small ellipsis' }, n.provider || '') : null)];
-  if (n.speed) parts.push(el('div', { class: 'row', style: 'gap:22px;margin-top:10px' }, el('div', { class: 'stat' }, el('span', { class: 'big', style: 'font-size:30px' }, Math.round(n.speed.downMbps)), el('span', { class: 'lbl' }, 'Mbps down')), w >= 3 ? el('div', { class: 'stat' }, el('span', { class: 'big', style: 'font-size:30px' }, Math.round(n.speed.upMbps)), el('span', { class: 'lbl' }, 'Mbps up')) : null));
-  if (h >= 3) parts.push(el('dl', { class: 'kv small', style: 'margin-top:14px' }, el('dt', {}, 'Ping'), el('dd', {}, `${n.latencyMs?.cloudflare ?? '-'} ms`), el('dt', {}, 'Devices'), el('dd', {}, n.lanDevices ?? '-'), el('dt', {}, 'Public IP'), el('dd', {}, n.publicIp || '-')));
+  if (!n || n.error) return b.replaceChildren(el('div', { class: 'muted' }, T('Checking…')));
+  const parts = [el('div', { class: 'row' }, el('span', { class: `dot ${n.online ? 'good' : 'bad'}` }), el('b', {}, n.online ? T('Online') : T('Down')), w >= 3 ? el('span', { class: 'muted small ellipsis' }, n.provider || '') : null)];
+  if (n.speed) parts.push(el('div', { class: 'row', style: 'gap:22px;margin-top:10px' }, el('div', { class: 'stat' }, el('span', { class: 'big', style: 'font-size:30px' }, Math.round(n.speed.downMbps)), el('span', { class: 'lbl' }, T('Mbps down'))), w >= 3 ? el('div', { class: 'stat' }, el('span', { class: 'big', style: 'font-size:30px' }, Math.round(n.speed.upMbps)), el('span', { class: 'lbl' }, T('Mbps up'))) : null));
+  if (h >= 3) parts.push(el('dl', { class: 'kv small', style: 'margin-top:14px' }, el('dt', {}, T('Ping')), el('dd', {}, `${n.latencyMs?.cloudflare ?? '-'} ms`), el('dt', {}, T('Devices')), el('dd', {}, n.lanDevices ?? '-'), el('dt', {}, T('Public IP')), el('dd', {}, n.publicIp || '-')));
   b.replaceChildren(...parts);
 } });
 
@@ -148,16 +150,16 @@ widget({ id: 'today', title: 'Today', icon: 'list', cat: 'personal', blurb: 'Tod
 
 widget({ id: 'alerts', title: 'Alerts', icon: 'bell', cat: 'safety', essential: true, blurb: 'What needs you right now', min: [2, 2], size: [3, 2], render(b, ctx, { h }) {
   const now = ctx.data.alerts?.now || [];
-  if (!now.length) return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('checkc'), el('div', { style: 'margin-top:6px' }, 'All clear'))));
-  b.replaceChildren(...now.slice(0, fits(h, 66)).map((a) => el('a', { href: '#alerts', class: `alert ${a.severity}` }, el('div', { class: 'grow' }, el('div', { class: 'ellipsis' }, a.title), el('div', { class: 'tiny muted' }, a.since ? `since ${fmtWhen(a.since)}` : a.source || '')))));
+  if (!now.length) return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('checkc'), el('div', { style: 'margin-top:6px' }, T('All clear')))));
+  b.replaceChildren(...now.slice(0, fits(h, 66)).map((a) => el('a', { href: '#alerts', class: `alert ${a.severity}` }, el('div', { class: 'grow' }, el('div', { class: 'ellipsis' }, a.title), el('div', { class: 'tiny muted' }, a.since ? T('since {when}', { when: fmtWhen(a.since) }) : srcName(a.source))))));
 } });
 
 widget({ id: 'energy', title: 'Energy', icon: 'bolt', cat: 'home', blurb: 'Watts now and what it costs', options: [{ key: 'cost', type: 'toggle', label: 'Cost', text: 'Show what it costs a day', default: true }], min: [2, 2], size: [3, 3], render(b, ctx, { w, h }) {
   const ds = (ctx.data.devices?.devices || []).filter((d) => typeof d.powerW === 'number' && !d.pairedTo).sort((a, c) => c.powerW - a.powerW);
   const total = ctx.data.devices?.power?.watts ?? ds.reduce((s, d) => s + d.powerW, 0), rate = ctx.data.settings?.energy?.ratePerKwh;
   if (!ds.length) return b.replaceChildren(empty('No power-metering plugs yet.'));
-  const parts = [el('div', { class: 'row', style: 'gap:22px;align-items:flex-end' }, el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(total), el('span', { style: 'font-size:18px;color:var(--muted)' }, ' W')), el('span', { class: 'lbl' }, 'using now')),
-    rate && optsOf(b._t || {}).cost !== false && (w >= 4 || h >= 3) ? el('div', { class: 'stat' }, el('span', { style: 'font-size:22px;font-weight:700' }, `$${(total / 1000 * 24 * rate).toFixed(2)}`), el('span', { class: 'lbl' }, 'a day at this rate')) : null)];
+  const parts = [el('div', { class: 'row', style: 'gap:22px;align-items:flex-end' }, el('div', { class: 'stat' }, el('span', { class: 'big' }, Math.round(total), el('span', { style: 'font-size:18px;color:var(--muted)' }, ' W')), el('span', { class: 'lbl' }, T('using now'))),
+    rate && optsOf(b._t || {}).cost !== false && (w >= 4 || h >= 3) ? el('div', { class: 'stat' }, el('span', { style: 'font-size:22px;font-weight:700' }, wMoney(total / 1000 * 24 * rate, ctx.data.settings?.energy?.currency || 'USD')), el('span', { class: 'lbl' }, T('a day at this rate'))) : null)];
   if (h >= 3) { const max = ds[0].powerW || 1; parts.push(el('div', { class: 'bars', style: 'margin-top:14px' }, ds.slice(0, fits(h - 1, 26, 30)).map((d) => el('div', { class: 'bar-row', style: w < 4 ? 'grid-template-columns:1fr 50px' : null }, el('span', { class: 'ellipsis small' }, d.name), w >= 4 ? el('div', { class: 'track' }, el('div', { class: 'fill', style: `width:${(d.powerW / max) * 100}%` })) : null, el('span', { class: 'small num', style: 'text-align:right' }, `${Math.round(d.powerW)} W`))))); }
   b.replaceChildren(...parts);
 } });
@@ -351,7 +353,7 @@ function camView(d) {
   let c = CAMS.get(d.id);
   if (!c) {
     const img = el('img', { alt: d.name, decoding: 'async', role: 'button', tabindex: 0 }), age = el('span', { class: 'cam-age' }), name = el('span', {}, d.name);
-    const wrap = el('div', { class: 'cam cam-wait', onclick: () => { camLive(c, false); camModal(c.d, () => camLive(c, c.visible && !document.hidden)); } }, img, el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, `${d.source || d.provider}${camLiveTile(d) ? ' · live' : d.stream ? ' · live on tap' : ''}`)), age);
+    const wrap = el('div', { class: 'cam cam-wait', onclick: () => { camLive(c, false); camModal(c.d, () => camLive(c, c.visible && !document.hidden)); } }, img, el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, [srcName(d.source || d.provider), camLiveTile(d) ? T('live') : d.stream ? T('live on tap') : ''].filter(Boolean).join(' · '))), age);
     c = { d, img, age, name, wrap, visible: true, last: 0, etag: null, url: null, busy: false }; wrap.__cam = c; CAMS.set(d.id, c);
     camSeen?.observe(wrap); camFetch(c, true);
   }

@@ -47,7 +47,7 @@ let page, shot;
   await nextTo('Your home');
   await field('What should we call your home?').fill('');
   await next();
-  check('missing home name is refused', /What should we call your home\? is needed/.test(await msg()), await msg());
+  check('missing home name is refused', /What should we call your home\?/.test(await msg()), await msg());
   await field('What should we call your home?').fill('Test Home');
   await shot('02-house');
 

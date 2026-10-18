@@ -242,7 +242,7 @@ function radarView(host, cfg) {
   function markReady() { if (readyQueued) return; readyQueued = true; requestAnimationFrame(() => { readyQueued = false; if (st.dead) return; root.style.setProperty('--rd-loaded', `${(st.frames.filter((_, i) => frameReady(i)).length / Math.max(1, st.frames.length)) * 100}%`); }); }
   function drawCredit() {
     const a = (x) => el('a', { href: x.href, target: '_blank', rel: 'noopener noreferrer' }, x.text);
-    const cr = st.info?.credit || [], parts = [st.frames.length && !st.info?.synthetic ? cr.find((x) => /RainViewer/.test(x.text)) : null, st.baseShown ? cr.find((x) => /OpenStreetMap/.test(x.text)) : null].filter(Boolean).map(a);
+    const cr = st.info?.credit || [], parts = [st.frames.length && !st.info?.synthetic ? cr.find((x) => !/OpenStreetMap/.test(x.text)) : null,   /* the radar's own credit: RainViewer or NOAA / NWS */ st.baseShown ? cr.find((x) => /OpenStreetMap/.test(x.text)) : null].filter(Boolean).map(a);
     if (!st.baseShown && st.outline) parts.push('Natural Earth');
     credit.replaceChildren(...parts.flatMap((x, i) => (i ? [' · ', x] : [x])));
   }

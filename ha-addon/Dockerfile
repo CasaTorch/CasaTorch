@@ -10,7 +10,11 @@ ADD https://github.com/casatorch/casatorch/archive/refs/heads/${CASATORCH_REF}.t
 RUN tar xzf /tmp/casatorch.tgz -C /tmp \
  && cp -r /tmp/casatorch-*/app/. /app/ && cp -r /tmp/casatorch-*/demo /demo \
  && rm -rf /tmp/casatorch-* /tmp/casatorch.tgz \
- && npm ci --omit=dev --no-audit --no-fund && npm cache clean --force \
+ && npm ci --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force \
  && node build.mjs
 ENV CASATORCH_DATA_DIR=/data PORT=8090 NODE_ENV=production
+# Starts as root only to give /data to the "node" user, then runs CasaTorch as that user (never root) -
+# the same entrypoint as the Docker image (app/docker-entrypoint.sh).
+RUN install -m 755 /app/docker-entrypoint.sh /usr/local/bin/casatorch-entrypoint
+ENTRYPOINT ["casatorch-entrypoint"]
 CMD ["node", "server.js"]

@@ -28,14 +28,49 @@ const errDetail = (err) => { const f = friendlyError(err); return f.vars ? [f.ms
 const setupLink = (step, add) => `/setup.html?step=${step}${add ? `&add=${add}` : ''}`;
 
 /* ---- this computer ---- */
+/* What CasaTorch itself keeps, by kind (Health shows it under Storage space). Walked without blocking, at most every
+   10 minutes; every kind has its own limit (history 2 years, replay 7 days, map cache 64 MB, logs 2 MB...). */
+const STORE_KINDS = [
+  ['scans', '3D Home plans and scans', (n) => n === 'floorplan'], ['photos', 'Photos', (n) => n === 'photos'],
+  ['restorePoints', '3D Home restore points', (n) => n === '.floorplan-restore'], ['beforeRestore', 'Kept from restores', (n) => n.startsWith('.before-restore-')],
+  ['history', 'History, energy and replay', (n) => /^(history|replay|power-baseline|alerts|apptests)\.json$|^audit\.log$/.test(n)],
+  ['family', 'Family, household and reminders', (n) => /^(family|household|events|nudges)\.json$|^nudges$/.test(n)],
+  ['mapCache', 'Map cache', (n) => n === 'radar-cache'], ['helper', 'Secure access helper', (n) => n === 'bin'],
+  ['settingsHistory', 'Settings history', (n) => n === '.settings-history'],
+];
+let storeMemo = { at: 0, parts: null };
+async function sizeOfPath(p, depth = 0) {
+  let st; try { st = await fs.promises.lstat(p); } catch { return 0; }
+  if (st.isFile()) return st.size;
+  if (!st.isDirectory() || depth > 6) return 0;
+  let n = 0, list = []; try { list = await fs.promises.readdir(p); } catch { return 0; }
+  for (const e of list) n += await sizeOfPath(path.join(p, e), depth + 1);
+  return n;
+}
+let storeBusy = null;
+function storageUse() {
+  if (storeMemo.parts && Date.now() - storeMemo.at < 10 * 60_000) return Promise.resolve(storeMemo.parts);
+  return (storeBusy ||= storageWalk().finally(() => { storeBusy = null; }));
+}
+async function storageWalk() {
+  const sum = Object.fromEntries([...STORE_KINDS.map(([k]) => [k, 0]), ['settings', 0]]);
+  let names = []; try { names = await fs.promises.readdir(DATA_DIR); } catch { /* none */ }
+  for (const n of names) { const k = STORE_KINDS.find(([, , m]) => m(n))?.[0] || 'settings'; sum[k] += await sizeOfPath(path.join(DATA_DIR, n)); }
+  const label = Object.fromEntries([...STORE_KINDS.map(([k, l]) => [k, l]), ['settings', 'Settings and everything else']]);
+  const parts = Object.entries(sum).filter(([, b]) => b >= 1024).sort((x, y) => y[1] - x[1]).map(([key, bytes]) => ({ key, label: label[key], bytes, size: bytes < MB ? `${Math.max(1, Math.round(bytes / 1024))} KB` : sizeText(bytes) }));
+  storeMemo = { at: Date.now(), parts };
+  return parts;
+}
 function docStorage() {
+  if (Date.now() - storeMemo.at > 10 * 60_000) storageUse().catch(() => {});   // doctorRun waits for it; others get the last one
+  const parts = storeMemo.parts, extra = parts ? { parts, usedBytes: parts.reduce((t, p) => t + p.bytes, 0) } : {};
   let st; try { st = fs.statfsSync(DATA_DIR); } catch { return chk('storage', 'system', 'Storage space', 'off', 'This system doesn\'t say how much space is free.'); }
   const free = st.bavail * st.bsize, total = st.blocks * st.bsize, pct = total ? free / total : 1;
   const v = { free: sizeText(free), total: sizeText(total) }, detail = (pre = '') => [`${pre}{free} free of {total}.`, v];
   // A share of the disk only matters while the space itself is small: 2% of a 20 TB NAS is still 400 GB.
-  if (free < 300 * MB || (pct < 0.02 && free < 5 * GB)) return chk('storage', 'system', 'Storage space', 'bad', detail('Almost full: '), { why: 'When the disk is full, CasaTorch can\'t save settings, history or camera pictures.', fix: { action: 'free-space', label: 'Free up space' } });
-  if (free < 1.5 * GB || (pct < 0.08 && free < 20 * GB)) return chk('storage', 'system', 'Storage space', 'warn', detail('Getting low: '), { fix: { action: 'free-space', label: 'Free up space' } });
-  return chk('storage', 'system', 'Storage space', 'ok', detail());
+  if (free < 300 * MB || (pct < 0.02 && free < 5 * GB)) return chk('storage', 'system', 'Storage space', 'bad', detail('Almost full: '), { why: 'When the disk is full, CasaTorch can\'t save settings, history or camera pictures.', fix: { action: 'free-space', label: 'Free up space' }, ...extra });
+  if (free < 1.5 * GB || (pct < 0.08 && free < 20 * GB)) return chk('storage', 'system', 'Storage space', 'warn', detail('Getting low: '), { fix: { action: 'free-space', label: 'Free up space' }, ...extra });
+  return chk('storage', 'system', 'Storage space', 'ok', detail(), extra);
 }
 function docMemory() {
   const rss = process.memoryUsage().rss, free = os.freemem(), total = os.totalmem(), pct = total ? free / total : 1;
@@ -195,6 +230,7 @@ async function doctorRun() {
   DOC.running = (async () => {
     const one = (id, fn) => timed(Promise.resolve().then(fn), 15000, id).catch((err) => chk(id, 'connections', id, 'bad', errDetail(err)));
     const conn = isDemo() ? DOC_DEMO.map(([id, t, d]) => chk(id, 'connections', t, 'ok', d)) : await Promise.all(Object.entries(DOC_CONN).map(([id, fn]) => one(id, fn)));
+    await storageUse().catch(() => {});
     const sys = await Promise.all([docStorage, docMemory, docClock, docDataFolder, docSettings, docSignIns, docInternet, docRemote, docCerts, docBackup, docUpdates].map((fn) => one(fn.name.replace(/^doc/, '').toLowerCase(), fn)));
     const checks = [...sys, ...conn].filter(Boolean);
     DOC.checks = checks; DOC.at = nowIso();
@@ -268,7 +304,7 @@ function freeSpace() {
     } catch { /* skip that one */ }
   }
   CACHE.clear();
-  sizeMemo = { at: 0, bytes: 0 };
+  sizeMemo = { at: 0, bytes: 0 }; storeMemo = { at: 0, parts: null };
   return { freed, what: [...new Set(gone)] };
 }
 const FIXES = {

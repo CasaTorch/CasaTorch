@@ -24,7 +24,7 @@ function askBox({ compact = false } = {}) {
       const r = await post('/api/ask', { question: q, history: askHistory.slice(0, -1).slice(-8).map(({ role, content }) => ({ role, content })) });
       askPush({ role: 'assistant', content: r.answer, actions: r.actions });
     } catch (err) {
-      askPush({ role: 'assistant', content: err.body?.setup ? T('Connect an AI first: Settings > Home AI Agent.') : err.message, error: true });
+      askPush({ role: 'assistant', content: err.body?.setup ? T('Connect an AI first: Settings › Connections & AI.') : err.message, error: true });
     }
     drawLog();
   }

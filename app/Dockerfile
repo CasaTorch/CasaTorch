@@ -5,7 +5,9 @@ WORKDIR /app
 # traceroute, tracepath, mtr: the hop-by-hop path in Network > App tests (no special rights needed).
 RUN apt-get update && apt-get install -y --no-install-recommends traceroute iputils-tracepath mtr-tiny && rm -rf /var/lib/apt/lists/*
 COPY app/package.json app/package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+# --ignore-scripts: no install scripts are needed, and it keeps out the static FFmpeg build that ring-client-api would
+# download (built with --enable-nonfree, so it may not be redistributed in an image). See THIRD_PARTY_NOTICES.md.
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
 COPY app/build.mjs ./
 COPY app/src ./src
 COPY app/public ./public

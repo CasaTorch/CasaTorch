@@ -23,14 +23,14 @@ const WALL_KINDS = ['door', 'double', 'slider', 'bifold', 'garage', 'window'];
 let cssOnce = false;
 const ensureCss = () => { if (cssOnce || document.querySelector('link[data-dz]')) return; cssOnce = true; const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'floorplan-draw.css'; l.dataset.dz = '1'; document.head.append(l); };
 
-export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], outlines = () => [], devices = () => [] }) {
+export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], outlines = () => [], devices = () => [], tool: tool0 = null, openKind: kind0 = null }) {   // QA: tool/openKind - "What can I add?" opens the drawing on the right tool
   ensureCss();
   document.getElementById('drawer')?.remove();
   let plan = G.normalizePlan(floor.plan || { rooms: [], walls: [] });
   const saved0 = JSON.stringify(plan);
   const narrow = () => matchMedia('(max-width: 760px)').matches;
-  const st = { tool: plan.rooms.length || plan.walls.length ? 'select' : 'room', ppm: 40, ox: 60, oy: 60, sel: null, drag: null, chain: null, hover: null, free: false, shift: false,
-    openKind: 'door', stairShape: 'straight', paint: { kind: 'wall', value: G.WALL_COLORS[4] }, issues: [], walls: [], undo: [], redo: [], moveFloor: false, measure: null, bgRatio: null, bgv: 1,
+  const st = { tool: tool0 && tool0 !== 'floor' ? tool0 : plan.rooms.length || plan.walls.length ? 'select' : 'room', ppm: 40, ox: 60, oy: 60, sel: null, drag: null, chain: null, hover: null, free: false, shift: false,
+    openKind: kind0 || 'door', stairShape: 'straight', paint: { kind: 'wall', value: G.WALL_COLORS[4] }, issues: [], walls: [], undo: [], redo: [], moveFloor: false, measure: null, bgRatio: null, bgv: 1,
     preview: !narrow(), sheetMin: false, pointers: new Map(), pinch: null, help: false, typed: null };
   /* ---------- the page ---------- */
   const svg = svgEl('svg', { class: 'dz-svg' }), defs = svgEl('defs'), gridL = svgEl('g'), layer = svgEl('g');
@@ -357,7 +357,10 @@ export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], o
     else if (s?.type === 'issue' && it) out.push(el('h3', {}, T('Something to fix')), el('p', {}, issueText(it)), el('p', {}, T(FIX_WHAT[it.fix] || '')), el('div', { class: 'dz-acts' }, el('button', { type: 'button', class: 'primary', onclick: () => fixIssue(it) }, T('Fix')), el('button', { type: 'button', onclick: () => { select(null); } }, T('Leave it'))));
     else if (s?.type === 'room' && it) out.push(...roomPanel(it));
     else if ((s?.type === 'edge' || s?.type === 'wall') && it) out.push(...wallPanel(s, it));
-    else if (s?.type === 'opening' && it) out.push(...openingPanel(it));
+    else if (s?.type === 'opening' && it) {   // QA: with the Door/Window tool on, what the next tap adds stays one tap away (it used to change the selected one)
+      if (st.tool === 'opening') out.push(el('h3', {}, T('Next tap adds')), chips(Object.entries(G.OPENING_KINDS).map(([k, v]) => [k, v.label]), st.openKind, (k) => { st.openKind = k; st.sel = null; inspector(); draw(); }));
+      out.push(...openingPanel(it));
+    }
     else if (s?.type === 'stairs' && it) out.push(...stairsPanel(it));
     else if (st.tool === 'opening') out.push(el('h3', {}, T('Doors and windows')), el('p', {}, T('Pick one, then tap a wall. You can change its size and place after.')), chips(Object.entries(G.OPENING_KINDS).map(([k, v]) => [k, v.label]), st.openKind, (k) => { st.openKind = k; inspector(); draw(); }));
     else if (st.tool === 'stairs') out.push(el('h3', {}, T('Stairs')), el('p', {}, T('Pick a shape, then tap where the stairs go. They climb to the floor above, which gets an opening cut for them.')), chips(Object.entries(G.STAIR_SHAPES), st.stairShape, (k) => { st.stairShape = k; inspector(); }));
@@ -478,7 +481,7 @@ export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], o
       s.shape !== 'straight' ? row('Turns', seg([['left', 'Left'], ['right', 'Right']], s.turn || 'right', (v) => change(() => { s.turn = v; }))) : null,
       row('Direction', el('button', { type: 'button', onclick: () => turn90() }, T('Turn 90°')), el('button', { type: 'button', onclick: () => change(() => { s.rot = ((s.rot || 0) + 180) % 360; }) }, T('Flip'))),
       el('p', {}, T('{n} steps of {cm} cm. The arrow points up.', { n: S.count, cm: Math.round(S.rise * 100) })),
-      el('p', {}, up ? T('They reach {floor}, which gets an opening cut for them.', { floor: up.name }) : T('Add a floor above (Editor > Floors) for them to reach.')),
+      el('p', {}, up ? T('They reach {floor}, which gets an opening cut for them.', { floor: up.name }) : T('Add a floor above (Edit > Floors) for them to reach.')),
       el('div', { class: 'dz-acts' }, el('button', { type: 'button', onclick: () => duplicate() }, T('Duplicate')), el('button', { type: 'button', class: 'danger', onclick: () => removeSel() }, T('Delete')))];
   }
   function paintPanel() {
@@ -683,9 +686,11 @@ export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], o
       draw(); inspector(); return;
     }
     if (st.moveFloor) { beginGesture(); st.drag = { kind: 'floor', last: raw, start: raw, total: [0, 0], base: snap() }; return; }
-    // the handles of what is selected work with every tool
-    if (k === 'vtx') { beginGesture(); st.drag = { kind: 'vtx', id, i: Number(e.target.dataset.i) }; return; }
-    if (k === 'wend') { beginGesture(); st.drag = { kind: 'wend', id, end: e.target.dataset.end }; return; }
+    // the handles of what is selected work with every tool - except while drawing: a new room or wall that starts on the last one's
+    // corner is a new room or wall, not a reshaped one (QA: drawing rooms side by side bent the first one)
+    const drawing = st.tool === 'room' || st.tool === 'shape' || st.tool === 'wall';
+    if (k === 'vtx' && !drawing) { beginGesture(); st.drag = { kind: 'vtx', id, i: Number(e.target.dataset.i) }; return; }
+    if (k === 'wend' && !drawing) { beginGesture(); st.drag = { kind: 'wend', id, end: e.target.dataset.end }; return; }
     if (k === 'oend') { beginGesture(); st.drag = { kind: 'oend', id, end: e.target.dataset.end }; return; }
     const t = st.tool;
     if (t === 'room') { const p = snapPoint(raw).pt; st.drag = { kind: 'new-room', p0: p, p1: p }; draw(); return; }
@@ -860,7 +865,9 @@ export function openDrawer(floor, { el, api, toast, onSave, floors = () => [], o
   const ro = new ResizeObserver(() => { if (!st.moved) fit(); draw(); preview.resize(); }); ro.observe(stage);   // keeps the drawing framed until you pan or zoom yourself
   layoutPv();
   requestAnimationFrame(() => { fit(); refresh(); });
-  return { get plan() { return plan; }, get view() { return { ppm: st.ppm, ox: st.ox, oy: st.oy }; }, close: teardown };
+  const handle = { get plan() { return plan; }, get view() { return { ppm: st.ppm, ox: st.ox, oy: st.oy }; }, get sel() { return st.sel; }, close: teardown };
+  if (/[?&]debug3d=1/.test(location.search)) window.__casaDraw = handle;   // QA: for driving the drawing from a test browser only
+  return handle;
 }
 
 /* A small 3D view of this floor that rebuilds a moment after each change. three.js loads only when it is first shown. */

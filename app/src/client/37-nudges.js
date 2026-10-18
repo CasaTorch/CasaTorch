@@ -36,10 +36,11 @@ function chimePlay(kind, times = 2) {
 const NUDGE_ICON_NAMES = { trash: 'Trash', paw: 'Pets', pill: 'Medicine', bill: 'Bills', plant: 'Plants', cake: 'Birthday', car: 'Car', school: 'School', laundry: 'Laundry', bell: 'Reminder' };
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const nudgeWhen = (n) => {
-  const t = hm(n.time), d = n.date ? new Date(`${n.date}T12:00:00Z`) : null, md = d ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(d) : '';
-  return { once: `${d ? new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(d) : ''} at ${t}`, daily: `Every day at ${t}`,
-    weekly: `${(n.days || []).length === 5 && !n.days.includes(0) && !n.days.includes(6) ? 'Weekdays' : (n.days || []).map((x) => DOW[x]).join(', ')} at ${t}`,
-    monthly: `Every month on the ${d ? ordinal(d.getUTCDate()) : ''} at ${t}`, yearly: `Every year on ${md} at ${t}` }[n.repeat] || t;
+  const loc = CasaI18n.lang === 'en' ? 'en-US' : CasaI18n.lang, t = hm(n.time), d = n.date ? new Date(`${n.date}T12:00:00Z`) : null, md = d ? dtf(loc, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(d) : '';
+  const dow = (x) => dtf(loc, { weekday: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2023, 0, 1 + x, 12)));   // 1 Jan 2023 was a Sunday
+  return { once: T('{date} at {t}', { date: d ? dtf(loc, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).format(d) : '', t }), daily: T('Every day at {t}', { t }),
+    weekly: T('{days} at {t}', { days: (n.days || []).length === 5 && !n.days.includes(0) && !n.days.includes(6) ? T('Weekdays') : (n.days || []).map(dow).join(', '), t }),
+    monthly: T('Every month on the {nth} at {t}', { nth: d ? (CasaI18n.lang === 'en' ? ordinal(d.getUTCDate()) : d.getUTCDate()) : '', t }), yearly: T('Every year on {date} at {t}', { date: md, t }) }[n.repeat] || t;
 };
 const ordinal = (n) => `${n}${[, 'st', 'nd', 'rd'][(n % 100 >> 3 ^ 1) && n % 10] || 'th'}`;
 const nudgePic = (n, size = 'md') => (n.photo ? el('img', { class: `nudgepic ${size}`, src: `/api/nudges/${encodeURIComponent(n.id)}/photo?t=${n.lastFired || ''}`, alt: '' }) : el('span', { class: `nudgeicon ${size}`, 'aria-hidden': 'true', style: n.color ? `background:${safeColor(n.color)};color:${hhInk(n.color)}` : null }, icon(n.icon || 'bell')));   // a bin's own color (37h-household.js)
@@ -55,7 +56,7 @@ function proUpsell(text) { return el('a', { class: 'proup', href: '#settings', t
 let nudgeMe = null;
 const nudgeRole = async () => { nudgeMe ||= await api('/api/auth/me').catch(() => ({})); return nudgeMe?.signIn === false || !nudgeMe?.user ? 'owner' : nudgeMe.user.role; };
 /* Reminders: their own page (they used to sit on Alerts, as "Nudges"). */
-tab({ id: 'reminders', label: 'Reminders', icon: 'bell', after: 'calendar', async render(main) {
+tab({ id: 'reminders', label: 'Reminders', icon: 'alarm', after: 'calendar', async render(main) {
   setTop(T('Reminders'), T('Trash night, the dog\'s dinner, bills, medicine, birthdays - on every screen, at the right time'));
   const draw = () => main.replaceChildren(el('div', { class: 'cards' }, nudgesCard(draw)));
   draw(); return draw;
@@ -67,15 +68,17 @@ function nudgesCard(redraw) {
     if (!d) { card.remove(); return; }
     const canEdit = !d.demo && role !== 'viewer';
     const add = canEdit ? el('button', { class: 'btn small primary', onclick: () => nudgeEditor(null, d, redraw) }, icon('plus'), T('Add a reminder')) : null;
-    const head = el('div', { class: 'row between wrap', style: 'gap:10px;margin-bottom:10px' }, el('div', {}, el('h2', { style: 'margin:0' }, T('Reminders')), el('p', { class: 'small muted', style: 'margin:4px 0 0' }, T('Your home\'s own reminders - trash night, the dog\'s dinner, bills due, medicine, birthdays. At the time, they light up every screen in the house.'))), add);
+    // the page title says what this is; the Add button sits at the top, like New event on Calendar
+    if (add && current === 'reminders') setTop(T('Reminders'), T('Trash night, the dog\'s dinner, bills, medicine, birthdays - on every screen, at the right time'), [add]);
+    const head = d.demo ? el('p', { class: 'small muted', style: 'margin:0 0 12px' }, T('This is the demo, so you can look at reminders but not change them.')) : el('span', { hidden: true });
     if (!d.list.length) {
       const ideas = [['Trash night', 'trash', 'weekly', [2], '19:30'], ['Feed the dog', 'paw', 'daily', [], '17:30'], ['Take medicine', 'pill', 'daily', [], '08:00'], ['Rent is due', 'bill', 'monthly', [], '09:00']];
-      card.replaceChildren(head, el('div', { class: 'row wrap', style: 'gap:8px' }, el('span', { class: 'small muted' }, 'Ideas:'), ideas.map(([title, ic, repeat, days, time]) => el('button', { class: 'btn small', disabled: canEdit ? null : true, onclick: () => nudgeEditor({ title, icon: ic, repeat, days, time, date: new Date().toISOString().slice(0, 10), flash: true, push: d.pro }, d, redraw, true) }, icon(ic), title))));
+      card.replaceChildren(head, el('div', { class: 'row wrap', style: 'gap:8px' }, el('span', { class: 'small muted' }, T('Ideas:')), ideas.map(([title, ic, repeat, days, time]) => el('button', { class: 'btn small', disabled: canEdit ? null : true, onclick: () => nudgeEditor({ title, icon: ic, repeat, days, time, date: new Date().toISOString().slice(0, 10), flash: true, push: d.pro }, d, redraw, true) }, icon(ic), title))));
     } else {
       const today = new Set(d.today || []);
       card.replaceChildren(head, el('div', { class: 'nudgelist' }, d.list.map((n) => el('button', { class: `nudgerow${n.on ? '' : ' off'}`, disabled: canEdit ? null : true, onclick: () => nudgeEditor(n, d, redraw) },
-        nudgePic(n, 'sm'), el('div', { class: 'grow', style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, n.title), el('span', { class: 'small muted' }, n.on ? nudgeWhen(n) : 'Off')),
-        today.has(n.id) && n.on ? el('span', { class: 'pill good' }, 'Today') : null,
+        nudgePic(n, 'sm'), el('div', { class: 'grow', style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, n.title), el('span', { class: 'small muted' }, n.on ? nudgeWhen(n) : T('Off'))),
+        today.has(n.id) && n.on ? el('span', { class: 'pill good' }, T('Today')) : null,
         n.push ? el('span', { class: 'tiny muted', title: 'Sent to phones' }, icon('send')) : null))));
     }
     if (!d.pro) card.append(el('div', { style: 'margin-top:12px' }, proUpsell(T('Send reminders to everyone\'s phone, wherever they are'))));
@@ -113,7 +116,7 @@ function nudgeEditor(n, d, redraw, fresh = false) {
       days, date, soundRow,
       el('label', { class: 'check' }, flash, el('span', {}, el('b', {}, 'Show it on every screen'), el('span', { class: 'small muted', style: 'display:block' }, 'A card lights up on every CasaTorch screen until someone taps Done.'))),
       el('label', { class: `check${d.pro ? '' : ' locked'}` }, push, el('span', {}, el('b', {}, 'Send it to phones '), d.pro ? null : el('span', { class: 'pill pro' }, 'Pro'),
-        el('span', { class: 'small muted', style: 'display:block' }, d.pro ? (d.phones ? 'To every phone with CasaTorch alerts on, wherever it is - even in quiet hours.' : 'No phones have CasaTorch alerts on yet - turn them on in Settings › Phone app & alerts.') : 'Reach everyone\'s phone wherever they are, even in quiet hours.'))),
+        el('span', { class: 'small muted', style: 'display:block' }, d.pro ? (d.phones ? 'To every phone with CasaTorch alerts on, wherever it is - even in quiet hours.' : 'No phones have CasaTorch alerts on yet - turn them on in Settings › Phones & alerts.') : 'Reach everyone\'s phone wherever they are, even in quiet hours.'))),
       d.pro ? null : proUpsell(T('Get reminders on your phone with CasaTorch Pro')),
       isNew ? null : el('label', { class: 'check' }, on, el('span', {}, el('b', {}, 'On'))),
       msg].filter(Boolean));

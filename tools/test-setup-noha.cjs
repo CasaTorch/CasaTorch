@@ -52,7 +52,7 @@ let page, shot, camServer;
   await field('Username').fill('owner');
   await field('Password (10+ characters - a short sentence works well)').fill(PW);
   await next();
-  check('the terms must be accepted', /agree to the Terms.* is needed/.test(await msg()), await msg());
+  check('the terms must be accepted', /agree to the Terms/.test(await msg()), await msg());
   await p.locator('main label.check input[type=checkbox]').check();
   await nextTo('Your phone');
   await btn('Not now').click();

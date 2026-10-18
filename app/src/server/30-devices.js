@@ -152,7 +152,7 @@ function riskOf(d) {
   if (d.kind === 'alarm') return { only: ['arm_home', 'arm_away', 'arm_night'], why: 'disarming isn\'t available from CasaTorch - use the alarm\'s own app or keypad' };
   if (d.kind === 'cover' && (d.risky || !SAFE_COVERS.has(d.haClass) || RISKY_NAME.test(words))) return { only: ['close', 'stop'], why: 'opening garage doors, gates and doors stays in their own app or Home Assistant' };
   if (d.domain === 'siren' || /siren/.test(d.id)) return { only: ['on'], why: 'sirens can be set off from CasaTorch, but only turned off where they were set' };
-  if (['switch', 'plug', 'action', 'fan'].includes(d.kind) && RISKY_NAME.test(words)) return { only: [], why: `"${d.name}" looks like a door, gate, lock or alarm control, so CasaTorch won't switch it. An owner can allow it in Settings › Security.` };
+  if (['switch', 'plug', 'action', 'fan'].includes(d.kind) && RISKY_NAME.test(words)) return { only: [], why: `"${d.name}" looks like a door, gate, lock or alarm control, so CasaTorch won't switch it. An owner can allow it in Settings › Safety.` };
   return null;
 }
 const blocked = (d, action) => { const r = riskOf(d); return r && !r.only.includes(action) ? r.why : null; };

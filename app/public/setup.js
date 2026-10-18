@@ -101,7 +101,7 @@ function fieldEl(f, store, onChange) {
     input = el('textarea', { id, rows: 3, spellcheck: 'false', oninput: (e) => set(e.target.value.trim()) }, store[f.id] || '');
   } else if (f.type === 'timezone') {
     const zones = (Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : [store[f.id]]);
-    input = el('select', { id, onchange: (e) => set(e.target.value) }, ...zones.map((z) => el('option', { value: z, selected: z === store[f.id] }, z)));
+    input = el('select', { id, onchange: (e) => set(e.target.value) }, ...zones.map((z) => el('option', { value: z, selected: z === store[f.id] }, z.replace(/_/g, ' ').replace(/\//g, ' / '))));
   } else {
     const type = f.type === 'password' || f.type === 'pin' ? 'password' : f.type === 'number' ? 'number' : f.type === 'url' ? 'url' : 'text';
     input = el('input', { id, type, value: store[f.id] ?? '', placeholder: f.placeholder || null, step: f.step || null, inputmode: f.type === 'pin' ? 'numeric' : null, autocomplete: type === 'password' ? 'new-password' : 'off', oninput: (e) => set(e.target.value) });
@@ -339,7 +339,7 @@ function flowEl(domain, hint, done, extra) {
         const out = {};
         for (const f of fields) {
           let val = input[f.id];
-          if (val === '' || val == null) { if (f.required) { msg.textContent = `${f.label} is needed.`; return; } continue; }
+          if (val === '' || val == null) { if (f.required) { msg.textContent = needMsg(f.label); return; } continue; }
           if (f.type === 'number') val = Number(val);
           out[f.id] = val;
         }
@@ -463,7 +463,7 @@ function pairDone(p) {
   $('#progress').replaceChildren(); $('#resume')?.replaceChildren(); $('#back').hidden = true;
   $('#next').textContent = T('Open my dashboard'); $('#next').disabled = false; $('#next').onclick = () => { location.href = W.rerun ? '/' : '/?tour'; };
   $('#page').replaceChildren(el('h1', {}, T('Now your phone')),
-    el('p', { class: 'intro' }, T('Open the CasaTorch app on your phone, tap "Scan a code", and point it at this. Your phone signs in as {user} - no typing.', { user: p.user })),
+    el('p', { class: 'intro' }, T('Open the CasaTorch app on your phone, tap "Scan a pairing code", and point it at this. Your phone signs in as {user} - no typing.', { user: p.user })),
     el('div', { class: 'pairbox' }, (() => { const q = el('div', { class: 'qr' }); if (/^\s*<svg[\s>]/.test(p.qr || '')) q.innerHTML = p.qr; return q; })(), el('div', {}, el('div', { class: 'note' }, T('Or type this code in the app:')), el('div', { class: 'paircode' }, p.code),
       el('div', { class: 'note' }, T('Works once, for 30 minutes. Phone on your home Wi-Fi.')))),
     el('p', { class: 'note' }, T('No app yet? Add a phone later in Settings › Phones & alerts.')), awayCard(), safeNote(true));
@@ -545,7 +545,7 @@ function restoreBox() {
     } catch (e) { msg.textContent = e.message; go.disabled = false; }
   } }, T('Restore'));
   return el('details', { class: 'card' }, el('summary', {}, el('b', {}, T('Moving from another CasaTorch?')), ' ', T('Restore its backup')),
-    el('p', { class: 'note' }, 'Use a backup file from Settings › Backup on your old CasaTorch. Everything comes across: settings, connections, sign-ins, floor plans and history.'),
+    el('p', { class: 'note' }, 'Use a backup file from Settings › Updates & backup on your old CasaTorch. Everything comes across: settings, connections, sign-ins, floor plans and history.'),
     el('label', {}, 'Backup file (.ctbk) ', file), el('label', {}, 'Passphrase ', pass), go, msg);
 }
 /* Where a step's branch keeps its answers: the network step keeps each kind's own (meraki, unifi). */
@@ -555,6 +555,7 @@ function stepPage(step) {
   const out = [el('h1', {}, T(step.title))];
   if (W.focus?.step === step.id) out.push(el('div', { class: 'focus-note' }, el('b', {}, W.focus.label ? T('Adding {name}', { name: T(W.focus.label) }) : T('Picking up where you left off')), el('span', {}, ` - ${T('follow the card below. When you see a green check, press "Review & save". Everything else in your setup stays as it is.')}`)));
   if (step.intro) out.push(el('p', { class: 'intro' }, T(step.intro)));
+  if (step.id === 'phone') out.push(el('p', { class: 'note' }, T('The CasaTorch app for iPhone, iPad and Android is coming soon to the App Store and Google Play. You can make its login now, or add a phone later.')));
   if (step.question) {
     const q = step.question;
     out.push(el('div', { class: 'q' }, T(q.label)), el('div', { class: 'opts' }, ...q.options.map(([v, l]) => el('button', { type: 'button', class: `opt${store[q.id] === v ? ' on' : ''}`, onclick: () => { if (store[q.id] !== v && step.id === 'ai') { delete store._test; delete store.apiKey; } store[q.id] = v; go(); } }, T(l)))));
@@ -579,20 +580,23 @@ function stepPage(step) {
       if (br.fields && late) out.push(...fieldsEl(br.fields, sub, go));
     }
   }
-  if (step.fields) out.push(...fieldsEl(step.id === 'account' && W.rerun ? step.fields.map((f) => (f.id === 'password' ? { ...f, required: false, label: T('New password (leave empty to keep the current one)') } : f)) : step.fields, store, go));
-  if (step.id === 'account') out.push(claimEl(store), safeNote(true));
+  // the account step keeps the Pro key out of the way: most people start on the free trial, so it sits under "Already bought Pro?"
+  const own = step.id === 'account' ? step.fields.filter((f) => f.id !== 'license') : step.fields;
+  if (step.fields) out.push(...fieldsEl(step.id === 'account' && W.rerun ? own.map((f) => (f.id === 'password' ? { ...f, required: false, label: T('New password (leave empty to keep the current one)') } : f)) : own, store, go));
+  if (step.id === 'account') out.push(claimEl(store, step.fields.find((f) => f.id === 'license')), safeNote(true));
   if (step.help) out.push(el('details', { class: 'card' }, el('summary', {}, T('Where do I find the link?')), el('p', { class: 'note' }, T(step.help))));
   return out;
 }
 /* Bought Pro? The key comes by e-mail code instead of copy and paste. */
-function claimEl(store) {
+function claimEl(store, keyField) {
   const st = W.claim ||= { email: '', sent: false, msg: '' };
-  const card = el('div', { class: 'card' }, el('h3', {}, 'Bought CasaTorch Pro?'));
-  if (store.license && st.done) { card.append(el('div', { class: 'ok' }, `✓ Pro key added (${st.done})`)); return card; }
+  const card = el('details', { class: 'card claim', open: store.license || st.sent || st.email ? true : null }, el('summary', {}, el('b', {}, T('Already bought CasaTorch Pro?')), el('span', { class: 'note', style: 'display:block;font-weight:400' }, T('Every new CasaTorch gets 14 days of Pro free - nothing to enter for that.'))));
+  if (store.license && st.done) { card.append(el('div', { class: 'ok' }, T('✓ Pro key added ({plan})', { plan: st.done }))); return card; }
+  if (keyField) card.append(fieldEl({ ...keyField, label: 'Paste your license key', help: null }, store, null), el('p', { class: 'note', style: 'margin:4px 0 12px' }, T('Or get it by e-mail - no key to copy:')));
   const email = el('input', { type: 'email', value: st.email, placeholder: 'you@example.com', autocomplete: 'email', oninput: (e) => { st.email = e.target.value; } });
-  const code = el('input', { inputmode: 'numeric', maxlength: '6', placeholder: '6-digit code', autocomplete: 'one-time-code' });
-  const msg = el('p', { class: 'note' }, st.msg || 'Type the e-mail you bought with and we\'ll send a code - no key to copy. (Or paste a key in the box above.)');
-  const btn = el('button', { type: 'button', class: 'small' }, st.sent ? 'Get my key' : 'Send me a code');
+  const code = el('input', { inputmode: 'numeric', maxlength: '6', placeholder: T('6-digit code'), autocomplete: 'one-time-code' });
+  const msg = el('p', { class: 'note' }, st.msg ? T(st.msg) : T('Type the e-mail you bought with and we\'ll send you a code.'));
+  const btn = el('button', { type: 'button', class: 'small' }, st.sent ? T('Get my key') : T('Send me a code'));
   btn.onclick = async () => {
     btn.disabled = true;
     try {
@@ -600,8 +604,8 @@ function claimEl(store) {
       else { const r = await api('/api/license/claim/finish', { body: { email: st.email, code: code.value } }); store.license = r.key; st.done = r.plan; go(); }
     } catch (e) { msg.textContent = e.message; btn.disabled = false; }
   };
-  card.append(el('label', { class: 'field' }, el('span', {}, 'E-mail address'), email));
-  if (st.sent) card.append(el('label', { class: 'field' }, el('span', {}, 'Code from the e-mail'), code));
+  card.append(el('label', { class: 'field' }, el('span', {}, T('E-mail address')), email));
+  if (st.sent) card.append(el('label', { class: 'field' }, el('span', {}, T('Code from the e-mail')), code));
   card.append(msg, btn);
   return card;
 }
@@ -646,28 +650,32 @@ function review() {
 }
 
 /* ---------- navigation ---------- */
+/* "Password (10+ characters - ...)" is named "Password" in a message; a question is asked again. */
+const needMsg = (label, field) => { problems.field = field || null; const l = T(label).replace(/\s*\(.*\)\s*$/, ''); return /[?？]$/.test(l) ? T('Please answer "{field}"', { field: l }) : T('{field} is needed.', { field: l }); };
 function problems(step) {
+  problems.field = null;
   if (!step) return null;
   const store = ans(step.id);
-  if (step.question && !store[step.question.id]) return 'Pick an answer to continue.';
+  if (step.question && !store[step.question.id]) return T('Pick an answer to continue.');
   if (step.id === 'ai' && store.provider !== 'later' && !store._test?.ok) return T('Press "Test connection" so your Home AI Agent is ready - or pick "Not now".');
   const br = step.question ? step.branches?.[store[step.question.id]] : null;
   const sub = br ? branchStore(step, store) : store;
   for (const [list, src] of [[step.fields, store], [br?.fields, sub]]) for (const f of (list || []).filter((g) => visible(g, src) && g.required && !(step.id === 'homeassistant' && sub._signedIn) && !(W.rerun && step.id === 'account' && g.id === 'password') && !(W.rerun && W.ha && step.id === 'homeassistant' && g.id === 'token'))) {
     const v = src[f.id];
-    if (v == null || v === '') return `${f.label} is needed.`;
-    if (f.minLength && String(v).length < f.minLength) return `${f.label}: at least ${f.minLength} characters.`;
+    if ((v == null || v === '' || v === false) && f.type === 'consent') { problems.field = null; return T('To continue, agree to the Terms of Use and the Privacy Notice.'); }
+    if (v == null || v === '') return needMsg(f.label, f.id);
+    if (f.minLength && String(v).length < f.minLength) { problems.field = f.id; return T('{field}: at least {n} characters.', { field: T(f.label).replace(/\s*\(.*\)\s*$/, ''), n: f.minLength }); }
   }
-  if (step.id === 'calendars' && (store.list || []).some((c) => !c.url)) return 'Paste a link for each calendar, or remove the empty one.';
-  if (step.id === 'reminders' && (store.list || []).some((r) => !r.title)) return 'Give each reminder a name, or remove the empty one.';
+  if (step.id === 'calendars' && (store.list || []).some((c) => !c.url)) return T('Paste a link for each calendar, or remove the empty one.');
+  if (step.id === 'reminders' && (store.list || []).some((r) => !r.title)) return T('Give each reminder a name, or remove the empty one.');
   if (step.id === 'apptests' && window.atSetupProblem) { const m = window.atSetupProblem(store); if (m) return m; }   // setup-apptests.js
   if (br?.pick) for (const o of shownOptions(br.pick.options)) if ((store[br.pick.id] || []).includes(o.id) && o.method === 'direct') {
     const d = store[o.id] || {};
-    for (const f of (o.fields || []).filter((g) => g.required)) if (!d[f.id]) return `${o.label}: ${f.label} is needed.`;
-    if (o.id === 'frigate' && !d._test?.ok) return 'Press "Test connection" for Frigate so CasaTorch can find your cameras.';
+    for (const f of (o.fields || []).filter((g) => g.required)) if (!d[f.id]) { problems.field = f.id; return T('{thing}: {field} is needed.', { thing: T(o.label), field: T(f.label).replace(/\s*\(.*\)\s*$/, '') }); }
+    if (o.id === 'frigate' && !d._test?.ok) return T('Press "Test connection" for Frigate so CasaTorch can find your cameras.');
   }
-  if (step.id === 'homeassistant' && store.uses === 'yes' && !W.ha) return 'Press "Test connection" so we know Home Assistant is reachable.';
-  if (step.id === 'energy' && store.track === 'yes' && !store.utility) return 'Find your power company, or choose "Mine isn\'t listed".';
+  if (step.id === 'homeassistant' && store.uses === 'yes' && !W.ha) return T('Press "Test connection" so we know Home Assistant is reachable.');
+  if (step.id === 'energy' && store.track === 'yes' && !store.utility) return T('Find your power company, or choose "Mine isn\'t listed".');
   return null;
 }
 function go() {
@@ -708,7 +716,7 @@ $('#next').onclick = async () => {
     return;
   }
   const p = problems(W.steps[W.i - 1]);
-  if (p) { $('#navmsg').textContent = p; return; }
+  if (p) { $('#navmsg').textContent = p; const bad = problems.field && $('#page').querySelector(`[id^="f-${problems.field}-"]`); if (bad) { bad.focus({ preventScroll: true }); bad.scrollIntoView({ block: 'center', behavior: 'smooth' }); } return; }
   W.i = W.focus && W.steps[W.i - 1]?.id === W.focus.step ? W.steps.length + 1 : W.i + 1; go(); scrollTo(0, 0);
 };
 /* The setup code: only the owner sets up a new CasaTorch. On the computer CasaTorch runs on (and from Home Assistant)

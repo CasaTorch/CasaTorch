@@ -30,6 +30,7 @@ const ICONS = {
   thermo: 'M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0z', lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4', door: 'M6 3h12v18H6zM14 12h.01', drop: 'M12 3s7 7.6 7 12a7 7 0 0 1-14 0c0-4.4 7-12 7-12z', fire: 'M12 22a7 7 0 0 0 7-7c0-4-3-6-4-9-1 2-2 3-4 3 0-2-1-4-2-6-1 4-4 7-4 12a7 7 0 0 0 7 7z', dotc: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   pause: 'M8 5v14M16 5v14', grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z', log: 'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5', phone: 'M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM11 18h2', palette: 'M12 21a9 9 0 1 1 9-9c0 2-1.5 3-3 3h-2a2 2 0 0 0-1 3.7A2 2 0 0 1 12 21zM7.5 11.5h.01M10 7.5h.01M15 7.5h.01M17.5 11.5h.01', link: 'M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1', download: 'M12 3v12M7 10l5 5 5-5M5 21h14', info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7h.01', help: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01', grip: 'M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01', x: 'M6 6l12 12M18 6 6 18', plus: 'M12 5v14M5 12h14', edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4', check: 'M20 6 9 17l-5-5', checkc: 'M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4 12 14l-3-3',
   send: 'M22 2 11 13M22 2l-7 20-4-9-9-4z', fan: 'M12 12a2 2 0 1 0 0-.01M12 10c0-4 1-7 4-7s2 5-2 7M14 12c4 0 7 1 7 4s-5 2-7-2M12 14c0 4-1 7-4 7s-2-5 2-7M10 12c-4 0-7-1-7-4s5-2 7 2', blinds: 'M4 3h16M5 3v14M19 3v14M5 7h14M5 11h14M5 15h14M12 17v3M10 21h4', play: 'M7 4l13 8-13 8z', vacuum: 'M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM5 13h3M16 13h3', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0', gauge: 'M12 21a9 9 0 1 1 9-9M12 12l5-5M4.6 16h14.8', search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM21 21l-5-5', chevl: 'M15 18l-6-6 6-6', chevr: 'M9 18l6-6-6-6', expand: 'M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7', reset: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5',
+  image: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15.5 10a1.5 1.5 0 1 0 0-.01', alarm: 'M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 1.5M5 3 2 6M19 3l3 3',
 };
 const icon = (name, size) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); if (size) { s.setAttribute('width', size); s.setAttribute('height', size); } s.innerHTML = `<path d="${ICONS[name] || ICONS.dotc}"/>`; return s; };
 const api = async (url, opts = {}) => {
@@ -76,15 +77,20 @@ document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key ==
 // Building a date formatter is slow (tens of ms on a Pi at first paint); each one is made once and reused.
 const DTF = new Map();
 const dtf = (loc, o) => { const k = `${loc}|${JSON.stringify(o)}`; let f = DTF.get(k); if (!f) { if (DTF.size > 300) DTF.clear(); f = new Intl.DateTimeFormat(loc, o); DTF.set(k, f); } return f; };
-const fmt = (iso, o) => (iso ? dtf('en-US', { timeZone: S.tz, ...o }).format(new Date(iso)) : '');
+/* Dates and times read the way the home's language writes them (English: US style). */
+const dateLoc = () => { const l = window.CasaI18n?.lang || 'en'; return l === 'en' ? 'en-US' : l === 'zh' ? 'zh-CN' : l; };
+const fmt = (iso, o) => (iso ? dtf(dateLoc(), { timeZone: S.tz, ...o }).format(new Date(iso)) : '');
 const fmtTime = (iso) => fmt(iso, { hour: 'numeric', minute: '2-digit' });
 const dayKey = (iso, tz = S.tz) => dtf('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
-const fmtWhen = (iso) => { const k = dayKey(iso), today = dayKey(new Date().toISOString()), tom = dayKey(new Date(Date.now() + 86400_000).toISOString()); return k === today ? `Today ${fmtTime(iso)}` : k === tom ? `Tomorrow ${fmtTime(iso)}` : `${fmt(iso, { weekday: 'short', month: 'short', day: 'numeric' })} ${fmtTime(iso)}`; };
-const ago = (iso) => { const s = Math.round((Date.now() - Date.parse(iso)) / 1000); if (!(s >= 0)) return ''; if (s < 60) return 'just now'; if (s < 3600) return `${Math.round(s / 60)} min ago`; if (s < 86400) return `${Math.round(s / 3600)} h ago`; return `${Math.round(s / 86400)} d ago`; };
+const fmtWhen = (iso) => { const k = dayKey(iso), today = dayKey(new Date().toISOString()), tom = dayKey(new Date(Date.now() + 86400_000).toISOString()); return k === today ? `${T('Today')} ${fmtTime(iso)}` : k === tom ? `${T('Tomorrow')} ${fmtTime(iso)}` : `${fmt(iso, { weekday: 'short', month: 'short', day: 'numeric' })} ${fmtTime(iso)}`; };
+const ago = (iso) => { const s = Math.round((Date.now() - Date.parse(iso)) / 1000); if (!(s >= 0)) return ''; if (s < 60) return T('just now'); if (s < 3600) return T('{n} min ago', { n: Math.round(s / 60) }); if (s < 86400) return T('{n} h ago', { n: Math.round(s / 3600) }); return T('{n} d ago', { n: Math.round(s / 86400) }); };
 const hm = (t) => { const [h, m] = String(t).split(':').map(Number); return Number.isFinite(h) ? `${(h % 12) || 12}:${String(m || 0).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}` : t; };
 const tempOf = (c) => (c == null ? '-' : S.units === 'C' ? `${c.toFixed(1)}°` : `${Math.round(c * 9 / 5 + 32)}°`);
 const devIconName = (d) => (d.kind === 'sensor' && d.tempC != null ? 'thermo' : d.kind === 'sensor' && d.humidity != null && d.water == null ? 'drop' : d.water != null ? 'drop' : d.smoke != null ? 'fire' : d.kind === 'cover' ? (d.risky ? 'door' : 'blinds') : d.open != null ? 'door' : d.meter ? 'bolt' : { light: 'bulb', switch: 'plug', plug: 'plug', media: 'music', climate: 'thermo', lock: 'lock', camera: 'camera', fan: 'fan', action: 'play', vacuum: 'vacuum', alarm: 'shield', presence: 'user', value: 'gauge' }[d.kind] || 'dotc');
 
+/* Where a device or alert comes from, as a person would write it ("frigate" reads Frigate; a plain camera says nothing). */
+const SRC_NAMES = { frigate: 'Frigate', reolink: 'Reolink', ring: 'Ring', yolink: 'YoLink', hue: 'Philips Hue', shelly: 'Shelly', ha: 'Home Assistant', homeassistant: 'Home Assistant', unifi: 'UniFi', meraki: 'Cisco Meraki', casatorch: 'CasaTorch', camera: '', snapshot: '', internet: '' };
+const srcName = (s) => { const k = String(s || '').toLowerCase(); return Object.hasOwn(SRC_NAMES, k) ? SRC_NAMES[k] : String(s || ''); };
 const TABS = [];   // filled by the tab files
 const tab = (t) => { const k = t.after ? TABS.findIndex((x) => x.id === t.after) : -1; if (k >= 0) TABS.splice(k + 1, 0, t); else TABS.push(t); };   // after: its place on the main bar
 let refresher = null, current = null;
@@ -106,7 +112,7 @@ async function show(id) {
   const early = setTimeout(reveal, 250);
   setTop(tabLabel(t));
   try { const r = (await t.render(main, sub || null)) || null; if (main.isConnected) refresher = r; }
-  catch (err) { main.append(el('div', { class: 'card empty' }, `Could not load this: ${err.message}`)); }
+  catch (err) { main.append(el('div', { class: 'card empty' }, T('Couldn\'t load this page: {why}', { why: err.message }), el('div', { style: 'margin-top:10px' }, el('button', { class: 'btn small', onclick: () => show(location.hash.slice(1) || 'home') }, icon('reset'), T('Try again'))))); }
   clearTimeout(early); reveal();
 }
 /* Once the dashboard is up and the browser is idle, the 3D Home's files are fetched ahead (Pro only, only if its
@@ -122,27 +128,41 @@ function warmUp() {
 const navTabs = () => TABS.filter((t) => !S.ui.tabs?.[t.id]?.hidden).map((t, i) => [t, S.ui.tabs?.[t.id]?.order ?? 50 + i]).sort((a, b) => a[1] - b[1]).map(([t]) => t);
 function navLink(t) {
   return el('a', { href: `#${t.id}`, 'data-tab': t.id, class: t.id === current ? 'on' : null, title: tabLabel(t) }, icon(t.icon), el('span', { class: 'nl' }, S.ui.tabs?.[t.id]?.label || T(t.short || t.label)),
-    t.pro && !isPro() ? el('span', { class: 'pro' }, 'PRO') : null, t.id === 'alerts' && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : null);
+    t.pro && !isPro() ? el('span', { class: 'pro' }, 'PRO') : null, t.id === 'alerts' && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : newDot(t.id));   // newDot: 39-whatsnew.js
 }
 function drawNav() {
+  requestAnimationFrame(navFade);
   const list = navTabs(), phone = window.innerWidth <= 760 && ['left', 'right'].includes(S.ui.nav || 'left');
   if (!phone || list.length <= 5) { $('.nav').replaceChildren(...list.map(navLink)); return; }
   const first = list.slice(0, 4), rest = list.slice(4), inMore = rest.some((t) => t.id === current);
-  $('.nav').replaceChildren(...first.map(navLink), el('a', { href: '#', class: inMore ? 'on' : null, title: T('More'), onclick: (e) => { e.preventDefault(); moreSheet(rest); } }, icon('grid'), el('span', { class: 'nl' }, T('More')), rest.some((t) => t.id === 'alerts') && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : null));
+  $('.nav').replaceChildren(...first.map(navLink), el('a', { href: '#', class: inMore ? 'on' : null, title: T('More'), onclick: (e) => { e.preventDefault(); moreSheet(rest); } }, icon('grid'), el('span', { class: 'nl' }, T('More')), rest.some((t) => t.id === 'alerts') && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : rest.map((t) => newDot(t.id)).find(Boolean) || null));
 }
 function moreSheet(rest) {
-  const m = modal(el('div', { class: 'more-grid' }, rest.map((t) => el('a', { href: `#${t.id}`, class: `more-item${t.id === current ? ' on' : ''}`, onclick: () => m.remove() }, icon(t.icon, 24), el('span', {}, tabLabel(t))))), { title: T('More') });
+  const m = modal(el('div', { class: 'more-grid' }, rest.map((t) => el('a', { href: `#${t.id}`, class: `more-item${t.id === current ? ' on' : ''}`, onclick: () => m.remove() }, icon(t.icon, 24), el('span', {}, tabLabel(t)), newDot(t.id)))), { title: T('More') });
   m.classList.add('sheet');
 }
 let navT = null; addEventListener('resize', () => { clearTimeout(navT); navT = setTimeout(drawNav, 150); });
+/* A side bar with more buttons than fit fades at the bottom, so it's clear it scrolls. */
+const navFade = () => {
+  const n = $('.nav'); if (!n) return;
+  n.classList.toggle('more-below', n.scrollHeight - n.scrollTop - n.clientHeight > 4);
+  // a long word ("Erinnerungen") gets a slightly smaller size instead of being cut off
+  for (const l of n.querySelectorAll('.nl')) {
+    l.style.fontSize = ''; const a = l.parentElement, cs = getComputedStyle(a), room = a.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    if (!(room > 0)) continue;
+    const r = document.createRange(); r.selectNodeContents(l);
+    for (let px = parseFloat(getComputedStyle(l).fontSize), i = 0; r.getBoundingClientRect().width > room && i < 4; i++) l.style.fontSize = `${(px -= 0.75)}px`;
+  }
+};
+document.addEventListener('DOMContentLoaded', () => { $('.nav')?.addEventListener('scroll', navFade, { passive: true }); new ResizeObserver(navFade).observe($('.nav')); });
 function drawBanner() {
   const b = $('#banner'), s = S.status; if (!s) return;
   const p = s.pro || {}; b.className = ''; b.replaceChildren();
   if (s.demo) b.append(T('Demo mode - sample data, no real house connected.'), el('a', { href: '/setup.html' }, T('Set up my house')));
-  else if (S.updates?.available) b.append(icon('spark', 16), `CasaTorch ${S.updates.latest} is available${S.updates.auto ? ' - it installs itself overnight.' : '.'}`, el('a', { href: '#settings' }, S.updates.auto ? 'Details' : 'How to update'));
-  else if (p.plan === 'trial') b.append(icon('spark', 16), p.trialDaysLeft === 1 ? T('Pro trial: 1 day left - 3D Home, your Home AI Agent and Ring are unlocked.') : T('Pro trial: {n} days left - 3D Home, your Home AI Agent and Ring are unlocked.', { n: p.trialDaysLeft }), el('a', { href: '#settings' }, T('Enter a license key')));
-  else if (p.grace) b.append('Your Pro subscription has ended - Pro keeps working for a few more days.', el('a', { href: '#settings' }, 'Renew'));
-  else if (!p.pro) { b.className = 'free'; b.append(T('CasaTorch Free.'), el('a', { href: '#settings' }, T('See what Pro adds'))); }
+  else if (S.updates?.available && !updSnoozed(S.updates.latest)) b.append(icon('spark', 16), S.updates.auto ? T('CasaTorch {v} is available - it installs itself overnight.', { v: S.updates.latest }) : T('CasaTorch {v} is available.', { v: S.updates.latest }), el('a', { href: '#settings/updates' }, S.updates.auto ? T('Details') : T('How to update')), updSnoozeBtn(S.updates.latest));
+  else if (p.plan === 'trial') b.append(icon('spark', 16), p.trialDaysLeft === 1 ? T('Pro trial: 1 day left - 3D Home, your Home AI Agent and Ring are unlocked.') : T('Pro trial: {n} days left - 3D Home, your Home AI Agent and Ring are unlocked.', { n: p.trialDaysLeft }), el('a', { href: '#settings/pro' }, T('Enter a license key')));
+  else if (p.grace) b.append(T('Your Pro subscription has ended - Pro keeps working for a few more days.'), el('a', { href: '#settings/pro' }, T('Renew')));
+  else if (!p.pro) { b.className = 'free'; b.append(T('CasaTorch Free.'), el('a', { href: '#settings/pro' }, T('See what Pro adds'))); }
   b.hidden = !b.textContent;
 }
 function tick() { $('#clock').textContent = fmt(new Date().toISOString(), { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }

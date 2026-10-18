@@ -2,6 +2,10 @@
 # casatorch-update - run nightly by casatorch-update.timer (as root). If a newer CasaTorch is out and
 # automatic updates are on (Settings > Updates), downloads it from casatorch.com, checks its SHA-256
 # against the release, and installs it. Your settings in /var/lib/casatorch are kept.
+# Safe updates: a copy of the settings goes into the settings history first, the installed version is kept aside,
+# and if the new version doesn't answer within 5 minutes the old one (and its settings) is put back by itself -
+# that version is then skipped until a newer one is out. Progress and the result go to
+# /var/lib/casatorch/.update-status.json, which Settings > Updates shows.
 #   sudo /opt/casatorch/casatorch-update          check and update now
 set -eu
 NODE=/opt/casatorch/node/node
@@ -23,29 +27,73 @@ let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{
 }catch(e){}})" "$cur" "$file")
 [ -n "$plan" ] || { echo "CasaTorch $cur is up to date"; exit 0; }
 ver=${plan% *}; sha=${plan#* }
+DATA=/var/lib/casatorch
+PORT=${CASATORCH_PORT:-8090}
+# Progress for Settings > Updates (and the "An update didn't work" troubleshooter).
+status() {
+  printf '{"state":"%s","from":"%s","to":"%s","at":"%s","message":"%s"}\n' "$1" "$cur" "$ver" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(printf '%s' "${2:-}" | tr -d '"\\' | head -c 300)" > "$DATA/.update-status.json.tmp" 2>/dev/null \
+    && chmod 600 "$DATA/.update-status.json.tmp" && chown casatorch:casatorch "$DATA/.update-status.json.tmp" 2>/dev/null; mv -f "$DATA/.update-status.json.tmp" "$DATA/.update-status.json" 2>/dev/null || true
+}
+if [ "$(cat "$DATA/.update-skip" 2>/dev/null || true)" = "$ver" ]; then echo "CasaTorch $ver didn't start here last time - waiting for a newer version"; exit 0; fi
+status downloading
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 echo "downloading CasaTorch $ver"
 curl -fsSL --max-time 900 -H "X-CasaTorch-Updater: 1" -o "$tmp/$file" "https://casatorch.com/dl/$file"
 got=$(sha256sum "$tmp/$file" | cut -d' ' -f1)
-[ "$got" = "$sha" ] || { echo "checksum does not match the release - not installing" >&2; exit 1; }
+[ "$got" = "$sha" ] || { status failed "The download didn't match the release - nothing was changed."; echo "checksum does not match the release - not installing" >&2; exit 1; }
 # The release's list of checksums must be signed with CasaTorch's offline release key (built into this package):
 # a download that only matches casatorch.com's own word is not enough.
 KEY=/opt/casatorch/release-key.pem
 if [ -f "$KEY" ]; then
   curl -fsSL --max-time 60 -o "$tmp/SHA256SUMS" "https://casatorch.com/dl/SHA256SUMS" && curl -fsSL --max-time 60 -o "$tmp/SHA256SUMS.sig" "https://casatorch.com/dl/SHA256SUMS.sig" \
-    || { echo "the release isn't signed (or the signature couldn't be downloaded) - not installing" >&2; exit 1; }
+    || { status failed "The release's signature couldn't be checked - nothing was changed."; echo "the release isn't signed (or the signature couldn't be downloaded) - not installing" >&2; exit 1; }
   "$NODE" -e "const c=require('crypto'),f=require('fs');process.exit(c.verify(null,f.readFileSync(process.argv[1]),f.readFileSync(process.argv[3],'utf8'),f.readFileSync(process.argv[2]))?0:1)" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.sig" "$KEY" \
-    || { echo "the release's signature is not CasaTorch's - not installing" >&2; exit 1; }
+    || { status failed "The release isn't signed by CasaTorch - nothing was changed."; echo "the release's signature is not CasaTorch's - not installing" >&2; exit 1; }
   signed=$(awk -v f="$file" '$2==f || $2=="*"f {print $1}' "$tmp/SHA256SUMS")
-  [ "$signed" = "$got" ] || { echo "the download doesn't match the signed checksum - not installing" >&2; exit 1; }
+  [ "$signed" = "$got" ] || { status failed "The download didn't match the signed release - nothing was changed."; echo "the download doesn't match the signed checksum - not installing" >&2; exit 1; }
 fi
 # A copy of the settings first, in CasaTorch's settings history (Settings > Health can put it back).
-DATA=/var/lib/casatorch
+snap=""
 if [ -f "$DATA/config.json" ]; then
   snap="$DATA/.settings-history/$(date -u +%Y%m%dT%H%M%SZ)-before-update"
   mkdir -p "$snap" && chmod 700 "$DATA/.settings-history" "$snap"
   for f in config.json users.json secret.key; do [ -f "$DATA/$f" ] && cp -p "$DATA/$f" "$snap/$f"; done
   chown -R casatorch:casatorch "$DATA/.settings-history" 2>/dev/null || true
 fi
-DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$tmp/$file"
-echo "updated CasaTorch $cur -> $ver"
+# The installed version, kept aside (outside the data folder, so backups don't carry it) to go back to.
+RB=/var/cache/casatorch-rollback
+mkdir -p "$RB" && chmod 700 "$RB"
+tar -C /opt -czf "$RB/casatorch-app.tgz.tmp" casatorch && mv -f "$RB/casatorch-app.tgz.tmp" "$RB/casatorch-app.tgz"
+status installing
+if ! DEBIAN_FRONTEND=noninteractive apt-get install -y -q "$tmp/$file"; then
+  status failed "Installing the new version didn't work - CasaTorch $cur is still installed."
+  echo "installing $ver failed - $cur is still installed" >&2; exit 1
+fi
+# Does the new version start and answer? Up to 5 minutes (a slow Raspberry Pi takes a while the first time).
+status verifying
+up=0
+for _ in $(seq 1 60); do
+  h=$(curl -fsS --max-time 3 "http://127.0.0.1:$PORT/api/health" 2>/dev/null || true)
+  case "$h" in *"\"version\":\"$ver\""*) up=1; break ;; esac
+  sleep 5
+done
+if [ "$up" = 1 ]; then
+  status done
+  rm -f "$DATA/.update-skip"
+  echo "updated CasaTorch $cur -> $ver"
+  exit 0
+fi
+# It didn't come up: put back the version and the settings from before, and skip this version.
+echo "CasaTorch $ver didn't answer within 5 minutes - going back to $cur" >&2
+systemctl stop casatorch || true
+if [ -n "$snap" ]; then
+  aside="$DATA/.settings-history/$(date -u +%Y%m%dT%H%M%SZ)-after-failed-update"
+  mkdir -p "$aside" && chmod 700 "$aside"
+  for f in config.json users.json secret.key; do [ -f "$DATA/$f" ] && cp -p "$DATA/$f" "$aside/$f"; [ -f "$snap/$f" ] && cp -p "$snap/$f" "$DATA/$f"; done
+  chown -R casatorch:casatorch "$DATA/.settings-history" "$DATA/config.json" "$DATA/users.json" "$DATA/secret.key" 2>/dev/null || true
+fi
+rm -rf /opt/casatorch.failed && mv /opt/casatorch /opt/casatorch.failed && tar -C /opt -xzf "$RB/casatorch-app.tgz" && rm -rf /opt/casatorch.failed
+printf '%s\n' "$ver" > "$DATA/.update-skip"; chown casatorch:casatorch "$DATA/.update-skip" 2>/dev/null || true
+systemctl start casatorch || true
+status rolled-back "CasaTorch $ver didn't answer within 5 minutes, so $cur was put back with your settings from before the update."
+exit 1

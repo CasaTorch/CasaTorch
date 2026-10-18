@@ -13,7 +13,12 @@
  * Microsoft) - so CasaTorch never sends anything to an address someone
  * typed in; the signing key is sealed on disk like every other secret.
  * ====================================================================== */
-import webpush from 'web-push';
+/* web-push is loaded the first time an alert goes to a browser; making the keys needs only Node's own crypto
+   (the same P-256 keys web-push makes, padded the same way). Saves a quarter second at every start on a Pi. */
+const webpush = {
+  generateVAPIDKeys() { const e = crypto.createECDH('prime256v1'); e.generateKeys(); const pk = e.getPrivateKey(); return { publicKey: e.getPublicKey().toString('base64url'), privateKey: Buffer.concat([Buffer.alloc(Math.max(0, 32 - pk.length)), pk]).toString('base64url') }; },
+  async sendNotification(...a) { return (await import('web-push')).default.sendNotification(...a); },
+};
 
 const PUSH_FILE = path.join(DATA_DIR, 'push.json');
 const push = { vapid: null, subs: [] };

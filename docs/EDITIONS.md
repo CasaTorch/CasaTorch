@@ -1,73 +1,95 @@
-# CasaTorch Free and Pro
+# CasaTorch Basic and Pro
 
-**Free is a complete home dashboard, for good.** Pro adds the showpiece features and, as they
-ship, the things that cost money to run (remote access, phone alerts, cloud backups).
+**Basic is a complete home dashboard, free for good.** Pro adds the showpiece features and, as they
+ship, the things that cost money to run (remote access, cloud backups).
 
-**Pro: $5/month or $49/year.** Every new install gets a
-**14-day Pro trial** - no card, nothing to cancel. A Pro key is checked on your box, offline;
-CasaTorch never phones home to check it.
+**Pro: $5/month or $49/year.** Every new install gets a **14-day Pro trial** - no card, nothing to
+cancel. A Pro key is checked on your box, offline; CasaTorch never phones home to check it.
 
-## What's in each
+This table is the single source of truth for what is in each edition. It follows the code (the
+`requirePro` route guards and `proStatus()` checks in `app/src/server/`); the Settings › CasaTorch Pro
+list, casatorch.com and the README follow this table.
 
 ✓ = included · **Now** = in the current release · **Coming** = on the roadmap (Pro buyers get it when it ships, no extra cost)
 
-| | Free | Pro | |
+| | Basic | Pro | |
 | --- | :---: | :---: | --- |
 | **The dashboard** | | | |
-| Home screen of widgets you drag, resize, add and remove - tiles show more as they grow | ✓ | ✓ | Now |
-| 14 widgets: clock, weather, calendar, scores, headlines, internet, today, alerts, energy, quick switches, pinned devices (add as many as you like), cameras, photo reel, 3D Home* | ✓ | ✓ | Now |
-| Panel mode for wall tablets: status bar of everything connected, keeps the screen on, full screen | ✓ | ✓ | Now |
-| Light and dark mode, color schemes and custom colors, menu on any side of the screen | ✓ | ✓ | Now |
-| Rename anything: menu items, tiles, devices, the house; hide what you don't use | ✓ | ✓ | Now |
-| Unlimited screens at home; sign-in with a password, PIN for risky actions | ✓ | ✓ | Now |
-| **Security Center** | | | |
-| Video wall of every camera (layouts, full screen, live video where available) | ✓ | ✓ | Now |
-| Doors and locks with "Lock all", the alarm (arm only), smoke and leak sensors | ✓ | ✓ | Now |
-| Devices on your home network, with an alert when a new one joins; daily check for risky open services | ✓ | ✓ | Now |
-| Security checklist and recent security events | ✓ | ✓ | Now |
+| Home screen of widgets you drag, resize, add and remove (35 widgets), themes, your own main bar | ✓ | ✓ | Now |
+| Panel mode for wall tablets: status bar, keeps the screen on, full screen | ✓ | ✓ | Now |
+| Rename anything; hide what you don't use; 14 languages | ✓ | ✓ | Now |
+| Unlimited screens at home; sign-ins for the family with optional two-step codes; PIN for risky actions | ✓ | ✓ | Now |
+| **Safety and security** | | | |
+| Every alert - leaks, smoke, doors, low batteries, devices offline, internet down - on every screen and phone | ✓ | ✓ | Now |
+| Phone alerts: the web app on your home screen, the Home Assistant app, and the CasaTorch apps (coming) | ✓ | ✓ | Now |
+| Fewer false alarms: an alert must still be there a minute later (water and smoke go out at once) | ✓ | ✓ | Now |
+| Security Center: video wall, doors and locks with "Lock all", the alarm (arm only), new-device alerts, open-port check | ✓ | ✓ | Now |
 | Secure address at home (https on your home network), on by default | ✓ | ✓ | Now |
-| App tests: common apps timed step by step, latency, jitter, loss, the path hop by hop (up to 8) | ✓ | ✓ | Now |
-| App tests for your own websites, every minute, alerts, up to 30 | | ✓ | Now |
+| **Smart alerts**: doorbell and motion only when nobody's home; critical alerts repeat every 10 minutes until someone taps "Got it" | | ✓ | Now |
 | **Your day** | | | |
-| Reminders: your own reminders (trash night, the dog's dinner, bills due) that light up every screen, with an icon or photo | ✓ | ✓ | Now |
-| Reminders sent to phones, anywhere, even in quiet hours | | ✓ | Now |
-| Weather, family calendar (built in - no Google needed - plus Google/iCloud/Outlook links), sports scores, news, reminders | ✓ | ✓ | Now |
-| Photo reel: upload photos from any phone or computer, slideshow on the wall | ✓ | ✓ | Now |
+| Weather, family calendar (built in, plus Google/iCloud/Outlook links), sports scores, headlines | ✓ | ✓ | Now |
+| Rain radar (RainViewer, or the US National Weather Service) and your own weather station | ✓ | ✓ | Now |
+| Reminders on every screen, with icons, sounds or your photos | ✓ | ✓ | Now |
+| Household: bin day, mail, thirsty plants, washer, dryer and dishwasher | ✓ | ✓ | Now |
+| Family hub: shared lists, chores and stars, kids' routines, meal plan | ✓ | ✓ | Now |
+| Photo reel | ✓ | ✓ | Now |
+| **Reminders on phones**: your reminders and Household reminders sent to everyone's phone, anywhere, even in quiet hours | | ✓ | Now |
 | **Your home** | | | |
 | Setup that asks the questions and connects everything for you | ✓ | ✓ | Now |
 | Without Home Assistant: Hue, Shelly, YoLink, Frigate, Reolink, any snapshot camera | ✓ | ✓ | Now |
-| With Home Assistant: everything in it - lights, fans, covers, media, climate, locks, cameras, scenes, scripts, vacuums, alarms, people, every sensor - searchable and pinnable to tiles | ✓ | ✓ | Now |
-| Controls, cameras, sensors, energy (watts and cost per device), network and speed tests | ✓ | ✓ | Now |
-| Alerts on the dashboard: leaks, smoke, low batteries, devices offline, internet down | ✓ | ✓ | Now |
-| **Pro** | | | |
-| **3D Home** - your home as a live 3D plan: **draw your floors in the app** (any device, or trace a floor-plan picture) or **upload a LiDAR scan** (iPhone 12 Pro or newer Pro, iPad Pro 2020 or newer); pin devices where they are; lights glow, music pulses, leaks flash; tap to switch | | ✓ | Now |
-| **Home AI Agent** - plain-English questions about your home; suggests actions you tap to do; in the panel-mode status bar too. Bring your own AI (Claude, OpenAI - **billed to you by them**) or run it free and privately with Ollama | | ✓ | Now |
+| With Home Assistant: everything in it, searchable and pinnable | ✓ | ✓ | Now |
+| Energy from plugs and from Home Assistant's Energy dashboard; watts and cost per device | ✓ | ✓ | Now |
+| Energy history by day and by device | 7 days shown | 2 years | Now |
+| This month's electricity bill forecast | | ✓ | Now |
+| Health: CasaTorch checks itself, repairs what it can and says what it fixed | ✓ | ✓ | Now |
+| Encrypted backup and restore | ✓ | ✓ | Now |
+| Internet status and speed tests | ✓ | ✓ | Now |
+| App tests: the path hop by hop and the likely culprit | Built-in apps, up to 8, every 5 or 15 min | Plus your own websites, up to 30, every 1, 5 or 15 min, with alerts | Now |
+| **Pro features** | | | |
+| **3D Home**: draw or scan your floors, yard and furniture; live devices, power and sunlight; replay up to 7 days | View only* | ✓ | Now |
+| **Home AI Agent** (your own Claude, OpenAI or Ollama - AI usage billed by them) | | ✓ | Now |
 | **Ring** doorbells and cameras without Home Assistant (Labs - unofficial API) | | ✓ | Now |
-| **Away from home** - secure remote access from your phone, no port forwarding | | ✓ | Coming |
-| **Phone alerts** - push notifications for leaks, doorbell, alarms, with quiet hours (web app on your home screen) | ✓ | ✓ | Now |
-| **CasaTorch apps** for iPhone, iPad and Android (App Store / Play Store): Face ID / fingerprint lock, end-to-end encrypted alerts, LiDAR room scans | ✓ | ✓ | Coming (built, in testing) |
-| **Smart alerts** - doorbell and motion only when nobody's home; critical alerts repeat every 10 minutes until acknowledged | | ✓ | Now |
-| Fewer false alarms: an alert must still be there a minute later (water and smoke go out at once) | ✓ | ✓ | Now |
-| **Weekly report** - every Monday: energy and cost vs the week before, always-on load, top devices, alerts, internet and server downtime, tips (written by your AI if connected, otherwise by rules); phone alert | | ✓ | Now |
-| Bill forecast for the month | | ✓ | Now |
-| **Health** - CasaTorch checks itself every 15 minutes (storage, clock, settings, connections, certificates, backups), tries a connection that stops answering again, puts back damaged settings from its own history, restarts itself if it gets stuck, and tells you what it fixed | ✓ | ✓ | Now |
-| Energy history (by day and by device) | 7 days | 2 years | Now |
-| Multiple homes (cabin, parents' house) in one app | | ✓ | Coming |
-| Extra wall-panel layouts and theme packs | | ✓ | Coming |
-| Encrypted backup and restore (settings, sign-ins, floor plans, history, photos) | ✓ | ✓ | Now |
-| Network monitoring: UniFi and Cisco Meraki (every device online/offline, connected clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), alerts when a device drops off - free keeps internet status and speed tests | | ✓ | Now |
-| Wi-Fi health and per-client detail for UniFi and Meraki | | ✓ | Coming |
-| Server monitor: NAS, servers and self-hosted apps - up or down, response time, 24-hour uptime, certificate expiry, alerts | | ✓ | Now |
-| Server monitor: storage and temperatures (needs an agent on the server) | | ✓ | Coming |
+| **Weekly report** every Monday, written by your AI if connected | | ✓ | Now |
+| **Server monitor**: NAS, servers and self-hosted apps, certificates, alerts | | ✓ | Now |
+| **Network monitoring**: UniFi, Cisco Meraki, Pi-hole, AdGuard Home, with alerts | | ✓ | Now |
+| **Cisco Meraki** MV camera pictures and MT sensor readings (through the Meraki network connection) | | ✓ | Now |
+| **Away from home**: secure remote access from your phone, no port forwarding | At home only | ✓ | Coming |
+| CasaTorch apps for iPhone, iPad and Android | ✓ | ✓ | Coming |
+| Multiple homes in one app; extra panel layouts and theme packs; cloud backup | | ✓ | Coming |
 | E-mail help | ✓ | ✓ | Now |
 
-\* The 3D Home tile needs Pro. 3D Home works with no special hardware if you draw your floors; LiDAR scanning needs an iPhone 12 Pro or newer *Pro* model, or an iPad Pro (2020 or newer).
+\* A 3D home made during the trial or a subscription stays on your box and can still be looked at;
+drawing, editing and the 3D Home tab need Pro.
+
+## When the trial or a subscription ends
+
+- **Nothing is deleted.** Your 3D home, history, reports, monitors and settings stay on your box and
+  come back as soon as a key is added.
+- **Safety never stops.** Every alert keeps reaching every screen and phone; only the Pro extras
+  (repeating critical alerts, "only when nobody's home") switch back to plain alerts.
+- **Grace days.** A monthly or yearly key keeps Pro on for 14 days after its end date - 30 days if
+  casatorch.com couldn't be reached to fetch the renewed key, so an outage on our side never switches
+  anyone's Pro off.
+- **Clear next step.** Pro screens say what Pro adds and link to Settings › CasaTorch Pro.
+
+## How the license works
+
+- A key is signed by CasaTorch (Ed25519) and checked on the box, offline. The private signing key
+  is never in this repository.
+- Monthly keys run to the end of the paid month plus 3 days. A yearly charge first gets a key for
+  21 days (the 14-day refund window plus a week); after the window CasaTorch fetches the key for the
+  rest of the paid year by itself. Renewals work the same way, automatically.
+- One purchase covers one home, with room for a reinstall or a new box. Claiming the key on a new
+  box ("Get my key by e-mail") moves it; a box that stops checking in frees its place after 90 days.
+- Refunds and chargebacks stop the key being handed out or extended; a key already on a box runs to
+  its own end date (at most a few weeks after a refund).
+- The 14-day trial counts calendar days and running time, so setting the clock back doesn't stretch it.
 
 ## Why it's split this way
 
-Everything you need to run your house from a wall screen is free and open source (AGPL-3.0).
-Pro pays for what costs money to run - the remote-access relay, push notifications, backups -
-and for the features that took the most work: the 3D Home, Home AI Agent and Ring.
+Everything you need to run your house from a wall screen - and every safety alert - is free and open
+source (AGPL-3.0). Pro pays for what costs money to run - the remote-access relay, backups - and for
+the features that took the most work: the 3D Home, Home AI Agent, Ring and the monitoring tools.
 
 ## Using AI with Home AI Agent
 
@@ -84,8 +106,7 @@ A ChatGPT Plus or Claude Pro *subscription* does not include API use - you need 
 platform.openai.com or console.anthropic.com, with billing set up there. Both let you set a monthly
 spending limit.
 
-
 Home AI Agent sends a snapshot of your home (device names and states, the calendar, weather) to
 the AI you choose, only when you ask a question. Choose **Ollama** and it never leaves your
-network. CasaTorch only suggests actions - you tap to do them - and it never unlocks doors or opens
-garage doors.
+network. CasaTorch only suggests actions - you tap to do them - and it never unlocks doors, opens
+garage doors or disarms alarms.

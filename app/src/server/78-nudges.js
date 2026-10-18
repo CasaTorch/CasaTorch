@@ -181,5 +181,6 @@ app.get('/api/nudges/:id/photo', (req, res) => {
 });
 function nudgeDemo() {
   const mk = (id, title, icon, time, repeat, extra = {}) => ({ id, title, icon, photo: false, time, repeat, days: [], date: null, flash: true, push: true, on: true, lastFired: null, sound: 'chime', ...extra });
-  return { pro: true, demo: true, icons: NUDGE_ICONS, phones: 2, today: ['d1', 'd2'], list: [mk('d1', 'Trash night', 'trash', '19:30', 'weekly', { days: [2] }), mk('d2', "Dog's dinner", 'paw', '17:30', 'daily'), mk('d3', 'Electric bill due', 'bill', '09:00', 'monthly', { date: '2026-01-15' }), mk('d4', "Mom's birthday", 'cake', '08:00', 'yearly', { date: '2026-03-22' }), mk('d5', 'Water the plants', 'plant', '08:30', 'weekly', { days: [1, 4] })] };
+  const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(new Intl.DateTimeFormat('en-US', { timeZone: config.house?.timezone || 'America/Los_Angeles', weekday: 'short' }).format(new Date()));   // the demo's bin night is always tonight
+  return { pro: true, demo: true, icons: NUDGE_ICONS, phones: 2, today: ['d1', 'd2'], list: [mk('d1', 'Trash night', 'trash', '19:30', 'weekly', { days: [dow] }), mk('d2', "Dog's dinner", 'paw', '17:30', 'daily'), mk('d3', 'Electric bill due', 'bill', '09:00', 'monthly', { date: '2026-01-15' }), mk('d4', "Mom's birthday", 'cake', '08:00', 'yearly', { date: '2026-03-22' }), mk('d5', 'Water the plants', 'plant', '08:30', 'weekly', { days: [1, 4] })] };
 }

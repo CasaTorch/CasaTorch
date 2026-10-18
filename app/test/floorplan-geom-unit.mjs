@@ -181,7 +181,8 @@ export default async function floorplanGeomTests(t) {
     assert.ok(ops.find((o) => o.userData.kind === 'double').getObjectByName('leaf2'));
     assert.ok(ops.find((o) => o.userData.kind === 'window').getObjectByName('cover'), 'a window with a blind has its cover');
     assert.ok(ops.find((o) => o.userData.kind === 'garage').userData.lift > 2);
-    const walls = g.children.filter((c) => c.name.startsWith('Wall')); assert.ok(walls.length >= 7 + 4, 'walls cut around the openings');
+    const walls = g.children.filter((c) => c.name.startsWith('Wall')); assert.ok(walls.length >= 7, 'one mesh per stretch of wall');
+    assert.ok(walls.filter((c) => c.geometry.attributes.position.count > 24).length >= 3, 'walls cut around the openings (the pieces of a stretch merged into one mesh)');
     assert.ok(g.children.some((c) => c.name.startsWith('Stairs')));
     const up = { id: 'b', kind: 'drawn', level: 1, heightM: 2.7, plan: { rooms: [{ x: 0, y: 0, w: 8, h: 4 }] } };
     const slab = D.buildDrawnGroup(up, { floors: [f, up] }).children.find((c) => c.name.startsWith('Floor'));

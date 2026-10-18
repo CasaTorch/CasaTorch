@@ -13,7 +13,7 @@
  *    faster.
  * ====================================================================== */
 import zlib from 'node:zlib';
-import QRCode from 'qrcode';
+const QRCode = { toString: async (...a) => (await import('qrcode')).default.toString(...a) };   // loaded the first time a QR code is drawn, not at every start
 const PUBLIC_DIR = path.join(APP_DIR, 'public'), THREE_DIR = path.join(APP_DIR, 'node_modules', 'three');
 const inlineScriptHashes = (() => {
   const out = new Set();
@@ -109,22 +109,28 @@ app.use('/api', (req, res, next) => {
 
 /* Compressed static files, cached in memory per file version. Mounted later (99-start), after sign-in. */
 const packed = new Map();
+/* Brotli quality 6, not 8: a quarter of the time for 2% larger files - the 3D engine packed in about 70 ms instead of
+   330 (four times that on a Raspberry Pi), and the page load no longer holds up the live updates. Done in line on
+   purpose: on the thread pool each worker thread keeps its own copy of the encoder's memory (~100 MB more on a Pi). */
+function packFile(file, enc, v) {
+  const raw = fs.readFileSync(file);
+  const body = enc === 'br' ? zlib.brotliCompressSync(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 6, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } }) : zlib.gzipSync(raw, { level: 6 });
+  const hit = { v, body, etag: `"${crypto.createHash('sha1').update(raw).digest('base64url').slice(0, 16)}-${enc}"` };
+  packed.set(`${file}|${enc}`, hit);
+  return hit;
+}
 function staticPacked(req, res, next) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   const vendor = req.path.startsWith('/vendor/three/');
-  let file = vendor ? path.join(THREE_DIR, decodeURIComponent(req.path.slice('/vendor/three/'.length))) : path.join(PUBLIC_DIR, decodeURIComponent(req.path === '/' ? 'index.html' : req.path));
+  let file;
+  try { file = vendor ? path.join(THREE_DIR, decodeURIComponent(req.path.slice('/vendor/three/'.length))) : path.join(PUBLIC_DIR, decodeURIComponent(req.path === '/' ? 'index.html' : req.path)); } catch { return next(); }   // a broken %-escape
   file = path.normalize(file);
-  if (!file.startsWith(vendor ? THREE_DIR : PUBLIC_DIR) || !/\.(m?js|css|html|svg|json)$/.test(file)) return next();
+  if (!file.startsWith((vendor ? THREE_DIR : PUBLIC_DIR) + path.sep) || !/\.(m?js|css|html|svg|json)$/.test(file)) return next();
   const ae = String(req.headers['accept-encoding'] || ''), enc = /\bbr\b/.test(ae) ? 'br' : /\bgzip\b/.test(ae) ? 'gzip' : null;
   let st; try { st = fs.statSync(file); if (!st.isFile() || st.size < 1024) return next(); } catch { return next(); }
   if (!enc) return next();
-  const key = `${file}|${enc}`; let hit = packed.get(key);
-  if (!hit || hit.v !== st.mtimeMs) {
-    const raw = fs.readFileSync(file);
-    const body = enc === 'br' ? zlib.brotliCompressSync(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 8, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } }) : zlib.gzipSync(raw, { level: 9 });
-    hit = { v: st.mtimeMs, body, etag: `"${crypto.createHash('sha1').update(raw).digest('base64url').slice(0, 16)}-${enc}"` };
-    packed.set(key, hit);
-  }
+  let hit = packed.get(`${file}|${enc}`);
+  if (!hit || hit.v !== st.mtimeMs) { try { hit = packFile(file, enc, st.mtimeMs); } catch { return next(); } }
   res.setHeader('Vary', 'Accept-Encoding'); res.setHeader('ETag', hit.etag);
   res.setHeader('Cache-Control', vendor ? 'public, max-age=604800, immutable' : 'no-cache');
   if (req.headers['if-none-match'] === hit.etag) return res.status(304).end();

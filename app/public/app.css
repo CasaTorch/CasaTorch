@@ -745,3 +745,39 @@ html.rd-lock, html.rd-lock body { overflow: hidden; }
 .editing .rd { cursor: inherit; }
 @media (max-width: 760px) { .rd-big .rd-legend .rd-snow, .rd-big .rd-legend .rd-snow + span { display: none; } .rd-zoom { right: 10px; } .rd-big .rd-top { top: 10px; left: 10px; right: 10px; } .rd-big .rd-foot { left: 10px; right: 10px; bottom: 10px; } }
 @media (prefers-reduced-motion: reduce) { .rd-pin::before { animation: none; opacity: 0; } .rd-full, .rd-zooming .rd-cv { animation: none; } }
+/* ---- Final experience review (0.8): small fixes found walking every page ---- */
+/* lists laid out as a grid never grow wider than the card (long device names and addresses shorten with ...) */
+.lanlist, .ha-found-list, .hh-list { grid-template-columns: minmax(0, 1fr); }
+.ha-found-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hh-item select { max-width: 112px !important; }
+.atbig { white-space: nowrap; }
+/* the side bar fits a laptop's screen without scrolling (Settings stays in reach) */
+@media (min-width: 761px) and (max-height: 980px) {
+  body.nav-m.nav-left .nav a, body.nav-m.nav-right .nav a { padding: 6px 4px 5px; gap: 2px; }
+  body.nav-m.nav-left .nav a svg, body.nav-m.nav-right .nav a svg { width: 20px; height: 20px; }
+  body.nav-left .rail .logo, body.nav-right .rail .logo { margin-bottom: 6px; }
+  body.nav-left .nav, body.nav-right .nav { gap: 2px; }
+}
+@media (min-width: 761px) and (max-height: 840px) {
+  body.nav-m.nav-left .nav a, body.nav-m.nav-right .nav a { padding: 4px 4px 3px; gap: 1px; font-size: 10.5px; }
+  body.nav-m.nav-left .nav a svg, body.nav-m.nav-right .nav a svg { width: 19px; height: 19px; }
+  body.nav-left .rail, body.nav-right .rail { padding: 10px 0; }
+  body.nav-left .rail .logo, body.nav-right .rail .logo { width: 36px; height: 36px; margin-bottom: 4px; }
+}
+/* when the bar still scrolls (many buttons, a short screen), a soft fade says there is more below */
+body.nav-left .nav.more-below, body.nav-right .nav.more-below { -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent); mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+/* "New" on a section added in this version, until it has been opened once */
+.nav a .newdot { position: absolute; top: 5px; right: 14px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--rail-bg, var(--bg)); }
+.newtag { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .03em; vertical-align: middle; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.more-item { position: relative; } .more-item .newdot { position: absolute; top: 8px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+/* What's new sheet */
+.wn { max-width: 520px; } .wn-list { display: grid; gap: 10px; margin: 6px 0 14px; padding: 0; list-style: none; }
+.wn-item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); text-decoration: none; color: inherit; }
+.wn-item:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wn-item > span:first-child { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.wn-item > span:first-child svg { width: 19px; height: 19px; } .wn-item b { display: block; } .wn-item small { color: var(--muted); line-height: 1.4; }
+.wn-ver { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 0 0 4px; }
+.ha-found > .row > b.grow { flex: 1 1 180px; }
+/* panel mode on a tablet: the Home AI Agent bar gets its own row, so neither it nor the status chips are squeezed */
+#statusbar .sb-ask input { min-width: 120px; }
+@media (min-width: 761px) and (max-width: 1280px) { #statusbar { flex-wrap: wrap; row-gap: 8px; } #statusbar .sb-ask { order: 9; flex: 1 1 100%; max-width: none; } }

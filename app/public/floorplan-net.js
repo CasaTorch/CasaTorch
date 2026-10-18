@@ -103,23 +103,28 @@ function netCard(t) {
     X.el('div', { class: 'row' }, X.el('a', { class: 'mini', href: '/#network', target: '_top' }, T('Open the Network tab')), X.el('button', { type: 'button', class: 'mini', onclick: X.closeModal }, T('Close')))));
 }
 async function savePins(pins) {
-  try { const r = await X.send('/api/floorplan/net-pins', 'PUT', { pins }); N.data.pins = r.pins; N.fsig = ''; sync(); }
+  try { const r = await X.send('/api/floorplan/net-pins', 'PUT', { pins }); N.data.pins = r.pins; N.fsig = ''; sync(); if (X.S.mode === 'edit' && X.S.tab === 'network') X.editor?.(); }
   catch (e) { X.toast(e.status === 402 ? T('Editing the 3D home is part of CasaTorch Pro.') : e.message); }
 }
-/* Editor > Network: what can go on the plan, and where it is. */
-function networkPanel() {
+/* Edit > Network (a tab of the editor): what can go on the plan, and where it is. */
+export function panel() {
   const d = N.data || { things: [], pins: [] }, placed = new Set((d.pins || []).map((p) => p.ref));
   const group = (title, list) => (list.length ? [X.el('h3', {}, title), ...list.map((t) => X.el('div', { class: 'nrow' }, X.el('span', { class: `dotst ${pinView(t).cls}` }), icon(KIND_ICON[t.kind] || 'server'), X.el('span', { class: 'nm' }, t.name, X.el('small', {}, pinView(t).val)),
-    X.el('button', { type: 'button', class: 'mini primary', onclick: () => { X.closeModal(); startPlacing(t.ref); } }, placed.has(t.ref) ? T('Move') : T('Place')),
-    placed.has(t.ref) ? X.el('button', { type: 'button', class: 'mini', onclick: () => { savePins(d.pins.filter((p) => p.ref !== t.ref)); X.closeModal(); } }, T('Remove')) : null))] : []);
+    X.el('button', { type: 'button', class: 'mini primary', onclick: () => startPlacing(t.ref) }, placed.has(t.ref) ? T('Move') : T('Place')),
+    placed.has(t.ref) ? X.el('button', { type: 'button', class: 'mini', onclick: () => savePins(d.pins.filter((p) => p.ref !== t.ref)) }, T('Remove')) : null))] : []);
   const th = d.things || [];
-  X.modal(X.el('div', { class: 'box netbox wide' }, X.el('h2', {}, T('Network on the plan')),
-    X.el('p', { class: 'note' }, T('Put your Wi-Fi access points, network gear and servers where they really are. They turn red when they go offline; the internet pin turns red when the internet is down.')),
+  return X.el('div', { class: 'netpanel' },
     ...group(T('Internet'), th.filter((t) => t.kind === 'modem')), ...group(T('Wi-Fi access points'), th.filter((t) => t.kind === 'ap')),
     ...group(T('Other network gear'), th.filter((t) => ['gateway', 'switch', 'device'].includes(t.kind))), ...group(T('Servers you watch'), th.filter((t) => t.kind === 'server')),
-    !d.connected?.network ? X.el('p', { class: 'note' }, T('To place access points, connect UniFi or Meraki in the Network tab.')) : null,
-    !d.connected?.monitors ? X.el('p', { class: 'note' }, T('To place servers, add them to watch in the Network tab.')) : null,
-    X.el('div', { class: 'row' }, X.el('button', { type: 'button', class: 'mini', onclick: X.closeModal }, T('Close')))));
+    X.el('p', { class: 'note' }, T('They turn red when they go offline; the internet pin turns red when the internet is down.')),
+    !d.connected?.network ? X.el('p', { class: 'note' }, T('To place access points, connect your network controller in the Network tab of the dashboard.')) : null,
+    !d.connected?.monitors ? X.el('p', { class: 'note' }, T('To place servers, add them to watch in the Network tab of the dashboard.')) : null);
+}
+/* For "What can I add?": everything that can be placed (or moved). */
+export function addItems() {
+  const d = N.data || { things: [], pins: [] }, placed = new Set((d.pins || []).map((p) => p.ref));
+  const word = { modem: 'internet modem router', ap: 'wifi wi-fi access point', gateway: 'router gateway', switch: 'switch', server: 'server nas', device: 'network' };
+  return (d.things || []).map((t) => ({ label: placed.has(t.ref) ? T('{name} (move)', { name: t.name }) : t.name, words: `${word[t.kind] || ''} network`, run: () => startPlacing(t.ref) }));
 }
 /* Placing: tap the house where it is (a drag still turns the view). */
 function startPlacing(ref) {
@@ -222,12 +227,11 @@ function toolsButton() {
   t.append(X.el('button', { type: 'button', id: 'wifiTog', class: `tog${N.wifi ? ' on' : ''}`, title: T('Estimated Wi-Fi coverage, room by room'), onclick: () => { N.wifi = !N.wifi; try { localStorage.setItem('casatorch-3d-wifi', N.wifi ? '1' : '0'); } catch { /* fine */ } sync(); toolsButton(); } }, icon('wifi'), T('Wi-Fi')));
 }
 
-/* ---------- Editor: Network and Backups ---------- */
+/* ---------- Editor: Backups (next to Undo and Redo; Network is a tab of its own) ---------- */
 function editorButtons() {
   const bar = document.querySelector('#left .undobar'); if (!bar || bar.querySelector('.nbx')) return;
-  bar.insertBefore(X.el('span', { class: 'nbx' },
-    X.el('button', { type: 'button', class: 'mini', title: T('Place access points, servers and the internet on the plan'), onclick: networkPanel }, T('Network')),
-    X.el('button', { type: 'button', class: 'mini', title: T('Download, upload and restore points'), onclick: backupPanel }, T('Backups'))), bar.querySelector('small'));
+  bar.append(X.el('span', { class: 'nbx' },
+    X.el('button', { type: 'button', class: 'mini', title: T('Download, upload and restore points'), onclick: backupPanel }, T('Backups'))));
 }
 const WHY = { auto: 'A change', start: 'When CasaTorch started', 'before-import': 'Before an upload', imported: 'Uploaded plan', 'before-restore': 'Before going back' };
 async function backupPanel() {

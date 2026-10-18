@@ -18,8 +18,9 @@ function haLiveStart() {
   const h = config.homeAssistant;
   if (!h?.url || !h.token || isDemo() || typeof WebSocket !== 'function' || LIVE.ws) return;
   let ws; try { ws = new WebSocket(`${h.url.replace(/^http/i, 'ws')}/api/websocket`); } catch { return haLiveLater(); }
-  LIVE.ws = ws; LIVE.url = h.url; LIVE.token = h.token;
+  LIVE.ws = ws; LIVE.url = h.url; LIVE.token = h.token; LIVE.heard = Date.now(); LIVE.pingId = 10;
   ws.addEventListener('message', (m) => {
+    LIVE.heard = Date.now();
     let msg; try { msg = JSON.parse(String(m.data)); } catch { return; }
     if (msg.type === 'auth_required') ws.send(JSON.stringify({ type: 'auth', access_token: h.token }));
     else if (msg.type === 'auth_ok') { ws.send(JSON.stringify({ id: 1, type: 'get_states' })); ws.send(JSON.stringify({ id: 2, type: 'subscribe_events', event_type: 'state_changed' })); }
@@ -32,6 +33,7 @@ function haLiveStart() {
     }
   });
   const down = () => { if (LIVE.ws !== ws) return; LIVE.ws = null; LIVE.ok = false; LIVE.states = null; haLiveLater(); };
+  LIVE.down = down;
   ws.addEventListener('close', down);
   ws.addEventListener('error', () => { try { ws.close(); } catch { down(); } });
 }
@@ -64,6 +66,17 @@ app.get('/api/live/events', (req, res) => {
   }, 25_000);
   res.on('close', () => { clearInterval(beat); LIVE.clients.delete(res); });
 });
+/* A connection that went quiet is a dead one: Home Assistant's machine lost power, Wi-Fi dropped, a router forgot
+   the connection. Nothing says "closed" then, and the screens would show the last states as current forever. So
+   after 25 quiet seconds CasaTorch pings, and with no answer at all for 75 (or no sign-in within 30) it drops the
+   connection: screens fall back to asking every few seconds, and the websocket is tried again. */
+const LIVE_QUIET = (Number(process.env.CASATORCH_HA_QUIET_SECONDS) || 75) * 1000;   // tests make it shorter
+setInterval(() => {
+  const ws = LIVE.ws; if (!ws) return;
+  const quiet = Date.now() - (LIVE.heard || 0);
+  if (quiet > LIVE_QUIET || (!LIVE.ok && quiet > LIVE_QUIET * 0.4)) { const d = LIVE.down; try { ws.close(); } catch { /* gone */ } d?.(); }
+  else if (quiet > LIVE_QUIET / 3 && LIVE.ok && ws.readyState === 1) { try { ws.send(JSON.stringify({ id: ++LIVE.pingId, type: 'ping' })); } catch { /* the next look drops it */ } }
+}, Math.min(15_000, LIVE_QUIET / 5)).unref?.();
 /* Start, and follow Home Assistant being added, changed or removed in setup. */
 setTimeout(haLiveStart, 2000).unref?.();
 setInterval(() => {

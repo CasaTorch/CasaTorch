@@ -78,6 +78,24 @@ function healFile(f, { dir = SH_DIR, source = shSource } = {}) {
   writeFileSafe(file, fs.readFileSync(from), 0o600);
   return { file: f, aside: path.basename(aside), from: tmps[0] ? 'a save that was cut off' : snap };
 }
+/* Every other file CasaTorch keeps. One that no longer reads (a power cut can leave a file on an SD card empty or half
+   written) is set aside - kept, never deleted - and a complete save that was cut off just before its swap is used
+   when there is one. Without this, that part would start empty and its next save would write over what is left. */
+const DATA_FILES = { 'events.json': 'Your calendar', 'family.json': 'The family hub', 'household.json': 'Household', 'nudges.json': 'Reminders',
+  'history.json': 'Energy history', 'replay.json': 'The 3D Home replay', 'alerts.json': 'Alerts', 'layout.json': 'Your screen layout', 'screen-layouts.json': 'Your screen layouts',
+  'push.json': 'Phone alerts', 'sessions.json': 'Sign-in sessions', 'apptests.json': 'App test history', 'power-baseline.json': 'Usual power use', 'security.json': 'Network security',
+  'floorplan/floorplan.json': 'Your 3D Home plan', 'setup-progress.json': 'Setup progress', 'tls/state.json': 'The secure address at home', '.health.json': 'Health' };
+function healData(f, { dir = DATA_DIR } = {}) {
+  const file = path.join(dir, f);
+  let raw; try { raw = fs.readFileSync(file, 'utf8'); } catch { return null; }   // not there, or not allowed (not damage)
+  try { const j = JSON.parse(raw); if (j && typeof j === 'object') return null; } catch { /* damaged */ }
+  const tmps = (() => { try { return fs.readdirSync(path.dirname(file)).filter((n) => n.startsWith(`${path.basename(file)}.`) && n.endsWith('.tmp')).map((n) => path.join(path.dirname(file), n)); } catch { return []; } })()
+    .filter((t) => { try { const j = JSON.parse(fs.readFileSync(t, 'utf8')); return !!j && typeof j === 'object'; } catch { return false; } }).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  const aside = `${file}.damaged-${shStamp()}`;
+  try { fs.copyFileSync(file, aside); } catch { /* keep going */ }
+  try { if (tmps[0]) writeFileSafe(file, fs.readFileSync(tmps[0]), 0o600); else fs.rmSync(file, { force: true }); } catch { return null; }
+  return { file: f, aside: path.basename(aside), recovered: !!tmps[0] };
+}
 const sealedSample = (o) => { if (typeof o === 'string') return SEALED.test(o) ? o : null; if (o && typeof o === 'object') for (const v of Object.values(o)) { const s = sealedSample(v); if (s) return s; } return null; };
 const opensWith = (sealed, key) => { try { const [, iv, enc, tag] = sealed.split('.'); const d = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url')); d.setAuthTag(Buffer.from(tag, 'base64url')); d.update(Buffer.from(enc, 'base64url')); d.final(); return true; } catch { return false; } };
 /** The key file doesn't open the settings, but a copy in the history does: use that copy (the other is kept aside). */
@@ -109,6 +127,11 @@ if (process.env.CASATORCH_TEST !== '1' && !isDemo()) {
       if (r?.from) { healNote(f === 'config.json' ? 'settings-repaired' : 'sign-ins-repaired', `${f === 'config.json' ? 'Your settings file' : 'The sign-in file'} was damaged, so CasaTorch went back to ${r.from === 'a save that was cut off' ? 'the last save' : 'the last good copy'}. The damaged file was kept as ${r.aside}.`); if (f === 'config.json') loadConfig(); }
       else if (r) { healNote(f === 'config.json' ? 'settings-damaged' : 'sign-ins-damaged', `${f === 'config.json' ? 'Your settings file' : 'The sign-in file'} is damaged and there was no good copy to go back to. It was kept as ${r.aside}.`); if (f === 'config.json') configAside = r.aside; }
     }
+    const dmg = Object.keys(DATA_FILES).map((f) => healData(f)).filter(Boolean), names = (l) => l.map((r) => DATA_FILES[r.file]).join(', ').replace(/, ([^,]*)$/, ' and $1');
+    const fixed = dmg.filter((r) => r.recovered), lost = dmg.filter((r) => !r.recovered);
+    if (fixed.length) healNote('data-repaired', `${names(fixed)} ${fixed.length === 1 ? 'was' : 'were'} cut off while saving, so CasaTorch used the last complete save. The damaged ${fixed.length === 1 ? 'file was' : 'files were'} kept (named ...damaged-...).`);
+    if (lost.length) healNote('data-damaged', `${names(lost)} couldn't be read (damaged, often by a power cut), so ${lost.length === 1 ? 'it starts' : 'they start'} again empty. The damaged ${lost.length === 1 ? 'file was' : 'files were'} kept (named ...damaged-...); restoring a backup puts ${lost.length === 1 ? 'it' : 'them'} back.`);
+    for (const r of dmg) console.warn(`Self-check: ${r.file} was damaged; kept as ${r.aside}${r.recovered ? ', the last complete save was used' : ''}.`);
     const k = healKey();
     if (k?.from) { secretKey = null; loadConfig(); healNote('key-repaired', 'The key that unlocks your saved passwords had changed, so CasaTorch put back the matching key from your settings history.'); }
     else if (k) healNote('key-mismatch', 'The key that unlocks your saved passwords doesn\'t match your settings, and no copy does. Restore a backup, or enter passwords and keys again.');
@@ -178,4 +201,4 @@ if (configProblem && process.env.CASATORCH_TEST !== '1' && !isDemo()) {
   rec.listen(PORT).on('error', (err) => { console.error(err.code === 'EADDRINUSE' ? `Port ${PORT} is already in use.` : err); process.exit(1); });
   await new Promise(() => {});   // nothing after this runs: no integrations, no setup, no writes
 }
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchSetup = { ...(globalThis.__casatorchSetup || {}), settingsPrune, settingsSnapshot, settingsRestore, settingsHistory, healFile, shTime };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchSetup = { ...(globalThis.__casatorchSetup || {}), settingsPrune, settingsSnapshot, settingsRestore, settingsHistory, healFile, healData, shTime };

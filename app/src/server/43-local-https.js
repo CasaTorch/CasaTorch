@@ -20,9 +20,9 @@
  * Stored in DATA_DIR/tls: state.json (the name, its secret, on/off), account.pem (Let's Encrypt account),
  * key.pem, cert.pem. Not in config.json, so it can start before setup without making CasaTorch look set up.
  * ====================================================================== */
-import acme from 'acme-client';
+const acmeLib = async () => (await import('acme-client')).default;   // loaded the first time a certificate is made, not at every start
 const LOCAL_URL = process.env.CASATORCH_LOCAL_URL || 'https://casatorch.com/api/local';
-const ACME_URL = process.env.CASATORCH_ACME_URL || acme.directory.letsencrypt.production;
+const ACME_URL = process.env.CASATORCH_ACME_URL || 'https://acme-v02.api.letsencrypt.org/directory';   // acme-client's directory.letsencrypt.production
 const HTTPS_PORT = Number(process.env.HTTPS_PORT || 8443);
 const TLS_DIR = path.join(DATA_DIR, 'tls');
 const lt = { state: 'off', why: null, server: null, expires: null, busy: false, fails: 0, nextTry: 0 };
@@ -54,7 +54,8 @@ async function ltIssue({ now = false } = {}) {
     fs.mkdirSync(TLS_DIR, { recursive: true, mode: 0o700 });
     const accPath = path.join(TLS_DIR, 'account.pem');
     let accountKey = fs.existsSync(accPath) ? fs.readFileSync(accPath) : null;
-    if (!accountKey) { accountKey = await acme.crypto.createPrivateKey(); fs.writeFileSync(accPath, accountKey, { mode: 0o600 }); }
+    const acme = await acmeLib();
+    if (!accountKey) { accountKey = await acme.crypto.createPrivateKey(); writeFileSafe(accPath, accountKey, 0o600); }
     const client = new acme.Client({ directoryUrl: ACME_URL, accountKey });
     const [key, csr] = await acme.crypto.createCsr({ commonName: c.hostname, altNames: [c.hostname] });
     const cert = await client.auto({

@@ -9,7 +9,7 @@
  *   /api/w/sports?t=nfl:25,...    those teams' games (ESPN)
  *   /api/w/sun                    sunrise, sunset, daylight, the moon (worked out here - no service)
  * ====================================================================== */
-const W_LIMIT = (req, n = 60) => limited(`w:${typeof clientIp === 'function' ? clientIp(req) : req.ip}`, n, 60_000);
+const W_LIMIT = (req, n = 60) => overLimit(`w:${typeof clientIp === 'function' ? clientIp(req) : req.ip}`, n, 60_000);
 const wNum = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) && x >= lo && x <= hi ? x : null; };
 
 /* ---- weather somewhere else ---- */
@@ -29,7 +29,7 @@ app.get('/api/w/places', async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 120);
   if (q.length < 2) return res.json({ places: [] });
   if (isDemo()) return res.json({ places: [{ name: `${q.replace(/^\w/, (c) => c.toUpperCase())} (demo)`, lat: 40.7128, lon: -74.006 }] });
-  if (limited(`wplaces:${typeof clientIp === 'function' ? clientIp(req) : req.ip}`, 20, 60_000)) return res.status(429).json({ error: 'slow down' });   // Nominatim asks for at most one search a second
+  if (overLimit(`wplaces:${typeof clientIp === 'function' ? clientIp(req) : req.ip}`, 20, 60_000)) return res.status(429).json({ error: 'slow down' });   // Nominatim asks for at most one search a second
   try {
     const j = await cached(`places:${q.toLowerCase()}`, 24 * 3600_000, async () => ({ list: await getJSON(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&addressdetails=1&q=${encodeURIComponent(q)}`) }));
     res.json({ places: (j.list || []).map((p) => { const a = p.address || {}; const town = a.city || a.town || a.village || a.hamlet || a.county || p.name; return { name: [town, a.state || a.region, a.country_code?.toUpperCase()].filter(Boolean).join(', '), lat: Math.round(Number(p.lat) * 1e4) / 1e4, lon: Math.round(Number(p.lon) * 1e4) / 1e4 }; }) });

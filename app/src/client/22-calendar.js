@@ -74,7 +74,7 @@ async function photoShrink(f) {
     return out && out.size < f.size ? out : f;
   } catch { return f; } finally { URL.revokeObjectURL(url); }
 }
-tab({ id: 'photos', label: 'Photos', icon: 'camera', async render(main) {
+tab({ id: 'photos', label: 'Photos', icon: 'image', async render(main) {
   const input = el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true });
   const status = el('span', { class: 'small muted' });
   async function upload(files) {

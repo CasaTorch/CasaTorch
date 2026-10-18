@@ -631,6 +631,19 @@ t('self-healing: a damaged settings file is put aside and the last good copy use
   assert.ok(SU.settingsHistory(hist).some((id) => id.endsWith('-before-putting-back')), 'what was there is saved first');
   assert.throws(() => SU.settingsRestore('../../etc', opts));
 });
+t('self-healing: a damaged data file is set aside (never deleted); a save cut off before its swap is used', () => {
+  const dir = '/tmp/casatorch-unit-healdata'; fsMod.rmSync(dir, { recursive: true, force: true }); fsMod.mkdirSync(dir, { recursive: true });
+  fsMod.writeFileSync(`${dir}/events.json`, '[{"id":"a"}]');
+  assert.equal(SU.healData('events.json', { dir }), null, 'a good file is left alone');
+  assert.equal(SU.healData('missing.json', { dir }), null, 'no file is not damage');
+  fsMod.writeFileSync(`${dir}/events.json`, '');   // emptied by a power cut
+  const r = SU.healData('events.json', { dir });
+  assert.equal(r.recovered, false); assert.ok(!fsMod.existsSync(`${dir}/events.json`), 'starts again empty');
+  assert.ok(fsMod.existsSync(`${dir}/${r.aside}`), 'the damaged file is kept');
+  fsMod.writeFileSync(`${dir}/family.json`, '{"lists":[{"na'); fsMod.writeFileSync(`${dir}/family.json.4242.tmp`, '{"lists":[{"name":"Groceries"}]}');
+  const f = SU.healData('family.json', { dir });
+  assert.equal(f.recovered, true); assert.equal(JSON.parse(fsMod.readFileSync(`${dir}/family.json`, 'utf8')).lists[0].name, 'Groceries');
+});
 
 /* A damaged config.json with no settings history: CasaTorch doesn't start (no setup wizard), shows a recovery
    page, says why in the log, and leaves the file alone. A real start, in its own process (00b-heal.js). */
@@ -866,6 +879,10 @@ await (await import('./live3d-unit.mjs')).default(t);   // the 3D home, live: tw
 await (await import('./floorplan-geom-unit.mjs')).default(t);   // the 3D home drawing's geometry (floorplan-geom-unit.mjs)
 await (await import('./family-unit.mjs')).default(t);   // the Family hub: chores, stars, lists, meals, outside sensors, chips, conditional widgets (family-unit.mjs)
 await (await import('./plan-net-unit.mjs')).default(t);   // 3D Home: plan backups and restore points, network on the plan, Wi-Fi estimate, voice (plan-net-unit.mjs)
-await (await import('./outdoor-unit.mjs')).default(t);   // 3D home outside and furniture: polygons, pools, slopes, fences, models, saved items (outdoor-unit.mjs)
+await (await import('./outdoor-unit.mjs')).default(t);
+await (await import('./floorplan-compat-unit.mjs')).default(t);   // the 3D home on older browsers: no newer JS/CSS without a fallback (floorplan-compat-unit.mjs)   // 3D home outside and furniture: polygons, pools, slopes, fences, models, saved items (outdoor-unit.mjs)
+await (await import('./license-unit.mjs')).default(t);   // Pro keys, grace periods and the trial (license-unit.mjs)
+await (await import('./security-unit.mjs')).default(t);   // the pre-launch security review: outbound-request guard, member links, pre-setup gate (security-unit.mjs)
+await (await import('./support-unit.mjs')).default(t);   // support: the support file's masking, activity log, getting-started checklist (support-unit.mjs)
 console.log(`\n${n} passed`);
 process.exit(0);

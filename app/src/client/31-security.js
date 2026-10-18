@@ -95,9 +95,6 @@ function peopleCard(data, me) {
 
 async function securityAdminCard(data, me) {
   const box = el('div', { class: 'card wide' });
-  let events = []; try { events = (await api('/api/auth/admin/audit')).events; } catch { /* none */ }
-  const LABEL = { 'signed-in': 'Signed in', 'login-failed': 'Wrong password', 'login-limited': 'Too many tries - paused', 'code-failed': 'Wrong 2-step code', 'signed-out': 'Signed out', '2fa-on': 'Turned on 2-step', '2fa-off': 'Turned off 2-step', 'password-changed': 'Changed password', 'user-added': 'Added a person', 'user-removed': 'Removed a person', 'user-reset': 'Reset a password', 'role-changed': 'Changed a role', 'invite-accepted': 'Accepted an invite', 'terms-accepted': 'Accepted the terms', 'policy-changed': 'Changed 2-step policy', 'google-on': 'Set up Google sign-in', 'google-off': 'Turned off Google sign-in', 'google-unknown': 'Unknown Google account tried', 'google-linked': 'Linked Google', 'panel-link-made': 'Made a panel link', 'panel-link-revoked': 'Revoked a panel link', 'panel-signed-in': 'Panel signed in', 'recovery-code-used': 'Used a recovery code', 'session-ended': 'Ended a session', 'owner-saved': 'Owner account saved' };
-  const bad = new Set(['login-failed', 'login-limited', 'code-failed', 'google-unknown']);
   const req2 = el('input', { type: 'checkbox', checked: data.policy?.require2fa ? true : null, onchange: async (e) => { try { await post('/api/auth/admin/policy', { require2fa: e.target.checked }, 'PUT'); toast(e.target.checked ? 'Everyone now needs two-step sign-in' : 'Two-step sign-in is optional'); } catch (x) { e.target.checked = !e.target.checked; toast(x.message, 5000); } } });
   const cid = el('input', { type: 'text', placeholder: '1234-abc.apps.googleusercontent.com', value: data.google?.clientId || '' }), csec = el('input', { type: 'password', placeholder: data.google?.hasSecret ? 'Saved - leave empty to keep' : 'Client secret', autocomplete: 'off' });
   const redirect = `${location.origin}/api/auth/google/callback`;
@@ -109,9 +106,7 @@ async function securityAdminCard(data, me) {
     el('div', { class: 'row wrap' }, cid, csec),
     el('div', { class: 'row wrap' }, el('button', { class: 'btn', onclick: async () => { try { await post('/api/auth/admin/google', { clientId: cid.value.trim(), clientSecret: csec.value.trim() || undefined }, 'PUT'); toast('Google sign-in saved'); csec.value = ''; } catch (x) { toast(x.message, 5000); } } }, 'Save'),
       data.google ? el('button', { class: 'btn ghost', onclick: async () => { await post('/api/auth/admin/google', {}, 'PUT'); cid.value = ''; toast('Google sign-in is off'); } }, 'Turn off') : null),
-    el('h3', {}, 'Security log'),
-    el('div', { class: 'audit' }, events.slice(0, 60).map((e) => el('div', { class: `ev${bad.has(e.event) ? ' bad' : ''}` }, el('span', { class: 'when' }, secAgo(e.at)), el('b', {}, LABEL[e.event] || e.event), el('span', { class: 'small muted' }, [e.user, e.added || e.removed || e.of || e.panel, e.ip].filter(Boolean).join(' · '))))),
-    events.length ? null : el('p', { class: 'small muted' }, 'Nothing yet.'));
+    el('p', { class: 'small muted', style: 'margin:14px 0 0' }, T('Sign-ins, failed attempts and changes are in Activity, below.')));   // activityCard: 39s-support.js
   return box;
 }
 

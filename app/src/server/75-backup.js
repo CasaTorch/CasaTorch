@@ -16,8 +16,14 @@
 import { Readable, Writable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 const BK_MAGIC = Buffer.from('CTBK1\n');
-const BK_FILES = ['config.json', 'secret.key', 'users.json', 'alerts.json', 'events.json', 'history.json', 'layout.json', 'push.json', 'audit.log'];
-const BK_DIRS = ['floorplan', 'photos'];
+/* Everything that is the household's, or that a move to new hardware needs (install-id: phones, secure access and the
+   Pro key know this CasaTorch by it; tls/: its secure address at home). Not: sign-in sessions (everyone signs in again
+   on new hardware), the radar map cache and the secure-access helper (fetched again), the settings history and 3D Home
+   restore points (this device's own undo), and Health's bookkeeping. */
+const BK_FILES = ['config.json', 'secret.key', 'users.json', 'alerts.json', 'events.json', 'history.json', 'layout.json', 'push.json', 'audit.log',
+  'install-id', 'screen-layouts.json', 'security.json', 'nudges.json', 'household.json', 'family.json', 'apptests.json', 'replay.json', 'power-baseline.json', 'license-state.json'];
+const BK_DIRS = ['floorplan', 'photos', 'nudges', 'tls'];
+const BK_SMALL = ['nudges', 'tls'];   // in every backup, with or without the photos and scans
 const bkKey = (pass, salt) => new Promise((ok, bad) => crypto.scrypt(String(pass), salt, 32, { N: 2 ** 15, r: 8, p: 1, maxmem: 96 * 1024 * 1024 }, (e, k) => (e ? bad(e) : ok(k))));
 const bkAllowed = (p) => typeof p === 'string' && !p.includes('\0') && !path.isAbsolute(p) && !p.split(/[\\/]/).includes('..') && (BK_FILES.includes(p) || BK_DIRS.some((d) => p.startsWith(`${d}/`)));
 const bkSource = (rel) => (rel === 'config.json' ? CONFIG_FILE : path.join(DATA_DIR, rel));
@@ -27,7 +33,9 @@ function bkList(withMedia) {
   if (withMedia) {
     const walk = (rel) => { for (const e of fs.readdirSync(path.join(DATA_DIR, rel), { withFileTypes: true })) { const r = `${rel}/${e.name}`; if (e.isDirectory()) walk(r); else if (e.isFile()) out.push({ p: r, s: fs.statSync(path.join(DATA_DIR, r)).size }); } };
     for (const d of BK_DIRS) { try { walk(d); } catch { /* none */ } }
-  } else { try { for (const e of fs.readdirSync(path.join(DATA_DIR, 'floorplan'))) if (e.endsWith('.json')) out.push({ p: `floorplan/${e}`, s: fs.statSync(path.join(DATA_DIR, 'floorplan', e)).size }); } catch { /* none */ } }   // the plan's layout without the big scan files
+  } else {
+    const walk = (rel) => { for (const e of fs.readdirSync(path.join(DATA_DIR, rel), { withFileTypes: true })) { const r = `${rel}/${e.name}`; if (e.isFile() && !/\.tmp$/.test(e.name)) out.push({ p: r, s: fs.statSync(path.join(DATA_DIR, r)).size }); } };
+    for (const d of BK_SMALL) { try { walk(d); } catch { /* none */ } } try { for (const e of fs.readdirSync(path.join(DATA_DIR, 'floorplan'))) if (e.endsWith('.json')) out.push({ p: `floorplan/${e}`, s: fs.statSync(path.join(DATA_DIR, 'floorplan', e)).size }); } catch { /* none */ } }   // the plan's layout without the big scan files
   return out;
 }
 async function* bkEntries(list) {
@@ -40,7 +48,12 @@ async function* bkEntries(list) {
   }
   yield Buffer.alloc(4);   // the end
 }
+/* What is kept in memory and written now and then (to spare SD cards) goes to disk first, so the backup has all of it. */
+function bkFlush() {
+  for (const f of [() => atSave(), () => { if (histDirty) saveHist(); }, () => { if (l3Dirty) l3Save(true); }, () => pbSave(true), () => { if (sessDirty) saveSessions(); }]) { try { f(); } catch { /* the backup still goes ahead */ } }
+}
 async function makeBackup(pass, withMedia, out) {
+  bkFlush();
   const salt = crypto.randomBytes(16), iv = crypto.randomBytes(12), key = await bkKey(pass, salt);
   fs.writeFileSync(out, Buffer.concat([BK_MAGIC, salt, iv]), { mode: 0o600 });
   const c = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -61,16 +74,18 @@ async function openBackup(file, pass, dir) {
         buf = Buffer.concat([buf, chunk]);
         for (;;) {
           if (cur) {
-            const n = Math.min(left, buf.length); if (n) { fs.writeSync(fdOut, buf, 0, n); buf = buf.subarray(n); left -= n; }
+            const n = Math.min(left, buf.length); if (n) { if (fdOut !== null) fs.writeSync(fdOut, buf, 0, n); buf = buf.subarray(n); left -= n; }
             if (left > 0) break;
-            fs.closeSync(fdOut); fdOut = null; cur = null; continue;
+            if (fdOut !== null) fs.closeSync(fdOut); fdOut = null; cur = null; continue;
           }
           if (done || buf.length < 4) break;
           const hl = buf.readUInt32BE(0); if (hl === 0) { done = true; buf = Buffer.alloc(0); break; }
           if (hl > 4096) throw new Error('damaged backup');
           if (buf.length < 4 + hl) break;
           const h = JSON.parse(buf.subarray(4, 4 + hl).toString('utf8')); buf = buf.subarray(4 + hl);
-          if (!bkAllowed(h.p) || !Number.isSafeInteger(h.s) || h.s < 0) throw new Error('damaged backup');
+          if (!Number.isSafeInteger(h.s) || h.s < 0 || typeof h.p !== 'string') throw new Error('damaged backup');
+          // A file this version doesn't know (a backup from a newer CasaTorch): skipped, not refused - so going back a version still restores.
+          if (!bkAllowed(h.p)) { if (h.p.includes('\0') || path.isAbsolute(h.p) || h.p.split(/[\\/]/).includes('..')) throw new Error('damaged backup'); cur = h; left = h.s; fdOut = null; continue; }
           const to = path.join(dir, h.p); fs.mkdirSync(path.dirname(to), { recursive: true, mode: 0o700 });
           fdOut = fs.openSync(to, 'w', 0o600); cur = h; left = h.s; files++;
         }
@@ -86,7 +101,8 @@ async function openBackup(file, pass, dir) {
 }
 function swapIn(staged) {
   const keep = path.join(DATA_DIR, `.before-restore-${new Date().toISOString().replace(/[:.]/g, '-')}`); fs.mkdirSync(keep, { mode: 0o700 });
-  for (const f of [...BK_FILES, ...BK_DIRS, 'sessions.json']) { const from = bkSource(f); if (fs.existsSync(from)) fs.renameSync(from, path.join(keep, path.basename(from))); }
+  // This CasaTorch's own identity (its id, its secure address) stays when the backup is from before it was backed up.
+  for (const f of [...BK_FILES, ...BK_DIRS, 'sessions.json']) { const from = bkSource(f); if (fs.existsSync(from) && !(['install-id', 'tls'].includes(f) && !fs.existsSync(path.join(staged, f)))) fs.renameSync(from, path.join(keep, path.basename(from))); }
   for (const f of [...BK_FILES, ...BK_DIRS]) { const from = path.join(staged, f); if (fs.existsSync(from)) fs.renameSync(from, bkSource(f)); }
   fs.rmSync(staged, { recursive: true, force: true });
   return keep;
@@ -134,3 +150,12 @@ app.post('/api/restore', requireRole('owner'), restoreHandler);
 app.post('/api/setup/restore', (req, res) => (isConfigured() ? res.status(403).json({ error: 'This CasaTorch is already set up - restore from Settings › Backup instead.' }) : restoreHandler(req, res)));
 /* Leftovers from an interrupted backup or restore. */
 try { for (const f of fs.readdirSync(DATA_DIR)) if (/^\.(backup|restore)-[0-9a-f]+(\.ctbk)?$/.test(f)) fs.rmSync(path.join(DATA_DIR, f), { recursive: true, force: true }); } catch { /* fine */ }
+/* The data kept from before each restore is a whole copy (photos and scans too): the newest two stay, older ones go
+   after 30 days - so restoring a few times can't fill the disk. */
+function bkPruneKept(now = Date.now()) {
+  let list = []; try { list = fs.readdirSync(DATA_DIR).filter((f) => /^\.before-restore-[\dT-]+Z?$/.test(f)).sort().reverse(); } catch { return 0; }
+  let n = 0;
+  for (const f of list.slice(2)) { try { const p = path.join(DATA_DIR, f); if (now - fs.statSync(p).mtimeMs > 30 * 86400_000) { fs.rmSync(p, { recursive: true, force: true }); n++; } } catch { /* next time */ } }
+  return n;
+}
+if (!isDemo()) bkPruneKept();

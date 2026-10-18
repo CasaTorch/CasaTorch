@@ -7,6 +7,8 @@ const el = (tag, attrs = {}, ...kids) => {
   for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k)));
   return e;
 };
+/* The sign-in page in the home's language (the one this browser last used here; i18n.js keeps it). */
+const T = (s, v) => (window.CasaI18n ? window.CasaI18n.T(s, v) : s);
 const q = new URLSearchParams(location.search);
 const nextUrl = (() => { const n = q.get('next') || ''; try { const u = new URL(n, location.origin); return n.startsWith('/') && u.origin === location.origin && !u.pathname.startsWith('/login') ? u.pathname + u.search + u.hash : '/'; } catch { return '/'; } })();   // only this CasaTorch's own pages
 async function call(url, body) {
@@ -18,7 +20,7 @@ async function call(url, body) {
 const view = $('#view');
 const show = (...kids) => { view.replaceChildren(...kids.flat().filter((k) => k != null && k !== false)); const f = view.querySelector('input:not([type=checkbox])'); if (f) setTimeout(() => f.focus(), 30); };
 const errBox = () => el('p', { class: 'err', role: 'alert' });
-function busy(btn, on, label) { btn.disabled = on; if (label) btn.textContent = on ? 'One moment…' : label; }
+function busy(btn, on, label) { btn.disabled = on; if (label) btn.textContent = on ? T('One moment…') : label; }
 /* Where each answer leads. */
 function after(r) {
   if (r.ok) { if (r.recovery) return showRecovery(r.recovery, () => { location.href = nextUrl; }); location.href = nextUrl; return; }
@@ -31,18 +33,18 @@ let STATE = {};
 function stepPassword(message) {
   const u = el('input', { type: 'text', id: 'u', autocomplete: 'username', autocapitalize: 'none', spellcheck: 'false', required: true });
   const p = el('input', { type: 'password', id: 'p', autocomplete: 'current-password', required: true });
-  const rem = el('input', { type: 'checkbox' }), err = errBox(), go = el('button', { class: 'btn', type: 'submit' }, 'Sign in');
+  const rem = el('input', { type: 'checkbox' }), err = errBox(), go = el('button', { class: 'btn', type: 'submit' }, T('Sign in'));
   if (message) err.textContent = message;
   const form = el('form', { onsubmit: async (e) => {
-    e.preventDefault(); err.textContent = ''; busy(go, true, 'Sign in');
+    e.preventDefault(); err.textContent = ''; busy(go, true, T('Sign in'));
     try { after(await call('/api/auth/login', { username: u.value, password: p.value, remember: rem.checked, next: nextUrl })); }
     catch (x) { err.textContent = x.message; p.value = ''; p.focus(); }
-    finally { busy(go, false, 'Sign in'); }
-  } }, el('label', { for: 'u' }, 'Username or e-mail'), u, el('label', { for: 'p' }, 'Password'), p,
-  el('label', { class: 'check' }, rem, el('span', {}, 'Keep me signed in on this screen')), err, go);
-  show(el('h1', {}, 'Welcome home'), el('p', { class: 'sub' }, 'Sign in to your CasaTorch.'), form,
-    STATE.google ? [el('div', { class: 'or' }, 'or'), el('a', { class: 'btn alt', href: `/api/auth/google/start${rem.checked ? '?remember=1' : ''}`, onclick: (e) => { e.currentTarget.href = `/api/auth/google/start${rem.checked ? '?remember=1' : ''}`; } }, googleMark(), 'Continue with Google')] : null,
-    el('p', { class: 'sub', style: 'margin:16px 0 0;font-size:13px' }, 'Forgot your password? Ask the owner of this CasaTorch to send you a new link.'));
+    finally { busy(go, false, T('Sign in')); }
+  } }, el('label', { for: 'u' }, T('Username or e-mail')), u, el('label', { for: 'p' }, T('Password')), p,
+  el('label', { class: 'check' }, rem, el('span', {}, T('Keep me signed in on this screen'))), err, go);
+  show(el('h1', {}, T('Welcome home')), el('p', { class: 'sub' }, T('Sign in to your CasaTorch.')), form,
+    STATE.google ? [el('div', { class: 'or' }, T('or')), el('a', { class: 'btn alt', href: `/api/auth/google/start${rem.checked ? '?remember=1' : ''}`, onclick: (e) => { e.currentTarget.href = `/api/auth/google/start${rem.checked ? '?remember=1' : ''}`; } }, googleMark(), T('Continue with Google'))] : null,
+    el('p', { class: 'sub', style: 'margin:16px 0 0;font-size:13px' }, `${T('Forgot your password? Ask the owner of this CasaTorch to send you a new link.')} `, el('a', { href: '/recover.html' }, T('The owner and locked out?'))));   // recover.html: a one-time code from the box (80-support.js)
 }
 function stepCode(ticket) {
   let recovery = false;

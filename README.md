@@ -121,25 +121,31 @@ Matter, Nest, your power company's real usage (Opower) and thousands more. Unloc
 doors and disarming alarms stay in Home Assistant. The full list, including what
 we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRIX.md).
 
-## Free and Pro
+## Basic and Pro
 
-**Free** is open source (AGPL-3.0) and everything above - the whole dashboard, for good, including Health
-(CasaTorch checks itself, repairs what it can and tells you what it fixed).
+**Basic** is free and open source (AGPL-3.0) and everything above - the whole dashboard, for good, including
+Health (CasaTorch checks itself, repairs what it can and tells you what it fixed), every alert on every
+screen and phone, the Security Center, Household, the Family hub and the rain radar.
 
-**Pro** - $5/month or $49/year, with a 14-day trial on every new install:
+**Pro** - $5/month or $49/year, with a 14-day trial on every new install (no card):
 
 | Pro, available now | Pro, coming (included when it ships) |
 | --- | --- |
 | **3D Home** - your home as a live 3D plan (LiDAR scan, or draw it in the app) | **Away from home** - secure remote access, no port forwarding |
-| **Home AI Agent** - answers about your home, tap-to-do actions (AI usage billed by your AI provider, or free with Ollama) | |
+| **Home AI Agent** - answers about your home, tap-to-do actions (AI usage billed by your AI provider, or free with Ollama) | Multi-home |
 | **Ring** doorbells and cameras (Labs) | |
 | **Weekly report** - every Monday: energy and cost, always-on load, alerts, internet and server downtime, with tips (written by your AI if connected) | |
 | **Server monitor** - your NAS, servers and self-hosted apps: up or down, response time, uptime, certificate expiry, alerts | |
-| **Energy history** - 2 years by day and by device (free keeps 7 days), and a bill forecast | |
+| **Energy history** - 2 years by day and by device (Basic shows 7 days), and a bill forecast | |
 | **Smart alerts** - doorbell/motion only when nobody's home; critical alerts repeat until someone taps "Got it" | |
+| **Reminders on phones** - your reminders and Household reminders sent to everyone's phone | |
+| **App tests for your own websites** - up to 30 tests, every minute, with alerts (Basic: the built-in apps, up to 8) | |
 | **Cisco Meraki** MV cameras and MT sensors | |
 | **Network monitoring** - UniFi and Cisco Meraki (every device online/offline, clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), with alerts | |
-| | Multi-home |
+
+When a trial or subscription ends, nothing is deleted: Pro features pause (your 3D home stays viewable),
+and everything comes back when a key is added. The key is checked on your box, offline; if casatorch.com
+can't be reached, Pro keeps working for 30 days after a key's end date.
 
 **Phone apps** for iPhone, iPad and Android - Face ID or fingerprint lock, end-to-end encrypted alerts,
 LiDAR room scans into the 3D Home - are built and coming to the App Store and Google Play, free in every
@@ -233,4 +239,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/ARCHITECTURE.md](docs/ARCHITECT
 ## License
 
 CasaTorch is licensed under the [GNU AGPL-3.0](LICENSE). CasaTorch Pro features are unlocked by a
-commercial license key.
+commercial license key bought at casatorch.com. Third-party libraries, data and services, and their licenses
+and terms: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) (also in the app: Settings › About › Open-source
+licenses). "CasaTorch" and the logo are the project's names and marks; a modified version you distribute
+should use a different name.

@@ -18,8 +18,9 @@
 const L3_KEEP_MS = 7 * 86400_000, L3_FILE = path.join(DATA_DIR, 'replay.json');
 const L3_NEVER = /^(presence|person|device_tracker)$/;   // never record or replay people or trackers
 const L3 = (() => { try { const j = JSON.parse(fs.readFileSync(L3_FILE, 'utf8')); return { s: j.s || {}, p: j.p || [], last: {} }; } catch { return { s: {}, p: [], last: {} }; } })();
-let l3SavedAt = 0;
-const l3Save = (force) => { if (isDemo() || (!force && Date.now() - l3SavedAt < 10 * 60_000)) return; l3SavedAt = Date.now(); try { writeFileSafe(L3_FILE, JSON.stringify({ s: L3.s, p: L3.p }), 0o600); } catch { /* next time */ } };
+let l3SavedAt = 0, l3Dirty = false;   // on disk every 30 minutes and as CasaTorch stops: an SD card wears out with every rewrite
+process.on('exit', () => { if (l3Dirty) l3Save(true); });
+const l3Save = (force) => { if (isDemo() || (!force && Date.now() - l3SavedAt < 30 * 60_000)) return; l3SavedAt = Date.now(); l3Dirty = false; try { writeFileSafe(L3_FILE, JSON.stringify({ s: L3.s, p: L3.p }), 0o600); } catch { /* next time */ } };
 /* The few facts a replay needs from a device - nothing about people, nothing personal. */
 function l3Fields(d) {
   const f = {};
@@ -55,9 +56,11 @@ function l3Record(devices, pinIds, now = Date.now()) {
     if (list.length > 6000) list.splice(0, list.length - 6000);
     if (!pinIds.has(id) && list[list.length - 1][0] < cut) delete L3.s[id];
   }
-  L3.p.push([now, Math.round(housePower(devices).watts)]);
+  // The house's power: when it moved (by a tenth, or 20 W) or every 5 minutes - not all 20,000 readings a week.
+  const w = Math.round(housePower(devices).watts), lp = L3.p[L3.p.length - 1];
+  if (!lp || now - lp[0] >= 5 * 60_000 || Math.abs(w - lp[1]) > Math.max(20, lp[1] * 0.1)) L3.p.push([now, w]);
   while (L3.p.length && L3.p[0][0] < cut) L3.p.shift();
-  l3Save(false);
+  l3Dirty = true; l3Save(false);
 }
 const l3PinIds = () => new Set((fpData().pins || []).map((p) => p.deviceId));
 if (!isDemo()) setInterval(async () => { try { if (isConfigured()) { const { devices } = await houseDevices(); const ids = l3PinIds(); const G = fpGroup(devices); for (const id of [...ids]) { const m = G.alias.get(id); if (m) ids.add(m); } l3Record(G.list.concat(devices), ids); } } catch { /* next time */ } }, 30_000).unref?.();

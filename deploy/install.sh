@@ -5,7 +5,8 @@
 #
 # Installs Node.js 22 if needed, puts CasaTorch in /opt/casatorch, keeps settings in
 # /var/lib/casatorch, and runs it as a service (casatorch.service) on port 8090.
-# Run it again any time to update; your settings are kept.
+# Run it again any time to update; your settings are kept. Before updating it saves a copy of the settings, and
+# if the new version doesn't start it goes back to the one you had (Settings > Updates shows how it went).
 set -euo pipefail
 
 REPO="${CASATORCH_REPO:-https://github.com/casatorch/casatorch.git}"
@@ -46,7 +47,15 @@ id casatorch >/dev/null 2>&1 || useradd --system --home "$DATA_DIR" --shell /usr
 mkdir -p "$DATA_DIR" && chown casatorch:casatorch "$DATA_DIR" && chmod 700 "$DATA_DIR"
 
 # Before updating: a copy of the settings, sign-ins and key in CasaTorch's settings history
-# (Settings > Health can put it back with one tap).
+# (Settings > Health can put it back with one tap), and which version is installed now (to go back to).
+snap=""; prev=""; prev_ver=""
+if [ -d "$APP_DIR/.git" ]; then prev=$(git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || true); prev_ver=$(node -p "require('$APP_DIR/app/package.json').version" 2>/dev/null || true); fi
+upd_status() {   # for Settings > Updates and the "An update didn't work" troubleshooter
+  [ -n "$prev" ] || return 0
+  new_ver=$(node -p "require('$APP_DIR/app/package.json').version" 2>/dev/null || true)
+  printf '{"state":"%s","from":"%s","to":"%s","at":"%s","message":"%s"}\n' "$1" "$prev_ver" "${3:-$new_ver}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${2:-}" > "$DATA_DIR/.update-status.json" 2>/dev/null || true
+  chown casatorch:casatorch "$DATA_DIR/.update-status.json" 2>/dev/null || true; chmod 600 "$DATA_DIR/.update-status.json" 2>/dev/null || true
+}
 if [ -f "$DATA_DIR/config.json" ]; then
   snap="$DATA_DIR/.settings-history/$(date -u +%Y%m%dT%H%M%SZ)-before-update"
   mkdir -p "$snap" && chmod 700 "$DATA_DIR/.settings-history" "$snap"
@@ -69,7 +78,7 @@ chown -R casatorch:casatorch "$APP_DIR"
 
 say "Installing and building"
 cd "$APP_DIR/app"
-sudo -u casatorch npm ci --omit=dev --no-audit --no-fund --loglevel=error
+sudo -u casatorch npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error
 sudo -u casatorch node build.mjs >/dev/null
 
 cat > /etc/systemd/system/casatorch.service <<UNIT
@@ -109,7 +118,24 @@ for _ in $(seq 1 60); do
   systemctl is-active -q casatorch || break
   sleep 1
 done
+# An update that doesn't start: go back to the version (and the settings) from before.
+if [ "$up" != 1 ] && [ -n "$prev" ] && [ "$(git -C "$APP_DIR" rev-parse HEAD 2>/dev/null)" != "$prev" ]; then
+  journalctl -u casatorch -n 30 --no-pager || true
+  failed_ver=$(node -p "require('$APP_DIR/app/package.json').version" 2>/dev/null || true)
+  say "The new version didn't start - going back to the one you had"
+  systemctl stop casatorch || true
+  git -C "$APP_DIR" reset -q --hard "$prev" && chown -R casatorch:casatorch "$APP_DIR"
+  (cd "$APP_DIR/app" && sudo -u casatorch npm ci --omit=dev --no-audit --no-fund --loglevel=error && sudo -u casatorch node build.mjs >/dev/null)
+  if [ -n "$snap" ]; then
+    for f in config.json users.json secret.key; do if [ -f "$snap/$f" ]; then cp -p "$snap/$f" "$DATA_DIR/$f"; fi; done
+    chown casatorch:casatorch "$DATA_DIR/config.json" "$DATA_DIR/users.json" "$DATA_DIR/secret.key" 2>/dev/null || true
+  fi
+  systemctl restart casatorch || true
+  upd_status rolled-back "Version ${failed_ver:-new} didn't start, so the installer put back ${prev_ver:-the previous version} with your settings from before." "$failed_ver"
+  die "The update didn't start, so CasaTorch went back to the version you had, with your settings from before. Try again later."
+fi
 [ "$up" = 1 ] || { journalctl -u casatorch -n 30 --no-pager; die "CasaTorch did not start - the log is above"; }
+[ -z "$prev" ] || [ "$(git -C "$APP_DIR" rev-parse HEAD 2>/dev/null)" = "$prev" ] || upd_status done
 # It knows it runs as a service (self-restart and the watchdog depend on that), not as a copy started by hand.
 health=$(curl -fsS --max-time 3 "http://127.0.0.1:$PORT/api/health" 2>/dev/null || true)
 case "$health" in

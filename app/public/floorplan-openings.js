@@ -9,6 +9,7 @@
    A window or roof window linked to a blind (coverId) has a child Group 'cover' (origin at the top; scale.y 0..1 lowers it).
    The local frame: x along the wall (from its start), y up from the floor, z out of the wall on the "out" side. */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const box = (w, h, d, name) => { const m = new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.005, w), Math.max(0.005, h), Math.max(0.005, d))); m.name = name; return m; };
 const FRAME = 0.05;
@@ -20,9 +21,11 @@ export function buildOpening(o, { width, thick, inSign = 1 }) {
   const openDir = (opensOut ? -inSign : inSign) * hinge;   // a + turn swings the leaf toward z = hinge side's sign
   g.userData = { openingId: id, kind, swing: o.swing === 'right' ? 'right' : 'left', opens: opensOut ? 'out' : 'in', openDir };
   // the frame (wall colored, so it reads as the reveal of the hole)
-  const trim = (w, h, x, y, n) => { const m = box(w, h, T + 0.02, `Wall frame ${id} ${n}`); m.position.set(x, y, 0); g.add(m); };
-  trim(FRAME, Hh, -W / 2 + FRAME / 2, sill + Hh / 2, 'l'); trim(FRAME, Hh, W / 2 - FRAME / 2, sill + Hh / 2, 'r'); trim(W, FRAME, 0, sill + Hh - FRAME / 2, 't');
-  if (isWin) trim(W, FRAME, 0, sill + FRAME / 2, 'b');
+  /* QA: the frame's sides are one mesh (one draw, one outline) */
+  const trims = [], trim = (w, h, x, y) => trims.push(new THREE.BoxGeometry(Math.max(0.005, w), Math.max(0.005, h), T + 0.02).translate(x, y, 0));
+  trim(FRAME, Hh, -W / 2 + FRAME / 2, sill + Hh / 2); trim(FRAME, Hh, W / 2 - FRAME / 2, sill + Hh / 2); trim(W, FRAME, 0, sill + Hh - FRAME / 2);
+  if (isWin) trim(W, FRAME, 0, sill + FRAME / 2);
+  { const fm = new THREE.Mesh(mergeGeometries(trims, false)); trims.forEach((x) => x.dispose()); fm.name = `Wall frame ${id}`; g.add(fm); }
   const iw = W - FRAME * 2, ih = Hh - FRAME * (isWin ? 2 : 1), y0 = sill + (isWin ? FRAME : 0);
   const leafAt = (x, name = 'leaf') => { const l = new THREE.Group(); l.name = name; l.position.set(x, y0, 0); g.add(l); return l; };
   const panel = (w, h, d, name) => box(w, h, d, `${name} ${id}`);

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * Everything in one go (what `npm test` in app/ runs, and what CI runs):
- *   build -> syntax check -> unit tests -> security checks (own temp server) -> setup wizard end-to-end
+ *   build -> syntax check -> unit tests -> security checks (own temp server) -> penetration checks -> setup wizard end-to-end
  *   (with mock Home Assistant) -> setup wizard end-to-end without Home Assistant.
  *
  *   node tools/test-all.mjs                 everything
@@ -24,13 +24,15 @@ const STEPS = [
   ['syntax', APP, ['-e', "for (const f of ['server.js','public/app.js','public/setup.js','public/floorplan.js','public/login.js']) require('node:child_process').execFileSync(process.execPath, ['--check', f], { stdio: 'inherit' })"]],
   ['unit', APP, ['test/unit.mjs']],
   ['security', ROOT, ['tools/test-security.mjs']],
+  ['pentest', ROOT, ['tools/test-pentest.mjs']],
+  ['chaos', ROOT, ['tools/test-chaos.mjs']],   // Home Assistant down/silent/slow/flapping, damaged files, a full disk (about 80 s)   // attack checks against a fresh server (its browser part is skipped with --no-e2e)
   ['e2e-wizard', ROOT, ['tools/test-setup-wizard.cjs'], true],
   ['e2e-noha', ROOT, ['tools/test-setup-noha.cjs'], true],
 ];
 
 const run = (name, cwd, argv, limitMs) => new Promise((ok) => {
   const t0 = Date.now();
-  const child = spawn(process.execPath, argv, { cwd, stdio: 'inherit', env: process.env });
+  const child = spawn(process.execPath, argv, { cwd, stdio: 'inherit', env: { ...process.env, ...(noE2e ? { SKIP_E2E: '1' } : {}) } });
   const timer = setTimeout(() => { console.error(`\n${name}: timed out after ${limitMs / 1000}s`); child.kill('SIGTERM'); }, limitMs);
   child.on('exit', (code, sig) => { clearTimeout(timer); ok({ name, ok: code === 0, code: code ?? sig, secs: (Date.now() - t0) / 1000 }); });
 });

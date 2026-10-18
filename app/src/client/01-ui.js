@@ -78,7 +78,7 @@ const statusBar = {
       const q = input.value.trim(); if (!q) return;
       close(); this.answerEl = el('div', { class: 'sb-answer' }, el('span', { class: 'typing' }, el('i'), el('i'), el('i'))); wrap.append(this.answerEl);
       askPush({ role: 'user', content: q });
-      let r; try { r = await post('/api/ask', { question: q, history: askHistory.slice(0, -1).slice(-8).map(({ role, content }) => ({ role, content })) }); } catch (err) { r = { answer: err.body?.setup ? T('Connect an AI first: Settings > Home AI Agent.') : err.message, actions: [] }; }
+      let r; try { r = await post('/api/ask', { question: q, history: askHistory.slice(0, -1).slice(-8).map(({ role, content }) => ({ role, content })) }); } catch (err) { r = { answer: err.body?.setup ? T('Connect an AI first: Settings › Connections & AI.') : err.message, actions: [] }; }
       askPush({ role: 'assistant', content: r.answer, actions: r.actions });
       input.value = '';
       const box = el('div', { class: 'sb-answer' }, el('div', { class: 'row between', style: 'align-items:flex-start;gap:12px' }, el('div', {}, r.answer), el('button', { class: 'btn ghost small', 'aria-label': 'Close', onclick: close }, icon('x'))));
