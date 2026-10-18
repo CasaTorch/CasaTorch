@@ -20,7 +20,6 @@ fails the privacy scan (`tools/scrub-check.mjs`).
 | 00-setup.js | core | Config loader; remove house defaults, add demo mode |
 | 00b-version.js | core | |
 | 01-gpu-pihole.js | core | Pi-hole; add AdGuard Home later |
-| 02-network-test.js | drop | Too niche for v1 |
 | 03-home-assistant.js | core | The main data source |
 | 04-host-and-apps.js | split | Keep host + generic services; drop Jellyfin/*arr/qBittorrent pollers |
 | 05-meraki.js | provider | `meraki` network provider |
@@ -113,7 +112,6 @@ fails the privacy scan (`tools/scrub-check.mjs`).
 | 14-car-and-devices.js | split | Devices core; car later |
 | 15-live-tv.js | drop | |
 | 16-movies-about.js | split | Keep About; drop Movies |
-| 17-network-test.js | drop | |
 | 18-look-and-feel.js | core | |
 | 19-ask.js | pro | |
 | 20-notifications-media.js | split | Alerts core; media dropped |

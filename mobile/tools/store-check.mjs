@@ -6,7 +6,7 @@ const store = path.join(path.dirname(new URL(import.meta.url).pathname), '..', '
 const LIMITS = {
   'app-store/en-US/name.txt': 30, 'app-store/en-US/subtitle.txt': 30, 'app-store/en-US/promotional_text.txt': 170, 'app-store/en-US/description.txt': 4000,
   'app-store/en-US/keywords.txt': 100, 'app-store/en-US/release_notes.txt': 4000,
-  'google-play/en-US/title.txt': 30, 'google-play/en-US/short_description.txt': 80, 'google-play/en-US/full_description.txt': 4000, 'google-play/en-US/changelogs/700.txt': 500,
+  'google-play/en-US/title.txt': 30, 'google-play/en-US/short_description.txt': 80, 'google-play/en-US/full_description.txt': 4000, 'google-play/en-US/changelogs/800.txt': 500,
 };
 let bad = 0;
 for (const [f, max] of Object.entries(LIMITS)) {

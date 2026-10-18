@@ -1,5 +1,10 @@
 # CasaTorch
 
+[![CI](https://github.com/casatorch/casatorch/actions/workflows/ci.yml/badge.svg)](https://github.com/casatorch/casatorch/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/casatorch/casatorch?sort=semver)](https://github.com/casatorch/casatorch/releases/latest)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![Home Assistant add-on](https://img.shields.io/badge/Home%20Assistant-add--on-41BDF5.svg)](#home-assistant-users)
+
 *Your home, lit up.*
 
 **One screen for your whole house - with or without Home Assistant.**
@@ -12,17 +17,23 @@ model from an iPhone LiDAR scan, and an assistant you can ask anything about you
 It runs on hardware you already have: a Raspberry Pi, a NAS with Docker, an old Windows PC, a mini PC.
 Nothing leaves your house unless you turn on a feature that needs to.
 
-> **Status: 0.2, early.** Everything below marked "now" works today and is tested against sample
-> data and a mock Home Assistant. Some outside services (weather, scores, Ring) still need testing
+**See it first:** screenshots and a 26-second film at **[casatorch.com](https://casatorch.com/#features)**, or run the
+demo house below. What changed in each version: [CHANGELOG.md](CHANGELOG.md).
+
+> **Status: 0.8, early.** Everything described here as available works today and is tested on every change -
+> unit, security, penetration and failure tests, and the setup wizard end to end in a real browser, against
+> sample data and a mock Home Assistant. Some outside services (weather, scores, Ring) still need testing
 > against the real thing on more networks - please open an issue if something doesn't work for you.
 
 ## Try it in two minutes (demo house, no setup)
 
 ```bash
 git clone https://github.com/casatorch/casatorch && cd casatorch/app
-npm install
+npm ci
 npm run demo          # open http://localhost:8090
 ```
+
+Needs Node.js 20 or newer (22 recommended) and git.
 
 ## Get a CasaTorch Box
 
@@ -67,8 +78,9 @@ Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
 
 - **Drag, resize, add and remove tiles** on the Home screen (Edit layout). Tiles show more as they
   grow: a small weather tile is the temperature; a big one adds the hours and the week.
-- **14 widgets**: clock, weather, calendar, scores, headlines, internet, today, alerts, energy,
-  quick switches, pinned devices (any devices or Home Assistant entities you pick), cameras, photo reel, 3D Home -
+- **More than 30 widgets**: clock, weather, calendar, scores, headlines, internet, today, alerts, energy,
+  quick switches, pinned devices (any devices or Home Assistant entities you pick), cameras, photo reel, 3D Home,
+  rain radar, Household, the family's lists, chores, routines and meals, timers, countdowns and more -
   plus **every device, Home Assistant entity and room as a widget of its own**: Add widget > Rooms & devices lists
   them all automatically, and anything new in Home Assistant appears there on its own (marked New).
 - **Panel mode** for wall tablets (`http://<box>:8090/?panel=1`): a status bar across the top with
@@ -231,10 +243,13 @@ More: [docs/PRIVACY.md](docs/PRIVACY.md).
 ## Development
 
 `app/src/server/*.js` and `app/src/client/*.js` are joined in file-name order by `app/build.mjs`.
-`node app/test/unit.mjs` runs the unit tests; `tools/test-setup-wizard.cjs` (with `tools/mock-ha.mjs`)
-and `tools/test-setup-noha.cjs` drive the setup wizard end to end with Playwright.
+`cd app && npm test` runs everything CI runs (build, unit, security, penetration and failure tests, and the setup
+wizard end to end); `npm run test:fast` skips the browser tests. `tools/test-setup-wizard.cjs` (with
+`tools/mock-ha.mjs`) and `tools/test-setup-noha.cjs` drive the setup wizard with Playwright.
 Never put anything from your own house in an issue or PR - the pre-commit hook checks for that.
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md) and
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Found a security problem? Please e-mail us instead of opening an
+issue: [SECURITY.md](SECURITY.md).
 
 ## License
 

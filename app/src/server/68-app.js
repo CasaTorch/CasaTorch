@@ -173,7 +173,7 @@ function relayKey() {
 }
 /* The id this home uses at the relay: made from its own public key ("k" + 32 characters of base64url SHA-256), so
    nobody who learns the public install id can claim the home there first (the relay checks it - api/push/send.js).
-   Boxes before 0.8.1 sent the install id (trust on first use); phones never see this id. */
+   Boxes before 0.8.0 sent the install id (trust on first use); phones never see this id. */
 const relayHomeId = (pub) => `k${crypto.createHash('sha256').update(Buffer.from(pub, 'base64')).digest('base64url').slice(0, 32)}`;
 function sealFor(pd, msg) {
   const key = Buffer.from(unseal(pd.key), 'base64'), iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', key, iv);

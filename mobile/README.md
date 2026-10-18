@@ -15,7 +15,7 @@ mobile/
   tools/     shell-strings.mjs (strings to translate), store-check.mjs (store text limits)
 ```
 
-Version **0.7.0** (build / versionCode **700**: raise it for every store upload).
+Version **0.8.0** (build / versionCode **800**: raise it for every store upload).
 
 ## How it works
 

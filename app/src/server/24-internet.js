@@ -41,7 +41,7 @@ async function speedTest() {
   return speed.last;
 }
 setInterval(() => { if (isConfigured() && !isDemo() && config.network?.speedtest !== false) speedTest().catch(() => {}); }, 4 * 3600_000).unref?.();   // the setting is read each time, so a change works without a restart
-/* Public address, country and provider. ipinfo.io's token-less API (used before 0.8.1) is IPinfo's "legacy" tier;
+/* Public address, country and provider. ipinfo.io's token-less API (used before 0.8.0) is IPinfo's "legacy" tier;
    its current free tier needs a per-user token, so CasaTorch now uses sources that need none: Cloudflare's trace
    page (address and country, every 30 minutes) and RIPEstat (the network that owns the address, cached 6 hours per
    address). Credit: "Provider data: RIPEstat (RIPE NCC)". */

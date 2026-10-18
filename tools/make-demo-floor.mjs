@@ -63,7 +63,7 @@ fs.writeFileSync(path.join(out, 'demo-top.glb'), floorGlb(12, 9, [...outer(12, 9
 // The plan file is hand-tuned (rooms, pins, the yard): only written the first time.
 if (!fs.existsSync(path.join(out, 'floorplan.json'))) fs.writeFileSync(path.join(out, 'floorplan.json'), JSON.stringify({
   floors: [{ id: 'ground', name: 'Ground floor', file: 'demo-ground.glb', level: 0, heightM: 2.8, rotationY: 0, scale: 1, offset: [0, 0], rooms: [{"name": "Living room", "color": "#38bdf8", "pos": [3.5, 2.75]}, {"name": "Kitchen", "color": "#fbbf24", "pos": [9.5, 2.75]}, {"name": "Office", "color": "#a78bfa", "pos": [2, 7.25]}, {"name": "Hall", "color": "#34d399", "pos": [8, 7.25]}] }, { id: 'upstairs', name: 'Upstairs', file: 'demo-upstairs.glb', level: 1, heightM: 2.8, rotationY: 0, scale: 1, offset: [0, 0], rooms: [{"name": "Bedroom 1", "color": "#f472b6", "pos": [2, 2.25]}, {"name": "Bedroom 2", "color": "#a78bfa", "pos": [6, 2.25]}, {"name": "Bedroom 3", "color": "#38bdf8", "pos": [10, 2.25]}, {"name": "Landing", "color": "#34d399", "pos": [4, 6.75]}, {"name": "Study", "color": "#22d3ee", "pos": [10, 6.75]}] }],
-  style: { theme: 'neon', colors: {} },
+  style: { theme: 'night', colors: {} },
   pins: [
     { deviceId: 'hue:1', floor: 'ground', pos: [3.5, 2.2, 2.5] }, { deviceId: 'hue:2', floor: 'ground', pos: [9.5, 2.2, 2.5] }, { deviceId: 'ha:media_player.living_room', floor: 'ground', pos: [1.2, 0.9, 1] },
     { deviceId: 'shelly:fridge', floor: 'ground', pos: [11.3, 0.8, 4.6] }, { deviceId: 'ha:binary_sensor.front_door', floor: 'ground', pos: [5.5, 1.2, 9] }, { deviceId: 'camera:porch', floor: 'ground', pos: [6.5, 2.3, 9.2] },

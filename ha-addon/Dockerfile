@@ -4,7 +4,7 @@
 ARG BUILD_FROM=node:22-bookworm-slim
 FROM ${BUILD_FROM}
 # A release tag (build.yaml). The source is checked against the release's checksums, signed with CasaTorch's offline
-# release key, before it is built: a changed tag or download fails the build. Releases from before 0.8.1 have no
+# release key, before it is built: a changed tag or download fails the build. Releases from before 0.8.0 have no
 # signed file list - the build says so and carries on unless CASATORCH_REQUIRE_SIGNED=1. A branch name (for
 # development) builds without the check.
 ARG CASATORCH_REF=v0.8.0

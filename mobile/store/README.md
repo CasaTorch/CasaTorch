@@ -100,7 +100,7 @@ States), App, Free).
    - **Content rating**: fill in the questionnaire (Utility, no violence/etc. - everything *No*).
    - **Target audience**: 18 and over. **News app**: No. **Government app**: No.
 4. **Release › Production** (or **Testing › Internal testing** first) › **Create new release**: upload the
-   signed `.aab`, release notes from `google-play/en-US/changelogs/700.txt` (the number is the versionCode).
+   signed `.aab`, release notes from `google-play/en-US/changelogs/800.txt` (the number is the versionCode).
    **Review release** › **Start rollout**.
 
 The **launcher icon** is in the app itself (`android/app/src/main/res`): an adaptive icon (navy background, the

@@ -10,7 +10,7 @@
 #
 # It installs the newest *release* (a version tag such as v0.8.1), never the work in progress on `main`, and checks
 # every file against the release's checksums signed with CasaTorch's offline release key (the same key the Linux/Pi
-# updater trusts) before anything is built or run. Releases made before 0.8.1 have no signed file list: then it says
+# updater trusts) before anything is built or run. Releases made before 0.8.0 have no signed file list: then it says
 # so and carries on (CASATORCH_REQUIRE_SIGNED=1 stops instead). Developers: CASATORCH_REF=main (or any branch/tag)
 # installs that instead, without the check.
 # Everything is inside main(), so a download cut off halfway runs nothing.
@@ -169,7 +169,7 @@ if [ "$up" != 1 ] && [ -n "$prev" ] && [ "$(git -C "$APP_DIR" rev-parse HEAD 2>/
   say "The new version didn't start - going back to the one you had"
   systemctl stop casatorch || true
   git -C "$APP_DIR" reset -q --hard "$prev" && chown -R casatorch:casatorch "$APP_DIR"
-  (cd "$APP_DIR/app" && sudo -u casatorch npm ci --omit=dev --no-audit --no-fund --loglevel=error && sudo -u casatorch node build.mjs >/dev/null)
+  (cd "$APP_DIR/app" && sudo -u casatorch npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error && sudo -u casatorch node build.mjs >/dev/null)
   if [ -n "$snap" ]; then
     for f in config.json users.json secret.key; do if [ -f "$snap/$f" ]; then cp -p "$snap/$f" "$DATA_DIR/$f"; fi; done
     chown casatorch:casatorch "$DATA_DIR/config.json" "$DATA_DIR/users.json" "$DATA_DIR/secret.key" 2>/dev/null || true
@@ -200,7 +200,7 @@ verify_release() {
   cat > "$vt/verify-release.js" <<'VERIFY_JS'
 // verify-release.js - checks a CasaTorch source tree against the release's signed checksums, before it is built or run.
 // Used by deploy/install.sh, deploy/install.ps1 and the Home Assistant add-on build (keep the copies the same:
-// tools/test-release-verify.mjs checks). Needs Node.js 20+ only.
+// app/test/security-unit.mjs checks). Needs Node.js 20+ only.
 //
 //   node verify-release.js <dir> <SHA256SUMS> <SHA256SUMS.sig> <casatorch-source-files.sha256> [<list of files>]
 //
@@ -208,7 +208,7 @@ verify_release() {
 // updater trusts), list casatorch-source-files.sha256 with the right checksum, and every file in that list must be in
 // <dir> with the right checksum. With no <list of files>, <dir> must hold nothing else (a fresh download); with one
 // (e.g. `git ls-files` of a checkout), that list must match exactly.
-// Exit codes: 0 verified; 2 the release has no signed file list (made before 0.8.1); 1 anything else is wrong.
+// Exit codes: 0 verified; 2 the release has no signed file list (made before 0.8.0); 1 anything else is wrong.
 'use strict';
 const crypto = require('crypto'), fs = require('fs'), path = require('path');
 const RELEASE_KEY = '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAjZpfFYZVcjzY0N8vFCEfIX7l6t5E7SSRB6Cfe2LdzIY=\n-----END PUBLIC KEY-----\n';

@@ -1,0 +1,32 @@
+name: Feature request
+description: An idea for CasaTorch - a new widget, a device or service to support, something to make easier.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! First check the [roadmap](https://github.com/casatorch/casatorch/blob/main/docs/ROADMAP.md)
+        and the [support matrix](https://github.com/casatorch/casatorch/blob/main/docs/SUPPORT-MATRIX.md) - it may be
+        planned already, or there may be a reason we chose not to support it. Note that nothing automatic and nothing the
+        AI does will ever unlock doors, open garage doors or gates, or disarm alarms.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: The problem or wish in your own words - what you'd use it for at home.
+    validations: { required: true }
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could CasaTorch help?
+      description: How you picture it working. Screenshots or sketches welcome (no private details).
+  - type: input
+    id: devices
+    attributes:
+      label: Devices or services involved
+      placeholder: "e.g. a brand of sensor, Home Assistant integration, a website"
+  - type: dropdown
+    id: ha
+    attributes:
+      label: Do you use Home Assistant?
+      options: ["Yes", "No", "Not yet"]

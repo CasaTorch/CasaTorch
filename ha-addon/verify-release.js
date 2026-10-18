@@ -1,6 +1,6 @@
 // verify-release.js - checks a CasaTorch source tree against the release's signed checksums, before it is built or run.
 // Used by deploy/install.sh, deploy/install.ps1 and the Home Assistant add-on build (keep the copies the same:
-// tools/test-release-verify.mjs checks). Needs Node.js 20+ only.
+// app/test/security-unit.mjs checks). Needs Node.js 20+ only.
 //
 //   node verify-release.js <dir> <SHA256SUMS> <SHA256SUMS.sig> <casatorch-source-files.sha256> [<list of files>]
 //
@@ -8,7 +8,7 @@
 // updater trusts), list casatorch-source-files.sha256 with the right checksum, and every file in that list must be in
 // <dir> with the right checksum. With no <list of files>, <dir> must hold nothing else (a fresh download); with one
 // (e.g. `git ls-files` of a checkout), that list must match exactly.
-// Exit codes: 0 verified; 2 the release has no signed file list (made before 0.8.1); 1 anything else is wrong.
+// Exit codes: 0 verified; 2 the release has no signed file list (made before 0.8.0); 1 anything else is wrong.
 'use strict';
 const crypto = require('crypto'), fs = require('fs'), path = require('path');
 const RELEASE_KEY = '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAjZpfFYZVcjzY0N8vFCEfIX7l6t5E7SSRB6Cfe2LdzIY=\n-----END PUBLIC KEY-----\n';

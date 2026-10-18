@@ -1,4 +1,4 @@
-Google Play Data safety answers for CasaTorch 0.7.0:
+Google Play Data safety answers for CasaTorch 0.8.0:
 - Does the app collect or share user data? No data collected. No data shared.
 - The app talks only to the user's own CasaTorch (self-hosted) and to casatorch.com/api/find (lists CasaTorch boxes on the same internet connection; nothing is stored).
 - Alerts: the user's CasaTorch encrypts them end to end; Firebase Cloud Messaging carries sealed bytes only. Firebase Analytics is off.

@@ -1,0 +1,71 @@
+name: Bug report
+description: Something in CasaTorch doesn't work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Issues are **public**: never paste passwords, tokens, your address, IP or MAC
+        addresses or camera pictures. **Security problem?** Don't open an issue - e-mail us (see SECURITY.md).
+
+        **Attach a support file** - it's the fastest way to a fix. In CasaTorch open
+        **Settings › Health › Get help › Make a support file**. Passwords, names, e-mail, IP and MAC addresses are
+        masked, and you see the whole file before you download it. Stuck on something specific? The guided
+        troubleshooters on that same page often find the cause.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings › ...
+        2. Tap ...
+        3. See ...
+  - type: input
+    id: version
+    attributes:
+      label: CasaTorch version
+      description: Settings › Updates & backup shows it.
+      placeholder: "0.8.0"
+    validations: { required: true }
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is CasaTorch installed?
+      options:
+        - CasaTorch Box
+        - Raspberry Pi image or install script
+        - Home Assistant add-on
+        - Docker / NAS
+        - Windows installer
+        - macOS installer
+        - Debian / Ubuntu package
+        - From source (npm)
+    validations: { required: true }
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: "e.g. Chrome 140 on a Fire HD 10 wall tablet, Safari on iPhone"
+  - type: dropdown
+    id: ha
+    attributes:
+      label: Home Assistant
+      options: ["Not used", "Connected", "Connected, but this is about Home Assistant data"]
+  - type: textarea
+    id: support
+    attributes:
+      label: Support file
+      description: Drag the support file here, or paste the "Copy summary" text. Read it once more first.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I checked that nothing private (addresses, tokens, names, pictures) is in this issue.
+          required: true

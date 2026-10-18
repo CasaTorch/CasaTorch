@@ -156,8 +156,8 @@ const WEB_ACTIONS = {
 function nativeStub(os) {
   return `(() => {
     const ok = (v) => Promise.resolve(v);
-    const hello = { casatorch: true, appMin: '0.7.0', home: { id: 'demo', name: 'Demo House', version: '0.7.1' }, signIn: true, configured: true, secure: null };
-    window.CasaNative = Object.freeze({ platform: '${os}', version: '0.7.0', device: '${os === 'ios' ? 'iPhone' : 'Pixel'}', hasLidar: false,
+    const hello = { casatorch: true, appMin: '0.7.0', home: { id: 'demo', name: 'Demo House', version: '0.8.0' }, signIn: true, configured: true, secure: null };
+    window.CasaNative = Object.freeze({ platform: '${os}', version: '0.8.0', device: '${os === 'ios' ? 'iPhone' : 'Pixel'}', hasLidar: false,
       haptic() {}, fullscreen() {}, share: () => ok(), openExternal() {},
       biometrics: () => ok({ available: true, enabled: false, type: '${os === 'ios' ? 'faceID' : 'fingerprint'}' }), setBiometricLock: () => ok(true),
       pushEnable: () => ok({}), lidar: () => ok(false), scanRoom: () => ok(null),
