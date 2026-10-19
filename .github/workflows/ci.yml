@@ -18,8 +18,8 @@ jobs:
     strategy: { fail-fast: false, matrix: { node: [22, 24] } }
     defaults: { run: { working-directory: app } }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: "${{ matrix.node }}", cache: npm, cache-dependency-path: app/package-lock.json }
       - run: npm ci --no-audit --no-fund
       - name: Build, syntax, unit tests, security checks
@@ -39,11 +39,11 @@ jobs:
       PLAYWRIGHT: ${{ github.workspace }}/.pw/node_modules/playwright
       SHOTS: ${{ github.workspace }}/test-results
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
       - run: npm ci --no-audit --no-fund
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with: { path: ~/.cache/ms-playwright, key: "playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}" }
       # Playwright stays out of CasaTorch's own dependencies: it is installed beside the checkout for the tests only.
       - name: Install Playwright and Chromium
@@ -52,7 +52,7 @@ jobs:
           cd "$GITHUB_WORKSPACE/.pw" && npx playwright install --with-deps chromium
       - name: Wizard with Home Assistant, wizard without it
         run: node ../tools/test-all.mjs --only=build,e2e-wizard,e2e-noha
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with: { name: e2e-screenshots, path: test-results/, retention-days: 14, if-no-files-found: ignore }
 
@@ -61,8 +61,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with: { node-version: 22 }
       - name: No personal data
         run: node tools/scrub-check.mjs .
@@ -82,5 +82,5 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -f app/Dockerfile -t casatorch:ci .
