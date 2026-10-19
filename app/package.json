@@ -28,7 +28,7 @@
     "multicast-dns": "7.2.5",
     "qrcode": "1.5.4",
     "ring-client-api": "^14.3.0",
-    "three": "0.185.1",
+    "three": "0.186.1",
     "web-push": "3.6.7"
   },
   "overrides": {
