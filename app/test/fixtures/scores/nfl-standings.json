@@ -1,0 +1,543 @@
+{
+ "uid": "s:20~l:28~g:9",
+ "id": "9",
+ "name": "National Football League",
+ "abbreviation": "NFL",
+ "children": [
+  {
+   "uid": "s:20~l:28~g:8",
+   "id": "8",
+   "name": "American Football Conference",
+   "abbreviation": "AFC",
+   "children": [
+    {
+     "id": "11",
+     "name": "AFC West",
+     "abbreviation": "AFC West",
+     "standings": {
+      "id": "0",
+      "name": "AFC West",
+      "displayName": "AFC West",
+      "season": 2026,
+      "seasonType": 2,
+      "entries": [
+       {
+        "team": {
+         "id": "12",
+         "uid": "s:20~l:28~t:12",
+         "location": "Kansas",
+         "name": "Chiefs",
+         "abbreviation": "KC",
+         "displayName": "Kansas City Chiefs",
+         "shortDisplayName": "Chiefs",
+         "color": "e31837",
+         "logos": [
+          {
+           "href": "https://a.espncdn.com/i/teamlogos/nfl/500/kc.png"
+          }
+         ]
+        },
+        "stats": [
+         {
+          "name": "wins",
+          "displayName": "Wins",
+          "abbreviation": "W",
+          "type": "wins",
+          "value": 6,
+          "displayValue": "6"
+         },
+         {
+          "name": "losses",
+          "abbreviation": "L",
+          "type": "losses",
+          "value": 0,
+          "displayValue": "0"
+         },
+         {
+          "name": "ties",
+          "abbreviation": "T",
+          "type": "ties",
+          "value": 0,
+          "displayValue": "0"
+         },
+         {
+          "name": "winPercent",
+          "abbreviation": "PCT",
+          "type": "winpercent",
+          "value": 1.0,
+          "displayValue": "1.000"
+         },
+         {
+          "name": "streak",
+          "abbreviation": "STRK",
+          "type": "streak",
+          "value": 1,
+          "displayValue": "W6"
+         },
+         {
+          "name": "playoffSeed",
+          "abbreviation": "SEED",
+          "type": "playoffseed",
+          "value": 1,
+          "displayValue": "1"
+         },
+         {
+          "name": "pointsFor",
+          "abbreviation": "PF",
+          "type": "pointsfor",
+          "value": 150,
+          "displayValue": "150"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "uid": "s:20~l:28~g:7",
+   "id": "7",
+   "name": "National Football Conference",
+   "abbreviation": "NFC",
+   "children": [
+    {
+     "id": "3",
+     "name": "NFC West",
+     "abbreviation": "NFC West",
+     "standings": {
+      "name": "NFC West",
+      "season": 2026,
+      "entries": [
+       {
+        "team": {
+         "id": "25",
+         "uid": "s:20~l:28~t:25",
+         "location": "San",
+         "name": "49ers",
+         "abbreviation": "SF",
+         "displayName": "San Francisco 49ers",
+         "shortDisplayName": "49ers",
+         "color": "aa0000",
+         "logos": [
+          {
+           "href": "https://a.espncdn.com/i/teamlogos/nfl/500/sf.png"
+          }
+         ]
+        },
+        "stats": [
+         {
+          "name": "wins",
+          "displayName": "Wins",
+          "abbreviation": "W",
+          "type": "wins",
+          "value": 5,
+          "displayValue": "5"
+         },
+         {
+          "name": "losses",
+          "abbreviation": "L",
+          "type": "losses",
+          "value": 1,
+          "displayValue": "1"
+         },
+         {
+          "name": "ties",
+          "abbreviation": "T",
+          "type": "ties",
+          "value": 0,
+          "displayValue": "0"
+         },
+         {
+          "name": "winPercent",
+          "abbreviation": "PCT",
+          "type": "winpercent",
+          "value": 0.8333333333333334,
+          "displayValue": ".833"
+         },
+         {
+          "name": "streak",
+          "abbreviation": "STRK",
+          "type": "streak",
+          "value": 1,
+          "displayValue": "W3"
+         },
+         {
+          "name": "playoffSeed",
+          "abbreviation": "SEED",
+          "type": "playoffseed",
+          "value": 1,
+          "displayValue": "1"
+         },
+         {
+          "name": "pointsFor",
+          "abbreviation": "PF",
+          "type": "pointsfor",
+          "value": 150,
+          "displayValue": "150"
+         }
+        ]
+       },
+       {
+        "team": {
+         "id": "14",
+         "uid": "s:20~l:28~t:14",
+         "location": "Los",
+         "name": "Rams",
+         "abbreviation": "LAR",
+         "displayName": "Los Angeles Rams",
+         "shortDisplayName": "Rams",
+         "color": "003594",
+         "logos": [
+          {
+           "href": "https://a.espncdn.com/i/teamlogos/nfl/500/lar.png"
+          }
+         ]
+        },
+        "stats": [
+         {
+          "name": "wins",
+          "displayName": "Wins",
+          "abbreviation": "W",
+          "type": "wins",
+          "value": 3,
+          "displayValue": "3"
+         },
+         {
+          "name": "losses",
+          "abbreviation": "L",
+          "type": "losses",
+          "value": 3,
+          "displayValue": "3"
+         },
+         {
+          "name": "ties",
+          "abbreviation": "T",
+          "type": "ties",
+          "value": 0,
+          "displayValue": "0"
+         },
+         {
+          "name": "winPercent",
+          "abbreviation": "PCT",
+          "type": "winpercent",
+          "value": 0.5,
+          "displayValue": ".500"
+         },
+         {
+          "name": "streak",
+          "abbreviation": "STRK",
+          "type": "streak",
+          "value": 1,
+          "displayValue": "L1"
+         },
+         {
+          "name": "playoffSeed",
+          "abbreviation": "SEED",
+          "type": "playoffseed",
+          "value": 7,
+          "displayValue": "7"
+         },
+         {
+          "name": "pointsFor",
+          "abbreviation": "PF",
+          "type": "pointsfor",
+          "value": 150,
+          "displayValue": "150"
+         }
+        ]
+       },
+       {
+        "team": {
+         "id": "26",
+         "uid": "s:20~l:28~t:26",
+         "location": "Seattle",
+         "name": "Seahawks",
+         "abbreviation": "SEA",
+         "displayName": "Seattle Seahawks",
+         "shortDisplayName": "Seahawks",
+         "color": "002244",
+         "logos": [
+          {
+           "href": "https://a.espncdn.com/i/teamlogos/nfl/500/sea.png"
+          }
+         ]
+        },
+        "stats": [
+         {
+          "name": "wins",
+          "displayName": "Wins",
+          "abbreviation": "W",
+          "type": "wins",
+          "value": 4,
+          "displayValue": "4"
+         },
+         {
+          "name": "losses",
+          "abbreviation": "L",
+          "type": "losses",
+          "value": 2,
+          "displayValue": "2"
+         },
+         {
+          "name": "ties",
+          "abbreviation": "T",
+          "type": "ties",
+          "value": 0,
+          "displayValue": "0"
+         },
+         {
+          "name": "winPercent",
+          "abbreviation": "PCT",
+          "type": "winpercent",
+          "value": 0.6666666666666666,
+          "displayValue": ".667"
+         },
+         {
+          "name": "streak",
+          "abbreviation": "STRK",
+          "type": "streak",
+          "value": 1,
+          "displayValue": "W1"
+         },
+         {
+          "name": "playoffSeed",
+          "abbreviation": "SEED",
+          "type": "playoffseed",
+          "value": 5,
+          "displayValue": "5"
+         },
+         {
+          "name": "pointsFor",
+          "abbreviation": "PF",
+          "type": "pointsfor",
+          "value": 150,
+          "displayValue": "150"
+         }
+        ]
+       },
+       {
+        "team": {
+         "id": "22",
+         "uid": "s:20~l:28~t:22",
+         "location": "Arizona",
+         "name": "Cardinals",
+         "abbreviation": "ARI",
+         "displayName": "Arizona Cardinals",
+         "shortDisplayName": "Cardinals",
+         "color": "97233f",
+         "logos": [
+          {
+           "href": "https://a.espncdn.com/i/teamlogos/nfl/500/ari.png"
+          }
+         ]
+        },
+        "stats": [
+         {
+          "name": "wins",
+          "displayName": "Wins",
+          "abbreviation": "W",
+          "type": "wins",
+          "value": 1,
+          "displayValue": "1"
+         },
+         {
+          "name": "losses",
+          "abbreviation": "L",
+          "type": "losses",
+          "value": 5,
+          "displayValue": "5"
+         },
+         {
+          "name": "ties",
+          "abbreviation": "T",
+          "type": "ties",
+          "value": 0,
+          "displayValue": "0"
+         },
+         {
+          "name": "winPercent",
+          "abbreviation": "PCT",
+          "type": "winpercent",
+          "value": 0.16666666666666666,
+          "displayValue": ".167"
+         },
+         {
+          "name": "streak",
+          "abbreviation": "STRK",
+          "type": "streak",
+          "value": 1,
+          "displayValue": "L4"
+         },
+         {
+          "name": "playoffSeed",
+          "abbreviation": "SEED",
+          "type": "playoffseed",
+          "value": 14,
+          "displayValue": "14"
+         },
+         {
+          "name": "pointsFor",
+          "abbreviation": "PF",
+          "type": "pointsfor",
+          "value": 150,
+          "displayValue": "150"
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "id": "1",
+     "name": "NFC East",
+     "abbreviation": "NFC East",
+     "standings": {
+      "name": "NFC East",
+      "season": 2026,
+      "entries": [
+       {
+        "team": {
+         "id": "21",
+         "uid": "s:20~l:28~t:21",
+         "location": "Philadelphia",
+         "name": "Eagles",
+         "abbreviation": "PHI",
+         "displayName": "Philadelphia Eagles",
+         "shortDisplayName": "Eagles",
+         "color": "004c54",
+         "logos": [
+          {
+           "href": "https://a.espncdn.com/i/teamlogos/nfl/500/phi.png"
+          }
+         ]
+        },
+        "stats": [
+         {
+          "name": "wins",
+          "displayName": "Wins",
+          "abbreviation": "W",
+          "type": "wins",
+          "value": 5,
+          "displayValue": "5"
+         },
+         {
+          "name": "losses",
+          "abbreviation": "L",
+          "type": "losses",
+          "value": 1,
+          "displayValue": "1"
+         },
+         {
+          "name": "ties",
+          "abbreviation": "T",
+          "type": "ties",
+          "value": 0,
+          "displayValue": "0"
+         },
+         {
+          "name": "winPercent",
+          "abbreviation": "PCT",
+          "type": "winpercent",
+          "value": 0.8333333333333334,
+          "displayValue": ".833"
+         },
+         {
+          "name": "streak",
+          "abbreviation": "STRK",
+          "type": "streak",
+          "value": 1,
+          "displayValue": "W2"
+         },
+         {
+          "name": "playoffSeed",
+          "abbreviation": "SEED",
+          "type": "playoffseed",
+          "value": 2,
+          "displayValue": "2"
+         },
+         {
+          "name": "pointsFor",
+          "abbreviation": "PF",
+          "type": "pointsfor",
+          "value": 150,
+          "displayValue": "150"
+         }
+        ]
+       },
+       {
+        "team": {
+         "id": "6",
+         "uid": "s:20~l:28~t:6",
+         "location": "Dallas",
+         "name": "Cowboys",
+         "abbreviation": "DAL",
+         "displayName": "Dallas Cowboys",
+         "shortDisplayName": "Cowboys",
+         "color": "002a5c",
+         "logos": [
+          {
+           "href": "https://a.espncdn.com/i/teamlogos/nfl/500/dal.png"
+          }
+         ]
+        },
+        "stats": [
+         {
+          "name": "wins",
+          "displayName": "Wins",
+          "abbreviation": "W",
+          "type": "wins",
+          "value": 3,
+          "displayValue": "3"
+         },
+         {
+          "name": "losses",
+          "abbreviation": "L",
+          "type": "losses",
+          "value": 3,
+          "displayValue": "3"
+         },
+         {
+          "name": "ties",
+          "abbreviation": "T",
+          "type": "ties",
+          "value": 0,
+          "displayValue": "0"
+         },
+         {
+          "name": "winPercent",
+          "abbreviation": "PCT",
+          "type": "winpercent",
+          "value": 0.5,
+          "displayValue": ".500"
+         },
+         {
+          "name": "streak",
+          "abbreviation": "STRK",
+          "type": "streak",
+          "value": 1,
+          "displayValue": "W1"
+         },
+         {
+          "name": "playoffSeed",
+          "abbreviation": "SEED",
+          "type": "playoffseed",
+          "value": 8,
+          "displayValue": "8"
+         },
+         {
+          "name": "pointsFor",
+          "abbreviation": "PF",
+          "type": "pointsfor",
+          "value": 150,
+          "displayValue": "150"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

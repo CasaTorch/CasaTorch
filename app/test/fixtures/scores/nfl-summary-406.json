@@ -1,0 +1,117 @@
+{
+ "header": {
+  "id": "406",
+  "competitions": [
+   {
+    "date": "2026-10-19T00:20Z",
+    "status": {
+     "type": {
+      "state": "in",
+      "shortDetail": "Q3 4:12"
+     }
+    },
+    "broadcasts": [
+     {
+      "media": {
+       "shortName": "NBC"
+      }
+     }
+    ],
+    "competitors": [
+     {
+      "homeAway": "home",
+      "winner": false,
+      "score": "17",
+      "team": {
+       "id": "25",
+       "abbreviation": "SF",
+       "displayName": "San Francisco 49ers",
+       "color": "aa0000"
+      },
+      "linescores": [
+       {
+        "displayValue": "7"
+       },
+       {
+        "displayValue": "3"
+       },
+       {
+        "displayValue": "7"
+       }
+      ]
+     },
+     {
+      "homeAway": "away",
+      "winner": false,
+      "score": "10",
+      "team": {
+       "id": "26",
+       "abbreviation": "SEA",
+       "displayName": "Seattle Seahawks",
+       "color": "002244"
+      },
+      "linescores": [
+       {
+        "displayValue": "3"
+       },
+       {
+        "displayValue": "7"
+       },
+       {
+        "displayValue": "0"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "boxscore": {
+  "teams": [
+   {
+    "team": {
+     "id": "26"
+    },
+    "statistics": [
+     {
+      "name": "totalYards",
+      "label": "Total Yards",
+      "displayValue": "287"
+     },
+     {
+      "name": "turnovers",
+      "label": "Turnovers",
+      "displayValue": "2"
+     },
+     {
+      "name": "onlyAway",
+      "label": "Only away",
+      "displayValue": "9"
+     }
+    ]
+   },
+   {
+    "team": {
+     "id": "25"
+    },
+    "statistics": [
+     {
+      "name": "totalYards",
+      "label": "Total Yards",
+      "displayValue": "342"
+     },
+     {
+      "name": "turnovers",
+      "label": "Turnovers",
+      "displayValue": "1"
+     }
+    ]
+   }
+  ]
+ },
+ "gameInfo": {
+  "venue": {
+   "fullName": "Home Field"
+  }
+ }
+}

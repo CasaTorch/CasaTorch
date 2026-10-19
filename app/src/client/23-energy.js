@@ -391,3 +391,86 @@ async function energyPage(main) {
 }
 /* The ctx a page grid's tiles draw from (kept on the grid element by pageGrid). */
 const pageCtx = (main) => main.querySelector('.grid')?._ctx || null;
+
+/* ======================= drawers: tap a tile for more (06d-drawer.js) =======================
+   Every metered device and room drills down: watts now, the last 24 hours, today's energy and cost, its share of
+   the house, whether it wastes power on standby, and its switch. */
+const enOverview = () => wget('/api/energy/overview', 30_000);
+const enHourly = (vals, end = Date.now()) => vals.map((_, i) => Math.floor(end / 3600_000) * 3600_000 - (vals.length - 1 - i) * 3600_000);
+/** One metered device, in full. */
+function energyDevDrawer(id, { fromHash = false, route = null } = {}) {
+  return openDrawer({
+    route: route || ['endev', id], fromHash, icon: 'plug', doc: 'page.energy', title: T('Device'), titleOf: (r) => r?.x?.name || r?.dev?.name,
+    updated: (x) => x?.d?.at,
+    async load() {
+      const [d, all] = await Promise.all([enOverview(), drDevices()]);
+      const x = (d.devices || []).find((y) => y.id === id), dev = all.find((y) => y.id === id);
+      const sr = dev && shFieldOf(dev) ? await devHistory([id]) : {};
+      return { d, x, dev, hist: sr[id] || null };
+    },
+    render(b, { d, x, dev, hist }, dr) {
+      if (!x && !dev) return b.append(drEmpty(T('This device isn\'t reporting power right now.')));
+      const name = x?.name || dev?.name, w = x?.w ?? dev?.powerW, today = (d.usage?.today?.kwh) || (d.devices || []).reduce((s, y) => s + (y.todayKwh || 0), 0);
+      const share = x && today ? Math.round((x.todayKwh / today) * 100) : null, wasted = (d.standby || []).find((y) => y.id === id || y.name === name);
+      const roomies = (d.devices || []).filter((y) => x?.room && y.room === x.room && y.id !== id);
+      // the Energy page's own hourly averages first (they add up to today's kWh), else the sensor's 5-minute readings
+      const series = x?.spark?.length > 2 ? { v: x.spark, end: Math.floor(Date.now() / 3600_000) * 3600_000, step: 3600_000, field: 'powerW' } : hist?.field === 'powerW' ? hist : null;
+      b.append(
+        el('div', { class: 'row', style: 'gap:12px;align-items:flex-end' }, el('div', { class: 'grow' }, el('div', { class: 'dr-big' }, enW(w)), el('div', { class: 'small muted' }, [x?.room, x?.ev ? T('Car charging') : null, x?.on === false || dev?.on === false ? T('Off') : T('Live')].filter(Boolean).join(' · '))),
+          dev && TOGGLES.has(dev.kind) && dev.online !== false ? el('button', { class: `btn small${dev.on ? ' primary' : ''}`, onclick: async () => { try { await toggleDevice(dev); toast(`${dev.name}: ${dev.on ? T('On') : T('Off')}`); setTimeout(() => { WCACHE.delete('/api/energy/overview'); dr.refresh(); }, 1200); } catch (err) { toast(err.message); } } }, dev.on ? T('Turn off') : T('Turn on')) : null),
+        el('div', { class: 'dr-kpis' }, drKpi(T('Today'), x ? enK(x.todayKwh) : '-', x?.todayCost != null ? enMoney(d, x.todayCost) : null), drKpi(T('Share of the house'), share != null ? `${share}%` : '-', T('of today')),
+          d.rate && w != null ? drKpi(T('At this pace'), enMoney(d, (w / 1000) * 24 * d.rate), T('a day')) : null),
+        series ? drSection(T('The last 24 hours'), drChart({ xs: series.v.map((_, i) => series.end - (series.v.length - 1 - i) * series.step), lines: [{ v: series.v, fmt: (v) => enW(v), label: name }], height: 160, label: T('Power, the last 24 hours') })) : null,
+        wasted ? drSection(T('Standby waste'), el('p', { class: 'small', style: 'margin:0' }, wasted.why === 'off' ? T('{name} draws {w} while switched off', { name, w: enW(wasted.w) }) : T('{name} draws {w} when nobody uses it', { name, w: enW(wasted.w) }), ' ', wasted.costYear != null ? T('About {money} a year. A smart plug schedule that switches it off overnight would save most of it.', { money: enMoney(d, wasted.costYear, 0) }) : '')) : null,
+        roomies.length ? drSection(T('Also in {room}', { room: x.room }), enRankRows(d, roomies)) : null,
+        dev ? el('button', { class: 'btn small ghost dr-open-page', onclick: () => deviceDrawer(dev) }, icon('sliders', 14), T('Every control and detail')) : null);
+    },
+  });
+}
+drawerRoute('endev', (id) => { energyDevDrawer(id, { fromHash: true }); });
+/** Devices ranked by energy today, each opening its own drawer. */
+function enRankRows(d, list) {
+  const max = Math.max(0.001, ...list.map((x) => x.todayKwh || 0));
+  return el('div', { class: 'dr-list' }, list.map((x) => el('button', { type: 'button', class: 'dr-row dr-rowbtn', onclick: () => energyDevDrawer(x.id) },
+    el('div', { class: 'grow' }, el('div', { class: 'row between', style: 'gap:8px' }, el('span', { class: 'ellipsis' }, x.name), el('b', { class: 'num' }, enW(x.w))),
+      el('div', { class: 'en-track', style: 'margin:4px 0' }, el('i', { class: x.ev ? 'ev' : '', style: `width:${Math.max(1.5, (x.todayKwh || 0) / max * 100)}%` })),
+      el('div', { class: 'tiny muted row between' }, el('span', {}, x.room || ''), el('span', { class: 'num' }, `${enK(x.todayKwh)}${x.todayCost ? ` · ${enMoney(d, x.todayCost)}` : ''} ${T('today')}`))), icon('chevr', 14))));
+}
+tileDrawer(['en-top', 'energy', 'en-standby'], {
+  doc: 'page.energy', every: 30_000, updated: (d) => d?.at,
+  load: () => enOverview(),
+  render(b, d, a) {
+    const list = (d.devices || []).slice().sort((x, y) => (y.todayKwh || 0) - (x.todayKwh || 0) || y.w - x.w);
+    if (!list.length) return b.append(drEmpty(T('No smart plugs with power metering yet. Shelly plugs work without Home Assistant; Kasa, Tapo and others through Home Assistant.'), '#connect', T('Connect')));
+    const n = d.now || {}, waste = d.standby || [];
+    b.append(el('div', { class: 'dr-kpis' }, drKpi(T('Using now'), enW(n.useW), d.rate && n.useW != null ? T('{money} a day at this pace', { money: enMoney(d, (n.useW / 1000) * 24 * d.rate) }) : null), drKpi(T('Today'), enK(d.usage?.today?.kwh), d.usage?.today?.cost != null ? enMoney(d, d.usage.today.cost) : null), d.baseload ? drKpi(T('Always on'), enW(d.baseload.w)) : null),
+      a.w.id === 'en-standby' && waste.length ? drSection(T('Standby waste'), el('div', { class: 'dr-list' }, waste.map((x) => el('button', { type: 'button', class: 'dr-row dr-rowbtn', onclick: () => x.id && energyDevDrawer(x.id) }, el('div', { class: 'grow' }, x.name, el('div', { class: 'tiny muted' }, x.costYear != null ? T('About {money} a year', { money: enMoney(d, x.costYear, 0) }) : '')), el('b', { class: 'num' }, enW(x.w)))))) : null,
+      drSection(T('Every metered device'), enRankRows(d, list)), el('p', { class: 'tiny muted', style: 'margin:0' }, T('Tap one for its last 24 hours.')), drOpenPage('#energy', T('Open Energy')));
+  },
+});
+tileDrawer('en-dev', { custom(a, { fromHash }) { const id = a.t.device || optsOf(a.t).device; if (!id) return false; energyDevDrawer(id, { fromHash, route: ['tile', a.t.id] }); return true; } });
+tileDrawer(['en-rooms'], {
+  doc: 'page.energy', updated: (d) => d?.at,
+  load: () => enOverview(),
+  render(b, d) {
+    const rooms = (d.rooms || []).filter((r) => r.n);
+    if (!rooms.length) return b.append(drEmpty(T('Put devices in rooms (areas in Home Assistant, or pins on the 3D Home) to see this.')));
+    const tot = rooms.reduce((s, r) => s + r.todayKwh, 0);
+    for (const r of rooms) {
+      const ds = (d.devices || []).filter((x) => (r.ev ? x.ev : (x.room || null) === (r.name || null) && !x.ev));
+      b.append(drSection(el('span', { class: 'grow' }, `${r.name || (r.ev ? T('Car charging') : T('Not in a room'))} · ${enK(r.todayKwh)}${tot ? ` (${Math.round(r.todayKwh / tot * 100)}%)` : ''}`), el('div', { class: 'tiny muted', style: 'margin-bottom:4px' }, T('{w} now · {n} devices', { w: enW(r.w), n: r.n })), ds.length ? enRankRows(d, ds) : null));
+    }
+  },
+});
+tileDrawer(['en-now', 'en-flow'], {
+  doc: 'page.energy', every: 20_000, updated: (d) => d?.at,
+  load: () => enOverview(),
+  render(b, d) {
+    const n = d.now || {}, live = d.live || [], today = d.today?.hours || [];
+    b.append(el('div', {}, el('div', { class: 'dr-big' }, enW(n.useW)), el('div', { class: 'small muted' }, d.rate && n.useW != null ? T('{hour} an hour · {day} a day at this pace', { hour: enMoney(d, n.useW / 1000 * d.rate, 2), day: enMoney(d, n.useW / 1000 * 24 * d.rate) }) : n.from ? T('From {meter}', { meter: n.from }) : '')),
+      el('div', { class: 'dr-kpis' }, n.solarW != null ? drKpi(T('Solar'), enW(n.solarW)) : null, n.gridW != null ? drKpi(n.gridW < 0 ? T('Sending back') : T('From the grid'), enW(Math.abs(n.gridW))) : null, n.battery ? drKpi(T('Battery'), n.battery.pct != null ? `${n.battery.pct}%` : enW(n.battery.w)) : null, n.selfPct != null ? drKpi(T('Self-powered'), `${n.selfPct}%`) : null, drKpi(T('Today'), enK(d.usage?.today?.kwh), d.usage?.today?.cost != null ? enMoney(d, d.usage.today.cost) : null)),
+      live.length > 3 ? drSection(T('The last hour'), drChart({ xs: live.map((p) => p[0]), lines: [{ v: live.map((p) => p[1]), fmt: (v) => enW(v), label: T('Using') }], height: 150, xLabel: (ms) => fmt(new Date(ms).toISOString(), { hour: 'numeric', minute: '2-digit' }), label: T('Power, the last hour') })) : null,
+      today.some((v) => v != null) ? drSection(T('Today, hour by hour'), drChart({ xs: today.map((_, h) => { const z = new Date(); z.setHours(h, 0, 0, 0); return z.getTime(); }), lines: [], bars: { v: today.map((v) => v || 0), fmt: (v) => enK(v), label: T('Energy') }, height: 130, label: T('Energy by hour today') })) : null,
+      (d.devices || []).length ? drSection(T('Using the most right now'), enRankRows(d, (d.devices || []).filter((x) => x.w >= 1).sort((x, y) => y.w - x.w).slice(0, 8))) : null);
+  },
+});

@@ -419,3 +419,42 @@ function hhAppEditor(a, d, save, redraw) {
     if (x?.demo && !DEFAULT_LAYOUT.some((t) => t.id === 'household')) { const i = DEFAULT_LAYOUT.findIndex((t) => t.id === 'today'); if (i >= 0) DEFAULT_LAYOUT.splice(i, 1, { id: 'household', w: DEFAULT_LAYOUT[i].w, h: DEFAULT_LAYOUT[i].h }); }
   } });
 })();
+
+/* ======================= drawers: tap a tile for more (06d-drawer.js) =======================
+   One drawer for the household: every bin with its next pickups, the mail (when it came, when it was collected),
+   each plant's soil moisture against its own limit (and its last 24 hours when the sensor keeps them), and each
+   machine's cycle. The section of the tile you tapped comes first. */
+tileDrawer(['household', 'hh-bins', 'hh-mail', 'hh-plants', 'hh-laundry'], {
+  doc: 'page.household', every: 30_000,
+  async load() {
+    WCACHE.delete('/api/household');
+    const [d, canAct] = await Promise.all([wget('/api/household', 10_000), hhRole()]);
+    const hist = d?.plants?.length ? await devHistory(d.plants.map((p) => `ha:${p.id}`)) : {};
+    return { d, canAct, hist };
+  },
+  actions: () => [el('a', { class: 'btn small', href: '#settings/household', onclick: () => closeDrawer() }, icon('gear', 14), el('span', { class: 'hide-phone' }, T('Household settings')))],
+  render(b, { d, canAct, hist }, a, dr) {
+    if (!d?.configured) return b.append(drEmpty(T('Bin night, the mail, plants and laundry - set them up once.'), '#settings/household', T('Set up')));
+    const act = async (url, body, msg) => { await hhDo(url, body, msg); setTimeout(() => dr.refresh(), 500); };
+    const parts = {
+      bins: d.bins.length ? drSection(T('Bins'), el('div', { class: 'dr-list' }, d.bins.map((x) => { const wn = hhWhen(x);
+        return el('div', { class: 'dr-row', style: 'align-items:flex-start' }, hhChip(x.icon, x.color, 'sm'), el('div', { class: 'grow' }, el('b', {}, x.name), el('div', { class: 'tiny muted' }, [wn.pill, wn.sub, x.source === 'ha' ? 'Home Assistant' : x.source === 'ical' ? T('Calendar') : T('Schedule')].filter(Boolean).join(' · ')),
+          x.upcoming?.length ? el('div', { class: 'dr-pills', style: 'margin-top:6px' }, x.upcoming.map((u) => el('span', { class: 'pill' }, fmt(`${u}T12:00:00Z`, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })))) : null, x.error ? el('div', { class: 'tiny bad' }, x.error) : null),
+          (x.state === 'tonight' || x.state === 'today') && canAct ? el('button', { class: `btn small${x.out ? '' : ' primary'}`, onclick: () => act(`/api/household/bins/${encodeURIComponent(x.id)}/out`, { out: !x.out }, x.out ? null : T('Thanks - {bin} is out', { bin: x.name })) }, icon('check', 14), x.out ? T('Out') : T('It\'s out')) : x.out ? el('span', { class: 'pill good' }, T('Out')) : null); }))) : null,
+      mail: d.mail ? drSection(T('Mail'), el('div', { class: 'dr-row' }, hhChip('mailbox', d.mail.state === 'post' ? '#2563eb' : '#6b7280', 'sm'), el('div', { class: 'grow' }, el('b', {}, d.mail.state === 'post' ? T('The mail is here') : T('No mail')),
+        el('div', { class: 'tiny muted' }, [d.mail.at ? T('Came at {time}', { time: fmtWhen(d.mail.at) }) : null, d.mail.collectedAt ? T('Last collected {when}', { when: fmtWhen(d.mail.collectedAt) }) : null].filter(Boolean).join(' · ') || T('From your mailbox sensor'))),
+        d.mail.state === 'post' && canAct ? el('button', { class: 'btn small primary', onclick: () => act('/api/household/mail/collected', {}, T('Mail collected')) }, icon('check', 14), T('Collected')) : null)) : null,
+      plants: d.plants.length ? drSection(T('Plants'), el('div', { class: 'dr-list' }, d.plants.map((p) => { const s = hist[`ha:${p.id}`];
+        return el('div', { class: 'dr-row', style: 'display:block' }, el('div', { class: 'row', style: 'gap:10px' }, hhChip('plant', p.thirsty && !p.watered ? '#ea580c' : '#16a34a', 'sm'), el('div', { class: 'grow' }, el('b', {}, p.name), el('div', { class: 'tiny muted' }, [p.offline ? T('Not answering') : p.watered ? T('Watered today') : p.thirsty ? T('Thirsty') : T('Fine'), T('waters below {n}%', { n: p.min })].join(' · '))), el('b', { class: 'num' }, p.moisture != null ? `${p.moisture}%` : '-')),
+          p.moisture != null ? el('div', { class: 'dr-tbar', style: 'margin-top:6px' }, el('i', { style: `width:${Math.max(2, Math.min(100, p.moisture))}%;background:${p.thirsty && !p.watered ? 'var(--warn)' : 'var(--good)'}` })) : null,
+          s?.v?.filter(Number.isFinite).length > 2 ? drChart({ xs: s.v.map((_, i) => s.end - (s.v.length - 1 - i) * s.step), lines: [{ v: s.v, fmt: (v) => `${Math.round(v)}%`, label: T('Soil') }], height: 90, label: T('Soil moisture, the last 24 hours') }) : null); })),
+        d.plants.some((p) => p.thirsty && !p.watered) && canAct ? el('button', { class: 'btn small primary', style: 'margin-top:8px', onclick: () => act('/api/household/plants/watered', {}, T('Watered')) }, icon('drop', 14), T('I watered them')) : null) : null,
+      laundry: d.laundry.length ? drSection(T('Laundry'), el('div', { class: 'dr-list' }, d.laundry.map((x) => el('div', { class: 'dr-row' }, hhChip(x.kind, x.phase === 'running' ? '#2563eb' : x.phase === 'done' ? '#ea580c' : '#6b7280', 'sm'),
+        el('div', { class: 'grow' }, el('b', {}, T(x.name)), el('div', { class: 'tiny muted' }, x.phase === 'running' ? [x.remainingMin != null ? T('{n} min left', { n: x.remainingMin }) : T('Running'), x.since ? T('started {when}', { when: fmtTime(x.since) }) : null].filter(Boolean).join(' · ') : x.phase === 'done' ? [T('Done'), x.doneAt ? fmtWhen(x.doneAt) : null].filter(Boolean).join(' · ') : T('Idle'))),
+        x.phase === 'done' && canAct ? el('button', { class: 'btn small primary', onclick: () => act(`/api/household/laundry/${encodeURIComponent(x.id)}/emptied`, {}, T('Emptied')) }, icon('check', 14), T('Emptied')) : null)))) : null,
+    };
+    const first = { 'hh-bins': 'bins', 'hh-mail': 'mail', 'hh-plants': 'plants', 'hh-laundry': 'laundry' }[a.w.id];
+    const order = first ? [first, ...['bins', 'mail', 'plants', 'laundry'].filter((k) => k !== first)] : ['bins', 'mail', 'plants', 'laundry'];
+    b.append(...order.map((k) => parts[k]).filter(Boolean), drOpenPage('#household', T('Open Household')));
+  },
+});

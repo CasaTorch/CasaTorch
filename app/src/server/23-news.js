@@ -61,3 +61,26 @@ async function newsNow() {
 }
 app.get('/api/news', async (_req, res) => { try { res.json(await newsNow()); } catch (err) { res.status(502).json({ error: String(err.message) }); } });
 if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchNews = { NEWS_DEFAULTS, NEWS_RETIRED, newsFeeds };
+
+/* ---- The Headlines drawer: more from each source, newest first, with the publisher and the time ----
+   The same feeds and the same cache as Home (nothing extra is fetched when Home has just read them). */
+async function newsBySource() {
+  const sources = [];
+  for (const f of newsFeeds()) {
+    try {
+      const feed = await cached(`rss:${f.url}`, 20 * 60_000, async () => parseFeed((await getText(f.url)).text));
+      const gn = /news\.google\.com/.test(f.url);
+      sources.push({ name: f.name, items: feed.items.slice(0, 25).map((i) => { const m = gn && /^(.*\S)\s+-\s+([^-]{2,60})$/.exec(i.title || ''); return { title: m ? m[1] : i.title, publisher: m ? m[2] : f.name, link: i.link, at: i.at }; }) });
+    } catch (err) { sources.push({ name: f.name, items: [], error: String(err.message) }); }
+  }
+  return { sources, at: new Date().toISOString() };
+}
+/* The demo: a few made-up headlines for each sample source. */
+function demoNewsMore() {
+  const now = Date.now(), m = (min) => new Date(now - min * 60_000).toISOString();
+  const S = { 'Local News': ['City council approves new bike lanes downtown', 'Farmers market moves to Saturday mornings for the winter', 'Library opens a maker space with 3D printers', 'Road work on Main Street wraps up a week early', 'High school robotics team heads to the state finals'],
+    'Weather Desk': ['Storm system expected midweek with heavy rain', 'How to get your gutters ready before the first big storm', 'Cooler nights ahead: frost possible in the valleys', 'Why this fall has been so dry, explained'],
+    Tech: ['New phone chips promise twice the battery life', 'A beginner\'s guide to a home network that just works', 'Smart plugs that measure power, compared', 'Open-source home dashboards are having a moment'] };
+  return { sources: Object.entries(S).map(([name, titles], k) => ({ name, items: titles.map((title, i) => ({ title, publisher: name, link: `https://example.com/${k}-${i}`, at: m(20 + k * 35 + i * 95) })) })), at: new Date(now).toISOString(), demo: true };
+}
+app.get('/api/news/more', async (_req, res) => { if (isDemo()) return res.json(demoNewsMore()); try { res.json(await newsBySource()); } catch (err) { res.status(502).json({ error: String(err.message) }); } });

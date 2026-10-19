@@ -717,3 +717,19 @@ async function famChipsCard() {
   await draw();
   return card;
 }
+
+/* ======================= drawers: tap a tile for more (06d-drawer.js) =======================
+   A Lists, Chores, Routine or Dinner tile opens the whole thing - every list and item, every person's chores and
+   stars, the routines, the week's meals - with everything you can do there. */
+const FAM_DRAWER = { lists: 'lists', 'fam-lists': 'lists', chores: 'chores', 'fam-chores': 'chores', routine: 'routines', 'fam-routines': 'routines', meals: 'meals', 'fam-meals': 'meals' };
+tileDrawer(Object.keys(FAM_DRAWER), {
+  doc: 'page.family', wide: true,
+  load: () => famLoad(true),
+  actions: () => [el('a', { class: 'btn small', href: '#settings/family', onclick: () => closeDrawer() }, icon('gear', 14), el('span', { class: 'hide-phone' }, T('Family settings')))],
+  async render(b, _d, a) {
+    const k = FAM_DRAWER[a.w.id], view = FAM_VIEWS.find(([x]) => x === k);
+    const box = el('div', { class: 'fam-wrap dr-fam' });
+    b.append(box, drOpenPage(`#family/${k}`, T('Open the Family board')));
+    if (view) await view[4](box);
+  },
+});

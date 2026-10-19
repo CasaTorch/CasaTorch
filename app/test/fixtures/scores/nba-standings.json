@@ -1,0 +1,129 @@
+{
+ "name": "National Basketball Association",
+ "children": [
+  {
+   "name": "Western Conference",
+   "abbreviation": "West",
+   "standings": {
+    "entries": [
+     {
+      "team": {
+       "id": "13",
+       "displayName": "Los Angeles Lakers",
+       "shortDisplayName": "Lakers",
+       "abbreviation": "LAL",
+       "color": "1d428a"
+      },
+      "stats": [
+       {
+        "name": "wins",
+        "value": 30
+       },
+       {
+        "name": "losses",
+        "value": 12
+       },
+       {
+        "name": "winPercent",
+        "value": 0.7142857142857143
+       },
+       {
+        "name": "streak",
+        "displayValue": "W2"
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "9",
+       "displayName": "Golden State Warriors",
+       "shortDisplayName": "Warriors",
+       "abbreviation": "GS",
+       "color": "1d428a"
+      },
+      "stats": [
+       {
+        "name": "wins",
+        "value": 31
+       },
+       {
+        "name": "losses",
+        "value": 11
+       },
+       {
+        "name": "winPercent",
+        "value": 0.7380952380952381
+       },
+       {
+        "name": "streak",
+        "displayValue": "W4"
+       }
+      ]
+     },
+     {
+      "team": {
+       "id": "21",
+       "displayName": "Phoenix Suns",
+       "shortDisplayName": "Suns",
+       "abbreviation": "PHX",
+       "color": "1d428a"
+      },
+      "stats": [
+       {
+        "name": "wins",
+        "value": 25
+       },
+       {
+        "name": "losses",
+        "value": 17
+       },
+       {
+        "name": "winPercent",
+        "value": 0.5952380952380952
+       },
+       {
+        "name": "streak",
+        "displayValue": "L1"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "Eastern Conference",
+   "abbreviation": "East",
+   "standings": {
+    "entries": [
+     {
+      "team": {
+       "id": "2",
+       "displayName": "Boston Celtics",
+       "shortDisplayName": "Celtics",
+       "abbreviation": "BOS",
+       "color": "1d428a"
+      },
+      "stats": [
+       {
+        "name": "wins",
+        "value": 33
+       },
+       {
+        "name": "losses",
+        "value": 9
+       },
+       {
+        "name": "winPercent",
+        "value": 0.7857142857142857
+       },
+       {
+        "name": "streak",
+        "displayValue": "W1"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}

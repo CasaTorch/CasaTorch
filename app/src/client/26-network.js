@@ -218,22 +218,28 @@ pageTile({ id: 'net-topo', page: 'network', phoneFull: true, title: 'Network map
   } });
 
 /* One device: everything about it, in a sheet. */
-function nwDeviceSheet(d, ctx) {
+function nwDeviceSheet(d, ctx, opts = {}) {
   const m = nwModel(ctx) || {}, [ic, kind] = NW_TYPE[d.type] || NW_TYPE.other;
   const dl = el('dl', { class: 'kv nw-kv' }), add = (k, v) => { if (v != null && v !== '') dl.append(el('dt', {}, k), el('dd', {}, v)); };
-  add(T('Kind'), T(kind)); add(T('Model'), d.model); add(T('Address'), d.ip); add(T('Firmware'), d.fw); add(T('Clients'), d.clients != null ? nwN(d.clients) : null);
+  add(T('Model'), d.model); add(T('Address'), d.ip); add(T('Firmware'), d.fw);
   const net = m.networks?.find((x) => x.id === d.net); add(T('Network'), net?.name);
   const ups = (m.uplinks || []).filter((u) => u.dev === d.id);
   const sw = (m.ports || []).find((p) => p.dev === d.id), ap = (m.wifi?.aps || []).find((x) => x.id === d.id), evs = (m.events || []).filter((e) => e.dev === d.id).slice(0, 6);
+  const hist = ctx.data?.ov?.history || {};
+  const upCharts = ups.map((u) => { const h = (hist.up?.[`${u.dev}:${u.iface}`] || []).filter((p) => p[2] != null); return h.length > 3 ? el('div', {}, el('div', { class: 'tiny muted', style: 'margin:6px 0 2px' }, T('{name}: latency, the last 24 hours', { name: T(NW_IFACE[u.iface] || u.iface) })), drChart({ xs: h.map((p) => p[0]), lines: [{ v: h.map((p) => p[2]), fmt: (v) => atMs(v), label: T('Latency') }], height: 110, label: T('Latency, the last 24 hours') })) : null; }).filter(Boolean);
+  const cl = (m.clients?.top || []).filter((c) => c.dev === d.id).slice(0, 30);
   const body = el('div', { class: 'nw-sheet' },
-    el('div', { class: 'row', style: 'gap:12px;margin-bottom:6px' }, el('span', { class: `nw-sheet-ic ${nwSt(d.status)}` }, icon(ic, 22)), el('div', { class: 'grow', style: 'min-width:0' }, el('h2', { style: 'margin:0' }, d.name), el('div', { class: 'tiny muted' }, [T(kind), d.model].filter(Boolean).join(' · '))), nwPill(nwSt(d.status), nwStWord(d.status))),
+    el('div', { class: 'row', style: 'gap:12px;margin-bottom:6px' }, el('span', { class: `nw-sheet-ic ${nwSt(d.status)}` }, icon(ic, 22)), el('div', { class: 'grow', style: 'min-width:0' }, el('b', {}, T(kind)), d.clients != null ? el('div', { class: 'tiny muted' }, T('{n} clients', { n: nwN(d.clients) })) : null), nwPill(nwSt(d.status), nwStWord(d.status))),
     dl,
     ups.length ? el('section', {}, el('h3', {}, T('Uplinks')), el('div', { class: 'nw-ups' }, ups.map((u) => { const [c, w] = NW_UP_ST[u.status] || ['idle', u.status]; return el('div', { class: 'nw-up' }, el('span', { class: 'nw-up-ic' }, icon(u.iface === 'cellular' ? 'ncell' : 'globe', 16)), el('div', { class: 'grow' }, el('b', {}, T(NW_IFACE[u.iface] || u.iface)), el('div', { class: 'tiny muted' }, [u.provider, u.lat != null ? atMs(u.lat) : null, u.loss != null ? T('{n}% loss', { n: u.loss }) : null].filter(Boolean).join(' · '))), ctx.data?.ov?.canIp ? nwIp(u.publicIp) : null, nwPill(c, T(w))); }))) : null,
+    upCharts.length ? el('section', {}, el('h3', {}, T('Uplink history')), upCharts) : null,
     sw?.ports?.length ? el('section', {}, el('h3', {}, T('Ports')), nwPortGrid(sw, false)) : null,
+    cl.length ? el('section', {}, el('h3', {}, T('Top clients here today')), el('div', { class: 'dr-list' }, cl.map((c) => el('div', { class: 'dr-row' }, el('span', { class: `dot ${c.online === false ? '' : 'good'}` }), el('span', { class: 'grow ellipsis' }, c.name || '-'), el('span', { class: 'tiny muted' }, [c.wired ? T('Wired') : c.ssid, c.os, c.kb != null ? nwGB(c.kb) : null].filter(Boolean).join(' · ')))))) : null,
     ap?.radios?.length ? el('section', {}, el('h3', {}, T('Radios')), nwRadios(ap, true)) : null,
     evs.length ? el('section', {}, el('h3', {}, T('Recent events')), el('div', { class: 'nw-evs' }, evs.map(nwEventRow))) : null,
     el('p', { class: 'tiny muted' }, T('Read from {name}. CasaTorch only looks - it never changes your network.', { name: ctx.data?.ov?.source?.name || 'Meraki' })));
-  modal(body, { wide: !!(sw?.ports?.length) });
+  if (typeof openDrawer !== 'function') return modal(body, { wide: !!(sw?.ports?.length), title: d.name });
+  openDrawer({ route: ['nwdev', d.id], fromHash: !!opts.fromHash, title: d.name, icon: ic, doc: 'page.network', wide: !!(sw?.ports?.length), sub: [T(kind), d.model].filter(Boolean).join(' · '), render: (b) => b.append(body) });
 }
 
 /* ---- devices online, alerting, offline ---- */
@@ -532,3 +538,21 @@ async function networkPage(main) {
   const canAdd = !S.status?.demo && (!role || ['owner', 'admin'].includes(role));
   return pageGrid(main, { page: 'network', title: tabLabel({ id: 'network', label: T('Network') }), sub: T('Your internet, your gear and every device on it - live'), load, actions: canAdd ? [addBtn] : [] });
 }
+
+/* ======================= drawers: tap a tile for more (06d-drawer.js) =======================
+   Any device on the map, in the lists or the port grid opens its own drawer (nwDeviceSheet); the Devices tile opens
+   all of them by kind, each one tap away. The other tiles open at their biggest. */
+drawerRoute('nwdev', (id) => { const ctx = $('#view .grid')?._ctx, d = ctx && nwDev(ctx, id); if (!d) return false; nwDeviceSheet(d, ctx, { fromHash: true }); return true; });
+tileDrawer(['net-devices'], {
+  doc: 'page.network',
+  render(b, _x, a) {
+    const m = nwModel(a.ctx);
+    if (!m?.devices?.length) return b.append(drEmpty(T('Connect Meraki or UniFi to see every device on your network.')));
+    for (const [type, label] of NW_TYPES_PL) {
+      const list = m.devices.filter((d) => (NW_TYPE[d.type] ? d.type : 'other') === type).sort((x, y) => (NW_SEV[nwSt(y.status)] || 0) - (NW_SEV[nwSt(x.status)] || 0) || String(x.name).localeCompare(String(y.name)));
+      if (!list.length) continue;
+      b.append(drSection(`${T(label)} (${list.length})`, el('div', { class: 'dr-list' }, list.map((d) => el('button', { type: 'button', class: 'dr-row dr-rowbtn', onclick: () => nwDeviceSheet(d, a.ctx) },
+        el('span', { class: `dot ${nwSt(d.status)}` }), el('div', { class: 'grow' }, el('div', { class: 'ellipsis' }, d.name), el('div', { class: 'tiny muted ellipsis' }, [d.model, d.ip, d.clients != null ? T('{n} clients', { n: d.clients }) : null].filter(Boolean).join(' · '))), nwPill(nwSt(d.status), nwStWord(d.status)))))));
+    }
+  },
+});

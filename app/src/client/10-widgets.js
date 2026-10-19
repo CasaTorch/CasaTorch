@@ -117,15 +117,8 @@ function gameRow(g, w) {
 }
 widget({ id: 'sports', title: 'Your teams', icon: 'trophy', cat: 'info', multi: true, blurb: 'Live scores and next games - pick any teams', keywords: 'scores nfl nba mlb nhl soccer', min: [2, 2], size: [3, 4],
   options: [{ key: 'teams', type: 'teams', label: 'Teams', help: 'NFL, NBA, MLB, NHL, college, MLS, Premier League and more.' }, { key: 'liveOnly', type: 'toggle', label: 'Only live', text: 'Only games on right now (and the next one)' }],
-  async render(b, ctx, { w, h }) {
-    const o = optsOf(b._t || {}), mine = Array.isArray(o.teams) && o.teams.length;
-    const sp = mine ? await wget(`/api/w/sports?t=${o.teams.map((x) => `${x.league}:${x.id}`).join(',')}`, 60_000).catch((err) => ({ error: err.message })) : ctx.data.home?.sports;
-    if (!sp) return b.replaceChildren(empty(T('Pick your teams: tap Edit layout, then customize this widget.')));
-    let games = sp.games || [];
-    if (o.liveOnly) { const live = games.filter((g) => g.state === 'in'); games = live.length ? live : games.filter((g) => g.state === 'pre').slice(0, 1); }
-    games = games.slice(0, fits(h, 84));
-    b.replaceChildren(...(games.length ? games.map((g) => gameRow(g, w)) : [empty(sp.error ? T('Scores are not loading right now.') : T('No games this week.'))]));
-  } });
+  /* S: the game that matters most; M: + each team's last and next; L: + one team's results and next games; XL: + standings (13s-sports.js) */
+  render(b, ctx, size) { return sportsTile(b, ctx, size); } });
 
 widget({ id: 'news', title: 'Headlines', icon: 'news', cat: 'info', multi: true, blurb: 'Headlines from your sources', min: [3, 2], size: [4, 4],
   options: (t, ctx) => {
@@ -144,7 +137,8 @@ widget({ id: 'internet', title: 'Internet', icon: 'wifi', cat: 'home', blurb: 'O
   if (!n || n.error) return b.replaceChildren(el('div', { class: 'muted' }, T('Checking…')));
   const parts = [el('div', { class: 'row' }, el('span', { class: `dot ${n.online ? 'good' : 'bad'}` }), el('b', {}, n.online ? T('Online') : T('Down')), w >= 3 ? el('span', { class: 'muted small ellipsis' }, n.provider || '') : null)];
   if (n.speed) parts.push(el('div', { class: 'row', style: 'gap:22px;margin-top:10px' }, el('div', { class: 'stat' }, el('span', { class: 'big', style: 'font-size:30px' }, Math.round(n.speed.downMbps)), el('span', { class: 'lbl' }, T('Mbps down'))), w >= 3 ? el('div', { class: 'stat' }, el('span', { class: 'big', style: 'font-size:30px' }, Math.round(n.speed.upMbps)), el('span', { class: 'lbl' }, T('Mbps up'))) : null));
-  if (h >= 3) parts.push(el('dl', { class: 'kv small', style: 'margin-top:14px' }, el('dt', {}, T('Ping')), el('dd', {}, `${n.latencyMs?.cloudflare ?? '-'} ms`), el('dt', {}, T('Devices')), el('dd', {}, n.lanDevices ?? '-'), el('dt', {}, T('Public IP')), el('dd', {}, n.publicIp || '-')));
+  if (h >= 3) parts.push(el('dl', { class: 'kv small', style: 'margin-top:14px' }, el('dt', {}, T('Ping')), el('dd', {}, `${n.latencyMs?.cloudflare ?? '-'} ms`), el('dt', {}, T('Devices')), el('dd', {}, n.lanDevices ?? '-'), el('dt', {}, T('Public IP')), el('dd', {}, n.publicIp || '-'),
+    h >= 4 && n.speed?.at ? [el('dt', {}, T('Speed test')), el('dd', {}, fmtWhen(n.speed.at))] : null, h >= 4 && n.gateway ? [el('dt', {}, T('Gateway')), el('dd', {}, n.gateway)] : null));
   b.replaceChildren(...parts);
 } });
 
@@ -155,7 +149,10 @@ widget({ id: 'today', title: 'Today', icon: 'list', cat: 'personal', blurb: 'Tod
 } });
 
 widget({ id: 'alerts', title: 'Alerts', icon: 'bell', cat: 'safety', essential: true, blurb: 'What needs you right now', min: [2, 2], size: [3, 2], render(b, ctx, { w, h }) {
-  const now = ctx.data.alerts?.now || [];
+  const now = ctx.data.alerts?.now || [], recent = (ctx.data.alerts?.recent || []).filter((x) => x.severity !== 'ok');
+  // all clear: Small and Medium say so; Large and up also show what happened lately
+  if (!now.length && h >= 4 && recent.length) return b.replaceChildren(el('div', { class: 'row', style: 'gap:8px;margin-bottom:8px' }, el('span', { class: 'dot good' }), el('b', {}, T('All clear'))), el('div', { class: 'tiny muted', style: 'margin-bottom:4px' }, T('Recent')),
+    ...recent.slice(0, fits(h, 40, 80)).map((a) => el('div', { class: 'row', style: 'gap:8px;padding:4px 0;min-width:0' }, el('span', { class: 'grow ellipsis small' }, alertTitle(a)), el('span', { class: 'tiny muted', style: 'flex:none' }, ago(a.at)))));
   if (!now.length) return b.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon('checkc'), el('div', { style: 'margin-top:6px' }, T('All clear')))));
   /* Small (narrow) on a phone: the title gets two lines instead of "Low battery (1..." */
   const narrow = (w || 3) <= 2;
@@ -336,16 +333,12 @@ function deviceCard(d, size) {
 }
 /** Which devices have a history worth a chart (the same rule as shField in 60-layout.js). */
 const shFieldOf = (d) => d.kind !== 'camera' && (Number.isFinite(d.tempC) || Number.isFinite(d.humidity) || Number.isFinite(d.powerW) || (d.kind === 'value' && d.value !== '' && d.value != null && Number.isFinite(Number(d.value))));
-/** Press and hold a device (or right-click): everything about it - state, controls, 24 h chart, details. */
+/** Press and hold a device (or right-click), or tap its tile: everything about it - state, every control, the last
+    24 hours, details, its alert rules - in the drawer (deviceDrawer, 13-drawers.js). */
 function deviceDetails(d) {
+  if (typeof deviceDrawer === 'function') return deviceDrawer(d);
   const body = el('div', { class: 'dev-details' });
-  const draw = () => {
-    body.replaceChildren(el('div', { class: 'row', style: 'gap:14px;align-items:center;margin-bottom:12px' }, el('span', { class: 'ic big' }, icon(devIconName(d), 28)), el('div', {}, el('div', { class: 'devcard-big' }, devHeadline(d) || ''), el('div', { class: 'small muted' }, devMeta(d, false)))),
-      C() && hasSheet(d) ? el('div', { class: 'dsheet' }, ...C().build(d, { units: S.units, act: async (a, v) => { await devAct(d, a, null, v); } })) : el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' }, devControls(d, 'xl', draw).filter((x) => !x.title)),
-      el('div', { class: 'dev-hist', style: 'margin-top:12px' }), el('div', { class: 'dev-facts-wrap' }, devFacts(d, null)));
-    devHistory(shFieldOf(d) ? [d.id] : []).then((sr) => { const s = sr[d.id]; if (s) body.querySelector('.dev-hist')?.replaceChildren(pgLine(s.v, { end: s.end, step: s.step, fmt: histFmt(s.field, d), label: d.name })); body.querySelector('.dev-facts-wrap')?.replaceChildren(devFacts(d, s)); });
-  };
-  draw();
+  body.append(el('div', { class: 'devcard-big' }, devHeadline(d) || ''), el('div', { class: 'small muted' }, devMeta(d, false)), el('div', { class: 'dev-facts-wrap' }, devFacts(d, null)));
   modal(body, { title: d.name, wide: true });
 }
 widget({ id: 'device', title: 'Device', icon: 'plug', multi: true, hidden: true, min: [2, 1], size: [3, 2], render(b, ctx, size) {
@@ -458,7 +451,7 @@ function camView(d, o = {}) {
     const img = el('img', { alt: d.name, decoding: 'async', role: 'button', tabindex: 0 }), fade = el('img', { class: 'cam-fade', alt: '', 'aria-hidden': 'true' });
     const video = el('video', { class: 'cam-video', 'aria-hidden': 'true' }), mjpeg = el('img', { class: 'cam-mjpeg', alt: '', 'aria-hidden': 'true' });
     const age = el('span', { class: 'cam-age' }), name = el('span', {}, d.name);
-    const wrap = el('div', { class: 'cam cam-wait', onclick: () => { c.held = true; camLive(c, false); camModal(c.d, () => { c.held = false; camLive(c, camLiveOk(c)); }); } }, img, fade, video, mjpeg,
+    const wrap = el('div', { class: 'cam cam-wait', onclick: () => { c.held = true; camLive(c, false); (typeof camDrawer === 'function' ? camDrawer : camModal)(c.d, () => { c.held = false; camLive(c, camLiveOk(c)); }); } }, img, fade, video, mjpeg,
       el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, [srcName(d.source || d.provider), camLiveTile(d) ? T('live') : d.stream ? T('live on tap') : ''].filter(Boolean).join(' · '))), age);
     c = { d, img, fade, video, mjpeg, age, name, wrap, visible: true, last: 0, etag: null, url: null, busy: false }; wrap.__cam = c; CAMS.set(d.id, c);
     camSeen?.observe(wrap); camFetch(c, true);
@@ -466,16 +459,14 @@ function camView(d, o = {}) {
   c.d = d; c.name.textContent = d.name; c.img.alt = d.name; c.boost = !!o.live;
   return c.wrap;
 }
-/* Full view: live video (the camera's main stream) where it has it, a new picture every second otherwise.
-   Tap the video for full screen; sound can be turned on when the camera has it. */
-function camModal(d, onClose) {
+function camStage(d) {
   const video = el('video', { class: 'camv-video' }), mjpeg = el('img', { class: 'camv-img', alt: d.name }), still = el('img', { class: 'camv-still', alt: d.name });
   const badge = el('span', { class: 'camv-badge' }, T('Connecting…'));
   const muteBtn = el('button', { class: 'camv-btn', type: 'button', hidden: true, title: T('Sound'), 'aria-label': T('Turn sound on'), onclick: (e) => { e.stopPropagation(); video.muted = !video.muted; muteBtn.replaceChildren(icon(video.muted ? 'mute' : 'vol', 18)); muteBtn.setAttribute('aria-label', video.muted ? T('Turn sound on') : T('Turn sound off')); } }, icon('mute', 18));
   const fsBtn = el('button', { class: 'camv-btn', type: 'button', title: T('Full screen'), 'aria-label': T('Full screen'), onclick: (e) => { e.stopPropagation(); toggleFs(); } }, icon('expand', 18));
   const stage = el('div', { class: 'camv', onclick: () => toggleFs() }, still, video, mjpeg, el('div', { class: 'camv-top' }, badge), el('div', { class: 'camv-ctl' }, muteBtn, fsBtn));
   const note = el('div', { class: 'tiny muted camv-note' });
-  const m = modal(el('div', {}, stage, note), { wide: true, title: d.name });
+  const node = el('div', {}, stage, note);
   const fsNow = () => document.fullscreenElement || document.webkitFullscreenElement;
   function toggleFs() {
     if (fsNow()) { (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); return; }
@@ -484,21 +475,21 @@ function camModal(d, onClose) {
     if (go && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) { try { const p = go.call(stage); if (p?.catch) p.catch(() => stage.classList.add('camv-max')); return; } catch { /* below */ } }
     stage.classList.add('camv-max');   // iPhone: the picture fills the screen inside the page - no player taking over
   }
-  let playing = false, etag = null;
-  // pictures first (so the sheet is never empty), and every second for as long as there's no live video
+  let playing = false, etag = null, stopped = false;
+  // pictures first (so the view is never empty), and every second for as long as there's no live video
   const tick = async () => {
-    if (!m.isConnected) return;
+    if (stopped) return;
     if (!playing) {
       try {
         const r = await fetch(snapSized(d, camPx(stage)), { cache: 'no-store', headers: etag ? { 'If-None-Match': etag } : {} });
-        if (r.ok && m.isConnected && !playing) { const u = URL.createObjectURL(await r.blob()), t = new Image(); t.src = u; await t.decode?.().catch(() => {}); const o = still.src; still.src = u; etag = r.headers.get('ETag'); if (o.startsWith('blob:')) URL.revokeObjectURL(o); }
+        if (r.ok && !stopped && !playing) { const u = URL.createObjectURL(await r.blob()), t = new Image(); t.src = u; await t.decode?.().catch(() => {}); const o = still.src; still.src = u; etag = r.headers.get('ETag'); if (o.startsWith('blob:')) URL.revokeObjectURL(o); }
       } catch { /* next tick */ }
     }
     setTimeout(tick, 1000);
   };
   tick();
   const player = camPlay(d, { role: 'full', video, img: mjpeg, onState: (st) => {
-    if (!m.isConnected) return;
+    if (stopped) return;
     if (st.state === 'trying') { if (!playing) badge.textContent = T('Connecting…'); return; }
     if (st.state === 'playing') {
       playing = true; stage.classList.add('is-live'); stage.classList.toggle('is-img', st.kind === 'mjpeg');
@@ -509,8 +500,17 @@ function camModal(d, onClose) {
     playing = false; stage.classList.remove('is-live', 'is-img'); badge.textContent = T('Pictures');
     note.textContent = `${T('This camera\'s live stream isn\'t available - showing pictures every second.')} ${camWhyText(st.why)}`;
   } });
+  // stopping it ends the live stream at once
+  const stop = () => { if (stopped) return; stopped = true; player.stop(); if (fsNow()) (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); const u = still.src; if (u.startsWith('blob:')) URL.revokeObjectURL(u); };
+  return { node, stop, fullscreen: toggleFs };
+}
+/* Full view: live video (the camera's main stream) where it has it, a new picture every second otherwise.
+   Tap the video for full screen; sound can be turned on when the camera has it. */
+function camModal(d, onClose) {
+  const st = camStage(d);
+  const m = modal(st.node, { wide: true, title: d.name });
   // closing the window stops the live stream at once
-  new MutationObserver((_, o) => { if (!m.isConnected) { player.stop(); if (fsNow()) (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); const u = still.src; if (u.startsWith('blob:')) URL.revokeObjectURL(u); o.disconnect(); onClose?.(); } }).observe(document.body, { childList: true });
+  new MutationObserver((_, o) => { if (!m.isConnected) { st.stop(); o.disconnect(); onClose?.(); } }).observe(document.body, { childList: true });
 }
 widget({ id: 'camera', title: 'Cameras', icon: 'camera', cat: 'safety', essential: true, multi: true, blurb: 'Your cameras, live - pick which, and let them take turns', keywords: 'ring frigate reolink doorbell video', min: [3, 2], size: [4, 3], noPreview: true,
   options: [

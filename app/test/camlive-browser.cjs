@@ -52,16 +52,16 @@ const { check, finish } = L.runner('live camera video');
     const snapAsk = fr.seen.http.filter((x) => x.path === '/api/living/latest.jpg').map((x) => x.query);
     check('tile pictures are made at the tile\'s real pixel size (Retina: h>=480), without boxes', snapAsk.some((q) => /h=(480|720|1080)/.test(q) && /bbox=0/.test(q)), snapAsk.join(' '));
 
-    // 2. full view: MSE, main stream
+    // 2. full view (the camera's drawer, 06d-drawer.js): MSE, main stream
     await page.$eval('.cams .cam', (e) => e.click());
-    await page.waitForSelector('#modal .camv.is-live', { timeout: 20000 }).catch(() => null);
-    check('the full view plays live video', !!(await page.$('#modal .camv.is-live')));
-    const a2 = await advances(page, '#modal .camv-video'); check('the full view\'s video time moves on (MSE)', a2.ok, JSON.stringify(a2));
+    await page.waitForSelector('#drawer .camv.is-live', { timeout: 20000 }).catch(() => null);
+    check('the full view plays live video', !!(await page.$('#drawer .camv.is-live')));
+    const a2 = await advances(page, '#drawer .camv-video'); check('the full view\'s video time moves on (MSE)', a2.ok, JSON.stringify(a2));
     check('the full view asked for the main stream (living)', fr.seen.ws.some((w) => w.src === 'living'));
-    const badge = await page.textContent('#modal .camv-badge'); check('the badge says LIVE (with the delay once it is noticeable)', /^LIVE( · [\d.]+ s)?$/.test(badge || ''), badge);
+    const badge = await page.textContent('#drawer .camv-badge'); check('the badge says LIVE (with the delay once it is noticeable)', /^LIVE( · [\d.]+ s)?$/.test(badge || ''), badge);
     check('Frigate saw no Origin from the page (go2rtc checks it) and no browser cookie', fr.seen.ws.every((w) => !w.origin && !/casatorch_session/.test(w.cookie || '')), JSON.stringify(fr.seen.ws));
     await page.screenshot({ path: path.join(SHOTS, 'camlive-modal-mse.png') });
-    await page.keyboard.press('Escape');
+    for (let i = 0; i < 3 && await page.$('#drawer:not(.dr-out)'); i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(120); }   // Esc closes a sheet on top first ("What's new"), then the drawer
     for (let i = 0; i < 20 && fr.seen.open.living; i++) await page.waitForTimeout(150);
     check('closing the full view closes its stream at once (no socket left open to Frigate)', !fr.seen.open.living, JSON.stringify(fr.seen.open));
 
@@ -69,9 +69,9 @@ const { check, finish } = L.runner('live camera video');
     const before = fr.seen.http.length;
     const p2 = await open(() => { window.WebSocket = undefined; });
     await p2.$eval('.cams .cam', (e) => e.click());
-    await p2.waitForSelector('#modal .camv.is-live', { timeout: 25000 }).catch(() => null);
-    if (!(await p2.$('#modal .camv-video'))) { await p2.screenshot({ path: path.join(SHOTS, 'camlive-hls-missing.png') }); console.log('  modal now:', (await p2.$eval('#modal', (m) => m.textContent.slice(0, 200)).catch(() => 'none'))); }
-    const a3 = await advances(p2, '#modal .camv-video'); check('without WebSockets, HLS plays and moves on', a3.ok, JSON.stringify(a3));
+    await p2.waitForSelector('#drawer .camv.is-live', { timeout: 25000 }).catch(() => null);
+    if (!(await p2.$('#drawer .camv-video'))) { await p2.screenshot({ path: path.join(SHOTS, 'camlive-hls-missing.png') }); console.log('  modal now:', (await p2.$eval('#drawer', (m) => m.textContent.slice(0, 200)).catch(() => 'none'))); }
+    const a3 = await advances(p2, '#drawer .camv-video'); check('without WebSockets, HLS plays and moves on', a3.ok, JSON.stringify(a3));
     const hls = fr.seen.http.slice(before).filter((x) => x.path.startsWith('/api/go2rtc/api/'));
     check('HLS went through go2rtc\'s own files (stream.m3u8, playlist, init, segments)', ['stream.m3u8', 'hls/playlist.m3u8', 'hls/init.mp4', 'hls/segment.m4s'].every((f) => hls.some((x) => x.path === `/api/go2rtc/api/${f}`)), hls.map((x) => x.path).join(' '));
     await p2.screenshot({ path: path.join(SHOTS, 'camlive-modal-hls.png') });
@@ -79,9 +79,9 @@ const { check, finish } = L.runner('live camera video');
     // 4. no MediaSource and no WebSocket (an old phone): MJPEG
     const p3 = await open(() => { window.WebSocket = undefined; window.MediaSource = undefined; window.ManagedMediaSource = undefined; });
     await p3.$eval('.cams .cam', (e) => e.click());
-    await p3.waitForSelector('#modal .camv.is-live.is-img', { timeout: 20000 }).catch(() => null);
-    check('with neither, the MJPEG picture plays', !!(await p3.$('#modal .camv.is-live.is-img')));
-    const note = await p3.textContent('#modal .camv-note'); check('and says it is basic quality', /basic quality/.test(note || ''), note);
+    await p3.waitForSelector('#drawer .camv.is-live.is-img', { timeout: 20000 }).catch(() => null);
+    check('with neither, the MJPEG picture plays', !!(await p3.$('#drawer .camv.is-live.is-img')));
+    const note = await p3.textContent('#drawer .camv-note'); check('and says it is basic quality', /basic quality/.test(note || ''), note);
 
     // 5. only fixed paths reached Frigate
     const bad = fr.seen.http.filter((x) => x.unknown).map((x) => x.path);

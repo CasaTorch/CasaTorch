@@ -181,6 +181,7 @@ async function pageGrid(main, o) {
   ctx.refresh = async () => { ctx.data = await o.load(); if (main.isConnected) await g.refresh(); };
   ctx.rebuild = () => g.build();
   ctx.grid = g;
+  if (typeof drawerReady === 'function') requestAnimationFrame(() => { if (main.isConnected) drawerReady(); });   // a drawer the address asked for (06d-drawer.js)
   return ctx.refresh;
 }
 

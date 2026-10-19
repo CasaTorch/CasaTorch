@@ -1011,6 +1011,7 @@ await (await import('./support-unit.mjs')).default(t);
 await (await import('./ask-unit.mjs')).default(t);   // Home AI Agent: charts, no HTML from answers, safety rule, sources, tools, the loop end to end (ask-unit.mjs)
 await (await import('./camlive-unit.mjs')).default(t);
 await (await import('./pagegrid-unit.mjs')).default(t);   // page grids: suggested layouts, saving per page and screen; the Energy page's data (pagegrid-unit.mjs)   // live camera video: stream choice, HLS file allow-list, MSE tunnel and HLS proxy (camlive-unit.mjs)   // support: the support file's masking, activity log, getting-started checklist (support-unit.mjs)
+await (await import('./drawers-unit.mjs')).default(t);   // tap any tile for more: standings, schedules and line scores, the forecast, the drawer's routing (drawers-unit.mjs)
 await (await import('./alert-rules-unit.mjs')).default(t);   // alert rules: the one decision per alert and phone, quiet hours, presence, overrides, safety floor, flap damping (alert-rules-unit.mjs)
 await (await import('./net-unit.mjs')).default(t);   // slow and flaky networks: time limits, retries, one request for many, last answers, the browser's copy; content-named files (net-unit.mjs)
 await (await import('./network-unit.mjs')).default(t);   // the Network page: polite Meraki client (pages, 429, retries), the model, the map, network tests (network-unit.mjs)

@@ -1,0 +1,471 @@
+{
+ "team": {
+  "id": "25",
+  "abbreviation": "SF",
+  "displayName": "San Francisco 49ers",
+  "shortDisplayName": "49ers",
+  "color": "aa0000",
+  "recordSummary": "5-1",
+  "standingSummary": "1st in NFC West"
+ },
+ "events": [
+  {
+   "id": "401",
+   "date": "2026-09-13T20:25Z",
+   "name": "x",
+   "competitions": [
+    {
+     "id": "401",
+     "date": "2026-09-13T20:25Z",
+     "competitors": [
+      {
+       "id": "25",
+       "homeAway": "home",
+       "winner": true,
+       "team": {
+        "id": "25",
+        "abbreviation": "SF",
+        "displayName": "San Francisco 49ers",
+        "shortDisplayName": "49ers",
+        "color": "aa0000"
+       },
+       "score": {
+        "value": 20.0,
+        "displayValue": "20"
+       }
+      },
+      {
+       "id": "6",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "6",
+        "abbreviation": "DAL",
+        "displayName": "Dallas Cowboys",
+        "shortDisplayName": "Cowboys",
+        "color": "002a5c"
+       },
+       "score": {
+        "value": 14.0,
+        "displayValue": "14"
+       }
+      }
+     ],
+     "status": {
+      "type": {
+       "state": "post",
+       "shortDetail": "Final",
+       "detail": "Final"
+      }
+     },
+     "venue": {
+      "fullName": "Home Field"
+     }
+    }
+   ]
+  },
+  {
+   "id": "402",
+   "date": "2026-09-20T17:00Z",
+   "name": "x",
+   "competitions": [
+    {
+     "id": "402",
+     "date": "2026-09-20T17:00Z",
+     "competitors": [
+      {
+       "id": "21",
+       "homeAway": "home",
+       "winner": true,
+       "team": {
+        "id": "21",
+        "abbreviation": "PHI",
+        "displayName": "Philadelphia Eagles",
+        "shortDisplayName": "Eagles",
+        "color": "004c54"
+       },
+       "score": {
+        "value": 27.0,
+        "displayValue": "27"
+       }
+      },
+      {
+       "id": "25",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "25",
+        "abbreviation": "SF",
+        "displayName": "San Francisco 49ers",
+        "shortDisplayName": "49ers",
+        "color": "aa0000"
+       },
+       "score": {
+        "value": 10.0,
+        "displayValue": "10"
+       }
+      }
+     ],
+     "status": {
+      "type": {
+       "state": "post",
+       "shortDetail": "Final",
+       "detail": "Final"
+      }
+     },
+     "venue": {
+      "fullName": "Home Field"
+     }
+    }
+   ]
+  },
+  {
+   "id": "403",
+   "date": "2026-09-27T20:05Z",
+   "name": "x",
+   "competitions": [
+    {
+     "id": "403",
+     "date": "2026-09-27T20:05Z",
+     "competitors": [
+      {
+       "id": "25",
+       "homeAway": "home",
+       "winner": false,
+       "team": {
+        "id": "25",
+        "abbreviation": "SF",
+        "displayName": "San Francisco 49ers",
+        "shortDisplayName": "49ers",
+        "color": "aa0000"
+       },
+       "score": {
+        "value": 13.0,
+        "displayValue": "13"
+       }
+      },
+      {
+       "id": "22",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "22",
+        "abbreviation": "ARI",
+        "displayName": "Arizona Cardinals",
+        "shortDisplayName": "Cardinals",
+        "color": "97233f"
+       },
+       "score": {
+        "value": 13.0,
+        "displayValue": "13"
+       }
+      }
+     ],
+     "status": {
+      "type": {
+       "state": "post",
+       "shortDetail": "Final/OT",
+       "detail": "Final/OT"
+      }
+     },
+     "venue": {
+      "fullName": "Home Field"
+     }
+    }
+   ]
+  },
+  {
+   "id": "404",
+   "date": "2026-10-04T20:25Z",
+   "name": "x",
+   "competitions": [
+    {
+     "id": "404",
+     "date": "2026-10-04T20:25Z",
+     "competitors": [
+      {
+       "id": "14",
+       "homeAway": "home",
+       "winner": false,
+       "team": {
+        "id": "14",
+        "abbreviation": "LAR",
+        "displayName": "Los Angeles Rams",
+        "shortDisplayName": "Rams",
+        "color": "003594"
+       },
+       "score": {
+        "value": 20.0,
+        "displayValue": "20"
+       }
+      },
+      {
+       "id": "25",
+       "homeAway": "away",
+       "winner": true,
+       "team": {
+        "id": "25",
+        "abbreviation": "SF",
+        "displayName": "San Francisco 49ers",
+        "shortDisplayName": "49ers",
+        "color": "aa0000"
+       },
+       "score": {
+        "value": 31.0,
+        "displayValue": "31"
+       }
+      }
+     ],
+     "status": {
+      "type": {
+       "state": "post",
+       "shortDetail": "Final",
+       "detail": "Final"
+      }
+     },
+     "venue": {
+      "fullName": "Home Field"
+     }
+    }
+   ]
+  },
+  {
+   "id": "405",
+   "date": "2026-10-11T20:25Z",
+   "name": "x",
+   "competitions": [
+    {
+     "id": "405",
+     "date": "2026-10-11T20:25Z",
+     "competitors": [
+      {
+       "id": "25",
+       "homeAway": "home",
+       "winner": true,
+       "team": {
+        "id": "25",
+        "abbreviation": "SF",
+        "displayName": "San Francisco 49ers",
+        "shortDisplayName": "49ers",
+        "color": "aa0000"
+       },
+       "score": {
+        "value": 24.0,
+        "displayValue": "24"
+       }
+      },
+      {
+       "id": "26",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "26",
+        "abbreviation": "SEA",
+        "displayName": "Seattle Seahawks",
+        "shortDisplayName": "Seahawks",
+        "color": "002244"
+       },
+       "score": {
+        "value": 17.0,
+        "displayValue": "17"
+       }
+      }
+     ],
+     "status": {
+      "type": {
+       "state": "post",
+       "shortDetail": "Final",
+       "detail": "Final"
+      }
+     },
+     "venue": {
+      "fullName": "Home Field"
+     }
+    }
+   ]
+  },
+  {
+   "id": "406",
+   "date": "2026-10-19T00:20Z",
+   "name": "x",
+   "competitions": [
+    {
+     "id": "406",
+     "date": "2026-10-19T00:20Z",
+     "competitors": [
+      {
+       "id": "25",
+       "homeAway": "home",
+       "winner": true,
+       "team": {
+        "id": "25",
+        "abbreviation": "SF",
+        "displayName": "San Francisco 49ers",
+        "shortDisplayName": "49ers",
+        "color": "aa0000"
+       },
+       "score": {
+        "value": 17.0,
+        "displayValue": "17"
+       }
+      },
+      {
+       "id": "26",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "26",
+        "abbreviation": "SEA",
+        "displayName": "Seattle Seahawks",
+        "shortDisplayName": "Seahawks",
+        "color": "002244"
+       },
+       "score": {
+        "value": 10.0,
+        "displayValue": "10"
+       }
+      }
+     ],
+     "status": {
+      "type": {
+       "state": "in",
+       "shortDetail": "Q3 4:12",
+       "detail": "Q3 4:12"
+      }
+     },
+     "venue": {
+      "fullName": "Home Field"
+     },
+     "broadcasts": [
+      {
+       "type": {
+        "shortName": "TV"
+       },
+       "media": {
+        "shortName": "NBC"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "407",
+   "date": "2026-10-26T00:20Z",
+   "name": "x",
+   "competitions": [
+    {
+     "id": "407",
+     "date": "2026-10-26T00:20Z",
+     "competitors": [
+      {
+       "id": "21",
+       "homeAway": "home",
+       "winner": false,
+       "team": {
+        "id": "21",
+        "abbreviation": "PHI",
+        "displayName": "Philadelphia Eagles",
+        "shortDisplayName": "Eagles",
+        "color": "004c54"
+       },
+       "score": null
+      },
+      {
+       "id": "25",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "25",
+        "abbreviation": "SF",
+        "displayName": "San Francisco 49ers",
+        "shortDisplayName": "49ers",
+        "color": "aa0000"
+       },
+       "score": null
+      }
+     ],
+     "status": {
+      "type": {
+       "state": "pre",
+       "shortDetail": "Sun, October 25th at 8:20 PM EDT",
+       "detail": "Sun, October 25th at 8:20 PM EDT"
+      }
+     },
+     "venue": {
+      "fullName": "Home Field"
+     },
+     "broadcasts": [
+      {
+       "type": {
+        "shortName": "TV"
+       },
+       "media": {
+        "shortName": "NBC"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "408",
+   "date": "2026-11-01T21:05Z",
+   "name": "x",
+   "competitions": [
+    {
+     "id": "408",
+     "date": "2026-11-01T21:05Z",
+     "competitors": [
+      {
+       "id": "25",
+       "homeAway": "home",
+       "winner": false,
+       "team": {
+        "id": "25",
+        "abbreviation": "SF",
+        "displayName": "San Francisco 49ers",
+        "shortDisplayName": "49ers",
+        "color": "aa0000"
+       },
+       "score": null
+      },
+      {
+       "id": "14",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "14",
+        "abbreviation": "LAR",
+        "displayName": "Los Angeles Rams",
+        "shortDisplayName": "Rams",
+        "color": "003594"
+       },
+       "score": null
+      }
+     ],
+     "status": {
+      "type": {
+       "state": "pre",
+       "shortDetail": "Sun 1:05 PM",
+       "detail": "Sun 1:05 PM"
+      }
+     },
+     "venue": {
+      "fullName": "Home Field"
+     },
+     "broadcasts": [
+      {
+       "type": {
+        "shortName": "TV"
+       },
+       "media": {
+        "shortName": "FOX"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
