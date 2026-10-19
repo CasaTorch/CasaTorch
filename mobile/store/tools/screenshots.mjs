@@ -4,6 +4,7 @@
      node mobile/store/tools/screenshots.mjs                 every device
      node mobile/store/tools/screenshots.mjs --only=ios/iphone-6.9,android/phone
      node mobile/store/tools/screenshots.mjs --base=http://localhost:8090   use a demo CasaTorch that's already running
+     node mobile/store/tools/screenshots.mjs --shots=02,06                    only those pictures
 
    What it does:
    1. Starts the CasaTorch demo (sample house, no real data) from app/server.js on a free port with a throwaway data
@@ -54,7 +55,7 @@ const DEVICES = {
 const SHOTS = [
   { n: '01', name: 'home', title: ['Your home,', { hi: 'lit up.' }], sub: 'Lights, climate, energy and your day, on one calm screen.', web: 'home' },
   { n: '02', name: '3d-home', pro: true, title: ['Your home', { hi: 'in 3D' }], sub: 'Every light, door and sensor, right where it is in the house.', web: 'house3d' },
-  { n: '03', name: 'cameras', title: ['Every camera,', { hi: 'and what it saw' }], sub: 'Live views, plus people, cars and packages from Frigate.', web: 'cameras' },
+  { n: '03', name: 'cameras', title: ['Every camera,', { hi: 'live' }], sub: 'Live video from every camera, each one shown once.', web: 'cameras' },
   { n: '04', name: 'energy', title: ['See where the', { hi: 'power goes' }], sub: 'What\'s on now, what this month will cost, and the biggest users.', web: 'energy' },
   { n: '05', name: 'health', title: ['Knows it\'s', { hi: 'all working' }], sub: 'CasaTorch checks itself every 15 minutes and tells you when something breaks.', web: 'settings/health' },
   { n: '06', name: 'home-ai-agent', pro: true, title: ['Just', { hi: 'ask your home' }], sub: 'Answers from your own house. It never unlocks a door.', web: 'ask' },
@@ -125,11 +126,11 @@ async function openWeb(ctx, route, d) {
   await p.goto(`${BASE}/#${route}`, { waitUntil: 'load' });
   await p.addStyleTag({ content: HIDE_CSS + insetCss(d) });
   await sleep(3000);
-  await p.evaluate(() => { for (const t of document.querySelectorAll('section.tile')) if (Object.values(t.dataset).some((v) => ['sports', 'photos', 'calendar'].includes(v))) t.remove(); });
+  await p.evaluate(() => { for (const t of document.querySelectorAll('.tile')) if (Object.values(t.dataset).some((v) => ['sports', 'photos', 'calendar'].includes(String(v).split(':')[0]))) t.remove(); });
   return p;
 }
 const WEB_ACTIONS = {
-  async house3d(p) { await sleep(4500); },
+  async house3d(p) { await p.frameLocator('iframe.plan').locator('canvas').first().waitFor({ timeout: 60000 }).catch(() => {}); await sleep(25000); },
   async cameras(p, d) {
     await p.waitForSelector('.card.det .detrow', { timeout: 10000 }).catch(() => {});
     await sleep(1500);
@@ -143,11 +144,14 @@ const WEB_ACTIONS = {
     }, [d.kind === 'phone', d.bars[0]]);
     await sleep(800);
   },
-  async ask(p) {
+  async ask(p, d) {
     // typed, like a person would: the same demo answers as the suggestion buttons
     const box = p.locator('main input[placeholder^="Ask"], main textarea[placeholder^="Ask"]').first();
-    for (const q of ['Which lights are on?', 'What\'s using the most power?']) { await box.fill(q); await box.press('Enter'); await sleep(3500); }
+    for (const q of ['What\'s using the most power?']) { await box.fill(q); await box.press('Enter'); await sleep(3500); }
     await p.evaluate(() => document.activeElement && document.activeElement.blur());
+    // from the top of the conversation: nothing scrolled under the status bar
+    await p.evaluate(() => { scrollTo(0, 0); for (const x of document.querySelectorAll('main, main *')) if (x.scrollTop > 0 && /(auto|scroll)/.test(getComputedStyle(x).overflowY)) x.scrollTop = 0; });
+    await sleep(600);
   },
   async 'settings/health'(p) { await p.waitForSelector('text=Everything is working', { timeout: 10000 }).catch(() => {}); await sleep(800); },
 };
@@ -156,8 +160,8 @@ const WEB_ACTIONS = {
 function nativeStub(os) {
   return `(() => {
     const ok = (v) => Promise.resolve(v);
-    const hello = { casatorch: true, appMin: '0.7.0', home: { id: 'demo', name: 'Demo House', version: '0.8.0' }, signIn: true, configured: true, secure: null };
-    window.CasaNative = Object.freeze({ platform: '${os}', version: '0.8.0', device: '${os === 'ios' ? 'iPhone' : 'Pixel'}', hasLidar: false,
+    const hello = { casatorch: true, appMin: '0.7.0', home: { id: 'demo', name: 'Demo House', version: '0.9.0' }, signIn: true, configured: true, secure: null };
+    window.CasaNative = Object.freeze({ platform: '${os}', version: '0.9.0', device: '${os === 'ios' ? 'iPhone' : 'Pixel'}', hasLidar: false,
       haptic() {}, fullscreen() {}, share: () => ok(), openExternal() {},
       biometrics: () => ok({ available: true, enabled: false, type: '${os === 'ios' ? 'faceID' : 'fingerprint'}' }), setBiometricLock: () => ok(true),
       pushEnable: () => ok({}), lidar: () => ok(false), scanRoom: () => ok(null),
@@ -188,7 +192,7 @@ async function captureShell(browser, d, which) {
 async function captureAll(browser, key, d) {
   const out = {};
   const ctx = await webContext(browser, d);
-  for (const s of SHOTS) {
+  for (const s of SHOTS.filter(keep)) {
     if (s.shell) { out[s.n] = await captureShell(browser, d, s.shell); continue; }
     const p = await openWeb(ctx, s.web, d);
     if (WEB_ACTIONS[s.web]) await WEB_ACTIONS[s.web](p, d);
@@ -297,7 +301,7 @@ async function compose(browser, key, d, raws) {
   const dir = path.join(OUT, key);
   fs.mkdirSync(dir, { recursive: true });
   const time = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Los_Angeles' }).format(new Date()).replace(/\s?[AP]M$/, '');
-  for (const s of SHOTS) {
+  for (const s of SHOTS.filter(keep)) {
     const png = raws[s.n];
     await page.setContent(frameHtml(d, s, png, time), { waitUntil: 'load' });
     if (s.web === 'cameras') { const [topC] = await edgeColors(page, png); await page.evaluate((t) => { document.querySelector('.sb').style.background = t; }, topC); }   // content scrolled under it stays hidden, as on the phone
@@ -338,6 +342,8 @@ async function featureGraphic(browser, d, raws) {
 }
 
 /* ---------------------------------------------------------------- run ---------------------------------------------------------------- */
+/* --shots=02,06: only those pictures (the others stay as they are) */
+const keep = (s) => !args.shots || args.shots === true || String(args.shots).split(',').includes(s.n);
 const only = args.only && args.only !== true ? String(args.only).split(',') : Object.keys(DEVICES);
 try {
   if (!BASE) await startDemo();
@@ -347,7 +353,7 @@ try {
     console.log(`${key} (${d.canvas.join('x')})`);
     const raws = await captureAll(browser, key, d);
     await compose(browser, key, d, raws);
-    if (key === 'android/phone') await featureGraphic(browser, d, raws);
+    if (key === 'android/phone' && !args.shots) await featureGraphic(browser, d, raws);   // it uses several of the pictures
   }
   await browser.close();
 } finally {

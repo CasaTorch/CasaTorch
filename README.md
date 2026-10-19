@@ -11,8 +11,9 @@
 
 CasaTorch is a self-hosted home dashboard built for a wall-mounted tablet (and your phone). Weather,
 a family calendar, your teams' scores, headlines, photos, the internet, lights and plugs, cameras,
-sensors and power use - on a Home screen you arrange yourself. With Pro, your house as a live 3D
-model from an iPhone LiDAR scan, and an assistant you can ask anything about your home.
+sensors and power use - on pages of tiles you arrange yourself, with any tile a tap away from the whole story.
+With Pro, your house as a live 3D model, a full network dashboard, voice assistants, an AI agent you can ask
+anything about your home, and your CasaTorch from anywhere.
 
 It runs on hardware you already have: a Raspberry Pi, a NAS with Docker, an old Windows PC, a mini PC.
 Nothing leaves your house unless you turn on a feature that needs to.
@@ -20,7 +21,7 @@ Nothing leaves your house unless you turn on a feature that needs to.
 **See it first:** screenshots and a 26-second film at **[casatorch.com](https://casatorch.com/#features)**, or run the
 demo house below. What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
-> **Status: 0.8, early.** Everything described here as available works today and is tested on every change -
+> **Status: 0.9, early.** Everything described here as available works today and is tested on every change -
 > unit, security, penetration and failure tests, and the setup wizard end to end in a real browser, against
 > sample data and a mock Home Assistant. Some outside services (weather, scores, Ring) still need testing
 > against the real thing on more networks - please open an issue if something doesn't work for you.
@@ -76,8 +77,10 @@ Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
 
 ## Make it yours
 
-- **Drag, resize, add and remove tiles** on the Home screen (Edit layout). Tiles show more as they
-  grow: a small weather tile is the temperature; a big one adds the hours and the week.
+- **Every page is tiles** - Home, Alerts, Controls, Cameras, Security, Energy, Network, Reminders, Household and
+  the Family board: drag, resize, add and remove them (Edit). Until you arrange a page, CasaTorch builds it from
+  what your home has. Tiles show more as they grow, and **tapping any tile opens a drawer** with the whole story
+  (the weather's 48 hours, standings and schedules, a device's last 24 hours...).
 - **More than 30 widgets**: clock, weather, calendar, scores, headlines, internet, today, alerts, energy,
   quick switches, pinned devices (any devices or Home Assistant entities you pick), cameras, photo reel, 3D Home,
   rain radar, Household, the family's lists, chores, routines and meals, timers, countdowns and more -
@@ -86,7 +89,9 @@ Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
 - **Panel mode** for wall tablets (`http://<box>:8090/?panel=1`): a status bar across the top with
   the time, weather, alerts and everything CasaTorch is connected to - green, yellow or red - plus
   the Home AI Agent bar. Keeps the screen on.
-- **Light or dark**, color schemes or your own colors, and the **menu on any side** of the screen.
+- **Themes and backgrounds** - light or dark, gradients, the weather at home, the seasons, team colors or your own
+  photo - and the **menu on any side** of the screen.
+- **Alerts your way** - Settings > Alerts: in the app, on phones, sound, repeats, quiet hours, per room and device.
 - **Rename anything** - menu items, tiles, devices, the house - and hide what you don't use.
 - **A family calendar built in** (no Google account needed) and a **photo reel** you upload to from
   any phone or computer. Everything stays on your box.
@@ -107,7 +112,7 @@ The first time you open CasaTorch, a setup wizard walks through:
 9. **Network, energy, alerts** - your power company's real usage needs Home Assistant; without it,
    CasaTorch uses your smart plugs and your price per kWh
 
-Run it again any time from **Settings > Run setup again**; what you don't change is kept. To add one thing, open
+Change any answer later from **Settings > General > Change your setup**; what you don't change is kept. To add one thing, open
 the **Connect** tab: every brand CasaTorch works with, what's already connected, and a **Connect** button that
 opens the guided setup right at that item - pick, answer a question or two, Test, Save. No command line.
 
@@ -143,7 +148,7 @@ screen and phone, the Security Center, Household, the Family board and the rain 
 
 | Pro, available now | Pro, coming (included when it ships) |
 | --- | --- |
-| **3D Home** - your home as a live 3D plan (LiDAR scan, or draw it in the app) | **Away from home** - secure remote access, no port forwarding |
+| **3D Home** - your home as a live 3D plan (LiDAR scan, or draw it in the app) | Asking the Home AI Agent through Alexa |
 | **Home AI Agent** - answers about your home, tap-to-do actions (AI usage billed by your AI provider, or free with Ollama) | Multi-home |
 | **Ring** doorbells and cameras (Labs) | |
 | **Weekly report** - every Monday: energy and cost, always-on load, alerts, internet and server downtime, with tips (written by your AI if connected) | |
@@ -153,7 +158,9 @@ screen and phone, the Security Center, Household, the Family board and the rain 
 | **Reminders on phones** - your reminders and Household reminders sent to everyone's phone | |
 | **App tests for your own websites** - up to 30 tests, every minute, with alerts (Basic: the built-in apps, up to 8) | |
 | **Cisco Meraki** MV cameras and MT sensors | |
-| **Network monitoring** - UniFi and Cisco Meraki (every device online/offline, clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), with alerts | |
+| **Network monitoring** - UniFi and Cisco Meraki (every device online/offline, clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), with alerts; with Meraki or UniFi, the full Network dashboard (map, Wi-Fi, ports, clients, events, firmware) | |
+| **Voice assistants** - Alexa, Google Home, Apple Home and SmartThings through Matter (never locks, garage doors, gates or alarms), and "Ask CasaTorch" with Siri | |
+| **Away from home** - Secure access: your CasaTorch from anywhere, encrypted, no port forwarding (Basic: the secure address on your home Wi-Fi) | |
 
 When a trial or subscription ends, nothing is deleted: Pro features pause (your 3D home stays viewable),
 and everything comes back when a key is added. The key is checked on your box, offline; if casatorch.com

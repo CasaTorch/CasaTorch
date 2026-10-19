@@ -5,18 +5,23 @@
  * have been opened once. A brand-new CasaTorch gets the tour instead, and a
  * wall panel never gets either. Settings › Help opens the sheet any time.
  * ====================================================================== */
-const WN_VERSION = '0.8';
+const WN_VERSION = '0.9';
 const WN_KEY = 'casatorch-whatsnew', WN_SEEN = 'casatorch-new-opened';
-/* [icon, title, words, where it opens, pro?] - only what this version really adds (docs: help/whats-new.html#v080). */
+/* Settings › Voice assistants names a microphone icon; the set in 00-core.js had none. */
+Object.assign(ICONS, { mic: 'M12 3.5a2.8 2.8 0 0 0-2.8 2.8v5.4a2.8 2.8 0 0 0 5.6 0V6.3A2.8 2.8 0 0 0 12 3.5zM6.5 11a5.5 5.5 0 0 0 11 0M12 16.5v4M9 20.5h6' });
+/* [icon, title, words, where it opens, pro?] - only what this version really adds (docs: help/whats-new.html#v090). */
 const WN_ITEMS = [
-  ['trash', 'Household', 'Bin night the evening before, the mail, thirsty plants and the laundry.', '#settings/household'],
-  ['star', 'Family board', 'Shared lists, chores with stars, kids\' routines and the week\'s meals.', '#family'],
-  ['drop', 'Rain radar', 'The last two hours of rain around your home - add it to Home as a widget.', '#home'],
-  ['wifi', 'App tests, hop by hop', 'The path to every app, and the likely culprit when one is slow.', '#network'],
-  ['cube', '3D home, drawn by you', 'Draw walls, rooms, stairs and the yard, then watch it all live.', '#house3d', true],
+  ['grid', 'Tap any tile for more', 'Every page is tiles you arrange and resize - tap one for the whole story.', '#home'],
+  ['link', 'Secure access', 'Works from anywhere now: encrypted, with no port forwarding.', '#settings/connections', true],
+  ['wifi', 'Network dashboard', 'Map, Wi-Fi, ports, clients and events from Meraki or UniFi.', '#network', true],
+  ['bolt', 'Energy dashboard', 'Power flow, day by day, top consumers and standby waste.', '#energy'],
+  ['spark', 'A smarter Home AI Agent', 'Answers with charts, tables and sources - and a next step.', '#ask', true],
+  ['mic', 'Voice assistants', 'Alexa, Google Home, Apple Home and SmartThings - and Siri.', '#settings/voice', true],
+  ['palette', 'Themes and backgrounds', 'Weather, seasons, team colors or your own photo.', '#settings/appearance'],
+  ['bell', 'Alerts your way', 'Sound, repeats and quiet hours - for each kind, room or device.', '#settings/alerts'],
 ];
 /* Sections (main bar ids and Settings sections) that are new in this version. */
-const WN_NEW_TABS = ['family'], WN_NEW_SECTIONS = ['household', 'family'], WN_NEW_WIDGETS = ['radar', 'household', 'lists', 'chores', 'meals'];
+const WN_NEW_TABS = ['household'], WN_NEW_SECTIONS = ['voice', 'alerts'], WN_NEW_WIDGETS = [];
 const wnGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const wnSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } };
 const wnVer = (v) => String(v || '0').split(':')[0].split('.').slice(0, 2).map((x) => Number(x) || 0);

@@ -5,18 +5,16 @@ There's no CasaTorch account. You sign in to your own CasaTorch with the name an
 
 EVERYTHING YOU KNOW, FITTED TO YOUR PHONE
 - The same dashboard: lights, climate, energy, people, reminders and more
-- Your cameras
+- Your cameras, with live video
 - The 3D home
 - Settings, with the same people and roles as at home
+- Away from home too, with Secure access (part of CasaTorch Pro)
 
 WHAT ONLY THE APP CAN DO
 - Fingerprint, face or screen lock. Your sign-in stays sealed by the Android Keystore and only comes out when it's you. While locked, the app hides itself in Recents.
 - Encrypted alerts. Water, smoke, the doorbell, a device going offline: your CasaTorch encrypts each alert (AES-256-GCM) with a key only this phone has. Apple, Google and casatorch.com only carry sealed bytes.
 - Pair in seconds. Scan the one-time QR code from Settings › Phones & alerts › Add a phone on any screen that's already signed in.
 - Works on tablets and foldables, in any orientation, with your font size.
-
-COMING
-- Away from home: reaching your home from anywhere with Secure access (part of CasaTorch Pro).
 
 WHAT YOU NEED
 A CasaTorch on your home network (the Basic edition is free), version 0.6 or newer. The app finds it on your Wi-Fi, or you type its address.

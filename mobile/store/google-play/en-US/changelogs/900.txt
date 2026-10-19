@@ -1,0 +1,6 @@
+The first CasaTorch app for Android.
+- Sign in to your own CasaTorch, or pair by QR code
+- Every page of your dashboard, with live camera video
+- Alerts encrypted for your phone alone
+- Works away from home with Secure access (Pro)
+- Fingerprint lock, and it reconnects by itself

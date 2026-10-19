@@ -12,8 +12,8 @@ options:
   developmentLanguage: en
 settings:
   base:
-    MARKETING_VERSION: "0.8.0"
-    CURRENT_PROJECT_VERSION: "800"   # 0.8.0 -> 800; raise it for every upload
+    MARKETING_VERSION: "0.9.0"
+    CURRENT_PROJECT_VERSION: "900"   # 0.9.0 -> 900; raise it for every upload
     SWIFT_VERSION: "5.9"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic

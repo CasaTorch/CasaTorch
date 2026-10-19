@@ -1,4 +1,7 @@
 The first CasaTorch app for iPhone and iPad.
 - Sign in to your own CasaTorch, or pair by QR code
+- Every page of your dashboard, with live camera video
+- Alerts straight from Apple, encrypted for your phone alone
+- Works away from home with Secure access (Pro)
+- Face ID lock and room scanning with LiDAR
 - Clear help when your home can't be reached, and it reconnects by itself
-- Face ID lock, encrypted alerts and room scanning with LiDAR

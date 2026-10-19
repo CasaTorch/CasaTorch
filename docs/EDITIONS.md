@@ -14,12 +14,14 @@ list, casatorch.com and the README follow this table.
 | | Basic | Pro | |
 | --- | :---: | :---: | --- |
 | **The dashboard** | | | |
-| Home screen of widgets you drag, resize, add and remove (35 widgets), themes, your own main bar | ✓ | ✓ | Now |
+| Every page made of tiles you drag, resize, add and remove (built for your home until you arrange it); tap any tile for more | ✓ | ✓ | Now |
+| Themes and backgrounds (weather, seasons, team colors, your own photo), your own main bar | ✓ | ✓ | Now |
 | Panel mode for wall tablets: status bar, keeps the screen on, full screen | ✓ | ✓ | Now |
 | Rename anything; hide what you don't use; 14 languages | ✓ | ✓ | Now |
 | Unlimited screens at home; sign-ins for the family with optional two-step codes; PIN for risky actions | ✓ | ✓ | Now |
 | **Safety and security** | | | |
 | Every alert - leaks, smoke, doors, low batteries, devices offline, internet down - on every screen and phone | ✓ | ✓ | Now |
+| Alerts tuned your way: in the app, on phones, sound, repeats, quiet hours, daily summary, per room and per device | ✓ | ✓ | Now |
 | Phone alerts: the web app on your home screen, the Home Assistant app, and the CasaTorch apps (coming) | ✓ | ✓ | Now |
 | Fewer false alarms: an alert must still be there a minute later (water and smoke go out at once) | ✓ | ✓ | Now |
 | Security Center: video wall, doors and locks with "Lock all", the alarm (arm only), new-device alerts, open-port check | ✓ | ✓ | Now |
@@ -37,7 +39,7 @@ list, casatorch.com and the README follow this table.
 | Setup that asks the questions and connects everything for you | ✓ | ✓ | Now |
 | Without Home Assistant: Hue, Shelly, YoLink, Frigate, Reolink, any snapshot camera | ✓ | ✓ | Now |
 | With Home Assistant: everything in it, searchable and pinnable | ✓ | ✓ | Now |
-| Energy from plugs and from Home Assistant's Energy dashboard; watts and cost per device | ✓ | ✓ | Now |
+| Energy dashboard: power flow, solar, battery and car, top consumers, heat map, standby waste; from plugs and Home Assistant's Energy dashboard | ✓ | ✓ | Now |
 | Energy history by day and by device | 7 days shown | 2 years | Now |
 | This month's electricity bill forecast | | ✓ | Now |
 | Health: CasaTorch checks itself, repairs what it can and says what it fixed | ✓ | ✓ | Now |
@@ -50,8 +52,10 @@ list, casatorch.com and the README follow this table.
 | **Ring** doorbells and cameras without Home Assistant (Labs - unofficial API) | | ✓ | Now |
 | **Weekly report** every Monday, written by your AI if connected | | ✓ | Now |
 | **Server monitor**: NAS, servers and self-hosted apps, certificates, alerts | | ✓ | Now |
-| **Network monitoring**: UniFi, Cisco Meraki, Pi-hole, AdGuard Home, with alerts | | ✓ | Now |
+| **Network monitoring**: UniFi, Cisco Meraki, Pi-hole, AdGuard Home, with alerts; with Meraki or UniFi, the full Network dashboard (map, Wi-Fi, ports, clients, events, firmware) | | ✓ | Now |
 | **Cisco Meraki** MV camera pictures and MT sensor readings (through the Meraki network connection; MT water and temperature alerts keep working on Basic) | | ✓ | Now |
+| **Voice assistants**: Alexa, Google Home, Apple Home and SmartThings through Matter (never locks, garage doors, gates or alarms); "Ask CasaTorch" with Siri | | ✓ | Now |
+| Asking the Home AI Agent through Alexa | | ✓ | Coming |
 | **Away from home**: secure remote access from your phone, no port forwarding | At home only | ✓ | Now |
 | CasaTorch apps for iPhone, iPad and Android | ✓ | ✓ | Coming |
 | Multiple homes in one app; extra panel layouts and theme packs; cloud backup | | ✓ | Coming |

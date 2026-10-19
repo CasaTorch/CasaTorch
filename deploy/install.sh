@@ -8,7 +8,7 @@
 # Run it again any time to update; your settings are kept. Before updating it saves a copy of the settings, and
 # if the new version doesn't start it goes back to the one you had (Settings > Updates shows how it went).
 #
-# It installs the newest *release* (a version tag such as v0.8.1), never the work in progress on `main`, and checks
+# It installs the newest *release* (a version tag such as v0.9.0), never the work in progress on `main`, and checks
 # every file against the release's checksums signed with CasaTorch's offline release key (the same key the Linux/Pi
 # updater trusts) before anything is built or run. Releases made before 0.8.0 have no signed file list: then it says
 # so and carries on (CASATORCH_REQUIRE_SIGNED=1 stops instead). Developers: CASATORCH_REF=main (or any branch/tag)

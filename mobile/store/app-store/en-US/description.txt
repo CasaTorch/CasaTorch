@@ -5,9 +5,10 @@ There's no CasaTorch account. You sign in to your own CasaTorch with the name an
 
 EVERYTHING YOU KNOW, FITTED TO YOUR PHONE
 - The same dashboard: lights, climate, energy, people, reminders and more
-- Your cameras
+- Your cameras, with live video
 - The 3D home
 - Settings, with the same people and roles as at home
+- Away from home too, with Secure access (part of CasaTorch Pro)
 
 WHAT ONLY THE APP CAN DO
 - Face ID or Touch ID lock. Your sign-in stays in the iPhone's Keychain and only comes out when it's you. While locked, the app hides itself in the app switcher.
@@ -15,9 +16,6 @@ WHAT ONLY THE APP CAN DO
 - Pair in seconds. Scan the one-time QR code from Settings › Phones & alerts › Add a phone on any screen that's already signed in.
 - Scan a room. On an iPhone Pro or iPad Pro with LiDAR, scan a room with Apple's RoomPlan and send it straight to your CasaTorch's 3D editor.
 - Built for iPad: Split View, Slide Over, rotation and keyboard shortcuts.
-
-COMING
-- Away from home: reaching your home from anywhere with Secure access (part of CasaTorch Pro).
 
 WHAT YOU NEED
 A CasaTorch on your home network (the Basic edition is free), version 0.6 or newer. The app finds it on your Wi-Fi, or you type its address.

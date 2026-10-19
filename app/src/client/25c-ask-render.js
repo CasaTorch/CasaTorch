@@ -175,8 +175,8 @@ function askDevicesEl(ids) {
   const list = (Array.isArray(ids) ? ids : []).map((x) => askS(x, 200)).slice(0, 12); if (!list.length) return null;
   const box = el('div', { class: 'ask-devs' });
   const draw = (m) => box.replaceChildren(...list.map((id) => { const d = m.get(id); return el('div', { class: `ask-dev${d?.on || d?.playing ? ' on' : ''}` }, icon(ASK_KIND_ICON[d?.kind] || 'dotc', 16), el('div', {}, el('div', { class: 'ask-dev-n' }, askS(d?.name || id, 60)), el('div', { class: 'ask-dev-s' }, askStateWords(d)))); }));
-  draw(new Map());
-  const tick = async () => { if (!box.isConnected && box._seen) return; box._seen ||= box.isConnected; draw(await askDevices()); if (box.isConnected || !box._seen) box._t = setTimeout(tick, 10_000); };
+  // drawn once the states are in (never a row of "Not found" while they load), and kept as they were if a read fails
+  const tick = async () => { if (!box.isConnected && box._seen) return; box._seen ||= box.isConnected; const m = await askDevices(); if (m.size || !box.childNodes.length) draw(m); if (box.isConnected || !box._seen) box._t = setTimeout(tick, 10_000); };
   tick();
   return box;
 }

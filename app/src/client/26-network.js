@@ -96,11 +96,36 @@ pageTile({ id: 'net-speed', page: 'network', title: 'Speed', icon: 'gauge', blur
 /* ---- the map ---- */
 /* Lay the tree out: leaves spread along one axis in order, each parent centered over its children; layers along the
    other. Too many children for the room: the rest fold into one "+n" node. o: { W, H, horiz, pad } -> positions. */
-function nwLayout(topo, o) {
-  const nodes = topo.nodes.map((n) => ({ ...n })), byId = new Map(nodes.map((n) => [n.id, n])), kids = new Map(nodes.map((n) => [n.id, []]));
-  const sev = (n) => NW_SEV[nwSt(n.status)] || 0, rank = { appliance: 0, cellular: 1, switch: 2, wireless: 3, camera: 4, sensor: 5, other: 6 };
+const NW_RANK = { appliance: 0, cellular: 1, switch: 2, wireless: 3, camera: 4, sensor: 5, other: 6 };
+/* Each device's children, in the order the map shows them: gateways first, then switches, access points, the rest. */
+function nwKids(nodes) {
+  const kids = new Map(nodes.map((n) => [n.id, []]));
   for (const n of nodes) if (n.parent && kids.has(n.parent)) kids.get(n.parent).push(n);
-  for (const [, ch] of kids) ch.sort((a, c) => (rank[a.type] ?? 6) - (rank[c.type] ?? 6) || String(a.name).localeCompare(String(c.name)));
+  for (const [, ch] of kids) ch.sort((a, c) => (NW_RANK[a.type] ?? 6) - (NW_RANK[c.type] ?? 6) || String(a.name).localeCompare(String(c.name)));
+  return kids;
+}
+function nwLayout(topo, o) {
+  const nodes = topo.nodes.map((n) => ({ ...n })), byId = new Map(nodes.map((n) => [n.id, n])), kids = nwKids(nodes);
+  const sev = (n) => NW_SEV[nwSt(n.status)] || 0;
+  const fold = (x) => { for (const k of kids.get(x.id) || []) fold(k); kids.delete(x.id); byId.delete(x.id); };
+  const moreOf = (pid, gone, layer) => {   // the "+n" under pid: what was folded away, red when any of it is offline
+    const all = []; const walk = (x) => { if (x.type !== 'more') all.push(x); else all.push(...(x._all || [])); for (const k of kids.get(x.id) || []) walk(k); }; gone.forEach(walk);
+    return { id: `more:${pid}`, type: 'more', name: `+${all.length}`, status: all.some((x) => nwSt(x.status) === 'bad') ? 'offline' : 'online', layer, parent: pid, folded: all.map((x) => x.name), ids: all.map((x) => x.id), _all: all };
+  };
+  // too many layers for the height (a small tile): everything below the last layer that fits folds into one "+n" per branch
+  const room = (bottom) => Math.max(2, Math.floor(((o.horiz ? o.W : o.H) - o.top - bottom) / o.minL) + 1);
+  if (o.minL && Math.max(...nodes.map((n) => n.layer)) + 1 > room(o.bottom)) {
+    o = { ...o, bottom: Math.min(o.bottom, 24) };   // the last layer is only "+n" discs, with no names under them
+    const last = room(o.bottom) - 1;
+    for (const n of nodes) {
+      if (!byId.has(n.id) || n.layer >= last) continue;
+      const ch = kids.get(n.id) || [], deep = ch.filter((c) => c.layer >= last);
+      if (!deep.length) continue;
+      const m = moreOf(n.id, deep, last);
+      deep.forEach(fold);
+      kids.set(n.id, [...ch.filter((c) => c.layer < last), m]); byId.set(m.id, m); kids.set(m.id, []);
+    }
+  }
   const along = o.horiz ? o.H : o.W, minSlot = o.horiz ? 54 : o.W < 520 ? 62 : 74;
   const slots = Math.max(2, Math.floor((along - o.pad * 2) / minSlot) + 1);
   const leafCount = (id) => { const ch = kids.get(id) || []; return ch.length ? ch.reduce((s, c) => s + leafCount(c.id), 0) : 1; };
@@ -110,10 +135,10 @@ function nwLayout(topo, o) {
     if (!best) break;
     const ch = kids.get(best), keep = ch.slice().sort((a, c) => sev(c) - sev(a) || (c.clients || 0) - (a.clients || 0)).slice(0, ch.length - 2);
     const gone = ch.filter((x) => !keep.includes(x) && x.type !== 'more'), more = ch.find((x) => x.type === 'more');
-    const fold = (x) => { for (const k of kids.get(x.id) || []) fold(k); kids.delete(x.id); byId.delete(x.id); };
+    const add = moreOf(best, gone, ch[0].layer);
     gone.forEach(fold);
-    const m = more || { id: `more:${best}`, type: 'more', name: '', status: 'online', layer: ch[0].layer, parent: best, folded: [] };
-    m.folded = [...(m.folded || []), ...gone.map((x) => x.name)]; m.ids = [...(m.ids || []), ...gone.map((x) => x.id)]; m.name = `+${m.folded.length}`; if (gone.some((x) => nwSt(x.status) === 'bad')) m.status = 'offline';
+    if (more) { more._all = [...more._all, ...add._all]; more.folded = [...more.folded, ...add.folded]; more.ids = [...more.ids, ...add.ids]; more.name = `+${more.folded.length}`; if (add.status === 'offline') more.status = 'offline'; }
+    const m = more || add;
     kids.set(best, [...keep.filter((x) => x.type !== 'more'), m]); byId.set(m.id, m); kids.set(m.id, []);
   }
   let i = 0; const pos = new Map();
@@ -127,49 +152,74 @@ function nwLayout(topo, o) {
   for (const n of byId.values()) { const a = off + pos.get(n.id) * step, l = loff + n.layer * lstep; out.push({ ...n, x: o.horiz ? l : a, y: o.horiz ? a : l }); }
   return { nodes: out, step, lstep, slots, layers };
 }
+/* The outline (a phone's drawer, or more devices than fit across): one row per device, top to bottom, each one indented
+   under what it hangs off, the name and model beside it - nothing folded, the drawer scrolls. o: { W, pad, top, row } */
+function nwOutline(topo, o) {
+  const kids = nwKids(topo.nodes), out = [], seen = new Set();
+  const walk = (n, depth) => { if (seen.has(n.id)) return; seen.add(n.id); out.push({ ...n, depth }); for (const c of kids.get(n.id) || []) walk(c, depth + 1); };
+  const root = topo.nodes.find((n) => n.id === 'internet');
+  if (root) walk(root, 0);
+  for (const n of topo.nodes) if (!seen.has(n.id)) walk(n, n.layer || 1);   // not in the tree (shouldn't happen): at the end
+  const deepest = Math.max(1, ...out.map((n) => n.depth)), indent = Math.max(30, Math.min(44, (o.W * 0.4 - o.pad) / deepest));
+  out.forEach((n, i) => { n.x = o.pad + n.depth * indent; n.y = o.top + i * o.row; });
+  return { nodes: out, step: o.row, lstep: indent, rows: out.length };
+}
+const NW_ROW = 58;
 function nwTopoDraw(box, data, ctx) {
   const { topo, detail, model } = data, W = Math.max(200, box.clientWidth), H = Math.max(150, box.clientHeight);
   const horiz = false;   // top to bottom everywhere: on a phone, quiet branches fold into "+n" (tap the map's devices list for all)
-  const L = nwLayout(topo, { W, H, horiz, pad: W < 520 ? 30 : 46, top: horiz ? 34 : 30, bottom: horiz ? 60 : (detail >= 2 ? 58 : 40) });
+  const outline = !!data.outline;   // the drawer on a phone (or a network too wide to show across): one row per device
+  const L = outline ? nwOutline(topo, { W, pad: 26, top: 28, row: NW_ROW }) : nwLayout(topo, { W, H, horiz, pad: W < 520 ? 30 : 46, top: horiz ? 34 : 30, bottom: horiz ? 60 : (detail >= 2 ? 58 : 40), minL: 50 });
   const N = new Map(L.nodes.map((n) => [n.id, n]));
-  const r = Math.max(13, Math.min(21, (horiz ? L.step : L.lstep) * 0.26, (horiz ? L.lstep : L.step) * 0.3));
-  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: 'nw-topo-svg', role: 'group', 'aria-label': T('Network map: {n} devices', { n: topo.nodes.length - 1 }) });
+  const compact = !outline && !horiz && L.layers > 1 && L.lstep < 70;   // little height between layers: just the names, no second line
+  const under = (n) => (n.type === 'more' ? 0 : compact ? (n.type === 'internet' ? 25 : 21) : detail >= 1 || n.type === 'internet' ? 33 : 20);   // where a node's labels end
+  const r = outline ? 17 : Math.max(13, Math.min(21, (horiz ? L.step : L.lstep) * 0.26, (horiz ? L.lstep : L.step) * 0.3));
+  const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: `nw-topo-svg${outline ? ' nw-outline' : ''}`, role: 'group', 'aria-label': T('Network map: {n} devices', { n: topo.nodes.length - 1 }) });
   const ge = svgEl('g', { class: 'nw-edges' }), gl = svgEl('g', { class: 'nw-elabels' }), gn = svgEl('g', { class: 'nw-nodes' });
   svg.append(ge, gl, gn);
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const edges = topo.edges.map((e) => ({ ...e, a: N.has(e.a) ? e.a : null, b: N.has(e.b) ? e.b : N.has(`more:${e.a}`) ? `more:${e.a}` : null })).filter((e) => e.a && e.b);
+  const edges = topo.edges.map((e) => ({ ...e, a: N.has(e.a) ? e.a : null, b: N.has(e.b) ? e.b : N.has(`more:${e.a}`) ? `more:${e.a}` : null })).filter((e) => e.a && e.b && (!outline || (e.tree && N.get(e.b).parent === e.a)));
+  const rad = (n) => (n.type === 'internet' ? r + 3 : n.type === 'more' ? r - 3 : r);
   const seenMore = new Set();
   for (const e of edges) {
     if (String(e.b).startsWith('more:')) { if (seenMore.has(e.b)) continue; seenMore.add(e.b); }
     const a = N.get(e.a), c = N.get(e.b), st = e.status === 'standby' ? 'idle' : nwSt(c.type === 'more' ? c.status : e.status);
     let d;
-    if (!e.tree && a.layer === c.layer) d = horiz ? `M${a.x},${a.y + r}L${c.x},${c.y - r}` : `M${a.x + r},${a.y}L${c.x - r},${c.y}`;
+    if (outline) { const y2 = c.y, bend = Math.min(10, Math.abs(c.y - a.y) / 2); d = `M${a.x},${a.y + rad(a) + 2}V${y2 - bend}Q${a.x},${y2} ${a.x + bend},${y2}H${c.x - rad(c) - 2}`; }   // down the parent's line, then across
+    else if (!e.tree && a.layer === c.layer) d = horiz ? `M${a.x},${a.y + r}L${c.x},${c.y - r}` : `M${a.x + r},${a.y}L${c.x - r},${c.y}`;
     else if (horiz) { const x1 = a.x + r, x2 = c.x - r, mx = (x1 + x2) / 2; d = `M${x1},${a.y}C${mx},${a.y} ${mx},${c.y} ${x2},${c.y}`; }
-    else { const y1 = a.y + r + (a.type === 'more' ? 0 : detail >= 1 || a.type === 'internet' ? 33 : 20), y2 = c.y - r - 2, my = (y1 + y2) / 2; d = `M${a.x},${y1}C${a.x},${my} ${c.x},${my} ${c.x},${y2}`; }   // from under the parent's label
+    else { const y1 = a.y + r + under(a), y2 = c.y - r - 2, my = (y1 + y2) / 2; d = `M${a.x},${y1}C${a.x},${my} ${c.x},${my} ${c.x},${y2}`; }   // from under the parent's label
     const cls = `nw-e ${st}${e.inferred ? ' est' : ''}${!e.tree ? ' side' : ''}${['wan', 'cellular', 'wan2'].includes(e.kind) ? ' wan' : ''}`;
     ge.append(svgEl('path', { d, class: cls }));
     if (st === 'good' && !still && e.tree) ge.append(svgEl('path', { d, class: `nw-flow${['wan'].includes(e.kind) ? ' fast' : ''}` }));
-    if (detail >= 2 && e.label && ['wan', 'cellular'].includes(e.kind) && !horiz) {
-      const mx = (a.x + c.x) / 2, my = (a.y + r + 33 + c.y - r) / 2, tw = e.label.length * 6.2 + 12;
+    if (detail >= 2 && e.label && ['wan', 'cellular'].includes(e.kind) && !horiz && !outline && !compact) {
+      const mx = (a.x + c.x) / 2, my = (a.y + r + under(a) + c.y - r) / 2, tw = e.label.length * 6.2 + 12;
       gl.append(svgEl('g', { transform: `translate(${mx.toFixed(1)},${my.toFixed(1)})`, class: 'nw-elab' }, svgEl('rect', { x: -tw / 2, y: -9, width: tw, height: 18, rx: 9 }), svgEl('text', { x: 0, y: 4, 'text-anchor': 'middle' }, e.label)));
     }
   }
-  const tip = chartTip(), chars = Math.max(5, Math.floor((horiz ? L.lstep - 6 : L.step - 4) / 6.4));
+  const tip = chartTip(), chars = Math.max(5, Math.floor((horiz ? L.lstep - 6 : (L.step || W / 2) - 4) / 6.4));
   const cut = (s, k) => { s = String(s ?? ''); return s.length > k ? `${s.slice(0, Math.max(1, k - 1))}…` : s; };
   for (const n of L.nodes) {
     const st = n.type === 'internet' ? nwSt(n.status) : nwSt(n.status), [ic] = NW_TYPE[n.type] || NW_TYPE.other;
     const g = svgEl('g', { class: `nw-n t-${n.type} ${st}`, transform: `translate(${n.x.toFixed(1)},${n.y.toFixed(1)})`, tabindex: 0, role: 'button',
       'aria-label': [n.type === 'more' ? T('{n} more: {names}', { n: n.folded.length, names: n.folded.join(', ') }) : n.name, T(NW_TYPE[n.type]?.[1] || 'Device'), nwStWord(n.status), n.clients ? T('{n} clients', { n: n.clients }) : null].filter(Boolean).join(', ') });
-    const rr = n.type === 'internet' ? r + 3 : n.type === 'more' ? r - 3 : r;
+    const rr = rad(n);
     g.append(svgEl('circle', { r: rr + 5, class: 'nw-halo' }), svgEl('circle', { r: rr, class: 'nw-disc' }));
     if (n.type === 'more') g.append(svgEl('text', { y: 4, 'text-anchor': 'middle', class: 'nw-moretx' }, n.name));
     else g.append(svgEl('path', { d: ICONS[ic], transform: `translate(${-rr * 0.55},${-rr * 0.55}) scale(${(rr * 1.1 / 24).toFixed(3)})`, class: 'nw-ic' }));
     if (n.type !== 'internet' && n.type !== 'more') g.append(svgEl('circle', { cx: rr * 0.72, cy: -rr * 0.72, r: 4.2, class: 'nw-sdot' }));
     const name = n.type === 'internet' ? (data.provider || T('Internet')) : n.type === 'more' ? '' : n.name;
-    if (name) g.append(svgEl('text', { y: rr + 15, 'text-anchor': 'middle', class: 'nw-l1' }, cut(name, chars)));
     const sub = n.type === 'internet' ? (data.latency != null ? atMs(data.latency) : '') : detail >= 1 && n.type !== 'more' ? (nwSt(n.status) === 'bad' ? nwStWord(n.status) : n.model || '') : '';
-    if (sub && (detail >= 1 || n.type === 'internet')) g.append(svgEl('text', { y: rr + 28, 'text-anchor': 'middle', class: `nw-l2${nwSt(n.status) === 'bad' && n.type !== 'internet' ? ' bad' : ''}` }, cut(sub, chars + 2)));
-    if (detail >= 1 && n.clients > 0 && ['wireless', 'switch', 'other', 'box'].includes(n.type)) {   // client count: a small pill at the node's foot
+    if (outline) {   // beside the node: the whole name, and the model (or what's wrong) with its clients
+      const room = Math.max(6, Math.floor((W - n.x - rr - 16) / 7)), bad = nwSt(n.status) === 'bad' && n.type !== 'internet';
+      const sub2 = [sub, !bad && n.clients > 0 ? T('{n} clients', { n: n.clients }) : null].filter(Boolean).join(' · ');
+      if (name) g.append(svgEl('text', { x: rr + 11, y: sub2 ? -2 : 4, class: 'nw-l1' }, cut(name, room)));
+      if (sub2) g.append(svgEl('text', { x: rr + 11, y: 13, class: `nw-l2${bad ? ' bad' : ''}` }, cut(sub2, room + 4)));
+    } else {
+      if (name) g.append(svgEl('text', { y: rr + 15, 'text-anchor': 'middle', class: 'nw-l1' }, cut(name, chars)));
+      if (sub && !compact && (detail >= 1 || n.type === 'internet')) g.append(svgEl('text', { y: rr + 28, 'text-anchor': 'middle', class: `nw-l2${nwSt(n.status) === 'bad' && n.type !== 'internet' ? ' bad' : ''}` }, cut(sub, chars + 2)));
+    }
+    if (!outline && detail >= 1 && n.clients > 0 && ['wireless', 'switch', 'other', 'box'].includes(n.type)) {   // client count: a small pill at the node's foot
       const txt = String(n.clients), cw = txt.length * 7 + 22;
       g.append(svgEl('g', { class: 'nw-cl', transform: `translate(${(rr * 0.7).toFixed(1)},${(rr * 0.62).toFixed(1)})` }, svgEl('rect', { x: 0, y: -8, width: cw, height: 16, rx: 8 }),
         svgEl('path', { d: ICONS.nclients, transform: 'translate(3,-6) scale(0.5)', class: 'nw-clic' }), svgEl('text', { x: 16, y: 4 }, txt)));
@@ -187,6 +237,14 @@ function nwTopoDraw(box, data, ctx) {
     gn.append(g);
   }
   box.replaceChildren(svg);
+}
+/* Under the map: what the colors mean, and how many devices and clients. */
+function nwLegend(topo, ov, detail) {
+  const m = ov.model, devs = topo.nodes.filter((x) => !['internet', 'box'].includes(x.type)), off = devs.filter((x) => nwSt(x.status) === 'bad').length, warn = devs.filter((x) => nwSt(x.status) === 'warn').length;
+  return el('div', { class: 'nw-legend' },
+    el('span', {}, el('i', { class: 'good' }), T('Online')), warn ? el('span', {}, el('i', { class: 'warn' }), T('{n} alerting', { n: warn })) : null, off ? el('span', {}, el('i', { class: 'bad' }), T('{n} offline', { n: off })) : null,
+    topo.inferred && detail >= 1 ? el('span', { title: T('Not reported by your gear - worked out from the kind of device') }, el('i', { class: 'est' }), T('estimated link')) : null,
+    el('span', { class: 'grow' }), m ? el('span', { class: 'tiny muted' }, T('{n} devices · {c} clients', { n: devs.length, c: nwN(m.clients?.total) })) : el('span', { class: 'tiny muted' }, ov.pro ? T('Connect Meraki or UniFi for the whole map') : T('The whole map comes with Meraki or UniFi (Pro)')));
 }
 /* Without Meraki or UniFi: what any router gives - the internet, the router, this CasaTorch and the devices seen. */
 function nwBasicTopo(n) {
@@ -208,11 +266,7 @@ pageTile({ id: 'net-topo', page: 'network', phoneFull: true, title: 'Network map
       ro.observe(box); box._ro = ro;
     }
     box._d = data;
-    const devs = topo.nodes.filter((x) => !['internet', 'box'].includes(x.type)), off = devs.filter((x) => nwSt(x.status) === 'bad').length, warn = devs.filter((x) => nwSt(x.status) === 'warn').length;
-    const legend = el('div', { class: 'nw-legend' },
-      el('span', {}, el('i', { class: 'good' }), T('Online')), warn ? el('span', {}, el('i', { class: 'warn' }), T('{n} alerting', { n: warn })) : null, off ? el('span', {}, el('i', { class: 'bad' }), T('{n} offline', { n: off })) : null,
-      topo.inferred && detail >= 1 ? el('span', { title: T('Not reported by your gear - worked out from the kind of device') }, el('i', { class: 'est' }), T('estimated link')) : null,
-      el('span', { class: 'grow' }), m ? el('span', { class: 'tiny muted' }, T('{n} devices · {c} clients', { n: devs.length, c: nwN(m.clients?.total) })) : el('span', { class: 'tiny muted' }, ov.pro ? T('Connect Meraki or UniFi for the whole map') : T('The whole map comes with Meraki or UniFi (Pro)')));
+    const legend = nwLegend(topo, ov, detail);
     if (b.firstChild !== box) nwPut(b, box, legend); else b.replaceChild(legend, b.lastChild);
     if (box.clientWidth) nwTopoDraw(box, data, ctx);
   } });
@@ -543,6 +597,32 @@ async function networkPage(main) {
    Any device on the map, in the lists or the port grid opens its own drawer (nwDeviceSheet); the Devices tile opens
    all of them by kind, each one tap away. The other tiles open at their biggest. */
 drawerRoute('nwdev', (id) => { const ctx = $('#view .grid')?._ctx, d = ctx && nwDev(ctx, id); if (!d) return false; nwDeviceSheet(d, ctx, { fromHash: true }); return true; });
+/* The map, at the drawer's own size: measured once it's on screen and again whenever the drawer changes width. Wide
+   enough for every device across: top to bottom, as tall as its layers need. On a phone (or more devices than fit
+   across): the outline, one row per device - nothing folded away, the drawer scrolls. */
+tileDrawer(['net-topo'], {
+  doc: 'page.network', wide: true,
+  render(b, _x, a) {
+    const ov = a.ctx.data?.ov || {}, m = ov.model, n = a.ctx.data?.inet || {};
+    const topo = ov.topo || nwBasicTopo(n), main = (m?.uplinks || []).find((u) => u.status === 'active');
+    const data = { topo, model: m, detail: TIER_RANK.xl, provider: n.provider || main?.provider || null, latency: main?.lat ?? n.latencyMs?.cloudflare ?? null };
+    const box = el('div', { class: 'nw-topo nw-topo-dr', style: 'flex:none;height:0' });
+    let lw = 0;
+    const fit = () => {
+      const W = box.clientWidth; if (W < 40 || Math.abs(W - lw) < 4) return;   // not laid out yet, or no real change
+      lw = W;
+      const top = 30, bottom = 58, probe = nwLayout(topo, { W, H: 2000, horiz: false, pad: W < 520 ? 30 : 46, top, bottom });
+      data.outline = W < 520 || probe.nodes.some((x) => x.type === 'more');
+      const H = data.outline ? 28 + (topo.nodes.length - 1) * NW_ROW + 30 : top + bottom + Math.max(1, probe.layers - 1) * 122;
+      box.style.height = `${H}px`;
+      nwTopoDraw(box, data, a.ctx);
+    };
+    const ro = new ResizeObserver(() => { if (!box.isConnected) { if (lw) ro.disconnect(); return; } fit(); });
+    ro.observe(box);
+    b.append(el('div', { class: 'nw-topo-card', style: 'background:var(--surface-2);border:1px solid var(--line);border-radius:16px;padding:12px 14px 12px;min-width:0' }, box, nwLegend(topo, ov, TIER_RANK.xl)));
+    if (!m) b.append(el('p', { class: 'small muted', style: 'margin:0' }, T('From the internet through your gateway and switches to every access point and its clients - live')));
+  },
+});
 tileDrawer(['net-devices'], {
   doc: 'page.network',
   render(b, _x, a) {

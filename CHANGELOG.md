@@ -4,21 +4,111 @@ What changed in each CasaTorch version. The illustrated version, with links into
 [What's new](https://casatorch.com/docs/help/whats-new.html); after an update CasaTorch also shows a short
 "What's new" sheet (find it again in Settings › Help). Items marked **Coming** are not available yet.
 
+## 0.9.0
+
+Every page is now yours to arrange - tap any tile for the whole story - plus a full Network dashboard, a rich Energy
+dashboard, a Home AI Agent that shows its work, voice assistants, themes and backgrounds, and your CasaTorch from
+anywhere with Secure access. Items marked **Coming** are not available yet.
+
+**Editions.** Modular pages, drawers, the Energy dashboard, themes and backgrounds, tunable alerts, the Household page
+and the Family board are in Basic. The Network dashboard (with a Cisco Meraki or UniFi connection), the Home AI Agent,
+voice assistants and Secure access from anywhere are Pro (and in the 14-day trial). Safety is never Pro.
+
+### Every page, your way
+- **Modular pages**: Home, Alerts, Controls, Cameras, Security, Energy, Network, Reminders, Household and the Family
+  board are all tiles you add, remove, drag and resize. Until you arrange a page, CasaTorch builds it from what your
+  home has (solar gets a power-flow tile, Frigate gets Detections, each room gets its own tile) and offers new tiles
+  in one tap when new devices arrive. Layouts for everyone, for phones, tablets or computers, just for you, or for
+  one screen.
+- **Tiles that grow**: a small tile shows the key number; bigger ones add a sparkline, a chart, then a table.
+- **Tap any tile for more**: a drawer slides in with everything behind it - the weather's 48 hours and 10 days,
+  your teams' standings, line scores and schedules, a stock's chart, the week's agenda, cameras live with what they
+  saw, and every device with its controls and its last 24 hours. Drawers have their own address, so Back closes
+  them and a link opens one.
+- **Themes and backgrounds**: pick a theme and a background - gradients, the weather at home (day and night),
+  the seasons, team colors, or your own photo (cleaned of location and other hidden data before it's saved). Each
+  screen can have its own. Asked early in setup; changed any time in Settings › Look & main bar.
+- **Docs one tap away**: a "?" on every page and Settings section, and "Learn more" on every setup step.
+
+### Network dashboard (Pro)
+- With a **Cisco Meraki** API key or **UniFi**: a live network map from the internet down to every switch, access
+  point and camera, uplinks and cellular backup, Wi-Fi by network and band, top clients, switch ports with PoE and
+  errors, events, firmware and license, new devices, your DNS filter, servers and apps - all tiles you can arrange.
+- App and network tests on the same page, with the hop-by-hop path for each.
+
+### Energy dashboard
+- Power flow between the grid, solar, a home battery, the house and the car; what's on now and its cost; today,
+  7 and 30 days; day by day; top consumers; sources hour by hour; an hour-of-day heat map; by room; this week vs
+  last; peak hours; carbon; standby waste with what it costs a year; a tile for each metered device. Built from the
+  meters your home has - nothing made up - and arranged like every other page. Bill forecast and 2 years of
+  history stay Pro.
+
+### Home AI Agent (Pro)
+- **Looks things up for itself**: Home Assistant, every CasaTorch page, the weather, scores, headlines and - if you
+  turn it on - the web. It reads only what the person asking may see.
+- **Shows its work**: answers come with charts, tables and headline numbers, name their sources, and end with a
+  next step you can tap. It still never unlocks, opens or disarms.
+- **You choose what it sees**: cameras, location, the calendar and the family can each be kept from the AI.
+
+### Voice assistants (Pro)
+- **Alexa, Google Home, Apple Home and SmartThings** through Matter: add CasaTorch once in your assistant's app and
+  your lights, plugs, fans, blinds, thermostats, sensors and scenes show up there, in step both ways. Locks, garage
+  doors, gates and alarms are never shared. (Google Home asks for a one-time developer-console step for devices like
+  this one; the docs walk you through it.)
+- **"Hey Siri, Ask CasaTorch"**: ask your Home AI Agent by voice and hear a short answer, with an Apple Shortcut and
+  a key for each phone that opens nothing else. Asking through Alexa is **Coming**.
+
+### Alerts, your way
+- **Settings › Alerts**: for each kind of alert - in the app, on phones, the sound, how often it repeats, quiet
+  hours and a daily summary - for the household or just your phones, and per room or per device. Mute a device for
+  a while from its alert.
+- Reminders and Household pushes follow the same rules. Water, smoke, gas, carbon monoxide and freezing alerts
+  always break through, and turning one off asks first.
+
+### Your home from anywhere
+- **Secure access is available**: with Pro, your CasaTorch works from anywhere through an encrypted address, with
+  no port forwarding. On Basic, the secure address works on your home Wi-Fi.
+- **iPhone alerts straight through Apple**: the iPhone and iPad app now gets alerts through Apple's own push service,
+  with no Google service in between - still encrypted on your CasaTorch for that one phone. The CasaTorch apps are **Coming** to the App Store and Google Play.
+- **Pages never go blank**: switching between Wi-Fi and cellular, or coming back to a tab, keeps the last data on
+  screen while CasaTorch reconnects, with time limits and a retry behind every request. The app asks which home to
+  open when a phone is signed in to more than one.
+
+### Cameras
+- **Live video, really live**: low-latency video from Frigate and Home Assistant cameras, in browsers and the phone
+  apps, with sharp tiles and the full-quality stream when you open one.
+- **Each camera once**: Cameras and Security show every camera one time, even when it's reached both directly and
+  through Home Assistant; the others wait under Detected cameras, ready to add back.
+
+### Setup
+- **Make it yours** early on: the look of your CasaTorch, previewed live.
+- **Two-step sign-in**, offered right after your login and strongly recommended, with recovery codes; the
+  CasaTorch app adds Face ID, Touch ID or fingerprint.
+- **Already in Home Assistant?** Setup explains what connecting Frigate or a Meraki key directly adds (live video,
+  detections, the full network map) and what you can skip.
+- **Change your setup** in Settings › General: every setup step can be opened again later.
+- **App tests** show the path to each app as a graph, hop by hop, with the likely culprit.
+
+### Household and Family board
+- **Household** has its own page: bins, the mail, plants and laundry as tiles.
+- The Family hub is now the **Family board**: same lists, chores, routines and meals, now as tiles too.
+
+### Security, reliability and clean-ups
+- **Passwords and keys are encrypted in your browser** before they're sent to your CasaTorch, on top of the
+  encrypted connection - and stay encrypted on the box, as before.
+- A person whose role is lowered to viewer can no longer switch things by voice; more of the app is covered by the
+  automated attack tests.
+- Faster main bar and Network page; fixes for phones, tablets and German text across the app.
+- Public sources, plainly: CasaTorch names itself to scores, quotes and feeds, and a source that refuses shows "not
+  available right now". Teams show as their abbreviation in team colors (logos are an opt-in switch). The AP News
+  preset is gone; Wikipedia excerpts in the Home AI Agent are labeled with their license.
+- Fresh screenshots, docs videos and tour film, and new store screenshots for the CasaTorch apps.
+
 ## 0.8.1
 
 - **Who is it?** Security Center names each device by its maker (from the first half of its network address) and
   the names your network already knows, guesses its type, and explains each open service for that kind of device.
   A receiver's control port is shown as normal information instead of a warning; real risks stay red.
-- **Family board:** the Family hub is now called the Family board (same lists, chores, routines and meals).
-- **Reminders and Household follow Settings › Alerts:** their pushes go through the alert rules (which phones,
-  sound, quiet hours); with nothing changed there they reach every phone, as before. Room rules can be set in
-  Settings › Alerts.
-- **Reminders, Family and Household pages are tiles** you can arrange, add, remove and resize, like Home and Energy.
-- **Public sources, plainly:** CasaTorch always names itself to scores, quotes and feeds (no more retrying as a
-  browser); a source that refuses shows "not available right now". Teams show as abbreviation and team colors -
-  logos are an opt-in switch. The AP News preset (a third-party mirror) is gone; Hacker News uses its own feed.
-  Unused Google Fonts entries were removed from the content security policy. Wikipedia excerpts in the Home AI
-  Agent are labeled "Wikipedia (CC BY-SA)" with a link to the license.
 - CI tests on Node 22 and 24 (Node 20 is end of life).
 - Fresh screenshots and videos everywhere.
 
