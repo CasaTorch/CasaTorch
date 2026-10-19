@@ -34,7 +34,7 @@ function chimePlay(kind, times = 2) {
 /* ---- Nudges: your home's own reminders (78-nudges.js). A card on the Alerts tab to add and change them,
    and the card that lights up every screen when one is due. ---- */
 const NUDGE_ICON_NAMES = { trash: 'Trash', paw: 'Pets', pill: 'Medicine', bill: 'Bills', plant: 'Plants', cake: 'Birthday', car: 'Car', school: 'School', laundry: 'Laundry', bell: 'Reminder' };
-const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DOW = { map: (f) => [0, 1, 2, 3, 4, 5, 6].map((i) => f(dowShort(i), i)) };   // the days in the home's language
 const nudgeWhen = (n) => {
   const loc = CasaI18n.lang === 'en' ? 'en-US' : CasaI18n.lang, t = hm(n.time), d = n.date ? new Date(`${n.date}T12:00:00Z`) : null, md = d ? dtf(loc, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(d) : '';
   const dow = (x) => dtf(loc, { weekday: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(2023, 0, 1 + x, 12)));   // 1 Jan 2023 was a Sunday

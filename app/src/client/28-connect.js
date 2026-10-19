@@ -30,7 +30,7 @@ function connectItems(cat) {
   for (const [v, l] of net?.question?.options || []) {
     if (['isp', 'other'].includes(v)) continue;
     const note = net.branches?.[v]?.note || '';
-    add({ key: `net-${v}`, step: 'network', add: v, label: l, desc: /planned|coming/i.test(note) ? T('Coming to Pro - internet status and speed tests work today') : note ? note.replace(/^CasaTorch will /, 'Shows ').replace(/, so CasaTorch shows/, ' - CasaTorch shows') : T('Every device on your network, Wi-Fi health and alerts'), how: /planned|coming/i.test(note) ? 'soon' : 'direct', ids: [v] }, 'network');
+    add({ key: `net-${v}`, step: 'network', add: v, label: l, desc: /planned|coming/i.test(note) ? T('Coming to Pro - internet status and speed tests work today') : note ? T(note) : T('Every device on your network, Wi-Fi health and alerts'), how: /planned|coming/i.test(note) ? 'soon' : 'direct', ids: [v] }, 'network');
   }
   add({ key: 'pihole', step: 'network', add: 'dns:pihole', label: T('Pi-hole'), desc: T('Coming to Pro: ads blocked and devices seen'), how: 'soon', ids: ['pihole'] }, 'network');
   add({ key: 'adguard', step: 'network', add: 'dns:adguard', label: T('AdGuard Home'), desc: T('Coming to Pro: ads blocked and devices seen'), how: 'soon', ids: ['adguard'] }, 'network');
@@ -180,7 +180,7 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
     const on = isOn(it);
     const tag = it.how === 'soon' ? el('span', { class: 'pill' }, T('Coming soon')) : it.how === 'pro' ? el('span', { class: 'pill pro' }, 'Pro') : it.how === 'ha' ? el('span', { class: 'pill ha' }, ha ? T('via Home Assistant') : T('needs Home Assistant')) : it.alsoHa ? el('span', { class: 'pill' }, T('Direct or via HA')) : el('span', { class: 'pill' }, T('Direct'));
     return el('div', { class: `connect-card${on ? ' on' : ''}` },
-      el('div', { class: 'row', style: 'gap:12px;align-items:center' }, monogram(it.label), el('div', { style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, it.label), el('div', { class: 'row', style: 'gap:6px;margin-top:3px' }, on ? el('span', { class: 'pill good' }, T('✓ Connected')) : null, tag))),
+      el('div', { class: 'row', style: 'gap:12px;align-items:center' }, monogram(it.label), el('div', { style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, T(it.label)), el('div', { class: 'row', style: 'gap:6px;margin-top:3px' }, on ? el('span', { class: 'pill good' }, T('✓ Connected')) : null, tag))),
       el('p', { class: 'small muted' }, it.desc ? T(it.desc) : '', it.desc ? ' ' : '', docLink(`connect.${it.add}`) || docLink(`connect.${it.step}`) || docLink(`connect.${it.key}`)),   // the guide for it (39d-docs-links.js)
       it.how === 'soon' ? el('button', { class: 'btn small', disabled: true }, T('Coming soon')) : it.href ? el('a', { class: `btn small${on ? '' : ' primary'}`, href: it.href }, on ? T('Open') : T('Connect')) : el('button', { class: `btn small${on ? '' : ' primary'}`, onclick: () => startConnect(it, conn) }, on ? T('Change') : it.how === 'ha' && !ha ? T('Set up') : T('Connect')),
       on ? removeBtn(it, conn, draw) : null);
@@ -188,7 +188,7 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
   const draw = () => {
     const t = q.value.trim().toLowerCase();
     chips.replaceChildren(...CONNECT_GROUPS.map(([g, l]) => el('button', { class: `chip${g === group ? ' on' : ''}`, onclick: () => { group = g; draw(); } }, T(l))),
-      el('span', { class: 'grow' }), ...[['any', 'Everything'], ['on', 'Connected']].map(([f, l]) => el('button', { class: `chip${f === filter ? ' on' : ''}`, onclick: () => { filter = f; draw(); } }, l)));
+      el('span', { class: 'grow' }), ...[['any', 'Everything'], ['on', 'Connected']].map(([f, l]) => el('button', { class: `chip${f === filter ? ' on' : ''}`, onclick: () => { filter = f; draw(); } }, T(l))));
     const shown = items.filter((it) => (group === 'all' || it.groups.includes(group)) && (filter === 'any' || isOn(it)) && (!t || `${it.label} ${it.desc} ${it.domain || ''}`.toLowerCase().includes(t)));
     shown.sort((a, b) => isOn(b) - isOn(a) || (a.how === 'soon') - (b.how === 'soon'));
     grid.replaceChildren(...shown.map(card), el('div', { class: 'connect-card more' }, el('b', {}, T('Don\'t see yours?')),

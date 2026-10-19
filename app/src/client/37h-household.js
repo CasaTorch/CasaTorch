@@ -153,10 +153,10 @@ pageTile({ id: 'hh-laundry', page: 'household', auto: true, title: 'Laundry', ic
     el('div', { class: 'grow' }, el('b', { class: 'ellipsis' }, T(a.name)), el('span', { class: 'sub' }, a.phase === 'running' ? (a.remainingMin != null ? T('{n} min left', { n: a.remainingMin }) : T('Running')) : a.phase === 'done' ? T('Done') : T('Idle'))),
     a.phase === 'done' && ctx.data.canAct ? el('button', { class: 'hh-outbtn', onclick: () => hhDo(`/api/household/laundry/${encodeURIComponent(a.id)}/emptied`, {}, T('Emptied')) }, icon('check'), T('Emptied')) : null))));
 } });
-tab({ id: 'household', label: 'Household', icon: 'trash', after: 'family', async render(main) {
+tab({ id: 'household', label: 'Household', icon: 'trash', after: 'reminders', async render(main) {
   const load = async () => { WCACHE.delete('/api/household'); const [hh, canAct] = await Promise.all([wget('/api/household', 10_000).catch(() => null), hhRole()]); return { hh, canAct }; };
   return pageGrid(main, { page: 'household', auto: true, title: tabLabel({ id: 'household', label: T('Household') }), sub: T('Bins, the mail, plants and laundry'), load,
-    actions: [el('a', { class: 'btn', href: '#settings/household' }, icon('gear', 14), el('span', { class: 'hide-phone' }, T('Household settings')))], addLabel: 'Add a tile' });
+    actions: [el('a', { class: 'btn', href: '#settings/household' }, icon('gear', 14), el('span', { class: 'hide-phone' }, T('Household settings')))] });
 } });
 
 /* ======================= Settings › Household ======================= */

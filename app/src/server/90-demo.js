@@ -1,6 +1,5 @@
 /* Demo data: every tab reads /api/<tab>; in demo mode the answer is a fixture
-   file (demo/fixtures/<tab>.json). Real providers replace these one by one as
-   modules are ported (docs/MODULES.md). */
+   file (demo/fixtures/<tab>.json). */
 const FIXTURES = path.join(APP_DIR, '..', 'demo', 'fixtures');
 /* The sample data was written on one day; the demo shows it as if it were today: every date moves forward by whole days
    (times of day stay put), and the hourly forecast starts at this hour, so nothing in the demo looks stale. */

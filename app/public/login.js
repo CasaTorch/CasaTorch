@@ -18,7 +18,7 @@ async function call(url, body) {
   return j;
 }
 const view = $('#view');
-const show = (...kids) => { view.replaceChildren(...kids.flat().filter((k) => k != null && k !== false)); const f = view.querySelector('input:not([type=checkbox])'); if (f) setTimeout(() => f.focus(), 30); };
+const show = (...kids) => { view.replaceChildren(...kids.flat().filter((k) => k != null && k !== false)); const f = view.querySelector('input:not([type=checkbox])'); if (f && !view.contains(document.activeElement)) f.focus(); };   // at once, and never away from a field already being typed in (a late focus moved fast typing or a password manager's fill into the wrong field)
 const errBox = () => el('p', { class: 'err', role: 'alert' });
 function busy(btn, on, label) { btn.disabled = on; if (label) btn.textContent = on ? T('One moment…') : label; }
 /* Where each answer leads. */

@@ -5,7 +5,7 @@
  * network), then everything is searched for them:
  *   every file in the data folder, CasaTorch's own log (process output and Settings › Log), every GET API answer,
  *   the support file, the browser's storage (localStorage, sessionStorage), what the browser sent over the network,
- *   and every byte CasaTorch sent to the stand-in services (Home Assistant, an AI, UniFi, Pi-hole, a Reolink camera).
+ *   and every byte CasaTorch sent to the stand-in services (Home Assistant, an AI, UniFi, Meraki, Pi-hole, a Reolink camera).
  * A secret may only appear in what's sent to its own service, in the header (or sign-in body) that service reads it from -
  * never in an address.
  *   cd app && node build.mjs && cd .. && node tools/test-secrets.mjs      (Playwright from $PLAYWRIGHT; TEST_PORT_BASE picks ports)
@@ -23,11 +23,13 @@ const SECRETS = {
   ownerPw: 'Kettle-Porch-Lamp-41', newPw: 'Garden-Hose-Window-73', haToken: L.HA_TOKEN,
   aiKey: 'sk-test-ai-key-Q9X2Z7W4', aiKey2: 'sk-test-ai-key-second-R5T8', unifiKey: 'unifi-test-key-M3N6P9Q2',   // scrub-ok: made-up test values
   piholePw: 'pihole-test-pass-K4L7', reolinkPw: 'reolink-test-pass-H2J5', snapPw: 'snapshot-test-pass-D8F1',
+  merakiKey: 'meraki0test0key0V7B4N1C9X2Z5',   // scrub-ok: made-up test value (a Meraki key entered with Meraki cameras in setup)
 };
 const ALLOWED = {   // where each secret may appear in what CasaTorch sends to the stand-in services
   haToken: [/^authorization: bearer /i],
   aiKey: [/^authorization: bearer /i], aiKey2: [/^authorization: bearer /i],
   unifiKey: [/^x-api-key: /i],
+  merakiKey: [/^authorization: bearer /i],
   piholePw: [/^\{"password":/],   // Pi-hole 6's sign-in: the password in the body of POST /api/auth
   reolinkPw: [/^\[\{"cmd":"Login"/],   // Reolink's sign-in: in the body of cmd=Login, never in an address
 };
@@ -50,6 +52,7 @@ async function fakeServices() {
   const srv = http.createServer((req, res) => {
     let body = ''; req.on('data', (d) => { body += d; }); req.on('end', () => {
       const u = new URL(req.url, 'http://x'), j = (o, s = 200) => { res.writeHead(s, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+      if (u.pathname.startsWith('/meraki/api/v1/')) return /Bearer meraki0test0key/.test(req.headers.authorization || '') ? j(u.pathname.endsWith('/organizations') ? [{ id: '1', name: 'Test org' }] : []) : j({ errors: ['Invalid API key'] }, 401);
       if (u.pathname.endsWith('/models')) return /Bearer sk-test-ai-key/.test(req.headers.authorization || '') ? j({ data: [{ id: 'gpt-4o-mini' }] }) : j({ error: 'no' }, 401);
       if (u.pathname === '/proxy/network/integration/v1/sites') return req.headers['x-api-key'] === SECRETS.unifiKey ? j({ data: [{ id: 's1', name: 'Default' }] }) : j({}, 401);
       if (u.pathname.startsWith('/proxy/network/integration/v1/')) return j({ data: [], totalCount: 0 });
@@ -72,7 +75,7 @@ let browser = null;
 try {
   const ha = await L.startMockHa(), haRec = await recorder(ha.port);
   const fake = await fakeServices(), fakeRec = await recorder(fake.port);
-  const s = await L.startCasaTorch({ name: 'secrets' }), B = s.base, DATA = s.data;
+  const s = await L.startCasaTorch({ name: 'secrets', env: { CASATORCH_MERAKI_BASE: `${fakeRec.base}/meraki/api/v1` } }), B = s.base, DATA = s.data;
   const H = { 'Content-Type': 'application/json', Origin: B };
   let cookie = '';
   const req = async (m, p, body, c = cookie) => { const r = await fetch(B + p, { method: m, headers: { ...H, ...(c ? { Cookie: c } : {}) }, body: body ? JSON.stringify(body) : undefined, redirect: 'manual', signal: AbortSignal.timeout(20000) }); const text = await r.text(); let j = null; try { j = JSON.parse(text); } catch { /* not JSON */ } return { s: r.status, j, text, sc: r.headers.get('set-cookie') }; };
@@ -102,7 +105,7 @@ try {
     house: { name: 'Test House', timezone: 'America/Los_Angeles' },
     account: { username: 'owner1', password: SECRETS.ownerPw, terms: true },
     homeassistant: { uses: 'yes', url: haRec.base },
-    cameras: { has: 'yes', kinds: ['reolink-local', 'snapshot'], 'reolink-local': { host: `127.0.0.1:${fakeRec.port}`, username: 'admin', password: SECRETS.reolinkPw }, snapshot: { snapshotUrl: `${fakeRec.base}/snap.jpg`, username: 'cam', password: SECRETS.snapPw } },
+    cameras: { has: 'yes', kinds: ['reolink-local', 'snapshot', 'meraki-mv'], 'meraki-mv': { apiKey: SECRETS.merakiKey }, 'reolink-local': { host: `127.0.0.1:${fakeRec.port}`, username: 'admin', password: SECRETS.reolinkPw }, snapshot: { snapshotUrl: `${fakeRec.base}/snap.jpg`, username: 'cam', password: SECRETS.snapPw } },
     network: { kind: 'unifi', unifi: { url: fakeRec.base, apiKey: SECRETS.unifiKey }, dns: 'pihole', dnsUrl: fakeRec.base, dnsKey: SECRETS.piholePw },
     ai: { provider: 'openai', url: `${fakeRec.base}/v1`, apiKey: SECRETS.aiKey, _test: { ok: true, model: 'gpt-4o-mini' } },
   } });
@@ -171,6 +174,7 @@ try {
   check(`no file in the data folder holds a password or key readable (${files.length} files)`, !inFiles.length, inFiles.join(' | '));
   const cfg = JSON.parse(fs.readFileSync(path.join(DATA, 'config.json'), 'utf8'));
   check('config.json: every secret is sealed and bound to its field (v2)', [cfg.homeAssistant?.token, cfg.ai?.apiKey, ...(cfg.cameras || []).map((c) => c.password), ...(cfg.network?.sources || []).map((x) => x.secret), cfg.network?.dns?.key].filter(Boolean).every((v) => /^v2\./.test(v)), JSON.stringify(cfg).slice(0, 200));
+  check('the Meraki key typed in setup became a Network source, sealed', (cfg.network?.sources || []).some((x) => x.kind === 'meraki' && /^v2\./.test(x.secret || '')) && !cfg.network?.meraki, JSON.stringify(cfg.network || {}).slice(0, 200));
   if (process.platform !== 'win32') {
     check('the key file is owner-only (0600)', (fs.statSync(path.join(DATA, 'secret.key')).mode & 0o777) === 0o600);
     check('the data folder is owner-only (0700)', (fs.statSync(DATA).mode & 0o777) === 0o700);

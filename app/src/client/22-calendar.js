@@ -51,7 +51,7 @@ tab({ id: 'calendar', label: 'Calendar', icon: 'calendar', async render(main) {
     setTop(T('Calendar'), T('Your linked calendars plus the CasaTorch calendar'), [el('button', { class: 'btn primary', onclick: () => eventEditor(null, draw) }, icon('plus'), T('New event'))]);
     main.replaceChildren(el('div', { class: 'card' },
       el('div', { class: 'row', style: 'margin-bottom:14px' }, el('button', { class: 'btn small', 'aria-label': T('Previous month'), onclick: () => step(-1) }, icon('chevl')), el('b', { style: 'font-size:18px;min-width:170px;text-align:center' }, title), el('button', { class: 'btn small', 'aria-label': T('Next month'), onclick: () => step(1) }, icon('chevr')), el('button', { class: 'btn small ghost', onclick: () => { ym = today.slice(0, 7); draw(); } }, T('Today'))),
-      el('div', { class: 'month' }, ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => el('div', { class: 'dow' }, d)), cells),
+      el('div', { class: 'month' }, [0, 1, 2, 3, 4, 5, 6].map((i) => el('div', { class: 'dow' }, dowShort(i))), cells),
       el('p', { class: 'small muted', style: 'margin:14px 0 0' }, T('Tap a day to add an event. Events you add here live on your CasaTorch box. Google, iCloud and Outlook calendars linked in setup show here too.')),
       ...errors.map((er) => el('p', { class: 'small', style: 'color:var(--warn)' }, T('{calendar} did not load.', { calendar: er.calendar })))));
   };

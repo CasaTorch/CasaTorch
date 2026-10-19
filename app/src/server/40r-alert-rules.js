@@ -350,6 +350,7 @@ app.put('/api/alerts/rules/mine', express.json({ limit: '4kb' }), (req, res) => 
 /* "Send a test of this kind": what would happen on each of my phones right now, and it goes where the rules let it. */
 app.post('/api/alerts/test', express.json({ limit: '1kb' }), async (req, res) => {
   const K = ALERT_KIND[String(req.body?.kind || '')]; if (!K) return res.status(400).json({ error: 'Unknown kind of alert.' });
+  if (overLimit(`alerttest:${alertUserKey(req)}`, 20, 10 * 60_000)) return res.status(429).json({ error: 'That\'s a lot of test alerts - wait a few minutes.' });   // each one can buzz your phones
   const uid = alertUserKey(req), a = { alertKind: K.id, id: `${K.id}-test:${Date.now()}`, severity: K.reminder ? 'event' : K.tier === 'critical' ? 'critical' : K.tier === 'important' ? 'warning' : 'notice', title: `Test: ${K.sample}`, ...(K.reminder ? { pushAsked: true } : {}) };
   const m = await alertMoment(), user = alertRulesUser(uid), mine = alertTargets().filter((t) => t.user === uid);
   const app0 = alertDecide(a, { ...m, user, target: null });

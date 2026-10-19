@@ -121,7 +121,7 @@ async function logCard() {
   const box = el('div', { class: 'logbox', role: 'log', 'aria-live': 'polite' });
   let level = 'all', q = '', timer = null;
   const load = async () => { try { const { lines } = await api(`/api/system/log?level=${level}&q=${encodeURIComponent(q)}`); const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30; box.replaceChildren(...(lines.length ? lines.map((l) => el('div', { class: `logline ${l.level}` }, el('span', { class: 'when' }, fmt(l.at, { hour: 'numeric', minute: '2-digit', second: '2-digit' })), el('span', { class: 'lvl' }, l.level === 'info' ? '' : l.level), el('span', {}, l.text))) : [el('div', { class: 'small muted' }, T('Nothing here.'))])); if (atEnd) box.scrollTop = box.scrollHeight; } catch (e) { box.replaceChildren(el('div', { class: 'small muted' }, e.message)); } };
-  const lv = el('div', { class: 'seg seg-mini' }, ...[['all', 'Everything'], ['problems', 'Problems'], ['error', 'Errors']].map(([v, l]) => el('button', { class: v === level ? 'on' : null, onclick: (e) => { level = v; [...lv.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); load(); } }, l)));
+  const lv = el('div', { class: 'seg seg-mini' }, ...[['all', 'Everything'], ['problems', 'Problems'], ['error', 'Errors']].map(([v, l]) => el('button', { class: v === level ? 'on' : null, onclick: (e) => { level = v; [...lv.children].forEach((b) => b.classList.toggle('on', b === e.currentTarget)); load(); } }, T(l))));
   const search = el('input', { type: 'search', placeholder: T('Search the log'), style: 'max-width:240px', oninput: (e) => { q = e.target.value; clearTimeout(timer); timer = setTimeout(load, 250); } });
   const card = el('div', { class: 'card wide' }, el('h2', {}, icon('log', 15), T('Log')), el('p', { class: 'small muted', style: 'margin-top:0' }, T('What CasaTorch has been doing - the last 600 lines, newest at the bottom. Passwords, keys and tokens are masked.')),
     el('div', { class: 'row wrap', style: 'gap:8px;margin-bottom:8px' }, lv, search, el('button', { class: 'btn small', onclick: load }, icon('reset', 14), T('Refresh')), el('a', { class: 'btn small', href: '/api/system/diagnostics', download: '' }, icon('download', 14), T('Diagnostics file'))), box,
@@ -174,7 +174,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
 
   const c = s.connected || {}, yes = (v) => (v ? (typeof v === 'number' ? `${v}` : T('Connected')) : '-');
   const conn = el('div', { class: 'card' }, el('h2', {}, T('Connected')), el('dl', { class: 'kv' },
-    [['Home Assistant', c.homeAssistant], ['Philips Hue', c.hue], ['Shelly devices', c.shelly], ['Cameras', c.cameras], ['YoLink', c.yolink], ['Ring', c.ring]].flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, yes(v))]),
+    [['Home Assistant', c.homeAssistant], ['Philips Hue', c.hue], ['Shelly devices', c.shelly], ['Cameras', c.cameras], ['YoLink', c.yolink], ['Ring', c.ring]].flatMap(([k, v]) => [el('dt', {}, T(k)), el('dd', {}, yes(v))]),
     el('dt', {}, T('Weather for')), el('dd', {}, s.location?.name || '-'), el('dt', {}, T('Calendars')), el('dd', {}, [...(s.calendars || []), 'CasaTorch calendar'].join(', ')), el('dt', {}, T('Teams')), el('dd', {}, s.teams?.join(', ') || '-'), el('dt', {}, T('News')), el('dd', {}, s.feeds?.join(', ') || '-')));
 
   const pw = el('input', { type: 'password', placeholder: T('Your CasaTorch password'), autocomplete: 'current-password' });

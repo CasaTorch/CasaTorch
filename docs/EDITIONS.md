@@ -52,7 +52,7 @@ list, casatorch.com and the README follow this table.
 | **Server monitor**: NAS, servers and self-hosted apps, certificates, alerts | | ✓ | Now |
 | **Network monitoring**: UniFi, Cisco Meraki, Pi-hole, AdGuard Home, with alerts | | ✓ | Now |
 | **Cisco Meraki** MV camera pictures and MT sensor readings (through the Meraki network connection; MT water and temperature alerts keep working on Basic) | | ✓ | Now |
-| **Away from home**: secure remote access from your phone, no port forwarding | At home only | ✓ | Coming |
+| **Away from home**: secure remote access from your phone, no port forwarding | At home only | ✓ | Now |
 | CasaTorch apps for iPhone, iPad and Android | ✓ | ✓ | Coming |
 | Multiple homes in one app; extra panel layouts and theme packs; cloud backup | | ✓ | Coming |
 | E-mail help | ✓ | ✓ | Now |

@@ -248,7 +248,7 @@ const GUIDES = {
   async remote() {
     if (!config.remote?.on) return { steps: [step('info', 'Secure access', 'Secure access is off.', { fix: { label: 'Open Connections', href: '#settings/connections' } })] };
     const out = [fromCheck('Secure access', await docRemote().catch(() => null))].filter(Boolean);
-    out.push(proStatus().pro ? step('ok', 'Away from home', 'With Pro, the secure address works from anywhere. Secure access is in beta: still being finished.') : step('info', 'Away from home', 'On CasaTorch Basic the secure address works on your home Wi-Fi. Using it from anywhere is part of Pro.'));
+    out.push(proStatus().pro ? step('ok', 'Away from home', 'With Pro, the secure address works from anywhere.') : step('info', 'Away from home', 'On CasaTorch Basic the secure address works on your home Wi-Fi. Using it from anywhere is part of Pro.'));
     const n = typeof internetNow === 'function' ? await internetNow().catch(() => null) : null;
     if (n && !n.online) out.push(step('bad', 'Internet', 'The internet is down at home, so secure access can\'t work until it\'s back.'));
     return { steps: out };

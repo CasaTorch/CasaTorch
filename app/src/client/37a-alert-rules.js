@@ -193,7 +193,7 @@ async function alertRulesCards() {
       const [a, b] = q(spec === 'house' ? d.house.quietHours : spec);
       const from = el('input', { type: 'time', value: a || '22:00', 'aria-label': T('From') }), to = el('input', { type: 'time', value: b || '07:00', 'aria-label': T('To') });
       const ok = el('button', { class: 'btn small', onclick: () => onSave(`${from.value}-${to.value}`) }, T('Save'));
-      const box = el('span', { class: 'row', style: 'gap:6px' }, from, el('span', { class: 'muted' }, '–'), to, ok); box.hidden = !(spec !== 'house' && spec !== 'none');
+      const box = el('span', { class: 'row ar-qbox', style: 'gap:6px' }, from, el('span', { class: 'muted' }, '–'), to, ok); box.hidden = !(spec !== 'house' && spec !== 'none');   // .ar-qbox wraps in a narrow card: Save never runs off the edge
       return el('div', { class: 'row wrap', style: 'gap:8px' }, mode, box);
     };
     const mineQ = qEditor(d.mine.quietHours, (v) => arSaveScoped('mine', { quietHours: v }), true);

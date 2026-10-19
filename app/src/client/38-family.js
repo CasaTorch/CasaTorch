@@ -180,7 +180,7 @@ const famDel = async (url) => { try { await api(url, { method: 'DELETE' }); WCAC
 const famPerson = (d, id) => d?.people?.find((p) => p.id === id) || null;
 const famAvatar = (p, size = '') => el('span', { class: `fam-av ${size}`, style: `background:${safeColor(p?.color, '#94a3b8')}`, 'aria-hidden': 'true' }, p ? String(p.name || '?').trim().charAt(0).toUpperCase() : icon('user', 16));
 const famStarsEl = (n) => el('span', { class: 'fam-stars', title: T('{n} stars this week', { n }) }, icon('star'), String(n || 0));
-const famDayName = (ymd, o = { weekday: 'long' }) => dtf('en-US', { timeZone: 'UTC', ...o }).format(new Date(`${ymd}T12:00:00Z`));
+const famDayName = (ymd, o = { weekday: 'long' }) => dtf(dateLoc(), { timeZone: 'UTC', ...o }).format(new Date(`${ymd}T12:00:00Z`));
 const famAddDays = (ymd, n) => new Date(Date.parse(`${ymd}T12:00:00Z`) + n * 86400_000).toISOString().slice(0, 10);
 const famRepeatWords = (c) => (c.repeat === 'weekly' ? T('Once a week') : c.repeat === 'days' ? (c.days || []).map((d) => famDayName(famAddDays('2026-10-18', d), { weekday: 'short' })).join(' ') : T('Every day'));
 const famEditingOn = () => document.body.classList.contains('editing-on');
@@ -448,7 +448,7 @@ for (const [k, ic, title, blurb, view] of FAM_VIEWS) {
 }
 tab({ id: 'family', label: 'Family', icon: 'star', after: 'reminders', async render(main, sub) {
   const refresh = await pageGrid(main, { page: 'family', auto: true, title: tabLabel({ id: 'family', label: T('Family') }), sub: T('Lists, chores, routines and meals'), load: () => famLoad(true),
-    actions: [el('a', { class: 'btn', href: '#settings/family' }, icon('gear', 14), el('span', { class: 'hide-phone' }, T('Family settings')))], addLabel: 'Add a tile' });
+    actions: [el('a', { class: 'btn', href: '#settings/family' }, icon('gear', 14), el('span', { class: 'hide-phone' }, T('Family settings')))] });
   if (FAM_VIEWS.some(([k]) => k === sub)) requestAnimationFrame(() => main.querySelector(`.tile[data-id^="fam-${sub}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
   // not while someone is typing into a list or has a row open
   return refresh && (async () => { if (main.querySelector('.fam-row.reveal, .fam-add input:focus') || document.activeElement?.closest?.('.fam-add')) return; await refresh(); });

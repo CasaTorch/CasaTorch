@@ -31,7 +31,8 @@ const NW_SEV = { bad: 3, warn: 2, idle: 1, good: 0 };
 const nwPut = (b, ...k) => b.replaceChildren(...k.flat().filter((x) => x != null && x !== false && x !== ''));
 const nwTier = (size) => size?.tier || sizeTier(size || {});
 const nwAt = (size, t) => TIER_RANK[nwTier(size)] >= TIER_RANK[t];
-const nwN = (v) => (v == null ? '-' : new Intl.NumberFormat(dateLoc()).format(v));
+const NW_NF = new Map();   // one number format per language (making one costs more than using it)
+const nwN = (v) => { if (v == null) return '-'; const l = dateLoc(); let f = NW_NF.get(l); if (!f) NW_NF.set(l, (f = new Intl.NumberFormat(l))); return f.format(v); };
 const nwGB = (kb) => (kb == null ? '-' : kb >= 1e6 ? `${(kb / 1e6).toFixed(kb >= 1e7 ? 0 : 1)} GB` : kb >= 1e3 ? `${Math.round(kb / 1e3)} MB` : `${Math.round(kb)} KB`);
 const nwPct = (v) => (v == null ? '-' : `${Math.round(v * 10) / 10}%`);
 const nwStat = (label, value, sub, cls = '') => el('div', { class: `en-stat ${cls}` }, el('div', { class: 'en-lbl' }, label), el('div', { class: 'en-val' }, value), sub ? el('div', { class: 'en-sub' }, sub) : null);
@@ -85,7 +86,9 @@ pageTile({ id: 'net-speed', page: 'network', title: 'Speed', icon: 'gauge', blur
   const btn = el('button', { class: 'btn small', disabled: !S.me?.user || ['member', 'admin', 'owner'].includes(S.me?.user?.role) ? null : true }, icon('bolt', 14), T('Run a speed test'));
   btn.onclick = async () => { btn.disabled = true; btn.lastChild.textContent = T('Testing (about 20 s)...'); try { await post('/api/internet/speedtest'); toast(T('Speed test done')); ctx.refresh?.(); } catch (err) { toast(err.message); btn.disabled = false; } };
   if (!s?.downMbps) return nwPut(b, el('div', { class: 'pg-empty-state' }, el('div', { class: 'small muted' }, s?.error ? T('The last test didn\'t work: {error}', { error: s.error }) : T('No test yet. CasaTorch tests every 4 hours.')), btn));
-  const kp = el('div', { class: 'nw-speed' }, nwStat(T('Download'), el('span', {}, Math.round(s.downMbps), el('small', {}, ' Mbps'))), nwStat(T('Upload'), el('span', {}, Math.round(s.upMbps), el('small', {}, ' Mbps'))));
+  const narrow = size.w < 3 && size.h < 3;   // a small tile (a phone's half width): upload goes under download
+  const kp = narrow ? el('div', { class: 'nw-speed' }, nwStat(T('Download'), el('span', {}, Math.round(s.downMbps), el('small', {}, ' Mbps')), `${T('Upload')} ${Math.round(s.upMbps)} Mbps`))
+    : el('div', { class: 'nw-speed' }, nwStat(T('Download'), el('span', {}, Math.round(s.downMbps), el('small', {}, ' Mbps'))), nwStat(T('Upload'), el('span', {}, Math.round(s.upMbps), el('small', {}, ' Mbps'))));
   const chart = hist.length >= 3 && (nwAt(size, 'm') || size.h >= 3) && size.h >= 3 ? el('div', { class: 'nw-speed-chart' }, pgSpark(hist.map((x) => x[1]), { w: 300, h: size.h >= 4 ? 60 : 36, cls: 'en-grid-c', label: T('Download speed, the last {n} tests', { n: hist.length }) }), el('div', { class: 'en-axis' }, el('span', {}, T('{n} tests', { n: hist.length })), el('span', {}, T('now')))) : null;
   nwPut(b, kp, chart, el('div', { class: 'row between wrap nw-foot', style: 'gap:8px' }, el('span', { class: 'tiny muted' }, T('Tested {when}', { when: fmtWhen(s.at) })), size.h >= 2 && size.w >= 3 ? btn : null));
 } });
@@ -350,8 +353,8 @@ pageTile({ id: 'net-dns', page: 'network', title: 'DNS filter', icon: 'shield', 
   if (!list.length) return nwPut(b, nw.pro ? el('div', { class: 'pg-empty-state' }, el('div', { class: 'small muted' }, T('Connect Pi-hole or AdGuard Home to see how much it blocks.')), nwAdmin() ? el('button', { class: 'btn small', onclick: () => netConnect(nw, () => ctx.refresh?.(), 'pihole') }, icon('plus', 14), T('Connect')) : null)
     : el('div', { class: 'en-lock' }, el('span', { class: 'pill pro' }, 'Pro'), el('div', { class: 'small muted' }, T('Pi-hole or AdGuard Home: look-ups and how much is blocked.')), el('a', { class: 'btn small', href: '#settings/pro' }, T('Unlock with Pro'))));
   nwPut(b, list.slice(0, size.h >= 4 ? 3 : 1).map((x) => { const s = x.summary || {}, pct = s.percentBlocked;
-    return el('div', { class: 'nw-dns' }, nwRing([['accent', s.blocked || 0], ['idle', Math.max(0, (s.queries || 0) - (s.blocked || 0))]], '', T('{n}% blocked', { n: pct ?? 0 })),
-      el('div', { class: 'grow', style: 'min-width:0' }, el('div', { class: 'row', style: 'gap:8px' }, el('b', { class: 'ellipsis' }, x.name), x.ok === false ? nwPill('bad', T('Can\'t reach')) : s.protection === false ? nwPill('warn', T('Blocking off')) : nwPill('good', T('Blocking on'))),
+    return el('div', { class: 'nw-dns' }, size.w < 3 ? null : nwRing([['accent', s.blocked || 0], ['idle', Math.max(0, (s.queries || 0) - (s.blocked || 0))]], '', T('{n}% blocked', { n: pct ?? 0 })),
+      el('div', { class: 'grow', style: 'min-width:0' }, el('div', { class: 'row wrap', style: 'gap:4px 8px' }, el('b', { class: 'ellipsis' }, x.name), x.ok === false ? nwPill('bad', T('Can\'t reach')) : s.protection === false ? nwPill('warn', T('Blocking off')) : nwPill('good', T('Blocking on'))),
         el('div', { class: 'en-val sm' }, pct != null ? `${pct}%` : '-', el('span', { class: 'tiny muted', style: 'font-weight:400' }, ` ${T('blocked')}`)),
         el('div', { class: 'tiny muted' }, [T('{n} look-ups', { n: nwN(s.queries) }), s.clients != null ? T('{n} clients', { n: nwN(s.clients) }) : null].filter(Boolean).join(' · ')))); }));
 } });

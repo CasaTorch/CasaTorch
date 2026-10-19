@@ -324,6 +324,7 @@ const voiceGate = (scope) => (req, res, next) => {
   if (!t.scopes.includes(scope)) return voiceSay(req, res, 403, scope === 'do' ? 'This phone may ask questions, but not switch things.' : 'This phone may switch things, but not ask questions.');
   const u = t.userId && typeof userById === 'function' ? userById(t.userId) : null;
   if (signInOn() && !u) return voiceSay(req, res, 401, t.userId ? 'The person who made this token isn\'t on this CasaTorch any more.' : 'Sign-in was turned on after this token was made. Make a new token in Settings, Voice assistants.');
+  if (signInOn() && u && scope === 'do' && rank(u.role) < rank('member')) return voiceSay(req, res, 403, 'The person who made this token may not switch things any more.');   // made by an admin who is now a viewer
   if (!proStatus().pro) return voiceSay(req, res, 402, 'Voice assistants are part of CasaTorch Pro.');
   const per = (VOICE_RATE.get(t.id) || []).filter((x) => now - x < 60_000); if (per.length >= 15) return voiceSay(req, res, 429, 'That\'s a lot of questions - wait a minute.');
   per.push(now); VOICE_RATE.set(t.id, per);

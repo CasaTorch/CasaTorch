@@ -17,7 +17,7 @@ async function call(url, body) {
   return j;
 }
 const view = $('#view');
-const show = (...kids) => { view.replaceChildren(...kids.flat().filter(Boolean)); const f = view.querySelector('input:not([type=checkbox])'); if (f) setTimeout(() => f.focus(), 30); };
+const show = (...kids) => { view.replaceChildren(...kids.flat().filter(Boolean)); const f = view.querySelector('input:not([type=checkbox])'); if (f && !view.contains(document.activeElement)) f.focus(); };   // at once, and never away from a field already being typed in (a late focus moved fast typing or a password manager's fill into the wrong field)
 const back = () => el('p', { class: 'sub', style: 'margin:16px 0 0;font-size:13px' }, el('a', { href: '/login.html' }, T('Back to sign in')));
 const WHERE = {
   addon: ['In Home Assistant: Settings › Add-ons › CasaTorch › Log.', 'It\'s also in the file owner-reset-code in the add-on\'s data folder.'],

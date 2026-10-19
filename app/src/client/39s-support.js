@@ -40,7 +40,7 @@ const SUP_GUIDES = [
   ['ha', 'home', 'Home Assistant stopped working'],
   ['cameras', 'camera', 'Cameras aren\'t showing'],
   ['slow3d', 'cube', 'The 3D home is slow on a tablet', true],
-  ['remote', 'lock', 'Secure access (beta) isn\'t working'],
+  ['remote', 'lock', 'Secure access isn\'t working'],
   ['locked', 'user', 'Forgot a password or locked out'],
   ['alerts', 'bell', 'Alerts don\'t reach my phone'],
   ['tablet', 'phone', 'The wall tablet goes to sleep', true],

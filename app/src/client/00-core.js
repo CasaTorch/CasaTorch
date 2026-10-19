@@ -263,6 +263,8 @@ const DTF = new Map();
 const dtf = (loc, o) => { const k = `${loc}|${JSON.stringify(o)}`; let f = DTF.get(k); if (!f) { if (DTF.size > 300) DTF.clear(); f = new Intl.DateTimeFormat(loc, o); DTF.set(k, f); } return f; };
 /* Dates and times read the way the home's language writes them (English: US style). */
 const dateLoc = () => { const l = window.CasaI18n?.lang || 'en'; return l === 'en' ? 'en-US' : l === 'zh' ? 'zh-CN' : l; };
+/** The day of the week in the home's language: 0 = Sunday ... 6 = Saturday ('short' Sun, or 'long' Sunday). */
+const dowShort = (i, weekday = 'short') => dtf(dateLoc(), { weekday, timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 9, 18 + i, 12)));
 const fmt = (iso, o) => (iso ? dtf(dateLoc(), { timeZone: S.tz, ...o }).format(new Date(iso)) : '');
 const fmtTime = (iso) => fmt(iso, { hour: 'numeric', minute: '2-digit' });
 const dayKey = (iso, tz = S.tz) => dtf('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
@@ -405,18 +407,24 @@ function moreSheet(rest) {
 }
 let navT = null; addEventListener('resize', () => { clearTimeout(navT); navT = setTimeout(drawNav, 150); });
 /* A side bar with more buttons than fit fades at the bottom, so it's clear it scrolls. */
+const navMore = () => { const n = $('.nav'); if (n) n.classList.toggle('more-below', n.scrollHeight - n.scrollTop - n.clientHeight > 4); };
+let navFitKey = '';
 const navFade = () => {
   const n = $('.nav'); if (!n) return;
-  n.classList.toggle('more-below', n.scrollHeight - n.scrollTop - n.clientHeight > 4);
-  // a long word ("Erinnerungen") gets a slightly smaller size instead of being cut off
-  for (const l of n.querySelectorAll('.nl')) {
-    l.style.fontSize = ''; const a = l.parentElement, cs = getComputedStyle(a), room = a.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  navMore();
+  // a long word ("Erinnerungen") gets a slightly smaller size instead of being cut off - measured once per set of
+  // labels and width (all writes, then all reads: one layout, not one per label)
+  const ls = [...n.querySelectorAll('.nl')], key = `${n.clientWidth}|${ls.map((l) => l.textContent).join('|')}`;
+  if (key === navFitKey) return; navFitKey = key;
+  for (const l of ls) l.style.fontSize = '';
+  const fit = ls.map((l) => { const a = l.parentElement, cs = getComputedStyle(a), r = document.createRange(); r.selectNodeContents(l); return [l, a.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight), r, parseFloat(getComputedStyle(l).fontSize)]; });
+  for (const [l, room, r, px0] of fit) {
     if (!(room > 0)) continue;
-    const r = document.createRange(); r.selectNodeContents(l);
-    for (let px = parseFloat(getComputedStyle(l).fontSize), i = 0; r.getBoundingClientRect().width > room && i < 4; i++) l.style.fontSize = `${(px -= 0.75)}px`;
+    const w = r.getBoundingClientRect().width; if (w <= room) continue;
+    l.style.fontSize = `${Math.max(px0 - 3, Math.floor(px0 * room / w * 4) / 4)}px`;   // at most 3 px smaller, like the four 0.75 px steps before
   }
 };
-document.addEventListener('DOMContentLoaded', () => { $('.nav')?.addEventListener('scroll', navFade, { passive: true }); new ResizeObserver(navFade).observe($('.nav')); });
+document.addEventListener('DOMContentLoaded', () => { $('.nav')?.addEventListener('scroll', navMore, { passive: true }); new ResizeObserver(navFade).observe($('.nav')); document.fonts?.ready.then(() => { navFitKey = ''; navFade(); }); });
 function drawBanner() {
   const b = $('#banner'), s = S.status; if (!s) return;
   const p = s.pro || {}; b.className = ''; b.replaceChildren();
