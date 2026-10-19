@@ -447,7 +447,12 @@ async function boot() {
   // (Home asks again a moment later and gets these same answers)
   if (/^#?(home)?$/.test(location.hash)) {
     const sid = typeof screenId === 'function' ? screenId() : '';
-    for (const u of ['/api/home', '/api/devices', '/api/auth/me', `/api/layout${sid ? `?screen=${sid}` : ''}`]) api(u, { global: true }).catch(() => {});
+    for (const u of ['/api/home', '/api/devices', '/api/auth/me']) api(u, { global: true }).catch(() => {});
+    // Home's grid (06-pagegrid.js) reads /api/page-layout/home with this screen's form - the same address, so it's answered from here;
+    // the older /api/layout only if that one can't be asked (an older box)
+    const old = `/api/layout${sid ? `?screen=${sid}` : ''}`;
+    if (typeof screenForm === 'function') api(`/api/page-layout/home?form=${screenForm()}${sid ? `&screen=${sid}` : ''}`, { global: true }).catch(() => api(old, { global: true }).catch(() => {}));
+    else api(old, { global: true }).catch(() => {});
   }
   try { S.settings = await api('/api/settings', { global: true }); S.tz = S.settings.house?.timezone || undefined; } catch { /* default zone */ }
   const [ui] = await Promise.all([pUi, S.settings && !S.settings.demo ? CasaI18n.use(S.settings.house?.lang || 'en') : null]);   // the demo keeps whatever this browser picked

@@ -316,7 +316,7 @@ function hhRemind(id, item, push) {
   const now = Date.now();
   hh.st.active = hh.st.active.filter((a) => a.id !== id);
   hh.st.active.push({ id, at: new Date(now).toISOString(), until: new Date(now + HH_SHOW_MIN * 60_000).toISOString(), ...item });
-  if (push && proStatus().pro && typeof nudgePush === 'function') nudgePush({ id, title: item.title, time: hhLocal(now, houseTz()).time, sound: item.sound || 'chime' }).catch(() => {});
+  if (push && proStatus().pro && typeof nudgePush === 'function') nudgePush({ id, title: item.title, time: hhLocal(now, houseTz()).time, sound: item.sound || 'chime' }, { kind: 'household' }).catch(() => {});   // through Settings › Alerts (40r-alert-rules.js)
   hhChanged();
 }
 const hhClear = (id) => { const n = hh.st.active.length; hh.st.active = hh.st.active.filter((a) => a.id !== id && !a.id.startsWith(`${id}:`)); if (n !== hh.st.active.length) hhChanged(); };

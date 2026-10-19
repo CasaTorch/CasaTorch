@@ -87,13 +87,15 @@ function askActions(list, byId) {
   return out;
 }
 /* Sources: web pages (titles and http(s) links) and where in the home a fact came from. */
+const ASK_CC_BY_SA = 'https://creativecommons.org/licenses/by-sa/4.0/';
 function askSources(list) {
   const seen = new Set(), out = [];
   for (const s of Array.isArray(list) ? list : []) {
     const url = askUrl(s?.url); if (!url) continue;
     const key = url.replace(/[#?].*$/, '').replace(/\/$/, ''); if (seen.has(key)) continue; seen.add(key);
     let host = ''; try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { /* checked above */ }
-    out.push({ title: askStr(s.title, 120) || host, url, site: host });
+    // Wikipedia text is CC BY-SA 4.0: its excerpts are labeled with the license and a link to it.
+    out.push({ title: askStr(s.title, 120) || host, url, site: host, ...(/(^|\.)wikipedia\.org$/i.test(host) ? { license: 'Wikipedia (CC BY-SA)', licenseUrl: ASK_CC_BY_SA } : {}) });
     if (out.length >= 8) break;
   }
   return out;

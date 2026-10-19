@@ -55,36 +55,48 @@ function proUpsell(text) { return el('a', { class: 'proup', href: '#settings', t
 /* Who's looking (members and up add and change nudges; viewers see them). */
 let nudgeMe = null;
 const nudgeRole = async () => { nudgeMe ||= await api('/api/auth/me').catch(() => ({})); return nudgeMe?.signIn === false || !nudgeMe?.user ? 'owner' : nudgeMe.user.role; };
-/* Reminders: their own page (they used to sit on Alerts, as "Nudges"). */
-tab({ id: 'reminders', label: 'Reminders', icon: 'alarm', after: 'calendar', async render(main) {
-  setTop(T('Reminders'), T('Trash night, the dog\'s dinner, bills, medicine, birthdays - on every screen, at the right time'));
-  const draw = () => main.replaceChildren(el('div', { class: 'cards' }, nudgesCard(draw)));
-  draw(); return draw;
-} });
-function nudgesCard(redraw) {
-  const card = el('div', { class: 'card nudges', style: 'grid-column:1/-1' });
-  (async () => {
-    const [d, role] = await Promise.all([api('/api/nudges').catch(() => null), nudgeRole()]);
-    if (!d) { card.remove(); return; }
-    const canEdit = !d.demo && role !== 'viewer';
-    const add = canEdit ? el('button', { class: 'btn small primary', onclick: () => nudgeEditor(null, d, redraw) }, icon('plus'), T('Add a reminder')) : null;
-    // the page title says what this is; the Add button sits at the top, like New event on Calendar
-    if (add && current === 'reminders') setTop(T('Reminders'), T('Trash night, the dog\'s dinner, bills, medicine, birthdays - on every screen, at the right time'), [add]);
-    const head = d.demo ? el('p', { class: 'small muted', style: 'margin:0 0 12px' }, T('This is the demo, so you can look at reminders but not change them.')) : el('span', { hidden: true });
-    if (!d.list.length) {
-      const ideas = [[T('Trash night'), 'trash', 'weekly', [2], '19:30'], [T('Feed the dog'), 'paw', 'daily', [], '17:30'], [T('Take medicine'), 'pill', 'daily', [], '08:00'], [T('Rent is due'), 'bill', 'monthly', [], '09:00']];
-      card.replaceChildren(head, el('div', { class: 'row wrap', style: 'gap:8px' }, el('span', { class: 'small muted' }, T('Ideas:')), ideas.map(([title, ic, repeat, days, time]) => el('button', { class: 'btn small', disabled: canEdit ? null : true, onclick: () => nudgeEditor({ title, icon: ic, repeat, days, time, date: new Date().toISOString().slice(0, 10), flash: true, push: d.pro }, d, redraw, true) }, icon(ic), title))));
-    } else {
-      const today = new Set(d.today || []);
-      card.replaceChildren(head, el('div', { class: 'nudgelist' }, d.list.map((n) => el('button', { class: `nudgerow${n.on ? '' : ' off'}`, disabled: canEdit ? null : true, onclick: () => nudgeEditor(n, d, redraw) },
-        nudgePic(n, 'sm'), el('div', { class: 'grow', style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, n.title), el('span', { class: 'small muted' }, n.on ? nudgeWhen(n) : T('Off'))),
-        today.has(n.id) && n.on ? el('span', { class: 'pill good' }, T('Today')) : null,
-        n.push ? el('span', { class: 'tiny muted', title: T('Sent to phones') }, icon('send')) : null))));
-    }
-    if (!d.pro) card.append(el('div', { style: 'margin-top:12px' }, proUpsell(T('Send reminders to everyone\'s phone, wherever they are'))));
-  })();
-  return card;
+/* Reminders: their own page of tiles (06-pagegrid.js; they used to sit on Alerts, as "Nudges"): every reminder,
+   today's, and which go to phones. Edit arranges, adds, removes and resizes them, like every other page. */
+const REM_SUB = () => T('Trash night, the dog\'s dinner, bills, medicine, birthdays - on every screen, at the right time');
+/** The list of reminders (or ideas to start from) into box. d: /api/nudges; redraw: after a change. */
+function nudgesFill(box, d, role, redraw) {
+  if (!d) return box.replaceChildren(pgEmpty(T('Reminders are not loading right now.'), null, null));
+  const canEdit = !d.demo && role !== 'viewer';
+  const head = d.demo ? el('p', { class: 'small muted', style: 'margin:0 0 12px' }, T('This is the demo, so you can look at reminders but not change them.')) : el('span', { hidden: true });
+  if (!d.list.length) {
+    const ideas = [[T('Trash night'), 'trash', 'weekly', [2], '19:30'], [T('Feed the dog'), 'paw', 'daily', [], '17:30'], [T('Take medicine'), 'pill', 'daily', [], '08:00'], [T('Rent is due'), 'bill', 'monthly', [], '09:00']];
+    box.replaceChildren(head, el('div', { class: 'row wrap', style: 'gap:8px' }, el('span', { class: 'small muted' }, T('Ideas:')), ideas.map(([title, ic, repeat, days, time]) => el('button', { class: 'btn small', disabled: canEdit ? null : true, onclick: () => nudgeEditor({ title, icon: ic, repeat, days, time, date: new Date().toISOString().slice(0, 10), flash: true, push: d.pro }, d, redraw, true) }, icon(ic), title))));
+  } else {
+    const today = new Set(d.today || []);
+    box.replaceChildren(head, el('div', { class: 'nudgelist' }, d.list.map((n) => el('button', { class: `nudgerow${n.on ? '' : ' off'}`, disabled: canEdit ? null : true, onclick: () => nudgeEditor(n, d, redraw) },
+      nudgePic(n, 'sm'), el('div', { class: 'grow', style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, n.title), el('span', { class: 'small muted' }, n.on ? nudgeWhen(n) : T('Off'))),
+      today.has(n.id) && n.on ? el('span', { class: 'pill good' }, T('Today')) : null,
+      n.push ? el('span', { class: 'tiny muted', title: T('Sent to phones') }, icon('send')) : null))));
+  }
 }
+pageTile({ id: 'rem-list', page: 'reminders', auto: true, title: 'Your reminders', icon: 'alarm', blurb: 'Every reminder - tap one to change it', size: [12, 1],
+  render(b, ctx) { nudgesFill(b, ctx.data.nudges, ctx.data.role, () => ctx.refresh()); } });
+pageTile({ id: 'rem-today', page: 'reminders', auto: true, title: 'Today', icon: 'clock', blurb: 'Today\'s reminders, in order', size: [6, 1], render(b, ctx) {
+  const d = ctx.data.nudges, today = new Set(d?.today || []), list = (d?.list || []).filter((n) => n.on && today.has(n.id)).sort((a, x) => a.time.localeCompare(x.time));
+  const now = new Date(), hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  b.replaceChildren(list.length ? el('div', { class: 'nudgelist' }, list.map((n) => el('div', { class: `nudgerow${n.time < hhmm ? ' off' : ''}`, style: 'cursor:default' }, nudgePic(n, 'sm'),
+    el('div', { class: 'grow', style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, n.title), el('span', { class: 'small muted' }, hm(n.time))), n.push ? el('span', { class: 'tiny muted', title: T('Sent to phones') }, icon('send')) : null)))
+    : el('p', { class: 'small muted', style: 'margin:0' }, T('No reminders today.')));
+} });
+pageTile({ id: 'rem-phones', page: 'reminders', auto: true, title: 'On your phones', icon: 'phone', blurb: 'Which reminders reach phones, and how', size: [6, 1], render(b, ctx) {
+  const d = ctx.data.nudges; if (!d) return b.replaceChildren();
+  if (!d.pro) return b.replaceChildren(proUpsell(T('Send reminders to everyone\'s phone, wherever they are')));
+  const n = d.list.filter((x) => x.push && x.on).length;
+  b.replaceChildren(el('p', { class: 'small', style: 'margin:0 0 10px' }, !d.phones ? T('No phones have CasaTorch alerts on yet - turn them on in Settings › Phones & alerts.') : n ? T(n === 1 ? '1 reminder goes to phones.' : '{n} reminders go to phones.', { n }) : T('None of your reminders go to phones yet.')),
+    el('div', { class: 'row wrap', style: 'gap:8px' }, el('a', { class: 'btn small', href: '#settings/alerts' }, icon('sliders', 14), T('Fine-tune in Settings › Alerts')), el('a', { class: 'btn small ghost', href: '#settings/phones' }, icon('phone', 14), T('Phones & alerts'))));
+} });
+tab({ id: 'reminders', label: 'Reminders', icon: 'alarm', after: 'calendar', async render(main) {
+  let refresh = null;
+  const add = el('button', { class: 'btn', hidden: true, onclick: () => { const d = pageCtx(main)?.data?.nudges; if (d) nudgeEditor(null, d, () => refresh?.()); } }, icon('plus'), el('span', { class: 'hide-phone' }, T('Add a reminder')));
+  const load = async () => { const [nudges, role] = await Promise.all([api('/api/nudges').catch(() => null), nudgeRole()]); add.hidden = !(nudges && !nudges.demo && role !== 'viewer'); return { nudges, role }; };
+  refresh = await pageGrid(main, { page: 'reminders', auto: true, title: tabLabel({ id: 'reminders', label: T('Reminders') }), sub: REM_SUB(), load, actions: [add], addLabel: 'Add a tile' });
+  return refresh;
+} });
 function nudgeEditor(n, d, redraw, fresh = false) {
   const isNew = !n?.id;
   const v = { title: n?.title || '', icon: n?.icon || 'bell', sound: n ? n.sound || 'none' : 'chime', time: n?.time || '18:00', repeat: n?.repeat || 'weekly', days: [...(n?.days || [])], date: n?.date || new Date().toISOString().slice(0, 10), flash: n?.flash !== false, push: d.pro ? (isNew ? true : !!n?.push) : false, on: n?.on !== false };
@@ -116,7 +128,8 @@ function nudgeEditor(n, d, redraw, fresh = false) {
       days, date, soundRow,
       el('label', { class: 'check' }, flash, el('span', {}, el('b', {}, T('Show it on every screen')), el('span', { class: 'small muted', style: 'display:block' }, T('A card lights up on every CasaTorch screen until someone taps Done.')))),
       el('label', { class: `check${d.pro ? '' : ' locked'}` }, push, el('span', {}, el('b', {}, T('Send it to phones ')), d.pro ? null : el('span', { class: 'pill pro' }, 'Pro'),
-        el('span', { class: 'small muted', style: 'display:block' }, d.pro ? (d.phones ? T('To every phone with CasaTorch alerts on, wherever it is - even in quiet hours.') : T('No phones have CasaTorch alerts on yet - turn them on in Settings › Phones & alerts.')) : T('Reach everyone\'s phone wherever they are, even in quiet hours.')))),
+        el('span', { class: 'small muted', style: 'display:block' }, d.pro ? (d.phones ? T('To every phone with CasaTorch alerts on, wherever it is - even in quiet hours.') : T('No phones have CasaTorch alerts on yet - turn them on in Settings › Phones & alerts.')) : T('Reach everyone\'s phone wherever they are, even in quiet hours.')),
+        d.pro && d.phones ? el('a', { class: 'small', href: '#settings/alerts', onclick: () => $('#modal')?.remove() }, T('Fine-tune in Settings › Alerts')) : null)),
       d.pro ? null : proUpsell(T('Get reminders on your phone with CasaTorch Pro')),
       isNew ? null : el('label', { class: 'check' }, on, el('span', {}, el('b', {}, T('On')))),
       msg].filter(Boolean));

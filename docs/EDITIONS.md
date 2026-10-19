@@ -30,7 +30,7 @@ list, casatorch.com and the README follow this table.
 | Rain radar (RainViewer, or the US National Weather Service) and your own weather station | ✓ | ✓ | Now |
 | Reminders on every screen, with icons, sounds or your photos | ✓ | ✓ | Now |
 | Household: bin day, mail, thirsty plants, washer, dryer and dishwasher | ✓ | ✓ | Now |
-| Family hub: shared lists, chores and stars, kids' routines, meal plan | ✓ | ✓ | Now |
+| Family board: shared lists, chores and stars, kids' routines, meal plan | ✓ | ✓ | Now |
 | Photo reel | ✓ | ✓ | Now |
 | **Reminders on phones**: your reminders and Household reminders sent to everyone's phone, anywhere, even in quiet hours | | ✓ | Now |
 | **Your home** | | | |

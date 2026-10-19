@@ -1000,7 +1000,7 @@ await (await import('./scan-unit.mjs')).default(t);   // photo-real scans and pl
 await (await import('./radar-unit.mjs')).default(t);   // the rain radar's tile proxy (radar-unit.mjs)
 await (await import('./live3d-unit.mjs')).default(t);   // the 3D home, live: tweens, glows, replay, rain rule (live3d-unit.mjs)
 await (await import('./floorplan-geom-unit.mjs')).default(t);   // the 3D home drawing's geometry (floorplan-geom-unit.mjs)
-await (await import('./family-unit.mjs')).default(t);   // the Family hub: chores, stars, lists, meals, outside sensors, chips, conditional widgets (family-unit.mjs)
+await (await import('./family-unit.mjs')).default(t);   // the Family board: chores, stars, lists, meals, outside sensors, chips, conditional widgets (family-unit.mjs)
 await (await import('./plan-net-unit.mjs')).default(t);   // 3D Home: plan backups and restore points, network on the plan, Wi-Fi estimate, voice (plan-net-unit.mjs)
 await (await import('./outdoor-unit.mjs')).default(t);
 await (await import('./floorplan-compat-unit.mjs')).default(t);   // the 3D home on older browsers: no newer JS/CSS without a fallback (floorplan-compat-unit.mjs)   // 3D home outside and furniture: polygons, pools, slopes, fences, models, saved items (outdoor-unit.mjs)
@@ -1015,7 +1015,8 @@ await (await import('./alert-rules-unit.mjs')).default(t);   // alert rules: the
 await (await import('./net-unit.mjs')).default(t);   // slow and flaky networks: time limits, retries, one request for many, last answers, the browser's copy; content-named files (net-unit.mjs)
 await (await import('./network-unit.mjs')).default(t);   // the Network page: polite Meraki client (pages, 429, retries), the model, the map, network tests (network-unit.mjs)
 await (await import('./themes-unit.mjs')).default(t);   // themes and backgrounds: WCAG contrast of every theme, safe accents, our own art, photo uploads checked and stripped of metadata (themes-unit.mjs)
-await (await import('./docs-links-unit.mjs')).default(t);   // every "Learn more" link points at a real docs page and section (docs-links-unit.mjs)
+await (await import('./docs-links-unit.mjs')).default(t);
+await (await import('./legal-unit.mjs')).default(t);   // legal round: own User-Agent, no browser retries, team logos opt-in, no feed mirrors, no Google Fonts (legal-unit.mjs)   // every "Learn more" link points at a real docs page and section (docs-links-unit.mjs)
 t('3D Home: a plan damaged at start comes back from the newest restore point (with a Health note), never over a plan that is there', () => {
   const PB = globalThis.__casatorchPlan, was = fsMod.existsSync(PB.FP_FILE) ? fsMod.readFileSync(PB.FP_FILE) : null;
   try {
@@ -1029,5 +1030,6 @@ t('3D Home: a plan damaged at start comes back from the newest restore point (wi
   } finally { if (was) fsMod.writeFileSync(PB.FP_FILE, was); }
 });
 await (await import('./sealed-unit.mjs')).default(t);   // sealed entry: passwords and keys sealed in the browser, opened only in the request; secrets kept sealed in memory (sealed-unit.mjs)
+await (await import('./voice-unit.mjs')).default(t);   // voice assistants: the safety rule, devices -> Matter, plain commands, voice tokens, the Matter bridge paired end to end (voice-unit.mjs)
 console.log(`\n${n} passed`);
 process.exit(0);

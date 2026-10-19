@@ -61,6 +61,17 @@ async function hhDo(url, body, okMsg) {
   catch (e) { toast(e.message); }
 }
 
+/* One bin: its color, when to put it out, and "It's out" on the evening before (the Home widget and the Household page). */
+function hhBinRow(x, w, canAct) {
+  const wn = hhWhen(x), small = w <= 2;
+  const act = (x.state === 'tonight' || x.state === 'today') && canAct
+    ? el('button', { class: `hh-outbtn${x.out ? ' done' : ''}`, 'aria-pressed': String(!!x.out), title: x.out ? T('Tap if it isn\'t out after all') : T('Tap when it\'s at the curb'), onclick: () => hhDo(`/api/household/bins/${encodeURIComponent(x.id)}/out`, { out: !x.out }, x.out ? null : T('Thanks - {bin} is out', { bin: x.name })) }, icon('check'), small ? null : x.out ? T('Out') : T('It\'s out'))
+    : x.out ? el('span', { class: 'pill good' }, icon('check', 12), T('Out')) : null;
+  return el('div', { class: `hh-row${wn.hot && !x.out ? ' hot' : ''}`, 'data-bin': x.id },
+    hhChip(x.icon, x.color, small ? 'xs' : 'sm'),
+    el('div', { class: 'grow' }, el('b', { class: 'ellipsis' }, x.name), el('span', { class: 'sub' }, (small ? [wn.pill || wn.sub] : [wn.pill, wn.pill && (act || wn.hot) && w < 5 ? '' : wn.sub, x.movedFrom ? T('moved') : '']).filter(Boolean).join(' · '))),
+    act || (wn.right && !small ? el('span', { class: 'small muted', style: 'flex:none' }, wn.right) : null));
+}
 widget({ id: 'household', title: 'Household', icon: 'trash', cat: 'home', multi: true, blurb: 'Bin night, the mail, thirsty plants and the laundry', keywords: 'trash garbage recycling bins pickup mail mailbox post plants water laundry washer dryer dishwasher chores', min: [2, 2], size: [4, 3],
   options: [{ key: 'parts', type: 'chips', label: 'Show', choices: [['bins', 'Bins'], ['mail', 'Mail'], ['plants', 'Plants'], ['laundry', 'Laundry']], help: 'Pick none for all of them.' }],
   async render(b, ctx, { w, h }) {
@@ -89,16 +100,7 @@ widget({ id: 'household', title: 'Household', icon: 'trash', cat: 'home', multi:
     while (lines > 0 && (bins0 ? 52 : 0) + lines * 34 + 8 > avail) lines--;
     chips.splice(lines * perLine);
     const room = Math.max(bins0 ? 1 : 0, Math.floor((avail - (lines ? lines * 34 + 8 : 0)) / 52));
-    const rows = bins.slice(0, room).map((x) => {
-      const wn = hhWhen(x), small = w <= 2;
-      const act = (x.state === 'tonight' || x.state === 'today') && canAct
-        ? el('button', { class: `hh-outbtn${x.out ? ' done' : ''}`, 'aria-pressed': String(!!x.out), title: x.out ? T('Tap if it isn\'t out after all') : T('Tap when it\'s at the curb'), onclick: () => hhDo(`/api/household/bins/${encodeURIComponent(x.id)}/out`, { out: !x.out }, x.out ? null : T('Thanks - {bin} is out', { bin: x.name })) }, icon('check'), small ? null : x.out ? T('Out') : T('It\'s out'))
-        : x.out ? el('span', { class: 'pill good' }, icon('check', 12), T('Out')) : null;
-      return el('div', { class: `hh-row${wn.hot && !x.out ? ' hot' : ''}`, 'data-bin': x.id },
-        hhChip(x.icon, x.color, small ? 'xs' : 'sm'),
-        el('div', { class: 'grow' }, el('b', { class: 'ellipsis' }, x.name), el('span', { class: 'sub' }, (small ? [wn.pill || wn.sub] : [wn.pill, wn.pill && (act || wn.hot) && w < 5 ? '' : wn.sub, x.movedFrom ? T('moved') : '']).filter(Boolean).join(' · '))),
-        act || (wn.right && !small ? el('span', { class: 'small muted', style: 'flex:none' }, wn.right) : null));
-    });
+    const rows = bins.slice(0, room).map((x) => hhBinRow(x, w, canAct));
     if (!rows.length && !chips.length) return b.replaceChildren(empty(T('Nothing to do around the house.')));
     b.replaceChildren(...[rows.length ? el('div', { class: 'hh-rows' }, rows) : null, chips.length ? el('div', { class: 'hh-chips', style: rows.length ? null : 'margin-top:0' }, chips) : null].filter(Boolean));
     // then, measured: while it doesn't fit, drop the last bin (keeping one) or the last chip
@@ -118,6 +120,44 @@ function hhPlantsSheet(d, canAct) {
       el('div', { class: 'grow' }, el('b', { class: 'ellipsis', style: 'display:block' }, p.name), el('span', { class: 'small muted' }, [p.moisture != null ? T('Soil {n}%', { n: p.moisture }) : null, p.offline ? T('Not answering') : p.watered ? T('Watered today') : p.thirsty ? T('Thirsty') : T('Fine')].filter(Boolean).join(' · ')))))),
     dry.length && canAct ? el('button', { class: 'btn primary', onclick: async () => { m.remove(); await hhDo('/api/household/plants/watered', {}, T('Watered')); } }, icon('drop'), T('I watered them')) : null), { title: T('Plants') });
 }
+
+/* ======================= the Household page =======================
+   A page of tiles (06-pagegrid.js), like every other page: the bins, the mail, the plants and the laundry, each a
+   tile Edit can move, resize or remove; the server suggests the ones this house has set up (60-layout.js). */
+const hhPageEmpty = () => pgEmpty(T('Bin night, the mail, plants and laundry - set them up once.'), '#settings/household', T('Set up'));
+pageTile({ id: 'hh-start', page: 'household', auto: true, title: 'Get started', icon: 'trash', blurb: 'Set up bins, the mail, plants and laundry', size: [12, 1], render(b) { b.replaceChildren(hhPageEmpty()); } });
+pageTile({ id: 'hh-bins', page: 'household', auto: true, title: 'Bins', icon: 'trash', blurb: 'Every bin and its next pickup - tap "It\'s out" the evening before', size: [6, 1], render(b, ctx) {
+  const d = ctx.data.hh, bins = (d?.bins || []).filter((x) => x.next || x.error);
+  b.replaceChildren(!d?.configured ? hhPageEmpty() : bins.length ? el('div', { class: 'hh-rows' }, bins.map((x) => hhBinRow(x, 6, ctx.data.canAct))) : pgEmpty(T('No bins set up yet.'), '#settings/household', T('Add a bin')));
+} });
+pageTile({ id: 'hh-mail', page: 'household', auto: true, title: 'Mail', icon: 'mailbox', blurb: 'Whether the mail is here', size: [6, 1], render(b, ctx) {
+  const m = ctx.data.hh?.mail;
+  if (!m) return b.replaceChildren(pgEmpty(T('Use a mailbox sensor to know when the mail is here.'), '#settings/household', T('Set up')));
+  b.replaceChildren(m.state === 'post'
+    ? el('div', { class: 'hh-row hot' }, hhChip('mailbox', '#2563eb'), el('div', { class: 'grow' }, el('b', {}, T('The mail is here')), m.at ? el('span', { class: 'sub' }, fmtTime(m.at)) : null),
+      ctx.data.canAct ? el('button', { class: 'hh-outbtn', onclick: () => hhDo('/api/household/mail/collected', {}, T('Mail collected')) }, icon('check'), T('Collected')) : null)
+    : el('div', { class: 'hh-row' }, hhChip('mailbox', '#6b7280'), el('div', { class: 'grow' }, el('b', {}, T('No mail')))));
+} });
+pageTile({ id: 'hh-plants', page: 'household', auto: true, title: 'Plants', icon: 'plant', blurb: 'Soil moisture, and which plants are thirsty', size: [6, 1], render(b, ctx) {
+  const list = ctx.data.hh?.plants || [];
+  if (!list.length) return b.replaceChildren(pgEmpty(T('Add plant sensors to know when they\'re thirsty.'), '#settings/household', T('Set up')));
+  const dry = list.filter((p) => p.thirsty && !p.watered);
+  b.replaceChildren(el('div', { class: 'hh-rows' }, list.map((p) => el('div', { class: `hh-row${p.thirsty && !p.watered ? ' hot' : ''}` }, hhChip('plant', p.thirsty && !p.watered ? '#ea580c' : '#16a34a'),
+    el('div', { class: 'grow' }, el('b', { class: 'ellipsis' }, p.name), el('span', { class: 'sub' }, [p.moisture != null ? T('Soil {n}%', { n: p.moisture }) : null, p.offline ? T('Not answering') : p.watered ? T('Watered today') : p.thirsty ? T('Thirsty') : T('Fine')].filter(Boolean).join(' · ')))))),
+    dry.length && ctx.data.canAct ? el('button', { class: 'btn small primary', style: 'margin-top:10px', onclick: () => hhDo('/api/household/plants/watered', {}, T('Watered')) }, icon('drop'), T('I watered them')) : null);
+} });
+pageTile({ id: 'hh-laundry', page: 'household', auto: true, title: 'Laundry', icon: 'washer', blurb: 'The washer, dryer and dishwasher', size: [6, 1], render(b, ctx) {
+  const list = ctx.data.hh?.laundry || [];
+  if (!list.length) return b.replaceChildren(pgEmpty(T('Add your washer, dryer or dishwasher to know when they\'re done.'), '#settings/household', T('Set up')));
+  b.replaceChildren(el('div', { class: 'hh-rows' }, list.map((a) => el('div', { class: `hh-row${a.phase === 'done' ? ' hot' : ''}` }, hhChip(a.kind, a.phase === 'running' ? '#2563eb' : '#6b7280'),
+    el('div', { class: 'grow' }, el('b', { class: 'ellipsis' }, T(a.name)), el('span', { class: 'sub' }, a.phase === 'running' ? (a.remainingMin != null ? T('{n} min left', { n: a.remainingMin }) : T('Running')) : a.phase === 'done' ? T('Done') : T('Idle'))),
+    a.phase === 'done' && ctx.data.canAct ? el('button', { class: 'hh-outbtn', onclick: () => hhDo(`/api/household/laundry/${encodeURIComponent(a.id)}/emptied`, {}, T('Emptied')) }, icon('check'), T('Emptied')) : null))));
+} });
+tab({ id: 'household', label: 'Household', icon: 'trash', after: 'family', async render(main) {
+  const load = async () => { WCACHE.delete('/api/household'); const [hh, canAct] = await Promise.all([wget('/api/household', 10_000).catch(() => null), hhRole()]); return { hh, canAct }; };
+  return pageGrid(main, { page: 'household', auto: true, title: tabLabel({ id: 'household', label: T('Household') }), sub: T('Bins, the mail, plants and laundry'), load,
+    actions: [el('a', { class: 'btn', href: '#settings/household' }, icon('gear', 14), el('span', { class: 'hide-phone' }, T('Household settings')))], addLabel: 'Add a tile' });
+} });
 
 /* ======================= Settings › Household ======================= */
 async function householdCards() {

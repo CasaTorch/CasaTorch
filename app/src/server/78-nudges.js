@@ -73,18 +73,12 @@ async function nudgeTick() {
   if (changed || ng.active.length !== before) { nudgeSave(); if (typeof liveNudge === 'function') liveNudge(); }   // every screen shows (or clears) it within a second, not at its next check
 }
 setInterval(() => { nudgeTick().catch(() => {}); }, 20_000).unref?.();
-/* A nudge you asked to be sent is sent - quiet hours don't hold it back (you chose the time). */
-async function nudgePush(n) {
-  const msg = { title: n.title, body: `${n.time} reminder from your home`, tag: `nudge:${n.id}`, url: '/#home', sev: 'event' };
-  await Promise.allSettled([
-    (async () => {
-      if (!push.subs.length) return;
-      const k = vapid();
-      await Promise.allSettled(push.subs.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(msg), { TTL: 3600, urgency: 'normal', vapidDetails: { subject: 'mailto:support@casatorch.com', publicKey: k.publicKey, privateKey: k.privateKey }, timeout: 10_000 })));   // scrub-ok: public support address
-    })(),
-    haPhone(msg),
-    (push.apps || []).length && !isDemo() ? appPushSend(push.apps, { ...msg, sound: n.sound && n.sound !== 'none' ? n.sound : null }) : null,
-  ]);
+/* A nudge you asked to be sent goes to phones through Settings › Alerts (40r-alert-rules.js: alertSendReminder):
+   with nothing changed there it reaches every phone and quiet hours don't hold it back (you chose the time).
+   Household reminders (78h-household.js) come through here too, as kind 'household'. */
+async function nudgePush(n, { kind = 'reminders', isTest = false } = {}) {
+  const msg = { title: n.title, body: `${n.time} reminder from your home`, tag: `${kind === 'household' ? '' : 'nudge:'}${n.id}`.slice(0, 64), url: kind === 'household' ? '/#household' : '/#reminders', sev: 'event', sound: n.sound && n.sound !== 'none' ? n.sound : null };
+  return alertSendReminder(n, { kind, msg, isTest });
 }
 
 /* ---- what the app gets ---- */
@@ -154,7 +148,7 @@ app.post('/api/nudges/:id/snooze', requireRole('member'), (req, res) => {
 app.post('/api/nudges/:id/test', requireRole('member'), async (req, res) => {
   const n = ng.list.find((x) => x.id === req.params.id); if (!n) return res.status(404).json({ error: 'That reminder is gone.' });
   ng.active = ng.active.filter((a) => a.id !== n.id); ng.active.push({ id: n.id, at: nowIso(), until: new Date(Date.now() + 10 * 60_000).toISOString() }); nudgeSave();
-  if (n.push && proStatus().pro) await nudgePush(n).catch(() => {});
+  if (n.push && proStatus().pro) await nudgePush(n, { isTest: true }).catch(() => {});
   res.json({ ok: true });
 });
 /* A photo instead of an icon: JPEG, PNG or WebP up to 5 MB, checked by its first bytes. */

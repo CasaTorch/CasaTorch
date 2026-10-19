@@ -51,6 +51,15 @@ export default async function pageGridTests(t) {
     assert.deepEqual(ids(P.suggestPageTiles('controls', { groups: {} })), ['ctl-start']);
     assert.ok(ids(P.suggestPageTiles('alerts', {})).includes('al-now'));
   });
+  t('page grid: Reminders, Family and Household are pages of tiles too, suggested from what the house has', () => {
+    assert.deepEqual(ids(P.suggestPageTiles('reminders', {})), ['rem-today', 'rem-phones', 'rem-list']);
+    assert.deepEqual(ids(P.suggestPageTiles('family', {})), ['fam-lists', 'fam-chores', 'fam-meals', 'fam-routines']);
+    assert.equal(P.suggestPageTiles('family', {}, 'phone')[0].w, 12, 'full width on a phone');
+    assert.deepEqual(ids(P.suggestPageTiles('household', { configured: false })), ['hh-start'], 'nothing set up: one tile that says how');
+    assert.deepEqual(ids(P.suggestPageTiles('household', { configured: true, bins: 2, mail: true, plants: 0, laundry: 1 })), ['hh-bins', 'hh-mail', 'hh-laundry']);
+    assert.equal(P.suggestPageTiles('household', { configured: true, bins: 1 })[0].w, 12, 'bins alone get the whole row');
+    for (const pg of ['reminders', 'family', 'household']) assert.deepEqual(P.cleanTiles(P.suggestPageTiles(pg, { configured: true, bins: 1, mail: true, plants: 1, laundry: 1 })), P.suggestPageTiles(pg, { configured: true, bins: 1, mail: true, plants: 1, laundry: 1 }), pg);
+  });
   t('page grid: suggested tiles pass the layout cleaner unchanged (ids, devices, options)', () => {
     const s = P.suggestPageTiles('energy', { metered: [{ id: 'ha:switch.tv_stand', name: 'TV' }], solar: true, hours: true, history: 9, rate: true });
     const c = P.cleanTiles(s);

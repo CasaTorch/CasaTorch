@@ -16,6 +16,8 @@ async function mySubscription() { if (!('serviceWorker' in navigator)) return nu
 async function phoneCard() {
   const card = el('div', { class: 'card' }, el('h2', {}, icon('bell', 15), window.CasaNative ? T('Alerts for everyone') : T('Web app & alerts')));
   const body = el('div'); card.append(body);
+  // each kind of alert (which phones, sound, repeats, quiet hours, a device or a room): 37a-alert-rules.js
+  card.append(el('p', { class: 'small', style: 'margin:14px 0 0' }, el('a', { href: '#settings/alerts', class: 'row', style: 'gap:6px;display:inline-flex' }, icon('sliders', 14), T('Fine-tune in Settings › Alerts'))));
   const add = (...kids) => body.append(...kids.filter((k) => k != null && k !== false));
   const draw = async () => {
     const info = await api('/api/push').catch(() => null);

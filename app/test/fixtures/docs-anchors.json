@@ -57,10 +57,12 @@
   "more"
  ],
  "connect/network.html": [
+  "add-test",
   "apptests",
   "devices",
   "internet",
   "not-yet",
+  "page",
   "sources",
   "speed"
  ],
@@ -252,6 +254,7 @@
   "limits",
   "meraki",
   "pihole",
+  "public",
   "unifi",
   "what"
  ],
@@ -328,6 +331,7 @@
   "on-an-alert",
   "pro",
   "quiet",
+  "rooms",
   "safety",
   "table",
   "whose"
@@ -352,7 +356,7 @@
   "size",
   "tablet"
  ],
- "use/family-hub.html": [
+ "use/family-board.html": [
   "chores",
   "family",
   "lists",
@@ -360,6 +364,7 @@
   "routines",
   "who"
  ],
+ "use/family-hub.html": [],
  "use/family.html": [
   "add",
   "google",

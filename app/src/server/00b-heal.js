@@ -81,7 +81,7 @@ function healFile(f, { dir = SH_DIR, source = shSource } = {}) {
 /* Every other file CasaTorch keeps. One that no longer reads (a power cut can leave a file on an SD card empty or half
    written) is set aside - kept, never deleted - and a complete save that was cut off just before its swap is used
    when there is one. Without this, that part would start empty and its next save would write over what is left. */
-const DATA_FILES = { 'events.json': 'Your calendar', 'family.json': 'The family hub', 'household.json': 'Household', 'nudges.json': 'Reminders',
+const DATA_FILES = { 'events.json': 'Your calendar', 'family.json': 'The Family board', 'household.json': 'Household', 'nudges.json': 'Reminders',
   'history.json': 'Energy history', 'replay.json': 'The 3D Home replay', 'alerts.json': 'Alerts', 'layout.json': 'Your screen layout', 'screen-layouts.json': 'Your screen layouts', 'page-layouts.json': 'Your page layouts', 'energy-hours.json': 'Energy hour by hour',
   'push.json': 'Phone alerts', 'sessions.json': 'Sign-in sessions', 'apptests.json': 'App test history', 'power-baseline.json': 'Usual power use', 'security.json': 'Network security',
   'floorplan/floorplan.json': 'Your 3D Home plan', 'setup-progress.json': 'Setup progress', 'tls/state.json': 'The secure address at home', '.health.json': 'Health' };

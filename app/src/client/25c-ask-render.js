@@ -186,7 +186,7 @@ function askSourcesEl(sources, from) {
   if (!web.length && !home.length) return null;
   return el('div', { class: 'ask-src' },
     home.length ? el('div', { class: 'ask-from' }, icon('home', 13), el('span', {}, `${T('From your home')}: `, home.map((f) => `${askS(f.label, 60)}${f.at ? ` (${fmtTime(f.at)})` : ''}`).join(' · '))) : null,
-    web.length ? el('ol', {}, web.map((s) => el('li', {}, el('a', { href: s.href, target: '_blank', rel: 'noopener noreferrer nofollow' }, askS(s.title, 120) || s.href), el('span', { class: 'faint' }, ` · ${askS(s.site, 60)}`)))) : null);
+    web.length ? el('ol', {}, web.map((s) => el('li', {}, el('a', { href: s.href, target: '_blank', rel: 'noopener noreferrer nofollow' }, askS(s.title, 120) || s.href), el('span', { class: 'faint' }, ` · ${askS(s.site, 60)}`), s.license && safeHref(s.licenseUrl) ? el('span', { class: 'faint' }, ' · ', el('a', { href: safeHref(s.licenseUrl), target: '_blank', rel: 'noopener noreferrer', class: 'ask-lic' }, askS(s.license, 40))) : null))) : null);
 }
 /* The whole answer: its blocks, then the sources, then the offer with up to 3 buttons. */
 function askAnswerEl(m, { onAsk, compact = false } = {}) {

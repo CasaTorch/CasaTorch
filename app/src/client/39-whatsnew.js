@@ -10,7 +10,7 @@ const WN_KEY = 'casatorch-whatsnew', WN_SEEN = 'casatorch-new-opened';
 /* [icon, title, words, where it opens, pro?] - only what this version really adds (docs: help/whats-new.html#v080). */
 const WN_ITEMS = [
   ['trash', 'Household', 'Bin night the evening before, the mail, thirsty plants and the laundry.', '#settings/household'],
-  ['star', 'Family hub', 'Shared lists, chores with stars, kids\' routines and the week\'s meals.', '#family'],
+  ['star', 'Family board', 'Shared lists, chores with stars, kids\' routines and the week\'s meals.', '#family'],
   ['drop', 'Rain radar', 'The last two hours of rain around your home - add it to Home as a widget.', '#home'],
   ['wifi', 'App tests, hop by hop', 'The path to every app, and the likely culprit when one is slow.', '#network'],
   ['cube', '3D home, drawn by you', 'Draw walls, rooms, stairs and the yard, then watch it all live.', '#house3d', true],

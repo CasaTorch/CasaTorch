@@ -60,7 +60,7 @@ const RANGES = { '1d': ['1d', '5m'], '5d': ['5d', '30m'], '1mo': ['1mo', '1d'], 
 function thin(arr, n) { const a = arr.filter((x) => typeof x === 'number' && Number.isFinite(x)); if (a.length <= n) return a; const out = []; for (let i = 0; i < n; i++) out.push(a[Math.round(i * (a.length - 1) / (n - 1))]); return out; }
 async function quoteYahoo(sym, range) {
   const [r, iv] = RANGES[range] || RANGES['1d'];
-  const j = await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${r}&interval=${iv}&includePrePost=false`, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CasaTorch)' }, timeout: 10000 });
+  const j = await getJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=${r}&interval=${iv}&includePrePost=false`, { timeout: 10000 });
   const res = j?.chart?.result?.[0]; if (!res?.meta) throw new Error(j?.chart?.error?.description || 'no quote');
   const m = res.meta, closes = res.indicators?.quote?.[0]?.close || [];
   const price = m.regularMarketPrice ?? closes.filter((x) => x != null).at(-1);

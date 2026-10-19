@@ -103,8 +103,14 @@ widget({ id: 'calendar', title: 'Coming up', icon: 'calendar', cat: 'personal', 
       el('div', { class: 'grow', style: 'min-width:0' }, el('div', { class: 'ellipsis' }, e.title), el('div', { class: 'when' }, e.allDay ? `${fmt(e.start, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })} · ${T('all day')}` : fmtWhen(e.start), w >= 4 && e.calendar ? ` · ${e.calendar}` : '')))));
   } });
 
+/* A team without a logo (the default): its abbreviation on its team color - no images from the scores service. */
+function teamBadge(t) {
+  const c = safeColor(t.color, 'var(--line)'), hex = /^#([0-9a-f]{6})$/i.exec(t.color || '')?.[1];
+  const dark = hex ? (parseInt(hex.slice(0, 2), 16) * 299 + parseInt(hex.slice(2, 4), 16) * 587 + parseInt(hex.slice(4, 6), 16) * 114) / 1000 < 150 : false;
+  return el('span', { class: 'team-badge', 'aria-hidden': 'true', style: `background:${c};color:${hex ? (dark ? '#fff' : '#111') : 'inherit'}` }, String(t.abbr || t.name || '?').slice(0, 4));
+}
 function gameRow(g, w) {
-  const side = (t, o) => el('div', { class: 'team' }, t.logo && w >= 3 ? el('img', { src: t.logo, alt: '', loading: 'lazy' }) : null, el('span', { class: `ellipsis${g.state === 'post' && !t.winner && o.winner ? ' lost' : ''}` }, w >= 4 ? t.name || t.abbr : t.abbr || t.name));
+  const side = (t, o) => el('div', { class: 'team' }, w >= 3 ? (t.logo ? el('img', { src: t.logo, alt: '', loading: 'lazy' }) : teamBadge(t)) : null, el('span', { class: `ellipsis${g.state === 'post' && !t.winner && o.winner ? ' lost' : ''}` }, w >= 4 ? t.name || t.abbr : t.abbr || t.name));
   const sc = (t, o) => el('div', { class: `score${g.state === 'post' && !t.winner && o.winner ? ' lost' : ''}` }, g.state === 'pre' ? '' : t.score ?? '');
   return el('div', { class: 'game' }, side(g.away, g.home), sc(g.away, g.home), side(g.home, g.away), sc(g.home, g.away),
     el('div', { class: 'tiny muted', style: 'grid-column:1/-1;margin-top:2px' }, el('span', { class: `pill${g.state === 'in' ? ' live' : ''}` }, g.state === 'in' ? T('LIVE') : g.state === 'post' ? T('Final') : fmtWhen(g.start)), ` ${g.leagueName || ''}${g.state === 'in' ? ` · ${g.detail}` : ''}${g.broadcast && w >= 4 ? ` · ${g.broadcast}` : ''}`));

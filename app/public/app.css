@@ -1361,3 +1361,10 @@ div.field { margin: 10px 0; } div.field > span:first-child { display: block; col
 @media (prefers-reduced-motion: reduce) { .nw-flow { display: none; } .nw-n.bad .nw-halo, .nw-orb.bad { animation: none; } }
 @media (max-width: 760px) { .nw-devlist.wide .nw-dev { grid-template-columns: 9px 16px minmax(0, 1fr) auto; } .nw-devlist.wide .nw-dev > .tiny:not(:last-child) { display: none; } .nw-radio { grid-template-columns: 30px auto 1fr 34px; } }
 /* ---- end Network page ---- */
+
+/* ---- legal round: team badges (no team logos by default) ---- */
+.team-badge { flex: none; display: inline-grid; place-items: center; min-width: 26px; height: 22px; padding: 0 4px; border-radius: 6px; font-size: 10px; font-weight: 700; letter-spacing: .02em; line-height: 1; }
+/* Reminders, Family and Household as page grids: a tile's content starts at the top, and a view's own card sits flat inside its tile */
+.pg-family .tile-b.fam-wrap { align-content: start; }
+.pg-family .tile-b > .card, .pg-household .tile-b > .card, .pg-reminders .tile-b > .card { background: transparent; border: 0; box-shadow: none; padding: 0; }
+/* ---- end legal round ---- */

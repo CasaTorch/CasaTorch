@@ -1,5 +1,5 @@
 /* ======================================================================
- * Family hub (server: 79c-family.js): shared lists (two-way with Home Assistant's to-do lists), chores with
+ * Family board (server: 79c-family.js): shared lists (two-way with Home Assistant's to-do lists), chores with
  * stars, kids' morning and evening routines, the week's meals - the Family page, its Home widgets and its
  * Settings - plus three things for every screen:
  *  - "Show only when..." on any Home widget (a device's state, a time of day, someone home, days of the week),
@@ -439,16 +439,19 @@ function famMealEditor(x, recent, done) {
 }
 
 /* ==================== the Family page ==================== */
-const FAM_VIEWS = [['lists', 'list', 'Lists'], ['chores', 'star', 'Chores'], ['routines', 'sun', 'Routines'], ['meals', 'meal', 'Meals']];
+/* A page of tiles (06-pagegrid.js), like every other page: lists, chores, routines and meals, each a tile you can move,
+   resize or remove with Edit. #family/<view> (links from the widgets and the docs) scrolls to that tile. */
+const FAM_VIEWS = [['lists', 'list', 'Lists', 'Shopping and to-do lists everyone can add to', (b) => famListsView(b)], ['chores', 'star', 'Chores', 'Chores with stars, for each person', (b) => famChoresView(b)],
+  ['routines', 'sun', 'Routines', 'Morning and evening routines kids tap through', (b) => famRoutinesView(b)], ['meals', 'meal', 'Meals', 'The week\'s dinners', (b) => famMealsView(b)]];
+for (const [k, ic, title, blurb, view] of FAM_VIEWS) {
+  pageTile({ id: `fam-${k}`, page: 'family', auto: true, title, icon: ic, blurb, size: [k === 'lists' || k === 'chores' ? 6 : 12, 1], async render(b) { b.classList.add('fam-wrap'); await view(b); } });
+}
 tab({ id: 'family', label: 'Family', icon: 'star', after: 'reminders', async render(main, sub) {
-  const v = FAM_VIEWS.some(([k]) => k === sub) ? sub : FAM.view || 'lists'; FAM.view = v;
-  setTop(tabLabel({ id: 'family', label: T('Family') }), T('Lists, chores, routines and meals'), [el('a', { class: 'btn', href: '#settings/family' }, icon('gear', 14), T('Family settings'))]);
-  const seg = el('div', { class: 'seg fam-seg', role: 'tablist' }, FAM_VIEWS.map(([k, ic, l]) => el('a', { href: `#family/${k}`, role: 'tab', 'aria-selected': String(k === v), class: k === v ? 'on' : '', style: 'display:inline-flex;align-items:center;gap:6px;padding:8px 14px;color:inherit;text-decoration:none' + (k === v ? ';background:var(--surface-3);font-weight:600' : ';color:var(--muted)') }, icon(ic, 16), T(l))));
-  const host = el('div', { class: 'fam-wrap' });
-  main.append(seg, host);
-  const draw = () => (v === 'lists' ? famListsView(host) : v === 'chores' ? famChoresView(host) : v === 'routines' ? famRoutinesView(host) : famMealsView(host));
-  await draw();
-  return async () => { if (host.querySelector('.fam-row.reveal, .fam-add input:focus') || document.activeElement?.closest?.('.fam-add')) return; await draw(); };
+  const refresh = await pageGrid(main, { page: 'family', auto: true, title: tabLabel({ id: 'family', label: T('Family') }), sub: T('Lists, chores, routines and meals'), load: () => famLoad(true),
+    actions: [el('a', { class: 'btn', href: '#settings/family' }, icon('gear', 14), el('span', { class: 'hide-phone' }, T('Family settings')))], addLabel: 'Add a tile' });
+  if (FAM_VIEWS.some(([k]) => k === sub)) requestAnimationFrame(() => main.querySelector(`.tile[data-id^="fam-${sub}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+  // not while someone is typing into a list or has a row open
+  return refresh && (async () => { if (main.querySelector('.fam-row.reveal, .fam-add input:focus') || document.activeElement?.closest?.('.fam-add')) return; await refresh(); });
 } });
 
 /* ==================== Home widgets ==================== */
@@ -615,7 +618,7 @@ function famChipsPaint() {
 }
 
 /* ==================== Settings ==================== */
-/* Settings › Family hub: the family, the week, lists from Home Assistant. */
+/* Settings › Family board: the family, the week, lists from Home Assistant. */
 async function familyCards() {
   const host = el('div', { style: 'display:contents' });
   const draw = async () => {

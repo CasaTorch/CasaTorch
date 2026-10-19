@@ -1,9 +1,9 @@
 /* News - RSS/Atom feeds the user picks (config.news.feeds: [{ name, url }]). */
-/* Sources to pick from, by kind. Feeds belong to their publishers and can change; any feed can also be added by address. */
+/* Sources to pick from, by kind: only feeds the publishers themselves offer (no third-party mirrors).
+   Feeds belong to their publishers and can change; any feed can also be added by address. */
 const NEWS_DEFAULTS = [
   // world
   { id: 'bbc', group: 'World', name: 'BBC World', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
-  { id: 'ap', group: 'World', name: 'AP News', url: 'https://feedx.net/rss/ap.xml' },
   { id: 'guardian-world', group: 'World', name: 'The Guardian - World', url: 'https://www.theguardian.com/world/rss' },
   { id: 'nyt-world', group: 'World', name: 'New York Times - World', url: 'https://rss.nytimes.com/services/xml/rss/nyt/World.xml' },
   { id: 'aljazeera', group: 'World', name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
@@ -22,7 +22,7 @@ const NEWS_DEFAULTS = [
   { id: 'ars', group: 'Technology', name: 'Ars Technica', url: 'https://feeds.arstechnica.com/arstechnica/index' },
   { id: 'techcrunch', group: 'Technology', name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
   { id: 'wired', group: 'Technology', name: 'Wired', url: 'https://www.wired.com/feed/rss' },
-  { id: 'hn', group: 'Technology', name: 'Hacker News', url: 'https://hnrss.org/frontpage' },
+  { id: 'hn', group: 'Technology', name: 'Hacker News', url: 'https://news.ycombinator.com/rss' },
   { id: 'cnbc', group: 'Business', name: 'CNBC - Top news', url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html' },
   { id: 'nasa', group: 'Science', name: 'NASA', url: 'https://www.nasa.gov/news-release/feed/' },
   { id: 'espn', group: 'Sports', name: 'ESPN', url: 'https://www.espn.com/espn/rss/news' },
@@ -48,12 +48,16 @@ function gnFeed(id, { town, cc, lang }) {
 }
 const homeTown = (loc) => String(loc?.name || '').split(',')[0].trim().slice(0, 60) || null;
 const homeCountry = (loc) => (/^[A-Z]{2}$/.test(String(loc?.cc || '')) ? loc.cc : (/,\s*([A-Z]{2})$/.exec(String(loc?.name || ''))?.[1] || null));
+/* Presets that pointed at unofficial mirrors in older versions: swapped for the publisher's own feed, or dropped. */
+const NEWS_RETIRED = { 'https://feedx.net/rss/ap.xml': null, 'https://hnrss.org/frontpage': 'https://news.ycombinator.com/rss' };
+const newsFeeds = (feeds = config.news?.feeds || []) => feeds.flatMap((f) => (Object.hasOwn(NEWS_RETIRED, f?.url ?? "") ? (NEWS_RETIRED[f.url] ? [{ ...f, url: NEWS_RETIRED[f.url] }] : []) : [f]));
 async function newsNow() {
   const items = [], errors = [];
-  for (const f of config.news?.feeds || []) {
+  for (const f of newsFeeds()) {
     try { const feed = await cached(`rss:${f.url}`, 20 * 60_000, async () => parseFeed((await getText(f.url)).text)); for (const i of feed.items.slice(0, 15)) { const gn = /news\.google\.com/.test(f.url) && /^(.*\S)\s+-\s+([^-]{2,60})$/.exec(i.title || ''); items.push({ ...i, ...(gn ? { title: gn[1], publisher: gn[2] } : {}), source: f.name || feed.title }); } }
     catch (err) { errors.push({ feed: f.name, error: String(err.message) }); }
   }
   return { items: items.sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 40), errors };
 }
 app.get('/api/news', async (_req, res) => { try { res.json(await newsNow()); } catch (err) { res.status(502).json({ error: String(err.message) }); } });
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchNews = { NEWS_DEFAULTS, NEWS_RETIRED, newsFeeds };

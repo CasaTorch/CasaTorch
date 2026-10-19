@@ -167,7 +167,7 @@ const CUSTOM = {
       try { list = (await api(`/api/setup/sports/teams?league=${league.value}`)).teams || []; team.replaceChildren(el('option', { value: '' }, T('Team...')), ...list.map((t) => el('option', { value: t.id }, t.name))); team.disabled = false; }
       catch (e) { team.replaceChildren(el('option', { value: '' }, T('Could not load teams: {message}', { message: e.message }))); }
     };
-    const add = el('button', { type: 'button', class: 'small', onclick: () => { const t = list.find((x) => x.id === team.value); if (!t || teams.some((x) => x.league === league.value && x.id === t.id)) return; teams.push({ league: league.value, id: t.id, name: t.name, abbr: t.abbr || null, logo: t.logo || null }); go(); } }, T('Add team'));
+    const add = el('button', { type: 'button', class: 'small', onclick: () => { const t = list.find((x) => x.id === team.value); if (!t || teams.some((x) => x.league === league.value && x.id === t.id)) return; teams.push({ league: league.value, id: t.id, name: t.name, abbr: t.abbr || null, color: t.color || null }); go(); } }, T('Add team'));
     box.append(el('div', { class: 'grid2' }, league, team), el('div', { class: 'row', style: 'margin-top:8px' }, add), el('p', { class: 'note' }, T('Scores come from ESPN\'s public scoreboard.')));
     return box;
   },

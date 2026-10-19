@@ -1,4 +1,4 @@
-/* Unit tests for the Family hub (src/server/79c-family.js and the pure part of src/client/38-family.js): chore repeats and
+/* Unit tests for the Family board (src/server/79c-family.js and the pure part of src/client/38-family.js): chore repeats and
    stars, the weekly reset, meal-week copying, Home Assistant to-do lists over a pretend websocket, your own weather station,
    the status chips, and the "Show only when..." rules for Home widgets. Run from test/unit.mjs (which loads server.js first). */
 import assert from 'node:assert/strict';

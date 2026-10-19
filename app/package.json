@@ -23,6 +23,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@matter/main": "0.17.9",
     "acme-client": "5.4.0",
     "express": "^4.21.2",
     "multicast-dns": "7.2.5",

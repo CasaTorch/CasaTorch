@@ -128,4 +128,27 @@ export default async function alertRuleTests(t) {
     r = R.flapStep({ lastClear: 0 }, 'raise', W + 1); assert.equal(r.action, 'push', 'back much later: a new alert');
     r = R.flapStep({ lastClear: 0 }, 'raise', 1000, true); assert.equal(r.action, 'push', 'water and smoke always go out');
   });
+
+  t('alert rules: reminders and household pushes go through the rules, and nothing changed means every phone, even in quiet hours', () => {
+    const rem = { id: 'nudge:abc', alertKind: 'reminders', severity: 'event', pushAsked: true, title: 'Trash night' };
+    const bin = { id: 'hh-bin-trash', alertKind: 'household', severity: 'event', pushAsked: true, title: 'Take out the trash tonight' };
+    assert.equal(R.alertKindOf(rem), 'reminders'); assert.equal(R.alertKindOf({ id: 'hh-mail' }), 'household'); assert.equal(R.alertKindOf({ id: 'nudge:x' }), 'reminders');
+    assert.equal(D(rem, { target: phone('critical'), ...at(12) }).push, true, 'a "Critical only" phone still gets a reminder it asked for');
+    assert.equal(D(bin, { target: phone('important'), ...at(23) }).push, true, 'quiet hours don\'t hold back a reminder by default');
+    assert.equal(D(rem, { target: phone(), rules: house({ kinds: { reminders: { push: false } } }), ...at(12) }).push, false, 'Settings › Alerts can turn reminders off');
+    assert.equal(D(bin, { target: phone(), user: { kinds: { household: { quiet: 'follow' } } }, ...at(23) }).push, false, 'my rule can make them wait for quiet hours');
+    assert.equal(D(bin, { target: phone('w:aaaaaa'), rules: house({ kinds: { household: { phones: ['w:bbbbbb'] } } }), ...at(12) }).push, false, 'only the picked phones');
+    assert.equal(D(rem, { target: phone(), user: { kinds: { reminders: { sound: 'silent' } } }, ...at(12) }).sound, 'silent');
+    assert.equal(D({ ...rem, pushAsked: false }, { target: phone('critical'), ...at(12) }).push, false, 'without the ask it follows the phone level');
+    assert.equal(D(rem, { target: phone(), mutes: [{ scope: 'house', kind: 'reminders', until: 2e12 }], ...at(12) }).push, false, 'a muted kind stays quiet');
+  });
+
+  t('alert rules: a room rule applies to its devices, and a device rule beats it', () => {
+    const r = house({ rooms: { Garage: { push: false } }, devices: { 'ha:sensor.freezer': { push: true } } });
+    const garageBatt = { id: 'battery:ha:sensor.garage_door', severity: 'notice', title: 'Low battery' };
+    assert.equal(D(garageBatt, { rules: r, target: phone('all'), device: { id: 'ha:sensor.garage_door', room: 'Garage' }, ...at(12) }).push, false, 'the room says no');
+    assert.equal(D(garageBatt, { rules: r, target: phone('all'), device: { id: 'ha:sensor.garage_door', room: 'Kitchen' }, ...at(12) }).push, true, 'another room: as before');
+    assert.equal(D({ id: 'battery:ha:sensor.freezer', severity: 'notice' }, { rules: r, target: phone('all'), device: { id: 'ha:sensor.freezer', room: 'Garage' }, ...at(12) }).push, true, 'the device rule wins');
+    assert.equal(D(leak, { rules: house({ rooms: { Garage: { push: false, app: false } } }), target: phone(), device: { id: 'ha:binary_sensor.sink', room: 'Garage' }, ...at(12) }).push, true, 'safety floor: a room rule can\'t silence a leak without the confirm');
+  });
 }

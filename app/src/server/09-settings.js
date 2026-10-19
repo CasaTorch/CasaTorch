@@ -26,6 +26,7 @@ app.get('/api/settings', (_req, res) => {
     calendars: (c.calendars || []).map((x) => x.name),
     teams: (c.sports?.teams || []).map((t) => `${t.name || t.id} (${String(t.league).toUpperCase()})`),
     feeds: (c.news?.feeds || []).map((f) => f.name || f.url),
+    sports: { showLogos: c.sports?.showLogos === true },
     ...(isDemo() ? { calendars: ['Family', 'Kids', 'House'], teams: ['49ers (NFL)', 'Warriors (NBA)', 'Giants (MLB)'], feeds: ['Local News', 'Weather Desk', 'Tech'] } : {}),
     energy: { ratePerKwh: c.energy?.ratePerKwh ?? (isDemo() ? 0.17 : null), budget: c.energy?.budget ?? null, currency: c.house?.currency || 'USD' },
     note: c.note || null,
@@ -53,6 +54,7 @@ app.put('/api/settings', express.json(), (req, res) => {
     next.security = { ...(next.security || {}), allowedHosts: [...new Set(list)].slice(0, 10) };
   }
   if ('ratePerKwh' in b) { const r = Number(b.ratePerKwh); if (!(r >= 0 && r < 5)) return res.status(400).json({ error: 'the rate is in dollars per kWh, e.g. 0.17' }); next.energy = { ...(next.energy || {}), ratePerKwh: r }; }
+  if ('showLogos' in b) next.sports = { ...(next.sports || {}), showLogos: b.showLogos === true };   // Settings › General › Scores (22-sports.js)
   if ('budget' in b) next.energy = { ...(next.energy || {}), budget: Number(b.budget) || null };
   saveConfig(next); res.json({ ok: true });
 });

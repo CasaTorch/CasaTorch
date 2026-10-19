@@ -91,7 +91,8 @@ const quietOk = (s) => s === 'none' || !!quietParse(s);
 
 /* The built-in rule for a kind: what CasaTorch did before rules existed (legacy = the old settings). */
 function alertBaseRule(kind, legacy = {}) {
-  return { app: true, push: null, phones: 'all', sound: 'auto', repeat: null, quiet: 'follow', presence: legacy.awayOnly && (kind === 'doorbell' || kind === 'motion') ? 'away' : 'any', digest: false, panel: 'show' };
+  // reminders (Reminders, Household) go at the time you picked: quiet hours don't hold them back unless a rule says so
+  return { app: true, push: null, phones: 'all', sound: 'auto', repeat: null, quiet: ALERT_KIND[kind]?.reminder ? 'ignore' : 'follow', presence: legacy.awayOnly && (kind === 'doorbell' || kind === 'motion') ? 'away' : 'any', digest: false, panel: 'show' };
 }
 const LEVEL_SEVS = { critical: ['critical'], important: ['critical', 'warning', 'event'], all: ['critical', 'warning', 'event', 'notice', 'info'] };
 const levelAllows = (level, sev) => (Object.hasOwn(LEVEL_SEVS, level) ? LEVEL_SEVS[level] : LEVEL_SEVS.important).includes(sev);
@@ -136,7 +137,9 @@ function alertDecide(a, ctx = {}) {
   if (!t) return out;   // no phone asked about: only the app, sound and repeat
   /* push to this phone? */
   let push;
-  if (r.push === true || r.push === false) push = r.push; else { push = levelAllows(t.level, sev); if (!push) why.push('phone-level'); }
+  if (r.push === true || r.push === false) push = r.push;
+  else if (K.reminder && a.pushAsked === true) push = true;   // a reminder set to "Send to phones" (78-nudges.js, 78h-household.js) goes, as before, unless a rule here says otherwise
+  else { push = levelAllows(t.level, sev); if (!push) why.push('phone-level'); }
   if (push && Array.isArray(r.phones) && !r.phones.includes(t.id)) { push = false; why.push('not-this-phone'); }
   if (r.push === false && !push) why.push('off');
   if (safety && !push && r.push === false && !r.confirmOff) { push = true; why.push('safety-floor'); }   // turned off without the confirm: still goes
@@ -252,6 +255,16 @@ function alertTargets() {
   return out;
 }
 
+/* ---- reminders and household pushes (78-nudges.js, 78h-household.js) go through the same rules ----
+   kind: 'reminders' | 'household'. The item itself asked to be sent to phones (pushAsked), so with no rule
+   changed it goes to every phone as before; Settings › Alerts can turn it off, pick phones, sound or quiet hours. */
+async function alertSendReminder(item, { kind = 'reminders', msg, isTest = false } = {}) {
+  const a = { id: kind === 'household' ? String(item.id) : `nudge:${item.id}`, alertKind: kind === 'household' ? 'household' : 'reminders', severity: 'event', pushAsked: true, title: item.title };
+  const m = await alertMoment(), dec = new Map(), go = [];
+  for (const t of alertTargets()) { const d = alertDecide(a, { ...m, user: t.user ? alertRulesUser(t.user) : {}, target: t, isTest }); dec.set(t, d); if (d.push) go.push(t); else if (d.digest) digestAdd(t.id, a); }
+  if (!go.length) return 0;
+  return alertSendTo(go, msg, (t) => dec.get(t));
+}
 /* ---- the daily summary ---- */
 function digestAdd(targetId, a) {
   const d = (alerts.digest ||= {}); const list = (d[targetId] ||= []);
@@ -287,7 +300,7 @@ app.get('/api/alerts/rules', async (req, res) => {
   const moment = { rules: house, user: mine, pro: !!proStatus().pro, now: Date.now(), mutes: [], home: null };
   const sampleTarget = targets.find((t) => t.type !== 'ha') ? { ...targets.find((t) => t.type !== 'ha'), user: uid } : { id: 'w:000000', level: 'important', user: uid };
   const effective = Object.fromEntries(ALERT_KINDS.map((K) => {
-    const a = { alertKind: K.id, id: `${K.id}:sample`, severity: K.tier === 'critical' ? 'critical' : K.tier === 'important' ? 'warning' : 'notice' };
+    const a = { alertKind: K.id, id: `${K.id}:sample`, severity: K.reminder ? 'event' : K.tier === 'critical' ? 'critical' : K.tier === 'important' ? 'warning' : 'notice', ...(K.reminder ? { pushAsked: true } : {}) };
     const d = alertDecide(a, { ...moment, target: sampleTarget });
     const h = alertDecide(a, { ...moment, user: {}, target: { ...sampleTarget, level: 'important' } });
     return [K.id, { app: d.app, push: d.push || d.digest, digest: d.digest, sound: d.sound, repeat: d.repeat, panel: d.panel, rule: alertRuleFor(a, moment).rule,
@@ -337,7 +350,7 @@ app.put('/api/alerts/rules/mine', express.json({ limit: '4kb' }), (req, res) => 
 /* "Send a test of this kind": what would happen on each of my phones right now, and it goes where the rules let it. */
 app.post('/api/alerts/test', express.json({ limit: '1kb' }), async (req, res) => {
   const K = ALERT_KIND[String(req.body?.kind || '')]; if (!K) return res.status(400).json({ error: 'Unknown kind of alert.' });
-  const uid = alertUserKey(req), a = { alertKind: K.id, id: `${K.id}-test:${Date.now()}`, severity: K.tier === 'critical' ? 'critical' : K.tier === 'important' ? 'warning' : 'notice', title: `Test: ${K.sample}` };
+  const uid = alertUserKey(req), a = { alertKind: K.id, id: `${K.id}-test:${Date.now()}`, severity: K.reminder ? 'event' : K.tier === 'critical' ? 'critical' : K.tier === 'important' ? 'warning' : 'notice', title: `Test: ${K.sample}`, ...(K.reminder ? { pushAsked: true } : {}) };
   const m = await alertMoment(), user = alertRulesUser(uid), mine = alertTargets().filter((t) => t.user === uid);
   const app0 = alertDecide(a, { ...m, user, target: null });
   const rows = mine.map((t) => ({ t, d: alertDecide(a, { ...m, user, target: t, isTest: true }) }));

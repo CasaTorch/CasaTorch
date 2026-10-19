@@ -1,5 +1,5 @@
 /* ======================================================================
- * Family hub - the things a family keeps on the fridge, on every screen:
+ * Family board - the things a family keeps on the fridge, on every screen:
  *  - Lists: shopping and to-do lists everyone shares. Our own lists, or Home Assistant's to-do lists (todo.*),
  *    two-way: an item added or checked here is added or checked in Home Assistant, and the other way round.
  *    Home Assistant is reached over its websocket (todo.get_items / add_item / update_item / remove_item).

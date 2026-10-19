@@ -75,7 +75,7 @@ const wsSelf = (req) => { const h = String(req.headers.host || ''); return /^[\w
 /* 'wasm-unsafe-eval' lets WebAssembly run (the 3D home's Draco, meshopt and KTX2 decoders for compressed scans); JavaScript eval stays off. */
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', [
-    "default-src 'self'", `script-src 'self' 'wasm-unsafe-eval' ${inlineScriptHashes}`.trim(), "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' data: https://fonts.gstatic.com",
+    "default-src 'self'", `script-src 'self' 'wasm-unsafe-eval' ${inlineScriptHashes}`.trim(), "style-src 'self' 'unsafe-inline'", "font-src 'self' data:",
     "img-src 'self' data: blob: https:", "media-src 'self' blob: https:", `connect-src 'self' blob: data:${wsSelf(req)}`, "worker-src 'self' blob:", "frame-src 'self'",
     "object-src 'none'", "base-uri 'self'", "form-action 'self' https://accounts.google.com", `frame-ancestors ${frameAncestors()}`,
   ].join('; '));

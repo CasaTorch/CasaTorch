@@ -9,16 +9,26 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Who is it?** Security Center names each device by its maker (from the first half of its network address) and
   the names your network already knows, guesses its type, and explains each open service for that kind of device.
   A receiver's control port is shown as normal information instead of a warning; real risks stay red.
+- **Family board:** the Family hub is now called the Family board (same lists, chores, routines and meals).
+- **Reminders and Household follow Settings › Alerts:** their pushes go through the alert rules (which phones,
+  sound, quiet hours); with nothing changed there they reach every phone, as before. Room rules can be set in
+  Settings › Alerts.
+- **Reminders, Family and Household pages are tiles** you can arrange, add, remove and resize, like Home and Energy.
+- **Public sources, plainly:** CasaTorch always names itself to scores, quotes and feeds (no more retrying as a
+  browser); a source that refuses shows "not available right now". Teams show as abbreviation and team colors -
+  logos are an opt-in switch. The AP News preset (a third-party mirror) is gone; Hacker News uses its own feed.
+  Unused Google Fonts entries were removed from the content security policy. Wikipedia excerpts in the Home AI
+  Agent are labeled "Wikipedia (CC BY-SA)" with a link to the license.
 - CI tests on Node 22 and 24 (Node 20 is end of life).
 - Fresh screenshots and videos everywhere.
 
 ## 0.8.0
 
-The biggest update yet: draw your whole home, inside and out, and watch it live in 3D; Household and a Family hub;
+The biggest update yet: draw your whole home, inside and out, and watch it live in 3D; Household and a Family hub (now Family board);
 a rain radar; App tests hop by hop - and a release built for trust: attack- and failure-tested on every change,
 complete backups, updates that roll back by themselves, and help when you're stuck.
 
-**Editions.** Household, the Family hub, the rain radar, App tests for the built-in apps, "Show only when..." and your
+**Editions.** Household, the Family board, the rain radar, App tests for the built-in apps, "Show only when..." and your
 own weather station are in Basic. Everything in the 3D home is Pro (and in the 14-day trial). Safety is never Pro:
 water and smoke alerts (gas and carbon monoxide count as smoke) repeat until someone taps Got it on Basic too.
 
@@ -46,11 +56,11 @@ water and smoke alerts (gas and carbon monoxide count as smoke) repeat until som
   half the draw calls, rests when nothing moves, shader warm-up for a smoother first picture; old browsers get a
   clear card instead of a blank page.
 
-### Household, Family hub, rain radar (Basic)
+### Household, Family board, rain radar (Basic)
 - **Household**: bin day from a schedule, Home Assistant waste sensors or a city calendar (holidays skip or move
   a pickup), "Take out the recycling tonight" on every screen; mail, thirsty plants, washer/dryer/dishwasher
   countdowns; the Household widget. Reminders on phones are Pro.
-- **Family hub**: shared lists (two-way with Home Assistant to-do lists), chores with stars, goals and rewards,
+- **Family board**: shared lists (two-way with Home Assistant to-do lists), chores with stars, goals and rewards,
   kids' routines, a weekly meal plan; "Show only when..." widgets; your own weather station replaces "now".
 - **Rain radar** widget: the last couple of hours of rain, looped, with "Rain likely in about 15 min".
 
@@ -73,7 +83,7 @@ water and smoke alerts (gas and carbon monoxide count as smoke) repeat until som
   (accepted once, with one tap, at the next sign-in).
 
 ### Reliability
-- **Backups carry everything** (Family hub, Household, reminders and photos, App tests, replay, layouts, the secure
+- **Backups carry everything** (Family board, Household, reminders and photos, App tests, replay, layouts, the secure
   address at home and the box's identity), encrypted with AES-256-GCM.
 - **Updates roll back by themselves** on a Box, Raspberry Pi and Linux if the new version doesn't answer within 5
   minutes; Settings › Updates & backup shows what's new, progress and how it went.

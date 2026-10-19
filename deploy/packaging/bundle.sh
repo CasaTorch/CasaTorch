@@ -8,6 +8,7 @@ OUT=${1:-$ROOT/dist/bundle}
 rm -rf "$OUT"; mkdir -p "$OUT/app"
 ( cd "$ROOT/app" && node build.mjs >/dev/null )
 cp -R "$ROOT/app/server.js" "$ROOT/app/package.json" "$ROOT/app/package-lock.json" "$ROOT/app/public" "$ROOT/app/catalog" "$OUT/app/"
+mkdir -p "$OUT/app/src" && cp -R "$ROOT/app/src/voice" "$OUT/app/src/"   # the Matter bridge's own process (79v-voice.js)
 cp -R "$ROOT/demo" "$OUT/demo"
 ( cd "$OUT/app" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error )
 node -p "require('$ROOT/app/package.json').version" > "$OUT/VERSION"

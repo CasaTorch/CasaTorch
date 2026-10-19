@@ -272,7 +272,7 @@ const ASK_FREE_WEB = { name: 'web_search', cat: 'web', label: 'Searching the web
       getJSON(`https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(q)}&limit=4`, { timeout: 8000 }).catch(() => null)]);
     if (ddg?.AbstractText && askUrl(ddg.AbstractURL)) results.push({ title: ddg.Heading || q, url: ddg.AbstractURL, text: String(ddg.AbstractText).slice(0, 900), via: ddg.AbstractSource || 'DuckDuckGo' });
     if (ddg?.Answer) results.push({ title: `DuckDuckGo: ${q}`, url: `https://duckduckgo.com/?q=${encodeURIComponent(q)}`, text: String(ddg.Answer).slice(0, 400), via: 'DuckDuckGo' });
-    for (const p of wiki?.pages || []) results.push({ title: p.title, url: `https://en.wikipedia.org/wiki/${encodeURIComponent(String(p.key || p.title).replace(/ /g, '_'))}`, text: String(p.excerpt || p.description || '').replace(/<[^>]+>/g, '').slice(0, 400), via: 'Wikipedia' });
+    for (const p of wiki?.pages || []) results.push({ title: p.title, url: `https://en.wikipedia.org/wiki/${encodeURIComponent(String(p.key || p.title).replace(/ /g, '_'))}`, text: String(p.excerpt || p.description || '').replace(/<[^>]+>/g, '').slice(0, 400), via: 'Wikipedia (CC BY-SA)' });
     return { data: results.length ? { results } : { error: 'nothing found' }, links: results.map((r) => ({ title: r.title, url: r.url })) };
   } };
 /* Only for screenshots and tests (CASATORCH_ASK_FAKE=1): a stand-in web search with example.org pages. */

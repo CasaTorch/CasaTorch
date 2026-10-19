@@ -150,7 +150,7 @@ async function supportBundle({ maskIps = true, fresh = false } = {}) {
   let data = null; try { data = JSON.parse(text); } catch { data = null; }
   return { text, data };
 }
-/* Names kept outside config.json: the family hub's people, nudges' titles - masked too when they exist. */
+/* Names kept outside config.json: the Family board's people, nudges' titles - masked too when they exist. */
 function supExtraPrivate() {
   const out = {};
   try { if (typeof fam === 'object') out.family = { people: (fam.d?.people || []).map((p) => ({ name: p.name })), lists: (fam.d?.lists || []).map((l) => ({ name: l.name || l.title })) }; } catch { /* not loaded */ }

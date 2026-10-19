@@ -28,6 +28,7 @@ CasaTorch comes with **no warranty**, to the extent the law allows (AGPL-3.0 sec
 | acme-client 5.4 | MIT | Let's Encrypt certificates for the secure address at home |
 | qrcode 1.5 | MIT | QR codes in setup |
 | multicast-dns 7.2 | MIT | Finding the box on the home network (Bonjour) |
+| matter.js (@matter/main 0.17, with @noble/curves and @noble/hashes) | Apache-2.0 (matter.js), MIT (@noble) | Voice assistants (Pro): CasaTorch as a Matter bridge for Alexa, Google Home, Apple Home and SmartThings. Shipped unmodified; source at github.com/matter-js/matter.js |
 | werift 0.25 | MIT | WebRTC (via ring-client-api) |
 | mediabunny 1.61 | MPL-2.0 | Media handling (via werift). Shipped unmodified |
 | node-forge 1.4 | BSD-3-Clause OR GPL-2.0 | Used under BSD-3-Clause |
@@ -84,12 +85,12 @@ casatorch.com is not in the middle (except where marked), and nothing is resold.
 | **OpenStreetMap** tiles (tile.openstreetmap.org) | Map under the radar | Map data © OpenStreetMap contributors, ODbL; tiles under the OSMF Tile Usage Policy: credit shown, identifying User-Agent, at least 7 days of caching, no bulk downloads. Heavy use needs another tile provider. | Basic |
 | **Nominatim** (nominatim.openstreetmap.org) | Turning a town name into a place | ODbL data; usage policy: 1 request a second at most, identifying User-Agent, **no autocomplete-as-you-type**. Every town search (setup, widgets, radar) runs only when you press Find or Enter, needs 3+ characters, goes through the box (CasaTorch's own User-Agent, at most one request a second per box), is cached for a week, and shows "Search © OpenStreetMap contributors" with the results. | Basic |
 | **MET Norway** (api.met.no) | Weather forecast | Free, CC BY 4.0 and NLOD 2.0; identifying User-Agent required; credit "Weather data: MET Norway" | Basic |
-| **ESPN** (site.api.espn.com) | Sports scores | **Unofficial, undocumented endpoint** - no published terms for outside use; can change or stop without notice; ESPN's site terms limit use to personal, non-commercial use. Personal display only, cached. **Lawyer to review**; be ready to switch to a licensed sports data feed. | Basic |
-| **Google News RSS** and publishers' RSS feeds (BBC, NPR, NYT, DW and others) | Headlines | Feeds offered for feed readers; headlines link to the publisher; personal use. Google's Terms of Service apply to Google News. CasaTorch shows titles and links only, never article text. **Lawyer to review** for commercial distribution. | Basic |
-| **Yahoo Finance** (query1.finance.yahoo.com) | Stocks widget | **Unofficial endpoint**, personal use; may stop working. **Lawyer to review**. | Basic |
+| **ESPN** (site.api.espn.com) | Sports scores | **Unofficial, undocumented endpoint** - no published terms for outside use; can change or stop without notice; ESPN's site terms limit use to personal, non-commercial use. Shown as "from public sources for personal use"; personal display only, cached; CasaTorch always identifies itself (its own User-Agent) and never retries as a browser - if the service refuses, the tile says scores are not available right now. **Lawyer to review**; be ready to switch to a licensed sports data feed. | Basic |
+| **Google News RSS** and publishers' RSS feeds (BBC, NPR, NYT, DW and others) | Headlines | Only feeds the publishers offer themselves (no third-party mirrors); feeds offered for feed readers; headlines link to the publisher; personal use. Google's Terms of Service apply to Google News. CasaTorch shows titles and links only, never article text. **Lawyer to review** for commercial distribution. | Basic |
+| **Yahoo Finance** (query1.finance.yahoo.com) | Stocks widget | **Unofficial endpoint**, personal use (shown as "from public sources for personal use"); CasaTorch's own User-Agent; may stop working. **Lawyer to review**. | Basic |
 | **Stooq** (stooq.com) | Stocks widget, when Yahoo Finance doesn't answer | Free quote download for personal use; no published license for products. **Lawyer to review**; make it optional or user-chosen. | Basic |
-| **DuckDuckGo** Instant Answer API and **Wikipedia** search (api.duckduckgo.com, en.wikipedia.org) | Quick facts for the Home AI Agent | DuckDuckGo asks for attribution (the answer is shown as "DuckDuckGo" with a link). Wikipedia text is CC BY-SA 4.0; CasaTorch shows only a short excerpt with the article title and link, and the Wikimedia API policy asks for an identifying User-Agent. | Pro |
-| **Team logos** (via ESPN) | Small team logos on the Sports tile | Team and league logos are trademarks of their owners, shown only to identify the team in that household's own scores. **Lawyer to review** before Pro is sold. | Basic |
+| **DuckDuckGo** Instant Answer API and **Wikipedia** search (api.duckduckgo.com, en.wikipedia.org) | Quick facts for the Home AI Agent | DuckDuckGo asks for attribution (the answer is shown as "DuckDuckGo" with a link). Wikipedia text is CC BY-SA 4.0; CasaTorch shows only a short excerpt labeled "Wikipedia (CC BY-SA)" with the article title and link, and the Wikimedia API policy asks for an identifying User-Agent. | Pro |
+| **Team logos** (via ESPN) | Small team logos on the Sports tile - **off by default** | Teams show as their abbreviation in team colors unless the household turns on Settings › General › "Show team logos from the scores service"; then logos load from the scores service for that household only. Team and league logos are trademarks of their owners, shown only to identify the team in that household's own scores. **Lawyer to review** before Pro is sold. | Basic |
 | **Cloudflare trace** (1.1.1.1/cdn-cgi/trace) and **RIPEstat** (stat.ripe.net, RIPE NCC) | Your public address, country and internet provider on the Internet tile | No key or account. The trace page is asked every 30 minutes; RIPEstat (which network owns the address) at most every 6 hours per address, identified with `sourceapp=casatorch`; credit "Provider data: RIPEstat (RIPE NCC)". Replaced ipinfo.io's token-less "legacy" API in 0.8.0 (its current free tier needs a token per user). City-level location is no longer shown - only the country. | Basic |
 | **Team Cymru** IP-to-ASN DNS service (origin.asn.cymru.com) | Who runs each network on an App test path | Free community service; no published restriction on commercial use; asks for modest volume and the DNS interface for repeat lookups (CasaTorch uses DNS and caches each answer 7 days). Not for geolocation (CasaTorch doesn't use it for that). | Basic |
 | **Cloudflare** speed test (speed.cloudflare.com) | Speed tests | Public endpoint behind Cloudflare's speed test; occasional use | Basic |
@@ -130,8 +131,8 @@ Anthropic, OpenAI, Ollama, Cloudflare, Matter and Zigbee (Connectivity Standards
 
 CasaTorch is not affiliated with, sponsored by or endorsed by any of them. Their names appear only as
 plain text, to say what CasaTorch works with or what an App test checks. CasaTorch does not ship their
-logos: App tests and Connect show a plain letter badge, and sports team logos (when shown) are loaded
-from the scores provider for that household only.
+logos: App tests and Connect show a plain letter badge, and sports teams show as their abbreviation in
+team colors - team logos load from the scores provider only if the household turns them on.
 
 ### Feather icons license
 

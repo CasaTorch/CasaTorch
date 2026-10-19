@@ -300,14 +300,14 @@ function optField(f, t, ctx, changed) {
       const draw = async () => {
         const league = el('select', { 'aria-label': T('League') }, el('option', { value: '' }, T('Pick a league…')));
         const teamSel = el('select', { 'aria-label': T('Team'), disabled: true }, el('option', { value: '' }, T('Then a team')));
-        const chips = el('div', { class: 'chips' }, cur.length ? cur.map((x, i) => el('span', { class: 'chip on' }, x.logo ? el('img', { src: x.logo, alt: '', style: 'width:16px;height:16px;margin-right:4px' }) : null, x.name, el('button', { type: 'button', class: 'chip-x', 'aria-label': T('Remove {name}', { name: x.name }), onclick: () => { cur.splice(i, 1); set([...cur]); draw(); } }, '×'))) : el('span', { class: 'tiny muted' }, T('No teams picked - shows the teams from Settings.')));
+        const chips = el('div', { class: 'chips' }, cur.length ? cur.map((x, i) => el('span', { class: 'chip on' }, x.name, el('button', { type: 'button', class: 'chip-x', 'aria-label': T('Remove {name}', { name: x.name }), onclick: () => { cur.splice(i, 1); set([...cur]); draw(); } }, '×'))) : el('span', { class: 'tiny muted' }, T('No teams picked - shows the teams from Settings.')));
         box.replaceChildren(chips, el('div', { class: 'row', style: 'gap:8px;margin-top:8px;flex-wrap:wrap' }, league, teamSel));
         try { const { leagues = [] } = await wget('/api/w/leagues', 3600_000); league.append(...leagues.map((l) => el('option', { value: l.id }, l.name))); } catch { /* offline */ }
         league.onchange = async () => {
           teamSel.disabled = true; teamSel.replaceChildren(el('option', { value: '' }, T('Loading…')));
           try { const { teams = [] } = await wget(`/api/w/teams?league=${encodeURIComponent(league.value)}`, 3600_000); teamSel.replaceChildren(el('option', { value: '' }, T('Pick a team…')), ...teams.map((x) => el('option', { value: x.id }, x.name))); teamSel.disabled = false; teamSel._teams = teams; } catch (err) { teamSel.replaceChildren(el('option', { value: '' }, err.message)); }
         };
-        teamSel.onchange = () => { const x = (teamSel._teams || []).find((y) => y.id === teamSel.value); if (!x || cur.some((c) => c.league === x.league && c.id === x.id) || cur.length >= 12) return; cur.push({ league: x.league, id: x.id, name: x.name, logo: x.logo }); set([...cur]); draw(); };
+        teamSel.onchange = () => { const x = (teamSel._teams || []).find((y) => y.id === teamSel.value); if (!x || cur.some((c) => c.league === x.league && c.id === x.id) || cur.length >= 12) return; cur.push({ league: x.league, id: x.id, name: x.name, abbr: x.abbr || null, color: x.color || null }); set([...cur]); draw(); };
       };
       draw(); return box;
     }

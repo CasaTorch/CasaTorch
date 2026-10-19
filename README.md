@@ -137,7 +137,7 @@ we decided *not* to support and why: [docs/SUPPORT-MATRIX.md](docs/SUPPORT-MATRI
 
 **Basic** is free and open source (AGPL-3.0) and everything above - the whole dashboard, for good, including
 Health (CasaTorch checks itself, repairs what it can and tells you what it fixed), every alert on every
-screen and phone, the Security Center, Household, the Family hub and the rain radar.
+screen and phone, the Security Center, Household, the Family board and the rain radar.
 
 **Pro** - $5/month or $49/year, with a 14-day trial on every new install (no card):
 

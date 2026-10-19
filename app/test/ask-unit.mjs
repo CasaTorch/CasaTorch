@@ -82,6 +82,11 @@ export default async function askTests(t) {
     assert.match(s, /Never guess, estimate or invent/); assert.match(s, /I don't know/); assert.match(s, /Never offer, or explain how, to unlock doors, open garage doors or gates, or disarm alarms/); assert.match(s, /```offer/);
   });
   /* ---- sources ---- */
+  await t('ask: Wikipedia sources carry the CC BY-SA label and license link (others do not)', () => {
+    const s = A.askSources([{ url: 'https://en.wikipedia.org/wiki/Lighthouse', title: 'Lighthouse' }, { url: 'https://example.org/x', title: 'X' }]);
+    assert.equal(s[0].license, 'Wikipedia (CC BY-SA)'); assert.match(s[0].licenseUrl, /^https:\/\/creativecommons\.org\/licenses\/by-sa\/4\.0\/$/);
+    assert.equal(s[1].license, undefined);
+  });
   await t('ask: sources keep http(s) links, drop repeats, at most 8; home citations read plainly', () => {
     const s = A.askSources([{ url: 'https://www.example.com/a#x', title: 'A' }, { url: 'https://www.example.com/a', title: 'A again' }, { url: 'javascript:alert(1)', title: 'bad' }, ...Array.from({ length: 12 }, (_, i) => ({ url: `https://example.org/${i}` }))]);
     assert.equal(s.length, 8); assert.equal(s[0].site, 'example.com'); assert.equal(s[1].title, 'example.org');
@@ -101,6 +106,13 @@ export default async function askTests(t) {
     assert.deepEqual(hrefs, ['https://example.com/', 'https://example.org/']);
     assert.ok(tags.includes('svg') && tags.includes('table'));
     assert.equal(R.askChartOk({ type: 'line', x: ['a'], series: [{ values: ['<b>'] }] }), null);
+  });
+  await t('ask (browser): a Wikipedia source shows "Wikipedia (CC BY-SA)" with the license link', () => {
+    const R = loadRenderer(), hrefs = [];
+    const node = R.askAnswerEl({ blocks: [{ type: 'md', text: 'Hi' }], sources: [{ url: 'https://en.wikipedia.org/wiki/X', title: 'X', site: 'en.wikipedia.org', license: 'Wikipedia (CC BY-SA)', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/' }] });
+    walk(node, (n) => { if (n.attrs?.href) hrefs.push(n.attrs.href); });
+    assert.ok(hrefs.includes('https://creativecommons.org/licenses/by-sa/4.0/'));
+    assert.match(JSON.stringify(node, (k, v) => (k === 'style' ? undefined : v)), /Wikipedia \(CC BY-SA\)/);
   });
   await t('ask (browser): the answer files never set HTML from text', () => {
     for (const f of ['25-ask.js', '25c-ask-render.js', '25p-ask-privacy.js']) { const src = fs.readFileSync(path.join(HERE, '../src/client', f), 'utf8'); assert.doesNotMatch(src, /innerHTML|outerHTML|insertAdjacentHTML|\bhtml:/, f); }

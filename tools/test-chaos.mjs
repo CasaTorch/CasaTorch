@@ -104,7 +104,7 @@ try {
   await c.req('POST', '/api/mycal', { title: 'Dentist', date: '2026-11-02', time: '09:00' });
   await c.req('POST', '/api/family/lists', { name: 'Groceries', icon: 'cart' });
   await c.req('POST', '/api/nudges', { title: 'Trash night', time: '19:30', repeat: 'weekly', days: [2] });
-  await sleep(1500);   // the family hub saves a moment later
+  await sleep(1500);   // the Family board saves a moment later
   await stopHard(srv);
   const fam = fs.readFileSync(path.join(data, 'family.json'));
   fs.writeFileSync(path.join(data, `family.json.${99999}.tmp`), fam);   // a save cut off just before its swap...

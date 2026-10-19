@@ -40,8 +40,15 @@ function arMatrix(redraw) {
   for (const k of d.kinds) {
     const e = arEff(k.id), name = el('div', { class: 'ar-name', role: 'rowheader' }, el('span', { class: 'ar-ic' }, icon(k.icon, 16)), el('span', { class: 'grow', style: 'min-width:0' }, el('b', {}, T(k.label)),
       k.safety ? el('span', { class: 'pill ar-safe' }, T('Safety')) : null, k.coming ? el('span', { class: 'pill' }, T('Coming')) : null));
-    if (k.reminder) {   // reminders reach phones as each one says (Household, Reminders)
-      rows.push(el('div', { class: 'ar-row ar-wide', role: 'row' }, name, el('span', { class: 'small muted ar-span' }, T('Set on each reminder: '), el('a', { href: k.id === 'household' ? '#settings/household' : '#reminders' }, k.id === 'household' ? T('Household') : T('Reminders')))));
+    if (k.reminder) {   // each reminder says whether it goes to phones (Household, Reminders); the rules here fine-tune that (40r-alert-rules.js)
+      const save = (rule) => arSave({ kind: k.id, rule }).then((ok) => ok && redraw());
+      name.querySelector('.grow').append(el('div', { class: 'tiny muted' }, T('Each reminder also says whether it goes to phones:'), ' ', el('a', { href: k.id === 'household' ? '#settings/household' : '#reminders' }, k.id === 'household' ? T('Household') : T('Reminders'))));
+      rows.push(el('div', { class: 'ar-row', role: 'row' }, name,
+        el('span', { class: 'ar-cell', 'data-l': T('In app') }, el('span', { class: 'tiny muted' }, T('On screens'))),
+        el('span', { class: 'ar-cell', 'data-l': T('Push') }, arSwitch(e.push, (ev) => save({ push: ev.target.checked ? null : false }), { label: `${T(k.label)}: ${T('Push')}` })),
+        el('span', { class: 'ar-cell', 'data-l': T('Sound') }, arSelect(e.rule?.sound || 'auto', d.sounds.map((x) => [x, T(arSoundLabel[x])]), (v) => save({ sound: v }), `${T(k.label)}: ${T('Sound')}`)),
+        el('span', { class: 'ar-cell', 'data-l': T('Repeat') }, el('span', { class: 'tiny muted' }, '-')),
+        el('span', { class: 'ar-cell ar-more' }, el('button', { class: 'btn small ghost', 'aria-label': `${T('Advanced')}: ${T(k.label)}`, onclick: () => arKindSheet(k.id, redraw) }, el('span', { class: 'hide-phone' }, T('Advanced')), icon('chevr', 14)))));
       continue;
     }
     const save = (rule) => arSave({ kind: k.id, rule }, { safety: k.safety }).then((ok) => ok && redraw());
@@ -59,14 +66,15 @@ function arMatrix(redraw) {
 }
 
 /* ---- the Advanced sheet: one kind, or one device ---- */
-function arRuleFields(rule, eff, { safety, save, kindId, tri = false }) {
+function arRuleFields(rule, eff, { safety, save, kindId, tri = false, reminder = false }) {
   const d = AR.data, r = rule || {}, f = [];
   const row = (label, ctl, help) => el('div', { class: 'ar-field' }, el('div', { class: 'grow' }, el('div', {}, label), help ? el('div', { class: 'tiny muted' }, help) : null), ctl);
   /* a device's own rule: Automatic (as its kind says), On or Off */
   const triSel = (k) => arSelect(r[k] == null ? '' : r[k] ? 'on' : 'off', [['', T('As its kind says')], ['on', T('On')], ['off', T('Off')]], (v) => save({ [k]: v === '' ? null : v === 'on' }));
   if (safety) f.push(row(T('Show in the app'), arSwitch(true, () => {}, { disabled: true }), T('Safety alerts always show in the app.')));
-  else f.push(row(T('Show in the app'), tri ? triSel('app') : arSwitch(eff.app, (e) => save({ app: e.target.checked }))));
-  f.push(row(T('Push to phones'), tri ? triSel('push') : arSwitch(eff.push, (e) => save({ push: e.target.checked })), !tri && r.push == null ? T('Automatic: as each phone\'s "Send" level says.') : null));
+  else if (!reminder) f.push(row(T('Show in the app'), tri ? triSel('app') : arSwitch(eff.app, (e) => save({ app: e.target.checked }))));
+  if (reminder) f.push(row(T('Push to phones'), arSwitch(eff.push, (e) => save({ push: e.target.checked ? null : false })), T('On: each reminder set to "Send it to phones" goes. Off: none of them do.')));
+  else f.push(row(T('Push to phones'), tri ? triSel('push') : arSwitch(eff.push, (e) => save({ push: e.target.checked })), !tri && r.push == null ? T('Automatic: as each phone\'s "Send" level says.') : null));
   const phones = d.targets || [];
   if (phones.length > 1) {
     const picked = Array.isArray(r.phones) ? r.phones : phones.map((p) => p.id);
@@ -76,16 +84,17 @@ function arRuleFields(rule, eff, { safety, save, kindId, tri = false }) {
     } }), el('span', {}, p.name))))));
   }
   f.push(row(T('Sound'), arSelect(r.sound || 'auto', d.sounds.map((s) => [s, T(arSoundLabel[s])]), (v) => save({ sound: v })), T('Urgent: stays on the lock screen and gets through Focus where the phone allows it. Automatic: urgent for critical alerts.')));
-  if (!d.pro && !safety) f.push(row(T('Repeat until someone taps "Got it"'), el('span', { class: 'pill pro' }, 'Pro')));
+  if (reminder) { /* reminders don't repeat; screens show them until someone taps Done */ }
+  else if (!d.pro && !safety) f.push(row(T('Repeat until someone taps "Got it"'), el('span', { class: 'pill pro' }, 'Pro')));
   else f.push(row(T('Repeat until someone taps "Got it"'), arSelect(r.repeat ?? '', [['', T('Automatic')], ...d.repeats.map((n) => [n, arRepeatLabel(n)])], (v) => save({ repeat: v === '' ? null : Number(v) })), T('Up to 6 reminders. Automatic: critical alerts every 10 minutes.')));
-  f.push(row(T('Quiet hours'), arSelect(r.quiet || 'follow', [['follow', T('Wait until quiet hours end')], ['ignore', T('Send during quiet hours too')]], (v) => save({ quiet: v })), safety ? T('Safety alerts always break through quiet hours.') : null));
-  if (!safety) {
+  f.push(row(T('Quiet hours'), arSelect(r.quiet || (reminder ? 'ignore' : 'follow'), [['follow', T('Wait until quiet hours end')], ['ignore', T('Send during quiet hours too')]], (v) => save({ quiet: v })), safety ? T('Safety alerts always break through quiet hours.') : null));
+  if (!safety && !reminder) {
     const pres = arSelect(r.presence || 'any', Object.entries(arPresenceLabel).map(([v, l]) => [v, T(l)]), (v) => save({ presence: v }));
     if (!d.pro || !d.presence) pres.disabled = true;
     f.push(row(T('When'), el('span', { class: 'row', style: 'gap:6px' }, pres, !d.pro ? el('span', { class: 'pill pro' }, 'Pro') : null), d.presence ? T('Uses the people and phones Home Assistant tracks.') : T('Needs people or phones tracked in Home Assistant.')));
     f.push(row(T('Daily summary instead of right away'), arSwitch(!!r.digest, (e) => save({ digest: e.target.checked })), T('One push a day at {time} with everything saved up.', { time: hm(d.house.digestTime) })));
   }
-  f.push(row(T('Wall panels'), arSelect(r.panel || 'show', Object.entries(arPanelLabel).filter(([v]) => !(safety && v === 'off')).map(([v, l]) => [v, T(l)]), (v) => save({ panel: v }))));
+  if (!reminder) f.push(row(T('Wall panels'), arSelect(r.panel || 'show', Object.entries(arPanelLabel).filter(([v]) => !(safety && v === 'off')).map(([v, l]) => [v, T(l)]), (v) => save({ panel: v }))));
   if (kindId) f.push(el('div', { class: 'row wrap', style: 'gap:8px;margin-top:12px' }, arTestButton(kindId),
     el('button', { class: 'btn small ghost', onclick: () => save({ app: null, push: null, phones: null, sound: null, repeat: null, quiet: null, presence: null, digest: null, panel: null }) }, icon('reset', 14), T('Back to automatic'))));
   return f;
@@ -96,7 +105,7 @@ function arKindSheet(kindId, after) {
   const draw = () => {
     const e = arEff(kindId), rule = (AR.scope === 'house' ? AR.data.house.kinds : AR.data.mine.kinds)[kindId] || {};
     body.replaceChildren(el('p', { class: 'small muted', style: 'margin-top:0' }, AR.scope === 'house' ? T('Household default - each person can change it for their own phones.') : T('Just for you and your phones.')),
-      ...arRuleFields(rule, e, { safety: k.safety, kindId, save: async (patch) => { if (await arSave({ kind: kindId, rule: patch }, { safety: k.safety })) { draw(); after?.(); } } }));
+      ...arRuleFields(rule, e, { safety: k.safety, kindId, reminder: !!k.reminder, save: async (patch) => { if (await arSave({ kind: kindId, rule: patch }, { safety: k.safety })) { draw(); after?.(); } } }));
   };
   draw();
   modal(body, { title: T(k.label) });
@@ -117,6 +126,19 @@ async function arDeviceSheet(dev) {
   };
   draw();
   modal(body, { title: T('Alerts for {name}', { name: dev.name }) });
+}
+/** "Alerts for this room": the household's rule for everything in one room (a Home Assistant area). */
+function arRoomSheet(room, after) {
+  const body = el('div', { class: 'ar-sheet' });
+  const saveHouse = async (patch) => { const was = AR.scope; AR.scope = 'house'; const ok = await arSave({ room, rule: patch }); AR.scope = was; return ok; };
+  const draw = () => {
+    const rule = AR.data.house.rooms?.[room] || {};
+    body.replaceChildren(el('p', { class: 'small muted', style: 'margin-top:0' }, T('Changes here apply to everything in {room}, on top of the rules for each kind of alert. Safety alerts still always show and break through quiet hours.', { room })),
+      ...arRuleFields(rule, { app: rule.app !== false, push: rule.push ?? true }, { safety: false, tri: true, save: async (patch) => { if (await saveHouse(patch)) { draw(); after?.(); } } }),
+      Object.keys(rule).length ? el('div', { class: 'row wrap', style: 'gap:8px;margin-top:12px' }, el('button', { class: 'btn small ghost', onclick: async () => { if (await saveHouse(Object.fromEntries(Object.keys(rule).map((k) => [k, null])))) { draw(); after?.(); } } }, icon('reset', 14), T('Back to automatic'))) : null);
+  };
+  draw();
+  modal(body, { title: T('Alerts for {name}', { name: room }) });
 }
 function arScopeSeg(redraw) {
   const box = el('div', { class: 'seg seg-mini', role: 'tablist' });
@@ -154,14 +176,14 @@ let arRefresh = () => {};
 /* ---- the Settings section ---- */
 async function alertRulesCards() {
   try { await arLoad(); } catch (e) { return [el('div', { class: 'card' }, el('p', { class: 'muted' }, e.message))]; }
-  const main = el('div', { class: 'card ar-card' }), times = el('div', { class: 'card' }), devs = el('div', { class: 'card' }), mutes = el('div', { class: 'card' });
+  const main = el('div', { class: 'card ar-card' }), times = el('div', { class: 'card' }), devs = el('div', { class: 'card' }), rooms = el('div', { class: 'card' }), mutes = el('div', { class: 'card' });
   const draw = () => {
     const d = AR.data;
     main.replaceChildren(el('div', { class: 'row between wrap', style: 'gap:10px' }, el('h2', { style: 'margin:0' }, icon('bell', 15), T('What each alert does')), d.admin ? arScopeSeg(draw) : null),
       el('p', { class: 'small muted' }, AR.scope === 'house' ? T('The household\'s defaults. Each person can change them for their own phones.') : T('For you and your phones. Water, smoke and freezing always show and always break through quiet hours.')),
       arMatrix(draw),
       el('p', { class: 'tiny muted' }, T('Automatic keeps what CasaTorch did before: each phone\'s "Send" level, and critical alerts repeating every 10 minutes.')));
-    drawTimes(); drawDevs(); drawMutes();
+    drawTimes(); drawDevs(); drawRooms(); drawMutes();
   };
   arRefresh = () => { if (main.isConnected) draw(); };
   const drawTimes = () => {
@@ -195,6 +217,18 @@ async function alertRulesCards() {
       list.length ? el('div', { class: 'list' }, list.map((x) => el('div', { class: 'row between', style: 'padding:6px 0;gap:8px' }, el('span', { class: 'row', style: 'gap:8px;min-width:0' }, icon(x.icon || 'dotc', 14), el('span', { class: 'ellipsis' }, x.name)), el('button', { class: 'btn small', onclick: () => arDeviceSheet(x) }, T('Edit'))))) : el('p', { class: 'small muted' }, T('No device has its own rules yet.')),
       d.devices.length ? el('div', {}, search, hits) : el('p', { class: 'small muted' }, T('Devices show here once they are connected.')));
   };
+  /* A whole room (Home Assistant areas): household defaults only, on top of each kind's rule; a device's own rule wins. */
+  const drawRooms = () => {
+    const d = AR.data;
+    if (!d.admin) { rooms.hidden = true; return; }
+    const set = d.house.rooms || {}, known = [...new Set([...d.devices.map((x) => x.room).filter(Boolean), ...Object.keys(set)])].sort((a, b) => a.localeCompare(b));
+    const pick = arSelect('', [['', T('Pick a room…')], ...known.filter((r) => !set[r]).map((r) => [r, r])], (v) => { if (v) arRoomSheet(v, () => { arLoad().then(drawRooms).catch(() => {}); }); }, T('Room'));
+    rooms.replaceChildren(el('h2', {}, icon('home', 15), T('Rooms')),
+      el('p', { class: 'small muted', style: 'margin-top:0' }, T('Give a whole room its own rules - say, no pushes from anything in the garage at night. A device\'s own rule wins over its room\'s. Rooms are household defaults.')),
+      Object.keys(set).length ? el('div', { class: 'list' }, Object.keys(set).sort((a, b) => a.localeCompare(b)).map((r) => el('div', { class: 'row between', style: 'padding:6px 0;gap:8px' }, el('span', { class: 'row', style: 'gap:8px;min-width:0' }, icon('home', 14), el('span', { class: 'ellipsis' }, r)),
+        el('button', { class: 'btn small', onclick: () => arRoomSheet(r, () => { arLoad().then(drawRooms).catch(() => {}); }) }, T('Edit'))))) : el('p', { class: 'small muted' }, T('No room has its own rules yet.')),
+      known.length ? pick : el('p', { class: 'small muted' }, T('Rooms show here once your devices are in Home Assistant areas.')));
+  };
   const drawMutes = () => {
     const d = AR.data;
     const kindPick = arSelect('doorbell', d.kinds.filter((k) => !k.reminder).map((k) => [k.id, T(k.label)]), () => {}, T('Kind of alert'));
@@ -204,7 +238,7 @@ async function alertRulesCards() {
       el('div', { class: 'row wrap', style: 'gap:8px' }, kindPick, el('button', { class: 'btn small', onclick: () => { const k = arKind(kindPick.value); arMuteDialog({ kind: k.id, name: T(k.label), safety: k.safety }); } }, icon('pause', 14), T('Mute a kind for a while'))));
   };
   draw();
-  return [main, times, devs, mutes];
+  return [main, times, devs, rooms, mutes];
 }
 
 /* ---- on an alert (the Alerts page): Got it, and More: snooze, mark resolved, mute the device, its rules ---- */

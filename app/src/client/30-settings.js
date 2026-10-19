@@ -163,6 +163,12 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
   const curSymbol = (c) => { try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: c || 'USD' }).formatToParts(0).find((x) => x.type === 'currency')?.value || '$'; } catch { return '$'; } };
   const everyday = el('div', { class: 'card' }, el('h2', {}, T('Your home')), el('label', { class: 'field' }, el('span', {}, T('Name of your home')), hname), el('label', { class: 'field' }, el('span', {}, T('Electricity price ({cur} per kWh)', { cur: curSymbol(s.energy?.currency) })), rate), el('label', { class: 'field' }, el('span', {}, T('Note on the Home screen')), note), saveV);
 
+  /* Scores and quotes: public sources for personal use; team logos only when the household turns them on (22-sports.js). */
+  const logoTog = el('input', { type: 'checkbox', checked: s.sports?.showLogos === true, style: 'width:auto;margin-top:3px' });
+  logoTog.onchange = async () => { try { await post('/api/settings', { showLogos: logoTog.checked }, 'PUT'); toast(T('Saved')); } catch (err) { logoTog.checked = !logoTog.checked; toast(err.message); } };
+  const scoresCard = el('div', { class: 'card' }, el('h2', {}, T('Scores & stock quotes')),
+    el('label', { class: 'row', style: 'gap:10px;align-items:flex-start' }, logoTog, el('span', {}, el('b', {}, T('Show team logos from the scores service')), el('div', { class: 'small muted' }, T('Off: each team shows as its abbreviation in its team colors.')))),
+    el('p', { class: 'small muted' }, T('Sports scores and stock quotes come from public sources for personal use and may be delayed. Team names and logos belong to their teams and leagues.')));
   const homeCard = el('div', { class: 'card' }, el('h2', {}, T('Home screen')), el('p', { class: 'small muted', style: 'margin-top:0' }, T('Add widgets, drag them around and resize them right on the Home screen (Edit layout). The layout is saved on this CasaTorch, so every screen in the house matches.')),
     el('div', { class: 'row wrap' }, el('a', { class: 'btn primary', href: '#home', onclick: () => setTimeout(() => $('.top .btn.primary')?.click(), 400) }, icon('plus'), T('Add a widget')), el('button', { class: 'btn', onclick: async () => { await post('/api/layout', { reset: true }, 'PUT'); toast(T('Home screen reset')); } }, icon('reset'), T('Reset layout')), el('a', { class: 'btn', href: '#photos' }, T('Manage photos')), el('a', { class: 'btn', href: '#calendar' }, T('Calendar'))));
 
@@ -182,14 +188,15 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
   conn.append(el('div', { class: 'row wrap', style: 'margin-top:12px' }, el('a', { class: 'btn primary', href: '#connect' }, icon('plus', 14), T('Connect more')), el('a', { class: 'btn', href: '#connect' }, T('Manage connections'))));
   /* Sections, like a phone's Settings: a list on the left (the whole page on a phone), one section at a time, and search. */
   const SECTIONS = [
-    ['general', T('General'), 'home', T('Your home\'s name, language, energy price and this CasaTorch'), async () => [await changeSetupCard(s, me), everyday, langCard(s), await famOutsideCard(), acct]],   // changeSetupCard: 39d-docs-links.js   // famOutsideCard: 38-family.js
+    ['general', T('General'), 'home', T('Your home\'s name, language, energy price and this CasaTorch'), async () => [await changeSetupCard(s, me), everyday, langCard(s), scoresCard, await famOutsideCard(), acct]],   // changeSetupCard: 39d-docs-links.js   // famOutsideCard: 38-family.js
     ['health', T('Health|settings'), 'checkc', T('Is everything working? Checks, one-tap fixes and saved copies of your settings'), async () => [...await healthCards(s, me), await supportHelpCard(s)], admin],   // supportHelpCard: 39s-support.js
     ['appearance', T('Look & main bar'), 'palette', T('Themes, backgrounds, colors, the main bar and the Home screen'), async () => [lookThemesCard(), lookCard(), barCard(), await famChipsCard(), homeCard]],   // famChipsCard: 38-family.js
     ['people', T('People & sign-in'), 'user', T('Your account, two-step sign-in, people in the house and the activity log'), async () => [...await securityCards(), await activityCard()]],   // activityCard: 39s-support.js
     ['safety', T('Safety'), 'shield', T('What CasaTorch will never switch, and your exceptions'), async () => [await safetyCard()], admin],
     ['connections', T('Connections & AI'), 'link', T('Home Assistant and your brands, Home AI Agent, secure access'), async () => [conn, aiCard(s), aiPrivacyCard(s), await remoteCard(), await localHttpsCard()]],
+    ['voice', T('Voice assistants'), 'mic', T('Alexa, Google Home, Apple Home and Siri'), async () => voiceCards(), admin],   // 39v-voice.js
     ['household', T('Household'), 'trash', T('Bins, the mail, plants and laundry'), async () => householdCards()],   // 37h-household.js
-    ['family', T('Family hub'), 'star', T('The family, chores and stars, lists and meals'), async () => familyCards()],   // 38-family.js
+    ['family', T('Family board'), 'star', T('The family, chores and stars, lists and meals'), async () => familyCards()],   // 38-family.js
     ['alerts', T('Alerts'), 'bell', T('What each kind of alert does: in the app, on phones, sounds, repeats, quiet hours, per device'), async () => alertRulesCards()],   // 37a-alert-rules.js
     ['phones', T('Phones & alerts'), 'phone', T('The CasaTorch app, alerts on your phones, quiet hours'), async () => [...(await appCards()), await phoneCard()]],
     ['updates', T('Updates & backup'), 'download', T('Versions, automatic updates and an encrypted backup'), async () => [await updatesCard(), await updateStatusCard(), await backupCard(s)]],   // updateStatusCard: 39s-support.js

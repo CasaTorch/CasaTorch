@@ -73,7 +73,7 @@ app.put('/api/screen-layout/:sid', express.json({ limit: '256kb' }), (req, res) 
 
 /* ======================================================================
  * Page layouts: every page built on the page grid (06-pagegrid.js) - Home, Controls, Cameras, Security, Alerts,
- * Energy, Network. Each page is a grid of that page's tiles. Until someone arranges a page, CasaTorch suggests one
+ * Energy, Network, Reminders, Family and Household. Each page is a grid of that page's tiles. Until someone arranges a page, CasaTorch suggests one
  * from what the house has (suggestPageTiles below) - so a house with solar gets the power-flow tile, one with
  * Frigate gets Detections, one with Home Assistant areas gets a tile per room - and the suggestion follows new
  * devices by itself. Once arranged, a layout is kept:
@@ -88,7 +88,7 @@ app.put('/api/screen-layout/:sid', express.json({ limit: '256kb' }), (req, res) 
  * kept in step, so an older app still shows the same Home.
  * ====================================================================== */
 const PAGE_LAYOUT_FILE = path.join(DATA_DIR, 'page-layouts.json');
-const PAGES = ['home', 'energy', 'cameras', 'controls', 'security', 'alerts', 'network'];
+const PAGES = ['home', 'energy', 'cameras', 'controls', 'security', 'alerts', 'network', 'reminders', 'family', 'household'];
 const FORMS = ['phone', 'tablet', 'desktop'];
 let pageLayouts = { house: {}, forms: {}, users: {}, screens: {} };
 try { const j = JSON.parse(fs.readFileSync(PAGE_LAYOUT_FILE, 'utf8')); if (j && typeof j === 'object') pageLayouts = { house: j.house || {}, forms: j.forms || {}, users: j.users || {}, screens: j.screens || {} }; } catch { /* none yet */ }
@@ -186,6 +186,16 @@ function suggestPageTiles(page, f = {}, form = 'desktop') {
   }
   if (page === 'alerts') { add('al-now', 6, 1); add('al-week', 6, 1); add('al-recent', 6, 1); add('al-sources', 6, 1); add('al-phones', 12, 1); return out; }
   if (page === 'network') return netSuggest(f);   // from what's connected (74n-net-model.js)
+  if (page === 'reminders') { add('rem-today', 6, 1); add('rem-phones', 6, 1); add('rem-list', 12, 1); return out; }
+  if (page === 'family') { add('fam-lists', phone ? 12 : 6, 1); add('fam-chores', phone ? 12 : 6, 1); add('fam-meals', 12, 1); add('fam-routines', 12, 1); return out; }
+  if (page === 'household') {   // what this house has set up; nothing yet: one tile that says how
+    if (!f.configured) { add('hh-start', 12, 1); return out; }
+    if (f.bins) add('hh-bins', f.mail || f.plants || f.laundry ? 6 : 12, 1);
+    if (f.mail) add('hh-mail', 6, 1);
+    if (f.laundry) add('hh-laundry', 6, 1);
+    if (f.plants) add('hh-plants', 6, 1);
+    return out;
+  }
   return out;
 }
 /* What the page's suggestion is made from - counts and yes/no only. */
@@ -201,6 +211,8 @@ async function pageFacts(page) {
       rate: !!pr.rate, tariff: !!pr.peak, co2: !!pr.co2, standby: isDemo() || hours >= 72 };
   }
   if (page === 'network') return netPageFacts();   // 74n-net-model.js
+  if (page === 'reminders' || page === 'family') return {};
+  if (page === 'household') { const v = hhView(); return { configured: !!v.configured, bins: v.bins.length, mail: !!v.mail, plants: v.plants.length, laundry: v.laundry.length }; }   // 78h-household.js
   const r = await houseDevices(), devices = r.devices, n = (f) => devices.filter(f).length;
   if (page === 'cameras') return { cameras: n((d) => d.kind === 'camera'), hidden: (r.hiddenCameras || []).length, frigate: frigateServers().length > 0 };
   if (page === 'security') return { cameras: n((d) => d.kind === 'camera'), hidden: (r.hiddenCameras || []).length };
