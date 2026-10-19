@@ -51,7 +51,7 @@ contain no FFmpeg binary. If one is ever needed, use the operating system's own 
 | --- | --- |
 | AndroidX (activity, appcompat, biometric, browser, core, webkit, swiperefreshlayout, splashscreen) | Apache-2.0 |
 | Kotlin coroutines | Apache-2.0 |
-| Firebase Cloud Messaging SDK (Android and iOS) | Apache-2.0 for the SDK; use of the service is under the Firebase / Google APIs terms |
+| Firebase Cloud Messaging SDK (Android) | Apache-2.0 for the SDK; use of the service is under the Firebase / Google APIs terms |
 | Google Play services code scanner | Android Software Development Kit License; Google APIs terms |
 
 The apps must also show their own open-source notices screen before store release (**Owner to do**).

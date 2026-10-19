@@ -3,8 +3,8 @@
  *
  * Every camera's latest picture is kept here, ready to send. While anyone
  * is looking at a camera (it was asked for in the last minute) it is
- * refreshed in the background - local cameras every 2 s, Ring every 4 s,
- * Home Assistant cameras every 3 s - and right away on a doorbell press or
+ * refreshed in the background - local cameras every second, Ring every 4 s,
+ * Home Assistant cameras every 2 s - and right away on a doorbell press or
  * motion. So a screen never waits on the camera or on Ring's servers: it
  * gets the newest picture we have in milliseconds, and asks again with
  * If-None-Match so an unchanged picture costs nothing to send.
@@ -63,13 +63,13 @@ async function sendSnap(req, res, key, fetcher, kind) {
   res.end(e.buf);
 }
 /** Something happened at this camera (doorbell, motion): get a new picture now. */
-const snapNow = (key) => { const e = SNAP.get(key); if (e) snapRefresh(e); };
+const snapNow = (key) => { for (const [k, e] of SNAP) if (k === key || k.startsWith(`${key}@`)) snapRefresh(e); };   // every size kept of that camera
 /* The background refresher: watched cameras on their own beat, the rest once a minute. */
 setInterval(() => {
   const now = Date.now();
   for (const [key, e] of SNAP) {
     // A camera removed from the settings, or one nobody has looked at for a day that keeps failing: stop fetching it.
-    if ((key.startsWith('camera:') && !(config.cameras || []).some((c) => `camera:${c.id}` === key))
+    if ((key.startsWith('camera:') && !(config.cameras || []).some((c) => `camera:${c.id}` === key.replace(/@\d+$/, '')))
       || (e.err && now - Math.max(e.wanted, e.at) > 86400_000 && now - (e.at || 0) > 3600_000)) { if (!e.inflight) SNAP.delete(key); continue; }
     const watched = now - e.wanted < SNAP_WATCH;
     // timed start-to-start, so a slow camera (or Ring's servers) still gets a new picture on its beat

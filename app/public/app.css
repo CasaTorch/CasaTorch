@@ -321,6 +321,29 @@ input[type=checkbox]:focus-visible, input[type=radio]:focus-visible, input[type=
 .cam-age:empty { display: none; }
 .cam.cam-err::after { content: 'Camera not answering - showing the last picture'; position: absolute; top: 10px; left: 10px; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(127, 29, 29, .8); color: #fff; }
 .cam-full { width: 100%; max-height: 78vh; object-fit: contain; background: #000; border-radius: 12px; display: block; }
+/* Live video on a tile: the video (or MJPEG picture) lies over the snapshot and fades in once it really plays. */
+.cam .cam-fade, .cam .cam-video, .cam .cam-mjpeg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; pointer-events: none; aspect-ratio: auto; }
+.cam .cam-fade { transition: opacity .25s ease-out; } .cam .cam-fade.on { opacity: 1; }
+.cam .cam-video, .cam .cam-mjpeg { transition: opacity .3s ease-out; background: transparent; }
+.cam.cam-live .cam-video { opacity: 1; } .cam.cam-live.cam-live-img .cam-video { opacity: 0; } .cam.cam-live.cam-live-img .cam-mjpeg { opacity: 1; }
+.cam .cam-mjpeg:not([src]), .cam .cam-fade:not([src]) { display: none; }
+.cam.cam-live::before { content: ''; position: absolute; top: 12px; left: 12px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 3px rgba(239, 68, 68, .25); z-index: 1; }
+/* The full view */
+.camv { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 78vh; background: #000; border-radius: 12px; overflow: hidden; cursor: zoom-in; }
+.camv > video, .camv > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; border-radius: 0 !important; max-width: none !important; }
+.camv .camv-video, .camv .camv-img { opacity: 0; transition: opacity .3s ease-out; }
+.camv.is-live .camv-video { opacity: 1; } .camv.is-live.is-img .camv-video { opacity: 0; } .camv.is-live.is-img .camv-img { opacity: 1; }
+.camv .camv-img:not([src]), .camv .camv-still:not([src]) { display: none; }
+.camv-top { position: absolute; top: 10px; left: 10px; display: flex; gap: 6px; pointer-events: none; }
+.camv-badge { font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 3px 9px; border-radius: 999px; background: rgba(0, 0, 0, .6); color: #fff; }
+.camv.is-live .camv-badge { background: rgba(185, 28, 28, .85); }
+.camv-ctl { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 8px; }
+.camv-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .55); color: #fff; cursor: pointer; backdrop-filter: blur(6px); }
+.camv-btn[hidden] { display: none; }
+.camv-note:empty { display: none; } .camv-note { margin-top: 8px; }
+.camv:fullscreen, .camv:-webkit-full-screen { max-height: none; border-radius: 0; aspect-ratio: auto; width: 100%; height: 100%; cursor: zoom-out; }
+.camv.camv-max { position: fixed; inset: 0; z-index: 1000; max-height: none; aspect-ratio: auto; border-radius: 0; cursor: zoom-out; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+.camv.camv-max .camv-top { top: calc(10px + env(safe-area-inset-top)); } .camv.camv-max .camv-ctl { bottom: calc(10px + env(safe-area-inset-bottom)); right: calc(10px + env(safe-area-inset-right)); }
 @media (prefers-reduced-motion: reduce) { .cam.cam-wait { animation: none; } }
 /* Home Assistant: found on your network, add any integration */
 .ha-found { margin-top: 14px; }
@@ -783,3 +806,82 @@ body.nav-left .nav.more-below, body.nav-right .nav.more-below { -webkit-mask-ima
 /* panel mode on a tablet: the Home AI Agent bar gets its own row, so neither it nor the status chips are squeezed */
 #statusbar .sb-ask input { min-width: 120px; }
 @media (min-width: 761px) and (max-width: 1280px) { #statusbar { flex-wrap: wrap; row-gap: 8px; } #statusbar .sb-ask { order: 9; flex: 1 1 100%; max-width: none; } }
+
+/* path view */
+/* App tests: the merged path graph, the time strip and "paths to all your apps" (21-apptests.js pv*). */
+:root { --pv-home: #34d399; --pv-provider: #5eb8ff; --pv-internet: #a78bfa; --pv-app: #fbbf24; --pv-band-a: 6%; --pv-band-line: 20%; --pv-node-ring: rgba(7, 10, 18, .9); --pv-label: #c9d3e3; --pv-new: #38bdf8; --pv-gone: #fb7185; }
+:root[data-theme="light"] { --pv-home: #059669; --pv-provider: #2563eb; --pv-internet: #7c3aed; --pv-app: #b45309; --pv-band-a: 5%; --pv-band-line: 22%; --pv-node-ring: #ffffff; --pv-label: #334155; --pv-new: #0369a1; --pv-gone: #be123c; }
+#modal .box.wide.pvwide { width: min(1240px, 100%); }
+.pv { display: grid; gap: 8px; }
+.pvtop { gap: 8px; align-items: center; }
+.pvstrip { min-height: 112px; outline-offset: 3px; border-radius: 10px; } .pvstrip svg { cursor: crosshair; touch-action: pan-y; user-select: none; }
+.pvstrip .pvarea { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: none; }
+.pvstrip .pvwin { fill: color-mix(in srgb, var(--accent) 14%, transparent); stroke: color-mix(in srgb, var(--accent) 70%, transparent); stroke-width: 1.2; }
+.pvstrip .pvdrag { fill: color-mix(in srgb, var(--accent-2) 22%, transparent); stroke: var(--accent-2); stroke-dasharray: 3 3; }
+.pvstrip .pvhas { fill: var(--line-2); } .pvstrip .pvhas.tr { fill: var(--faint); opacity: .35; }
+.pvstrip .lossbar { fill: var(--bad); opacity: .8; } .pvstrip .chg { stroke: var(--warn); stroke-dasharray: 3 3; } .pvstrip .chgmk { fill: var(--warn); } .pvstrip .chgmk.mtu { fill: var(--accent-2); }
+.pvstrip .attip { z-index: 3; }
+.pvbar { gap: 8px 14px; align-items: center; } .pvwhen { min-width: 0; } .pvcmp input { width: auto; margin: 0; }
+.pvzoom { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; } .pvzoom .pvzb { min-width: 30px; padding: 4px 8px; font-weight: 700; }
+.pvgraph.vert ~ * .pvzoom, .pv:has(.pvgraph.vert) .pvzoom { display: none; }
+.pvgwrap { position: relative; }
+.pvgraph { overflow: auto; border-radius: 16px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface-2) 60%, transparent); overscroll-behavior-x: contain; touch-action: pan-x pan-y; min-height: 120px; transition: opacity .2s; }
+.pvgraph.busy { opacity: .55; } .pvgraph.vert { overflow: visible; } .pvgraph.ov { background: transparent; border: 0; }
+.pvempty { padding: 28px; text-align: center; }
+.pvsvg { display: block; font-family: var(--font); }
+.pvsvg.pvin { animation: pvin .28s ease-out; } @keyframes pvin { from { opacity: 0; } to { opacity: 1; } }
+.pvband { stroke-width: 1; }
+.pvband.z-home { fill: color-mix(in srgb, var(--pv-home) var(--pv-band-a), transparent); stroke: color-mix(in srgb, var(--pv-home) var(--pv-band-line), transparent); }
+.pvband.z-provider { fill: color-mix(in srgb, var(--pv-provider) var(--pv-band-a), transparent); stroke: color-mix(in srgb, var(--pv-provider) var(--pv-band-line), transparent); }
+.pvband.z-internet { fill: color-mix(in srgb, var(--pv-internet) var(--pv-band-a), transparent); stroke: color-mix(in srgb, var(--pv-internet) var(--pv-band-line), transparent); }
+.pvband.z-app { fill: color-mix(in srgb, var(--pv-app) var(--pv-band-a), transparent); stroke: color-mix(in srgb, var(--pv-app) var(--pv-band-line), transparent); }
+.pvbt { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; fill: var(--muted); } .pvbs { font-size: 11.5px; fill: var(--faint); }
+.pvbh { cursor: pointer; outline: none; } .pvbh .pvbhit { fill: transparent; } .pvbh:hover .pvbhit { fill: var(--surface-2); } .pvbh:focus-visible .pvbhit { stroke: var(--accent); stroke-width: 2; }
+.pvchev { fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pvsum .pvsumdot { fill: var(--surface-3); stroke: var(--line-2); } .pvsum .pvsumn { font-size: 11px; font-weight: 700; fill: var(--text); } .pvsum.bad .pvsumdot { stroke: var(--bad); stroke-width: 2; }
+.pve { fill: none; stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-linecap: round; }
+.pve.quiet { stroke-dasharray: 2 5; } .pve.jump { stroke: var(--warn); } .pve.bad { stroke: var(--bad); }
+.pve.new { stroke: var(--pv-new); } .pve.gone { stroke: var(--pv-gone); stroke-dasharray: 6 5; opacity: .85; } .pve.back { stroke-dasharray: 1 4; }
+.pvel rect { fill: var(--solid); stroke: var(--line-2); } .pvel text { font-size: 10.5px; font-weight: 600; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.pvel.jump rect { stroke: var(--warn); } .pvel.jump text { fill: var(--warn); } .pvel.bad rect { fill: var(--bad); stroke: var(--bad); } .pvel.bad text { fill: #fff; }
+.pvn { cursor: pointer; outline: none; } .pvn .pvhit { fill: transparent; }
+.pvn .pvdot { fill: var(--good); stroke: var(--pv-node-ring); stroke-width: 2.5; transition: transform .15s; }
+.pvn.l-minor .pvdot { fill: var(--warn); } .pvn.l-bad .pvdot { fill: var(--bad); } .pvn.l-nodata .pvdot { fill: var(--surface-3); }
+.pvn.l-quiet .pvdot { fill: var(--solid); stroke: var(--faint); stroke-dasharray: 3 3; stroke-width: 1.6; }
+.pvn.k-you .pvdot { fill: var(--surface-3); stroke: var(--line-2); stroke-width: 1.5; } .pvn .pvico { fill: none; stroke: var(--text); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pvn.k-dest .pvdot { stroke-width: 3; } .pvg1 { stop-color: var(--accent); } .pvg2 { stop-color: var(--accent-2); }
+.pvn.k-dest.l-bad .pvdot, .pvn.appdown .pvdot { fill: var(--bad); } .pvn.appslow .pvdot { fill: var(--warn); }
+.pvn .pvnum { font-size: 10.5px; font-weight: 700; fill: #062b1d; font-variant-numeric: tabular-nums; pointer-events: none; }
+.pvn.l-bad .pvnum { fill: #fff; } .pvn.l-minor .pvnum { fill: #2b1d00; } .pvn.l-quiet .pvnum { fill: var(--muted); font-size: 14px; }
+.pvn .pvdl { font-size: 12.5px; font-weight: 800; fill: var(--on-accent); pointer-events: none; }
+.pvn .pvring { fill: none; stroke: color-mix(in srgb, var(--warn) 60%, transparent); stroke-width: 2.5; } .pvn .pvring.big { stroke: color-mix(in srgb, var(--bad) 75%, transparent); stroke-width: 3; }
+.pvn .pvsel { fill: none; stroke: var(--accent); stroke-width: 2.5; opacity: 0; }
+.pvn.sel .pvsel { opacity: 1; } .pvn:focus-visible .pvsel { opacity: 1; stroke-dasharray: 4 3; } .pvn:hover .pvdot { transform: scale(1.08); }
+.pvl1 { font-size: 11.5px; font-weight: 600; fill: var(--pv-label); } .pvl1.mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; font-weight: 500; }
+.pvl2 { font-size: 11px; fill: var(--muted); font-variant-numeric: tabular-nums; } .pvl2.bad { fill: var(--bad); font-weight: 700; }
+.pvn.new .pvdot { stroke: var(--pv-new); stroke-width: 3; } .pvn.gone { opacity: .75; } .pvn.gone .pvdot { stroke: var(--pv-gone); stroke-dasharray: 4 3; stroke-width: 2.5; }
+.pvflag rect { fill: var(--bad); } .pvflag text { font-size: 10.5px; font-weight: 700; fill: #fff; }
+.pvflag.warn rect { fill: var(--warn); } .pvflag.warn text { fill: #2b1d00; } .pvflag.muted rect { fill: var(--surface-3); stroke: var(--line-2); } .pvflag.muted text { fill: var(--muted); }
+.pvtip { position: absolute; z-index: 5; width: 300px; max-width: calc(100% - 8px); padding: 10px 12px; border-radius: 14px; background: var(--solid); border: 1px solid var(--line-2); box-shadow: 0 14px 40px rgba(0, 0, 0, .35); font-size: 13px; pointer-events: none; }
+.pvinfo { padding: 12px 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); font-size: 14px; } .pvinfo:empty { display: none; }
+.pvdhead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 8px; } .pvmono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--muted); }
+.pvkv { gap: 5px 16px; font-size: 13px; } .pvtip .pvkv { gap: 3px 12px; font-size: 12.5px; }
+.pill.pvnew { color: var(--pv-new); border-color: color-mix(in srgb, var(--pv-new) 40%, transparent); } .pill.pvgone { color: var(--pv-gone); border-color: color-mix(in srgb, var(--pv-gone) 40%, transparent); }
+.pvlegend { display: flex; flex-wrap: wrap; gap: 4px 14px; } .pvlegend span { display: inline-flex; align-items: center; gap: 6px; }
+.pvlegend .lg { width: 10px; height: 10px; border-radius: 50%; display: inline-block; } .pvlegend .lg.l-ok { background: var(--good); } .pvlegend .lg.l-minor { background: var(--warn); } .pvlegend .lg.l-bad { background: var(--bad); }
+.pvlegend .lg.quiet { border: 1.5px dashed var(--faint); } .pvlegend .lg.ring { box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--warn) 60%, transparent); background: var(--good); }
+.pvlegend .ln { width: 18px; height: 3px; border-radius: 2px; display: inline-block; } .pvlegend .ln.bad { background: var(--bad); height: 4px; } .pvlegend .ln.jump { background: var(--warn); }
+.pvlegend .ln.new { background: var(--pv-new); } .pvlegend .ln.gone { background: repeating-linear-gradient(90deg, var(--pv-gone) 0 5px, transparent 5px 8px); }
+.pvlegend .pvlcmp { display: none; } .pv.cmp .pvlegend .pvlcmp { display: inline-flex; }
+.pvchange { font: inherit; color: inherit; background: none; border: 0; padding: 2px 0; text-align: left; cursor: pointer; } .pvchange:hover span:nth-child(2) { text-decoration: underline; }
+.pvov .pvgraph { min-height: 0; }
+@media (max-width: 620px) { .pvtip { display: none; } .pvbar .pvzoom { display: none; } }
+@media (prefers-reduced-motion: reduce) { .pvsvg.pvin { animation: none; } .pvgraph { transition: none; } .pvn .pvdot { transition: none; } }
+.pvn .pvculprit { fill: none; stroke: var(--bad); stroke-width: 2.5; stroke-dasharray: 3 2.5; }
+.pvculps { display: flex; gap: 8px; align-items: baseline; margin: 6px 0 0; color: var(--bad); font-weight: 600; } .pvculps .mk { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); flex: none; }
+@media (min-width: 900px) { .pvinfo .pvkv { grid-template-columns: max-content minmax(0, 1fr) max-content minmax(0, 1fr); column-gap: 18px; } }
+.pvel, .pvflag { pointer-events: none; }
+.pvbh .pvbhit { fill: var(--solid); } .pvbh .pvbhit.z-home { fill: color-mix(in srgb, var(--pv-home) 9%, var(--solid)); } .pvbh .pvbhit.z-provider { fill: color-mix(in srgb, var(--pv-provider) 9%, var(--solid)); }
+.pvbh .pvbhit.z-internet { fill: color-mix(in srgb, var(--pv-internet) 9%, var(--solid)); } .pvbh .pvbhit.z-app { fill: color-mix(in srgb, var(--pv-app) 9%, var(--solid)); }
+.pvbh:hover .pvbhit { filter: brightness(1.08); }
+.pvchange.atchange { display: block; line-height: 1.5; } .pvchange .mk { display: inline-block; margin-right: 6px; vertical-align: 1px; }

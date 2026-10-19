@@ -71,6 +71,7 @@ function appTestsCard(a, redraw) {
     return card;
   }
   card.append(el('div', { class: 'atgrid' }, a.tests.map((t) => atTile(t, (id) => atOpen(id, a, redraw)))));
+  if (a.overview) card.append(pvOverview(a, (id) => atOpen(id, a, redraw)));
   if (!(a.trace?.ok ?? a.traceroute)) card.append(atNoTrace(a));
   if (!a.pro) card.append(el('p', { class: 'tiny muted', style: 'margin:10px 0 0' }, T('Basic tests the built-in apps (up to {n}).', { n: a.basicMax }), ' ', el('a', { href: '#settings' }, 'Pro'), ' ', T('adds your own websites, up to 30 tests, testing every minute, and an alert when an app is down or slow.')));
   return card;
@@ -102,6 +103,7 @@ function atAdd(a, redraw) {
 async function atOpen(id, a, redraw) {
   const body = el('div', { class: 'atdetail' }, el('p', { class: 'muted' }, T('Loading…')));
   const m = modal(body, { title: T('App test'), wide: true });
+  m.querySelector('.box')?.classList.add('pvwide');   // the path graph likes room
   const draw = (t) => {
     const [dot, word] = atState(t), l = t.last, web = t.kind === 'web', nm = atName(t);
     const runBtn = el('button', { class: 'btn small primary', onclick: async () => { runBtn.disabled = true; runBtn.lastChild.textContent = T('Testing…'); try { draw(await post(`/api/apptests/${encodeURIComponent(id)}/run`, {})); } catch (e) { toast(e.message); runBtn.disabled = false; } } }, icon('play'), T('Test now'));
@@ -130,8 +132,7 @@ async function atOpen(id, a, redraw) {
           [['Latency', atMs(l?.latency), 'how long a round trip takes'], ['Jitter', atMs(l?.jitter), 'how much that wobbles'], ['Loss', l?.loss != null ? `${l.loss}%` : '-', 'probes that got no answer']].map(([k, v, s]) => el('div', { class: 'atstat' }, el('span', { class: 'tiny muted' }, T(k)), el('b', {}, v), el('span', { class: 'tiny muted' }, T(s))))),
           el('p', { class: 'tiny muted' }, T('From five quick connections each test. Video calls stay smooth with latency under about 100 ms, jitter under 30 ms and no loss.')))),
       el('h3', { style: 'margin-top:18px' }, T('Path, hop by hop'), t.path?.at && t.path.hops?.length ? el('span', { class: 'tiny muted', style: 'font-weight:400;margin-left:6px' }, T('traced {when}', { when: atAgo(t.path.at) })) : null),
-      atPath(t, a, nm),
-      el('h3', { style: 'margin-top:22px' }, T('History')), atHistory(t),
+      pvSection(t, a, nm, id),
       web ? el('h3', { style: 'margin-top:18px' }, T('Time to load today')) : null, web ? atChart(t.runs || []) : null].filter(Boolean));
   };
   try { draw(await api(`/api/apptests/${encodeURIComponent(id)}`)); } catch (e) { body.replaceChildren(el('p', { class: 'small', style: 'color:var(--bad)' }, e.message)); }
@@ -244,57 +245,403 @@ function atHopInfo(nodes, i, t, nm) {
   if (n.seen && t.path?.traces) add('Seen', T('in {n} of the last {m} traces', { n: n.seen, m: t.path.traces }));
   return el('div', {}, el('b', {}, title), dl);
 }
-/* History: 24 hours (every test) or 7 days (by the hour) - the round trip to the app, loss below it, and route
-   changes as markers. Hover or touch for the numbers; tap a marker for what changed. */
-function atHistory(t) {
-  const box = el('div', { class: 'athist' }), chart = el('div', { class: 'atchart athistchart' });
-  let range = '24h';
-  const seg = el('div', { class: 'seg', role: 'tablist' }, [['24h', T('24 hours')], ['7d', T('7 days')]].map(([k, l]) => el('button', { type: 'button', role: 'tab', class: k === range ? 'on' : '', 'aria-selected': k === range ? 'true' : 'false', onclick: (e) => { range = k; for (const b of seg.children) { b.classList.toggle('on', b === e.currentTarget); b.setAttribute('aria-selected', b === e.currentTarget ? 'true' : 'false'); } paint(); } }, l)));
-  const list = el('div', { class: 'atchanges' });
-  const paint = () => {
-    const since = Date.now() - (range === '24h' ? 86400_000 : 7 * 86400_000);
-    const pts = (range === '24h' ? (t.runs || []).map((r) => ({ at: r.at, v: r.latency, loss: r.loss, ok: r.ok })) : (t.hours || []).map((h) => ({ at: h.at, v: h.latency, loss: h.loss, ok: h.up == null || h.up >= 99, up: h.up }))).filter((p) => Date.parse(p.at) >= since);
-    const ch = (t.changes || []).filter((c) => Date.parse(c.at) >= since);
-    list.replaceChildren(...(ch.length ? ch.slice().reverse().map((c) => el('div', { class: 'tiny atchange' }, el('i', { class: 'mk', 'aria-hidden': 'true' }), el('span', {}, atChangeText(c)), el('span', { class: 'muted' }, ` · ${atAgo(c.at)}`))) : [el('p', { class: 'tiny muted', style: 'margin:6px 0 0' }, range === '24h' ? T('The route stayed the same all day.') : T('The route stayed the same all week.'))]));
-    if (pts.length < 2) { chart.replaceChildren(el('p', { class: 'small muted' }, T('The chart fills in as tests run.'))); return; }
-    const W = Math.max(280, chart.clientWidth || 600), H = 196, padL = 54, padR = 8, padT = 14, lossH = 30, gap = 10, padB = 22, mainH = H - padT - padB - lossH - gap;
-    const t0 = since, t1 = Date.now(), okv = pts.map((p) => p.v).filter((v) => v != null), top = Math.max(10, Math.ceil(Math.max(...okv, 1) * 1.2 / 10) * 10), lossMax = Math.max(10, ...pts.map((p) => p.loss || 0));
-    const x = (at) => padL + (Date.parse(at) - t0) / (t1 - t0) * (W - padL - padR), y = (v) => padT + mainH * (1 - Math.min(v, top) / top), ly0 = padT + mainH + gap + lossH;
-    const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'), add = (tag, at, txt) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(at)) e.setAttribute(k, v); if (txt != null) e.textContent = txt; svg.append(e); return e; };
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', T('Round trip to the app over {range}: median {ms}, {n} route changes', { range: range === '24h' ? T('24 hours') : T('7 days'), ms: atMs([...okv].sort((p, q) => p - q)[Math.floor(okv.length / 2)]), n: ch.length }));
-    for (const v of [0, top / 2, top]) { add('line', { x1: padL, x2: W - padR, y1: y(v), y2: y(v), class: 'grid' }); add('text', { x: padL - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, atMs(v)); }
-    add('line', { x1: padL, x2: W - padR, y1: ly0, y2: ly0, class: 'grid' }); add('text', { x: padL - 8, y: ly0 - lossH / 2 + 4, 'text-anchor': 'end', class: 'axis' }, T('loss'));
-    let d = '', pen = false;
-    for (const p of pts) { if (p.v == null) { pen = false; continue; } d += `${pen ? 'L' : 'M'}${x(p.at).toFixed(1)},${y(p.v).toFixed(1)}`; pen = true; }
-    add('path', { d, class: 'line' });
-    const bw = Math.max(2, (W - padL - padR) / pts.length - 1);
-    for (const p of pts) { if (p.loss > 0) { const h = Math.max(2, p.loss / lossMax * lossH); add('rect', { x: x(p.at) - bw / 2, y: ly0 - h, width: bw, height: h, rx: 1, class: 'lossbar' }); } if (!p.ok) add('rect', { x: x(p.at) - 1.5, y: padT + mainH - 6, width: 3, height: 6, rx: 1, class: 'fail' }); }
-    for (const c of ch) { const cx = x(c.at); add('line', { x1: cx, x2: cx, y1: padT - 4, y2: ly0, class: 'chg' }); add('path', { d: `M${cx},${padT - 10}l5,5l-5,5l-5,-5z`, class: `chgmk${c.kind === 'mtu' ? ' mtu' : ''}` }); }
-    for (const [at, anchor] of [[new Date(t0).toISOString(), 'start'], [new Date(t1).toISOString(), 'end']]) add('text', { x: x(at), y: H - 5, 'text-anchor': anchor, class: 'axis' }, range === '24h' ? fmtTime(at) : fmt(at, { weekday: 'short', month: 'short', day: 'numeric' }));
-    const cross = add('line', { y1: padT, y2: ly0, class: 'cross', visibility: 'hidden' }), mark = add('circle', { r: 4.5, class: 'mark', visibility: 'hidden' });
-    const tip = el('div', { class: 'attip', hidden: true });
-    const show = (cx) => {
-      const near = ch.find((c) => Math.abs(x(c.at) - cx) < 8);
-      let best = pts[0]; for (const p of pts) if (Math.abs(x(p.at) - cx) < Math.abs(x(best.at) - cx)) best = p;
-      const px = near ? x(near.at) : x(best.at); cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
-      if (!near && best.v != null) { mark.setAttribute('cx', px); mark.setAttribute('cy', y(best.v)); mark.setAttribute('visibility', 'visible'); } else mark.setAttribute('visibility', 'hidden');
-      tip.replaceChildren(...(near ? [el('b', {}, range === '24h' ? fmtTime(near.at) : fmtWhen(near.at)), el('div', {}, atChangeText(near))]
-        : [el('b', {}, range === '24h' ? fmtTime(best.at) : fmtWhen(best.at)), el('div', {}, best.v != null ? T('round trip {ms}', { ms: atMs(best.v) }) : T('No answer')), el('div', { class: 'tiny muted' }, `${T('loss')} ${best.loss ?? 0}%${best.up != null ? ` · ${T('{n}% up', { n: best.up })}` : ''}`)]));
-      tip.hidden = false; tip.style.left = `${Math.min(Math.max(px - 110, 0), W - 230)}px`;
-    };
-    const hit = add('rect', { x: padL - 6, y: 0, width: W - padL - padR + 12, height: H, fill: 'transparent' });
-    const pos = (e) => { const b = svg.getBoundingClientRect(); return ((e.touches?.[0]?.clientX ?? e.clientX) - b.left) * (W / b.width); };
-    hit.addEventListener('pointermove', (e) => show(pos(e))); hit.addEventListener('pointerdown', (e) => show(pos(e)));
-    hit.addEventListener('pointerleave', () => { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); mark.setAttribute('visibility', 'hidden'); });
-    chart.replaceChildren(svg, tip);
-  };
-  box.append(el('div', { class: 'row between wrap', style: 'gap:8px;margin-bottom:6px' }, el('span', { class: 'tiny muted' }, T('Round trip to the app, loss below it, and route changes (◆).')), seg), chart, list);
-  atWatchWidth(chart, paint);
-  return box;
-}
 function atChangeText(c) {
   if (c.kind === 'mtu') return T('Largest packet size (MTU) changed: {a} → {b} bytes', { a: c.mtuFrom, b: c.mtuTo });
   const from = (c.from || []).join(' → ') || '?', to = (c.to || []).join(' → ') || '?';
   return from === to ? T('Route changed ({a} → {b} hops)', { a: c.hopsFrom, b: c.hopsTo }) : T('Route changed: {from} became {to}', { from, to });
+}
+
+/* ---- the path graph: every trace in a time window merged into one picture (atGraph in 77-apptests.js) ----
+   Left to right from your home to the app (top to bottom on a phone), in bands by whose network it is. Routers that
+   share the traffic show as branches that split and rejoin; a hop that doesn't answer traces is a dashed "no reply".
+   Color is loss (green none, amber at that router only - harmless, red loss that carries on to the app), a ring is
+   delay a hop adds, a link's label is the delay between its ends, and a thick red link is much slower than usual.
+   Above it, a strip of the last day or week: drag across it (or tap) to see the path at that time. */
+const PV_BAND = { home: 'Your home network', provider: 'Your internet provider', internet: 'Transit network', app: 'The app\'s network' };
+const PV_NS = 'http://www.w3.org/2000/svg';
+const pvS = (tag, at = {}, parent = null, txt = null) => { const e = document.createElementNS(PV_NS, tag); for (const [k, v] of Object.entries(at)) if (v != null && v !== false) e.setAttribute(k, v); if (txt != null) e.textContent = txt; if (parent) parent.append(e); return e; };
+const pvCut = (s, n) => { s = String(s ?? ''); return s.length > n ? `${s.slice(0, Math.max(1, n - 1))}…` : s; };
+const pvReduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const pvLoss = (n) => (n.kind === 'you' ? 'you' : n.kind === 'silent' ? 'quiet' : n.loss == null ? (n.kind === 'dest' ? 'nodata' : 'ok')
+  : (n.kind === 'dest' ? n.loss >= 5 : (n.lossOn ?? 0) >= 5) ? 'bad' : n.loss > 0 ? 'minor' : 'ok');
+const pvCmp = (x) => (x.tags?.includes('then') && !x.tags.includes('now') ? 'gone' : x.tags?.includes('now') && !x.tags.includes('then') ? 'new' : '');
+const pvBandOf = (g, n) => g.bands.find((b) => n.col >= b.c0 && n.col <= b.c1) || null;
+const pvBandName = (b, ov) => (ov && b.key === 'apps' ? T('On to each app') : T(PV_BAND[b.zone] || PV_BAND.internet));
+const pvBandSub = (b, ov) => (ov && b.zone === 'app' ? '' : [b.org, b.asn ? `AS${b.asn}` : null].filter(Boolean).join(' · '));
+const pvTitle = (n, nm) => (n.kind === 'you' ? T('Your home') : n.kind === 'dest' ? nm : T('Hop {n}', { n: (n.ns || []).join('/') }));
+const pvHops = (n) => (n === 1 ? T('1 hop') : T('{n} hops', { n }));
+const pvIso = (ms) => new Date(ms).toISOString();
+
+/* Everything about one node, for the panel under the graph (and the hover card). */
+function pvDetails(n, g, nm, short = false) {
+  const dl = el('dl', { class: 'kv pvkv' }), add = (k, v) => { if (v != null && v !== '') dl.append(el('dt', {}, k), el('dd', {}, v)); };
+  const band = pvBandOf(g, n), cmp = pvCmp(n);
+  const head = el('div', { class: 'pvdhead' }, el('b', {}, n.kind === 'dest' && g.apps ? (n.name || nm) : pvTitle(n, nm)), n.ip && n.kind === 'hop' ? el('span', { class: 'pvmono' }, n.ip) : null,
+    cmp ? el('span', { class: `pill ${cmp === 'new' ? 'pvnew' : 'pvgone'}` }, cmp === 'new' ? T('New since then') : T('Gone now')) : null);
+  if (n.kind === 'you') { add(T('Where'), T('This CasaTorch - every time here is a round trip from it.')); return el('div', {}, head, dl); }
+  add(T('Network'), band ? `${pvBandName(band, !!g.apps)}${n.org || n.asn ? ` · ${[n.org, n.asn ? `AS${n.asn}` : null].filter(Boolean).join(' · ')}` : ''}` : null);
+  if (n.kind === 'silent') {
+    add(T('Address'), T('no reply'));
+    dl.append(el('dt', {}, ''), el('dd', { class: 'muted' }, T('This router doesn\'t answer traces - many don\'t. The hops after it did, so traffic passes through fine.')));
+    add(T('Traces'), T('in {n} of the last {m} traces', { n: n.c, m: g.n }));
+    return el('div', {}, head, dl);
+  }
+  if (n.kind === 'dest') add(T('Address'), (n.ips || [n.ip]).filter(Boolean).join(', ') || null);
+  if (n.name && n.name !== nm && n.kind !== 'dest') add(T('Name'), n.name);
+  if (n.kind === 'dest' && n.name && g.apps) add(T('Name'), n.name);
+  if (!short) add(T('Registered in'), n.cc ? atRegion(n.cc) : null);
+  if (n.avg != null) add(T('Round trip'), T('{avg} average · {min} fastest · {max} slowest', { avg: atMs(n.avg), min: atMs(n.min), max: atMs(n.max) }));
+  if (n.jit != null) add(T('Jitter'), T('{ms} between traces', { ms: atMs(n.jit) }));
+  if (n.usual != null && n.avg != null) add(T('Usual'), `${atMs(n.usual)}${n.avg - n.usual >= 20 ? ` · ${T('{ms} more than usual now', { ms: atMs(n.avg - n.usual) })}` : ''}`);
+  if (n.add != null && n.add >= 1 && n.kind !== 'dest') add(T('Adds'), T('{ms} over the hop before', { ms: `+${atMs(n.add)}` }));
+  if (n.loss != null) add(T('Loss'), n.loss === 0 ? T('none') : n.kind === 'dest' ? (n.loss >= 100 ? T('{loss}% - no answer', { loss: n.loss }) : `${n.loss}%`)
+    : (n.lossOn ?? 0) >= 5 ? T('{loss}% - it carries on to the app, so traffic is being lost here', { loss: n.loss })
+      : T('{loss}% here only - this router skips some trace replies; your traffic isn\'t lost', { loss: n.loss }));
+  add(T('Traces'), g.apps ? T('{n} of your apps go through it', { n: n.tags?.length || 0 }) : T('in {n} of the last {m} traces', { n: n.c, m: g.n }));
+  if (!short) {
+    add(T('MTU'), n.mtu ? T('{n} bytes', { n: n.mtu }) : null);
+    add(T('First seen'), n.f ? fmtWhen(pvIso(n.f)) : null); add(T('Last seen'), n.l ? fmtWhen(pvIso(n.l)) : null);
+  }
+  return el('div', {}, head, dl);
+}
+
+/* Draw a graph. o: { width, vertical, nm, ov (the all-apps tree), collapsed (Set of band ids), flags: Map(key -> [text, kind]),
+   sel, onPick(node), onHover(node, el), onBand(id), apps: { id -> app } }. Returns { svg, W, H }. */
+function pvDraw(g, o) {
+  const { cols, y0, y1 } = g.layout, span = y1 - y0, ov = !!o.ov, R = ov ? 10 : 13, V = !!o.vertical;
+  const bandId = (b) => `${b.key}@${b.c0}`, colBand = (c) => g.bands.find((b) => c >= b.c0 && c <= b.c1);
+  const shut = (c) => V && o.collapsed?.has(bandId(colBand(c)));
+  const perCol = new Map(); for (const n of g.nodes) perCol.set(n.col, (perCol.get(n.col) || 0) + 1);
+  const ringAt = Math.max(10, 0.15 * Math.max(0, ...g.nodes.filter((n) => n.kind === 'dest').map((n) => n.avg || 0)));   // a hop adding a real share of the trip
+  let W, H, X, Y, P, COLW = 0, LANEW = 0;
+  if (!V) {
+    const PADX = ov ? 46 : 62, TOP = ov ? 46 : 70, LANEH = ov ? 62 : 100;
+    COLW = Math.min(ov ? 170 : 150, Math.max(ov ? 86 : 108, (o.width - 2 * PADX) / Math.max(1, cols - 1)));
+    W = Math.round(2 * PADX + (cols - 1) * COLW); X = (c) => PADX + c * COLW; Y = (y) => TOP + (y - y0) * LANEH;
+    H = Math.round(Y(y1) + (ov ? 50 : 60) + ([...(o.flags?.keys() || [])].some((k) => g.nodes.find((n) => n.k === k)?.y === y1) ? 26 : 0)); P = (c, y) => [X(c), Y(y)];
+    for (const b of g.bands) { b._x0 = b.c0 === 0 ? 4 : X(b.c0) - COLW / 2 + 3; b._x1 = b.c1 === cols - 1 ? W - 4 : X(b.c1) + COLW / 2 - 3; }
+  } else {
+    const PADL = 22, BH = 50, ROWH = ov ? 60 : 68, SUMH = 44;
+    W = Math.round(o.width); LANEW = span ? Math.min(160, Math.max(56, (W - PADL - R * 2 - (ov ? 70 : 128)) / span)) : 0;
+    X = (y) => PADL + R + (y - y0) * LANEW;
+    const rowY = []; let cur = 6;
+    for (const b of g.bands) {
+      b._top = cur; cur += BH;
+      if (o.collapsed?.has(bandId(b))) { b._sum = cur + SUMH / 2; for (let c = b.c0; c <= b.c1; c++) rowY[c] = b._sum; cur += SUMH; }
+      else for (let c = b.c0; c <= b.c1; c++) { rowY[c] = cur + ROWH / 2; cur += ROWH; }
+      b._bot = cur + 4; cur += 10;
+    }
+    H = Math.round(cur); P = (c, y) => [shut(c) ? X(0) : X(y), rowY[c]];
+  }
+  const svg = pvS('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, class: `pvsvg${V ? ' vert' : ''}${ov ? ' ov' : ''}`, role: 'group', 'aria-label': o.label || '' });
+  const defs = pvS('defs', {}, svg);
+  const grad = pvS('linearGradient', { id: `pvdest${o.uid || ''}`, x1: 0, y1: 0, x2: 1, y2: 1 }, defs);
+  pvS('stop', { offset: '0', class: 'pvg1' }, grad); pvS('stop', { offset: '1', class: 'pvg2' }, grad);
+  // bands
+  const gb = pvS('g', { class: 'pvbands' }, svg), heads = pvS('g', { class: 'pvheads' });
+  for (const b of g.bands) {
+    const name = pvBandName(b, ov), sub = pvBandSub(b, ov);
+    if (!V) {
+      const w = b._x1 - b._x0, chars = Math.floor((w - 18) / 6.6);
+      pvS('rect', { x: b._x0, y: 4, width: w, height: H - 8, rx: 14, class: `pvband z-${b.zone}` }, gb);
+      pvS('text', { x: b._x0 + 10, y: 22, class: 'pvbt' }, gb, pvCut(name, chars));
+      if (sub) pvS('text', { x: b._x0 + 10, y: 37, class: 'pvbs' }, gb, pvCut(sub, chars));
+    } else {
+      const open = !o.collapsed?.has(bandId(b));
+      pvS('rect', { x: 4, y: b._top, width: W - 8, height: b._bot - b._top, rx: 14, class: `pvband z-${b.zone}` }, gb);
+      const hd = pvS('g', { class: 'pvbh', 'data-b': bandId(b), tabindex: 0, role: 'button', 'aria-expanded': open ? 'true' : 'false', 'aria-label': `${name}${sub ? `, ${sub}` : ''}, ${pvHops(b.hops)}` }, heads);
+      pvS('rect', { x: 5, y: b._top + 1, width: W - 10, height: 44, rx: 13, class: `pvbhit z-${b.zone}` }, hd);
+      pvS('path', { d: open ? `M14 ${b._top + 15}l5 5 5-5` : `M16 ${b._top + 13}l5 5-5 5`, class: 'pvchev' }, hd);
+      pvS('text', { x: 32, y: b._top + 22, class: 'pvbt' }, hd, pvCut(name, Math.floor((W - 110) / 7.2)));
+      if (b.hops) pvS('text', { x: W - 16, y: b._top + 22, class: 'pvbs', 'text-anchor': 'end' }, hd, pvHops(b.hops));
+      if (sub) pvS('text', { x: 32, y: b._top + 38, class: 'pvbs' }, hd, pvCut(sub, Math.floor((W - 48) / 6.2)));
+      const go = () => o.onBand?.(bandId(b));
+      hd.addEventListener('click', go); hd.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+      if (!open) {
+        const ns = g.nodes.filter((n) => n.col >= b.c0 && n.col <= b.c1 && n.kind !== 'you'), ms = ns.map((n) => n.avg).filter((v) => v != null), bad = ns.some((n) => pvLoss(n) === 'bad');
+        const sg = pvS('g', { transform: `translate(${X(0)},${b._sum})`, class: `pvsum${bad ? ' bad' : ''}` }, heads);
+        pvS('circle', { r: R - 2, class: 'pvsumdot' }, sg); pvS('text', { x: 0, y: 4, 'text-anchor': 'middle', class: 'pvsumn' }, sg, String(ns.length));
+        pvS('text', { x: R + 10, y: 4, class: 'pvl2' }, sg, [ms.length ? `${atMs(Math.min(...ms))}–${atMs(Math.max(...ms))}` : null, bad ? T('loss that reaches the app') : T('no loss')].filter(Boolean).join(' · '));
+      }
+    }
+  }
+  // links
+  const N = new Map(g.nodes.map((n) => [n.k, n])), ge = pvS('g', { class: 'pvedges' }, svg), gl = pvS('g', { class: 'pvlabels' }, svg);
+  svg.append(heads);   // phone band headers sit over the links that cross them
+  const curve = (pts) => { let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`; for (let i = 1; i < pts.length; i++) { const [ax, ay] = pts[i - 1], [bx, by] = pts[i]; d += V ? ` C${ax.toFixed(1)},${(ay + (by - ay) / 2).toFixed(1)} ${bx.toFixed(1)},${(by - (by - ay) / 2).toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}` : ` C${(ax + (bx - ax) / 2).toFixed(1)},${ay.toFixed(1)} ${(bx - (bx - ax) / 2).toFixed(1)},${by.toFixed(1)} ${bx.toFixed(1)},${by.toFixed(1)}`; } return d; };
+  for (const e of g.edges) {
+    const a = N.get(e.a), b = N.get(e.b);
+    if (shut(a.col) && shut(b.col) && colBand(a.col) === colBand(b.col)) continue;
+    let pts = e.pts.filter(([c], i) => i === 0 || i === e.pts.length - 1 || !shut(c)).map(([c, y]) => P(c, y));
+    pts = pts.filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) > 0.5);
+    if (pts.length < 2) continue;
+    const cmp = pvCmp(e), quiet = a.kind === 'silent' || b.kind === 'silent';
+    const w = (ov ? 1.6 : 1.8) + (ov ? 3 : 4.5) * Math.min(1, e.share || 0) + (e.bad ? 1.5 : 0);
+    pvS('path', { d: curve(pts), class: `pve${e.bad ? ' bad' : e.jump ? ' jump' : ''}${quiet ? ' quiet' : ''}${cmp ? ` ${cmp}` : ''}${e.back ? ' back' : ''}`, 'stroke-width': w.toFixed(1) }, ge);
+    if (!ov && !V && e.dl != null && e.dl >= 1 && (e.share >= 0.2 || e.bad || e.jump)) {   // on a phone the added delay is on the node's own line
+      const [ax, ay] = pts[pts.length - 2], [bx, by] = pts[pts.length - 1], txt = `+${atMs(e.dl)}`, tw = txt.length * 6.3 + 10;
+      const mx = V ? (ax + bx) / 2 + (Math.abs(bx - ax) > 1 ? 0 : 8 + tw / 2) : (ax + bx) / 2, my = V ? (ay + by) / 2 : (ay + by) / 2 - (Math.abs(by - ay) > 1 ? 0 : 11);
+      const lg = pvS('g', { class: `pvel${e.bad ? ' bad' : e.jump ? ' jump' : ''}`, transform: `translate(${mx.toFixed(1)},${my.toFixed(1)})` }, gl);
+      pvS('rect', { x: -tw / 2, y: -9, width: tw, height: 18, rx: 9 }, lg); pvS('text', { x: 0, y: 4, 'text-anchor': 'middle' }, lg, txt);
+    }
+  }
+  // nodes
+  const gn = pvS('g', { class: 'pvnodes' }, svg), gf = pvS('g', { class: 'pvflags' }, svg), els = new Map();
+  for (const n of g.nodes) {
+    if (shut(n.col)) continue;
+    const [x, y] = P(n.col, n.y), big = n.kind === 'dest' || n.kind === 'you', r = big ? R + 3 : R, lc = pvLoss(n), cmp = pvCmp(n), app = ov && n.kind === 'dest' ? o.apps?.[n.app] : null;
+    const label = n.kind === 'you' ? T('Your home') : n.kind === 'dest' ? (app ? atName(app) : o.nm) : n.kind === 'silent' ? T('no reply') : (n.ip || '');
+    const l2 = n.kind === 'you' ? (ov ? '' : T('start')) : ov ? (n.kind === 'dest' ? (app?.down ? T('Down') : app?.slow ? T('Slow') : n.avg != null ? atMs(n.avg) : '') : n.tags?.length > 1 ? T('{n} apps', { n: n.tags.length }) : '')
+      : n.kind === 'silent' ? '' : [n.avg != null ? atMs(n.avg) : n.kind === 'dest' ? T('No answer') : null, V && n.kind === 'hop' && n.add >= 1 ? `+${atMs(n.add)}` : null, n.loss > 0 && n.loss < 100 ? `${n.loss}%` : null].filter(Boolean).join(' · ');
+    const slowIn = g.edges.some((e) => e.b === n.k && e.bad);
+    const aria = [pvTitle(n, label), n.ip && n.kind === 'hop' ? n.ip : null, n.org, n.avg != null ? atMs(n.avg) : null, n.loss ? T('{n}% loss', { n: n.loss }) : null, cmp === 'new' ? T('New since then') : cmp === 'gone' ? T('Gone now') : null].filter(Boolean).join(', ');
+    const ng = pvS('g', { class: `pvn k-${n.kind} l-${lc}${cmp ? ` ${cmp}` : ''}${o.sel === n.k ? ' sel' : ''}${o.marks?.has(n.k) ? ' culprit' : ''}${app?.down ? ' appdown' : app?.slow ? ' appslow' : ''}`, transform: `translate(${x.toFixed(1)},${y.toFixed(1)})`, tabindex: 0, role: 'button', 'aria-label': aria, 'data-k': n.k }, gn);
+    pvS('circle', { r: r + 9, class: 'pvhit' }, ng);
+    if (o.marks?.has(n.k)) pvS('circle', { r: r + 5, class: 'pvculprit' }, ng);
+    if (!ov && n.add != null && n.add >= ringAt && n.kind === 'hop' && cmp !== 'gone') pvS('circle', { r: r + 3.5 + Math.min(8, n.add / 7), class: `pvring${n.add >= 25 ? ' big' : ''}` }, ng);
+    pvS('circle', { r, class: 'pvdot', ...(n.kind === 'dest' ? { fill: `url(#pvdest${o.uid || ''})` } : {}) }, ng);
+    pvS('circle', { r: r + 4, class: 'pvsel' }, ng);
+    if (n.kind === 'you') pvS('path', { d: ICONS.home, transform: `translate(${-r * 0.62},${-r * 0.62}) scale(${(r * 1.24 / 24).toFixed(3)})`, class: 'pvico' }, ng);
+    else if (n.kind === 'dest') pvS('text', { x: 0, y: 4.5, 'text-anchor': 'middle', class: 'pvdl' }, ng, app ? app.short || '•' : o.short || '•');
+    else pvS('text', { x: 0, y: 4, 'text-anchor': 'middle', class: 'pvnum' }, ng, n.kind === 'silent' ? '·' : String(n.ns?.[0] ?? ''));
+    // the label: under the node (sideways layout, or a crowded phone row), else to its right
+    const crowded = V && (perCol.get(n.col) || 1) > 1 && LANEW < 132;
+    if (!V || crowded) {
+      const chars = Math.max(6, Math.floor(((V ? LANEW : COLW) - 10) / (n.kind === 'hop' ? 6.4 : 6.6)));
+      // the last column on a wide screen: right-aligned, so a long app name stays inside the picture
+      const edge = !V && n.col === cols - 1 && label.length * 6.6 / 2 > W - x - 6, ax = edge ? r + 4 : 0, anchor = edge ? 'end' : 'middle';
+      if (!(crowded && chars < 11 && n.kind !== 'dest')) {   // a crowded phone row: addresses would be cut to nothing - tap for them
+        pvS('text', { x: ax, y: r + 15, 'text-anchor': anchor, class: `pvl1${n.kind === 'hop' ? ' mono' : ''}` }, ng, pvCut(label, chars));
+        if (l2) pvS('text', { x: ax, y: r + 28, 'text-anchor': anchor, class: `pvl2${lc === 'bad' ? ' bad' : ''}` }, ng, pvCut(l2, chars));
+      }
+    } else {
+      const room = Math.floor((W - x - r - 22) / 6.6);
+      pvS('text', { x: r + 10, y: l2 ? -2 : 4, class: `pvl1${n.kind === 'hop' ? ' mono' : ''}` }, ng, pvCut(label, room));
+      if (l2) pvS('text', { x: r + 10, y: 13, class: `pvl2${lc === 'bad' || slowIn ? ' bad' : ''}` }, ng, pvCut(l2, room));
+    }
+    const flag = o.flags?.get(n.k);
+    if (flag) {
+      const [txt, kind] = flag, tw = txt.length * 6.1 + 16;
+      const fx = V ? Math.min(W - 10 - tw / 2, Math.max(tw / 2 + 8, x + (crowded ? 0 : r + 10 + tw / 2))) : Math.min(W - 6 - tw / 2, Math.max(tw / 2 + 6, x)), fy = V ? y - r - 15 : y + r + (l2 ? 46 : 33);
+      const fg = pvS('g', { class: `pvflag ${kind || ''}`, transform: `translate(${fx.toFixed(1)},${fy.toFixed(1)})` }, gf);
+      pvS('rect', { x: -tw / 2, y: -10, width: tw, height: 20, rx: 10 }, fg); pvS('text', { x: 0, y: 4, 'text-anchor': 'middle' }, fg, txt);
+    }
+    els.set(n.k, ng);
+    ng.addEventListener('click', () => o.onPick?.(n, ng, 'click'));
+    ng.addEventListener('focus', () => o.onPick?.(n, ng, 'focus'));
+    ng.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') o.onHover?.(n, ng); });
+    ng.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') o.onHover?.(null); });
+    ng.addEventListener('keydown', (e) => {
+      const fwd = V ? 'ArrowDown' : 'ArrowRight', back = V ? 'ArrowUp' : 'ArrowLeft', side = V ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
+      let to = null;
+      if (e.key === fwd || e.key === back) { const list = g.edges.filter((x) => (e.key === fwd ? x.a : x.b) === n.k).sort((p, q) => q.c - p.c); to = list[0] && (e.key === fwd ? list[0].b : list[0].a); }
+      else if (side.includes(e.key)) { const same = g.nodes.filter((x) => x.col === n.col).sort((p, q) => p.y - q.y), i = same.indexOf(n); to = same[i + (e.key === side[0] ? -1 : 1)]?.k; }
+      else if (e.key === 'Home') to = 'you'; else if (e.key === 'End') to = g.nodes.find((x) => x.kind === 'dest')?.k;
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); o.onPick?.(n, ng, 'click'); return; } else return;
+      e.preventDefault(); if (to) { const t2 = els.get(to); t2?.focus(); }
+    });
+  }
+  return { svg, W, H, els, at: (k) => { const n = N.get(k); return n ? P(n.col, n.y) : null; } };
+}
+
+/* Pinch, Ctrl + wheel (a trackpad pinch) and buttons zoom a long path on a big screen; it scrolls sideways when wider. */
+function pvZoomable(box) {
+  let k = null, W = 0, H = 0, svg = null, pts = new Map(), pinch = null;
+  const apply = (nk, cx = null) => {
+    if (!svg) return; const old = k || 1; k = Math.min(2.2, Math.max(0.5, nk));
+    const fx = cx ?? box.clientWidth / 2, sx = (box.scrollLeft + fx) / old;
+    svg.setAttribute('width', Math.round(W * k)); svg.setAttribute('height', Math.round(H * k));
+    box.scrollLeft = sx * k - fx;
+  };
+  const set = (r) => { svg = r.svg; W = r.W; H = r.H; const fit = box.clientWidth / W; if (k == null) k = W <= box.clientWidth ? 1 : fit >= 0.78 ? fit : 1; apply(k); };
+  box.addEventListener('wheel', (e) => { if (!e.ctrlKey || !svg) return; e.preventDefault(); const b = box.getBoundingClientRect(); apply(k * Math.exp(-e.deltaY * 0.01), e.clientX - b.left); }, { passive: false });
+  box.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; pts.set(e.pointerId, [e.clientX, e.clientY]); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), k }; } });
+  box.addEventListener('pointermove', (e) => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]); if (pinch && pts.size === 2) { const [a, b] = [...pts.values()], bb = box.getBoundingClientRect(); apply(pinch.k * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d, (a[0] + b[0]) / 2 - bb.left); } });
+  const up = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; };
+  box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
+  const btn = (ic, lab, f) => el('button', { type: 'button', class: 'btn small ghost pvzb', 'aria-label': lab, title: lab, onclick: f }, ic);
+  const tools = el('div', { class: 'pvzoom', role: 'group', 'aria-label': T('Zoom|graph') },
+    btn('−', T('Zoom out'), () => apply(k / 1.25)), btn('+', T('Zoom in'), () => apply(k * 1.25)), btn(T('Fit'), T('Fit the whole path'), () => apply(Math.min(1, box.clientWidth / W))));
+  return { set, tools };
+}
+
+/* The strip above the graph: the round trip to the app, loss under it, route changes (◆), and the time the graph shows
+   (the shaded window). Drag across it to pick a time, tap for the hour around a moment; arrow keys move the window. */
+function pvStrip(t, st, onPick) {
+  const box = el('div', { class: 'pvstrip atchart', tabindex: 0, role: 'slider', 'aria-label': T('Time the path shows - drag or use the arrow keys'), 'aria-valuemin': 0, 'aria-valuemax': 100 });
+  const tip = el('div', { class: 'attip', hidden: true });
+  const paint = () => {
+    const range = st.range, now = Date.now(), since = now - (range === '24h' ? 86400_000 : 7 * 86400_000);
+    const pts = (range === '24h' ? (t.runs || []).map((r) => ({ at: Date.parse(r.at), v: r.latency, loss: r.loss })) : (t.hours || []).map((h) => ({ at: Date.parse(h.at) + 1800_000, v: h.latency, loss: h.loss, up: h.up }))).filter((p) => p.at >= since);
+    const ch = (t.changes || []).filter((c) => Date.parse(c.at) >= since), marks = st.data?.marks || { traces: [], buckets: [] };
+    const W = Math.max(280, box.clientWidth || 600), H = 112, padL = 46, padR = 8, padT = 14, lossH = 18, gap = 6, padB = 20, mainH = H - padT - padB - lossH - gap;
+    const okv = pts.map((p) => p.v).filter((v) => v != null), top = Math.max(10, Math.ceil(Math.max(...okv, 1) * 1.2 / 10) * 10), lossMax = Math.max(10, ...pts.map((p) => p.loss || 0));
+    const x = (ms) => padL + (ms - since) / (now - since) * (W - padL - padR), y = (v) => padT + mainH * (1 - Math.min(v, top) / top), ly0 = padT + mainH + gap + lossH, inv = (px) => since + (px - padL) / (W - padL - padR) * (now - since);
+    const svg = pvS('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, 'aria-hidden': 'true' });
+    for (const v of [0, top]) { pvS('line', { x1: padL, x2: W - padR, y1: y(v), y2: y(v), class: 'grid' }, svg); pvS('text', { x: padL - 6, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, svg, atMs(v)); }
+    pvS('text', { x: padL - 6, y: ly0 - 4, 'text-anchor': 'end', class: 'axis' }, svg, T('loss'));
+    // when there's path data: each kept trace as a tick, older sums as a faint band
+    for (const [h, w] of marks.buckets) if (h + w > since && h < (marks.traces[0] ?? now)) pvS('rect', { x: x(Math.max(h, since)), y: H - padB + 3, width: Math.max(1, x(Math.min(h + w, now)) - x(Math.max(h, since)) - 1), height: 3, rx: 1.5, class: 'pvhas' }, svg);
+    for (const ms of marks.traces) if (ms >= since) pvS('rect', { x: x(ms) - 0.5, y: H - padB + 2, width: 1, height: 3, class: 'pvhas tr' }, svg);
+    let d = '', pen = false;
+    for (const p of pts) { if (p.v == null) { pen = false; continue; } d += `${pen ? 'L' : 'M'}${x(p.at).toFixed(1)},${y(p.v).toFixed(1)}`; pen = true; }
+    if (d) { pvS('path', { d: `${d}L${x(pts[pts.length - 1].at).toFixed(1)},${(padT + mainH).toFixed(1)}L${x(pts.find((p) => p.v != null)?.at ?? since).toFixed(1)},${(padT + mainH).toFixed(1)}Z`, class: 'pvarea' }, svg); pvS('path', { d, class: 'line' }, svg); }
+    const bw = Math.max(1.5, (W - padL - padR) / Math.max(1, pts.length) - 0.6);
+    for (const p of pts) if (p.loss > 0) { const h = Math.max(2, p.loss / lossMax * lossH); pvS('rect', { x: x(p.at) - bw / 2, y: ly0 - h, width: bw, height: h, rx: 1, class: 'lossbar' }, svg); }
+    for (const c of ch) { const cx = x(Date.parse(c.at)); pvS('line', { x1: cx, x2: cx, y1: padT - 4, y2: ly0, class: 'chg' }, svg); pvS('path', { d: `M${cx},${padT - 11}l5,5l-5,5l-5,-5z`, class: `chgmk${c.kind === 'mtu' ? ' mtu' : ''}` }, svg); }
+    // the window the graph shows
+    const wf = st.from ?? st.data?.from, wt = st.to ?? st.data?.to;
+    if (wf && wt) { const a = x(Math.max(wf, since)), b = x(Math.min(wt, now)); pvS('rect', { x: a, y: padT - 2, width: Math.max(3, b - a), height: ly0 - padT + 4, rx: 4, class: 'pvwin' }, svg); box.setAttribute('aria-valuenow', Math.round((wt - since) / (now - since) * 100)); box.setAttribute('aria-valuetext', `${fmtWhen(pvIso(wf))} – ${fmtTime(pvIso(wt))}`); }
+    for (const [ms, anchor] of [[since, 'start'], [now, 'end']]) pvS('text', { x: x(ms), y: H - 3, 'text-anchor': anchor, class: 'axis' }, svg, range === '24h' ? fmtTime(pvIso(ms)) : fmt(pvIso(ms), { weekday: 'short', month: 'short', day: 'numeric' }));
+    const sel = pvS('rect', { y: padT - 2, height: ly0 - padT + 4, class: 'pvdrag', visibility: 'hidden' }, svg), cross = pvS('line', { y1: padT, y2: ly0, class: 'cross', visibility: 'hidden' }, svg);
+    const pos = (e) => { const b = svg.getBoundingClientRect(); return Math.min(W - padR, Math.max(padL, (e.clientX - b.left) * (W / b.width))); };
+    let drag = null;
+    svg.addEventListener('pointerdown', (e) => { drag = { x0: pos(e), x1: pos(e) }; svg.setPointerCapture?.(e.pointerId); });
+    svg.addEventListener('pointermove', (e) => {
+      const px = pos(e);
+      if (drag) { drag.x1 = px; const a = Math.min(drag.x0, px), b = Math.max(drag.x0, px); sel.setAttribute('x', a); sel.setAttribute('width', b - a); sel.setAttribute('visibility', b - a > 4 ? 'visible' : 'hidden'); }
+      cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('visibility', 'visible');
+      const at = inv(px), near = ch.find((c) => Math.abs(x(Date.parse(c.at)) - px) < 8); let best = pts[0]; for (const p of pts) if (Math.abs(p.at - at) < Math.abs(best.at - at)) best = p;
+      tip.replaceChildren(...(near ? [el('b', {}, fmtWhen(near.at)), el('div', {}, atChangeText(near))] : best ? [el('b', {}, range === '24h' ? fmtTime(pvIso(best.at)) : fmtWhen(pvIso(best.at))), el('div', {}, best.v != null ? T('round trip {ms}', { ms: atMs(best.v) }) : T('No answer')), el('div', { class: 'tiny muted' }, `${T('loss')} ${best.loss ?? 0}%`)] : []));
+      tip.hidden = !best && !near; tip.style.left = `${Math.min(Math.max(px - 110, 0), W - 230)}px`; tip.style.top = `${H + 4}px`;
+    });
+    const end = () => {
+      if (!drag) return; const a = Math.min(drag.x0, drag.x1), b = Math.max(drag.x0, drag.x1); drag = null; sel.setAttribute('visibility', 'hidden');
+      if (b - a > 6) onPick(Math.round(inv(a)), Math.round(inv(b)));
+      else { const at = inv(a), half = range === '24h' ? 1800_000 : 3 * 3600_000; onPick(Math.round(Math.max(since, at - half)), Math.round(Math.min(now, at + half))); }
+    };
+    svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', () => { drag = null; sel.setAttribute('visibility', 'hidden'); });
+    svg.addEventListener('pointerleave', () => { if (!drag) { tip.hidden = true; cross.setAttribute('visibility', 'hidden'); } });
+    box.replaceChildren(svg, tip);
+  };
+  box.addEventListener('keydown', (e) => {
+    const wf = st.from ?? st.data?.from, wt = st.to ?? st.data?.to; if (!wf) return;
+    const w = wt - wf, now = Date.now(), min = now - (st.range === '24h' ? 86400_000 : 7 * 86400_000);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); const s = e.key === 'ArrowLeft' ? -w / 2 : w / 2, f = Math.max(min, Math.min(now - w, wf + s)); onPick(Math.round(f), Math.round(f + w)); }
+    else if (e.key === 'End') { e.preventDefault(); onPick(null, null); }
+  });
+  atWatchWidth(box, paint);
+  return { box, paint };
+}
+
+/* The path section of a test's details: the strip, the graph (or the hop list), the selected hop, the legend. */
+function pvSection(t, a, nm, id) {
+  const p = t.path;
+  if (t.kind === 'router' || (t.kind === 'dns' && p?.none === 'home') || !(a.trace?.ok ?? a.traceroute) || p?.none === 'tool' || !p?.hops?.length) return atPath(t, a, nm);
+  const st = { range: '24h', from: null, to: null, cmp: false, mode: 'graph', collapsed: null, sel: null, data: null, seq: 0, vertical: null };
+  try { if (localStorage.getItem('ct.pathview') === 'list') st.mode = 'list'; } catch { /* private window */ }
+  const segOf = (opts, cur, on) => { const s = el('div', { class: 'seg seg-mini', role: 'tablist' }, opts.map(([k, l]) => el('button', { type: 'button', role: 'tab', class: k === cur ? 'on' : '', 'aria-selected': k === cur ? 'true' : 'false', onclick: (e) => { for (const b of s.children) { b.classList.toggle('on', b === e.currentTarget); b.setAttribute('aria-selected', b === e.currentTarget ? 'true' : 'false'); } on(k); } }, l))); return s; };
+  const wrap = el('div', { class: 'pv' }), gwrap = el('div', { class: 'pvgwrap' }), gbox = el('div', { class: 'pvgraph', role: 'region', 'aria-label': T('Network path') });
+  const tip = el('div', { class: 'pvtip', hidden: true }), info = el('div', { class: 'pvinfo', 'aria-live': 'polite' }), when = el('div', { class: 'pvwhen small' });
+  const strip = pvStrip(t, st, (f, to) => { st.from = f; st.to = to; if (f == null) st.cmp = false; load(); });
+  const cmpBox = el('input', { type: 'checkbox', onchange: (e) => { st.cmp = e.target.checked; load(); } });
+  const cmpLab = el('label', { class: 'row pvcmp', style: 'gap:6px' }, cmpBox, el('span', { class: 'small' }, T('Compare with now')));
+  const nowBtn = el('button', { type: 'button', class: 'btn small ghost', onclick: () => { st.from = st.to = null; st.cmp = false; load(); } }, T('Back to now'));
+  const zoom = pvZoomable(gbox);
+  const listBox = el('div', { class: 'pvlist' });
+  const changes = el('div', { class: 'atchanges' });
+  const legend = el('div', { class: 'pvlegend tiny muted' },
+    el('span', {}, el('i', { class: 'lg l-ok' }), T('no loss')), el('span', {}, el('i', { class: 'lg l-minor' }), T('loss at that router only (harmless)')), el('span', {}, el('i', { class: 'lg l-bad' }), T('loss that reaches the app')),
+    el('span', {}, el('i', { class: 'lg quiet' }), T('no reply (normal)')), el('span', {}, el('i', { class: 'lg ring' }), T('ring: delay this hop adds')), el('span', {}, el('i', { class: 'ln bad' }), T('slower than usual')), el('span', {}, el('i', { class: 'ln jump' }), T('big jump (usual)')),
+    el('span', { class: 'pvlcmp' }, el('i', { class: 'ln new' }), T('new since then')), el('span', { class: 'pvlcmp' }, el('i', { class: 'ln gone' }), T('gone now')));
+  const range = segOf([['24h', T('24 hours')], ['7d', T('7 days')]], '24h', (k) => { st.range = k; strip.paint(); paintChanges(); });
+  const mode = segOf([['graph', T('Graph')], ['list', T('List')]], st.mode, (k) => { st.mode = k; try { localStorage.setItem('ct.pathview', k); } catch { /* fine */ } show(); });
+  const paintChanges = () => {
+    const since = Date.now() - (st.range === '24h' ? 86400_000 : 7 * 86400_000), ch = (t.changes || []).filter((c) => Date.parse(c.at) >= since);
+    changes.replaceChildren(...(ch.length ? ch.slice().reverse().map((c) => el('button', { type: 'button', class: 'tiny atchange pvchange', title: T('Show the path before this change, compared with now'), onclick: () => { const at = Date.parse(c.at); st.to = at - 60_000; st.from = st.to - 3600_000; st.cmp = true; load(); } },
+      el('i', { class: 'mk', 'aria-hidden': 'true' }), el('span', {}, atChangeText(c)), el('span', { class: 'muted' }, ` · ${atAgo(c.at)}`)))
+      : [el('p', { class: 'tiny muted', style: 'margin:6px 0 0' }, st.range === '24h' ? T('The route stayed the same all day.') : T('The route stayed the same all week.'))]));
+  };
+  const flagsOf = (g) => {
+    const f = new Map(), tr = g.trouble;
+    if (tr?.k) f.set(tr.k, [tr.kind === 'down' ? T('Stops answering here') : T('Trouble starts here'), tr.kind === 'delay' && !t.down && !t.slow ? 'warn' : 'bad']);
+    return f;
+  };
+  const pick = (n, how) => {
+    st.sel = n.k; tip.hidden = true;
+    for (const x of gbox.querySelectorAll('.pvn.sel')) x.classList.remove('sel');
+    gbox.querySelector(`.pvn[data-k="${CSS.escape(n.k)}"]`)?.classList.add('sel');
+    info.replaceChildren(pvDetails(n, st.data.graph, nm));
+    if (how === 'click' && st.vertical) info.scrollIntoView({ block: 'nearest', behavior: pvReduced() ? 'auto' : 'smooth' });
+  };
+  const hover = (n, ng) => {
+    if (!n) { tip.hidden = true; return; }
+    tip.replaceChildren(pvDetails(n, st.data.graph, nm, true));
+    const b = ng.getBoundingClientRect(), w = gwrap.getBoundingClientRect();
+    tip.hidden = false; const tw = tip.offsetWidth || 280;
+    tip.style.left = `${Math.min(Math.max(0, b.left - w.left + b.width / 2 - tw / 2), w.width - tw)}px`; tip.style.top = `${b.bottom - w.top + 6}px`;
+  };
+  const draw = () => {
+    const g = st.data?.graph;
+    if (!g) { gbox.replaceChildren(el('p', { class: 'small muted pvempty' }, st.from ? T('No traces in that time - pick another on the strip above.') : T('Tracing the path - it shows up here within a few minutes.'))); info.replaceChildren(); return; }
+    const width = gbox.clientWidth || 900; st.vertical = width < 600;
+    if (!st.collapsed) st.collapsed = new Set();
+    const r = pvDraw(g, { width, vertical: st.vertical, nm, short: t.short, collapsed: st.collapsed, flags: flagsOf(g), sel: st.sel, onPick: (n, _ng, how) => pick(n, how), onHover: hover, uid: id,
+      onBand: (bid) => { if (st.collapsed.has(bid)) st.collapsed.delete(bid); else st.collapsed.add(bid); draw(); gbox.querySelector(`.pvbh[data-b="${CSS.escape(bid)}"]`)?.focus({ preventScroll: true }); },
+      label: T('Path to {name}: {n} hops', { name: nm, n: g.nodes.filter((x) => x.kind === 'hop' || x.kind === 'silent').length }) });
+    gbox.replaceChildren(r.svg); gbox.classList.toggle('vert', st.vertical);
+    if (!st.vertical) zoom.set(r); else { r.svg.removeAttribute('height'); r.svg.setAttribute('width', '100%'); }
+    if (!pvReduced()) { r.svg.classList.add('pvin'); }
+    const sel = g.nodes.find((x) => x.k === st.sel) || g.nodes.find((x) => x.k === g.trouble?.k) || g.nodes.find((x) => x.kind === 'dest');
+    if (sel) { st.sel = sel.k; r.els.get(sel.k)?.classList.add('sel'); info.replaceChildren(pvDetails(sel, g, nm)); }
+    if (!st.vertical && g.trouble?.k && gbox.scrollWidth > gbox.clientWidth) { const at = r.at(g.trouble.k); if (at) gbox.scrollLeft = Math.max(0, at[0] * (Number(r.svg.getAttribute('width')) / r.W) - gbox.clientWidth / 2); }
+  };
+  const bar = () => {
+    const d = st.data, g = d?.graph, past = st.from != null;
+    const span = d ? `${fmtWhen(pvIso(d.from))} – ${fmtTime(pvIso(d.to))}` : '';
+    const what = g ? [g.traces != null ? T('{n} traces merged', { n: g.traces }) : null, g.distinct > 1 ? T('{n} different paths', { n: g.distinct }) : null, g.mtu ? T('largest packet (MTU) {n} bytes', { n: g.mtu }) : null].filter(Boolean).join(' · ') : '';
+    when.replaceChildren(...[el('b', {}, past ? span : T('The last hour')), what ? el('span', { class: 'muted' }, ` · ${what}`) : null,
+      st.cmp && g ? el('span', { class: 'muted' }, ` · ${T('compared with the last hour')}`) : null].filter(Boolean));
+    cmpBox.checked = st.cmp; cmpLab.hidden = !past; nowBtn.hidden = !past;
+    wrap.classList.toggle('cmp', !!st.cmp);
+  };
+  const load = async () => {
+    const seq = ++st.seq, q = new URLSearchParams();
+    if (st.from != null) { q.set('from', st.from); q.set('to', st.to); } if (st.cmp) q.set('cmp', '1');
+    gbox.classList.add('busy');
+    try {
+      const d = await api(`/api/apptests/${encodeURIComponent(id)}/graph?${q}`); if (seq !== st.seq) return;
+      st.data = d; bar(); draw(); strip.paint();
+    } catch (e) { if (seq === st.seq) gbox.replaceChildren(el('p', { class: 'small', style: 'color:var(--bad)' }, e.message)); }
+    finally { if (seq === st.seq) gbox.classList.remove('busy'); }
+  };
+  const show = () => {
+    const g = st.mode === 'graph';
+    for (const x of [gwrap, info, legend, when.parentElement]) if (x) x.hidden = !g;
+    listBox.hidden = g; if (!g && !listBox.childNodes.length) listBox.append(atPath(t, a, nm));
+    if (g && st.data) draw();
+  };
+  const top = el('div', { class: 'row between wrap pvtop' }, el('span', { class: 'tiny muted' }, T('Round trip to the app, loss below it, and route changes (◆). Drag across it to see the path at any time.')), el('div', { class: 'row', style: 'gap:8px' }, range, mode));
+  wrap.append(top, strip.box, el('div', { class: 'row between wrap pvbar' }, when, el('div', { class: 'row wrap', style: 'gap:8px;align-items:center' }, cmpLab, nowBtn, zoom.tools)), gwrap, info, legend, listBox, changes);
+  gwrap.append(gbox, tip);
+  atWatchWidth(gbox, () => { if (st.data && st.mode === 'graph') draw(); });
+  gbox.addEventListener('pointerleave', () => { tip.hidden = true; });
+  paintChanges(); show(); load();
+  return wrap;
+}
+
+/* Paths to all your apps: one tree from home. Where they share hops and where they part; a problem on a shared hop
+   shows on every app after it, so trouble there is marked with how many apps pass through. Tap an app to open it. */
+function pvOverview(a, open) {
+  const g = a.overview, box = el('div', { class: 'pvov' }), gbox = el('div', { class: 'pvgraph ov' }), info = el('div', { class: 'pvinfo', 'aria-live': 'polite' });
+  const apps = Object.fromEntries((g.apps || []).map((x) => [x.id, x])), collapsed = new Set();
+  const flags = new Map();
+  if (g.split && g.split !== 'you') flags.set(g.split, [T('Paths part here'), 'muted']);
+  const marks = new Set((g.marks || []).map((m) => m.k));
+  if (g.issue) flags.set(g.issue.k, [T('{n} apps having trouble pass here', { n: g.issue.apps.length }), 'bad']);
+  const draw = () => {
+    const width = gbox.clientWidth || 900, vertical = width < 600;
+    const r = pvDraw(g, { width, vertical, ov: true, apps, collapsed, flags, marks, uid: 'ov', label: T('Paths to all your apps'),
+      onPick: (n, _ng, how) => { if (n.kind === 'dest' && how === 'click') return open(n.app); if (how === 'click') info.replaceChildren(pvDetails(n, g, '', true)); },
+      onBand: (bid) => { if (collapsed.has(bid)) collapsed.delete(bid); else collapsed.add(bid); draw(); gbox.querySelector(`.pvbh[data-b="${CSS.escape(bid)}"]`)?.focus({ preventScroll: true }); } });
+    gbox.replaceChildren(r.svg); if (vertical) { r.svg.removeAttribute('height'); r.svg.setAttribute('width', '100%'); }
+    gbox.classList.toggle('vert', vertical);
+  };
+  const shared = g.nodes.filter((x) => x.kind !== 'you' && x.kind !== 'dest' && x.tags.length === (g.apps || []).length).length;
+  box.append(el('div', { class: 'row between wrap', style: 'gap:8px;margin:18px 0 6px' }, el('h3', { style: 'margin:0;font-size:15px' }, T('Paths to all your apps')),
+    el('span', { class: 'tiny muted' }, shared ? T('All your apps share the first {n} hops, then part ways.', { n: shared }) : T('Your apps part ways straight after your home.'))),
+    el('p', { class: 'tiny muted', style: 'margin:0 0 8px' }, T('A problem on a shared hop slows every app after it. Tap an app to see its own path.')), gbox,
+    (g.marks || []).length ? el('div', { class: 'pvculps tiny' }, el('i', { class: 'mk', 'aria-hidden': 'true' }), el('span', {}, (g.marks || []).map((m) => { const n = g.nodes.find((x) => x.k === m.k); return T('{name}: likely culprit at hop {hop}{org}', { name: atName(apps[m.app] || { name: '?' }), hop: (n?.ns || []).join('/'), org: n?.org ? ` (${n.org})` : '' }); }).join(' · '))) : null, info);
+  atWatchWidth(gbox, draw);
+  return box;
 }

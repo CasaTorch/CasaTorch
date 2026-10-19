@@ -408,6 +408,106 @@ t('App tests: setup suggests apps for the country, and turns the answers into te
   assert.equal(A.atFromSetup({ want: 'no' }, kept), kept);
   assert.equal(A.atFromSetup({ want: 'yes', picks: ['netflix'] }, kept)[0].id, 'k1', 'running setup again keeps the history');
 });
+/* The path graph (scrub-ok: documentation addresses throughout). */
+const PG = { a: '192.168.1.1', b1: '198.51.100.17', b2: '198.51.100.21', c: '198.51.100.5', d: '203.0.113.41', e: '203.0.113.45' };   // scrub-ok
+const pgAcc = (avg, loss = 0) => [avg * 0.9, avg, avg * 1.2, loss, 1, Math.round(avg * avg), 1];
+t('App tests: path graph merges traces - a router once per address, branches that rejoin, a silent hop between its neighbors', () => {
+  const A = globalThis.__casatorchAT;
+  const g = A.atMerge([{ s: [PG.a, PG.b1, PG.c, null, PG.d], c: 3 }, { s: [PG.a, PG.b2, PG.c, null, PG.d], c: 1 }], { s: { [PG.a]: pgAcc(1), [PG.b1]: pgAcc(9), [PG.b2]: pgAcc(10), [PG.c]: pgAcc(12), [PG.d]: pgAcc(15) } });
+  const by = Object.fromEntries(g.nodes.map((x) => [x.k, x]));
+  assert.equal(g.nodes.length, 8);   // home, a, b1, b2, c, one "no reply", d, the app
+  assert.deepEqual([by[PG.c].c, by[PG.b1].c, by[PG.b2].c, by.dest.c], [4, 3, 1, 4]);
+  assert.equal(g.nodes.filter((x) => x.kind === 'silent').length, 1, 'the same silent hop after the same router is one node');
+  assert.equal(g.edges.length, 8); assert.equal(g.edges.find((e) => e.a === PG.a && e.b === PG.b1).c, 3);
+  assert.equal(by[PG.a].zone, 'home'); assert.equal(by[PG.b1].avg, 9);
+  // a routing loop (an address seen twice in one trace) doesn't fold back onto itself
+  const loop = A.atMerge([{ s: [PG.a, PG.c, PG.a, PG.d], c: 1 }]);
+  assert.ok(loop.nodes.some((x) => x.k === `${PG.a}#3`));
+  // a router answering for two addresses at one hop (a traceroute line with two) counts once per trace
+  assert.equal(A.atMerge([{ s: [PG.a, PG.b1], c: 2 }, { s: [PG.a, PG.b2], c: 2 }], { n: 2 }).nodes.find((x) => x.k === PG.a).c, 2);
+});
+t('App tests: path graph layout - columns by the longest way from home, branches side by side, waypoints on long links', () => {
+  const A = globalThis.__casatorchAT;
+  const g = A.atGraph([{ s: [PG.a, PG.b1, PG.c, PG.d], c: 2 }, { s: [PG.a, PG.b2, PG.c, PG.d], c: 2 }, { s: [PG.a, PG.d], c: 1 }]);
+  const by = Object.fromEntries(g.nodes.map((x) => [x.k, x]));
+  assert.deepEqual([by.you.col, by[PG.a].col, by[PG.b1].col, by[PG.c].col, by[PG.d].col, by.dest.col], [0, 1, 2, 3, 4, 5]);
+  assert.equal(by[PG.b1].col, by[PG.b2].col); assert.equal(by[PG.c].y, 0, 'the paths rejoin on the middle line');
+  const dia = A.atGraph([{ s: [PG.a, PG.b1, PG.c], c: 2 }, { s: [PG.a, PG.b2, PG.c], c: 2 }]).nodes;
+  assert.deepEqual(dia.filter((x) => x.ip === PG.b1 || x.ip === PG.b2).map((x) => x.y).sort(), [-0.5, 0.5], 'an even split is a diamond');
+  const skip = g.edges.find((e) => e.a === PG.a && e.b === PG.d);
+  assert.equal(skip.pts.length, 4, 'a link skipping two columns gets two waypoints'); assert.ok(skip.pts.every(([c, y]) => Number.isFinite(c) && Number.isFinite(y)));
+  assert.ok(skip.pts.slice(1, -1).every(([, y]) => y !== 0), 'and goes around the middle line, not through the nodes on it');
+  assert.equal(g.layout.cols, 6); assert.ok(g.layout.y1 - g.layout.y0 >= 2, "three ways side by side");
+  assert.deepEqual(g.bands.map((b) => b.key), ['home', 'internet', 'app']);
+});
+t('App tests: path graph reads delay per link, loss that carries on, and where trouble starts', () => {
+  const A = globalThis.__casatorchAT;
+  const paths = [{ s: [PG.a, PG.c, PG.d, PG.e], c: 4 }];
+  const meta = (ip) => ({ [PG.c]: { z: 'provider', a: 64500, o: 'Example Broadband' }, [PG.d]: { z: 'internet', a: 64501, o: 'Transit Example' }, [PG.e]: { z: 'internet', a: 64501, o: 'Transit Example' } }[ip] || {});
+  // slower than usual from d on: the link c -> d is marked, trouble starts at d
+  let g = A.atGraph(paths, { meta, s: { [PG.a]: pgAcc(1), [PG.c]: pgAcc(10), [PG.d]: pgAcc(72), [PG.e]: pgAcc(73) }, dest: { dest: { acc: pgAcc(75) } }, usual: { [PG.a]: 1, [PG.c]: 10, [PG.d]: 14, [PG.e]: 15 }, usualDest: 16 });
+  const cd = g.edges.find((e) => e.a === PG.c && e.b === PG.d);
+  assert.deepEqual([cd.dl, cd.udl, !!cd.bad, !!cd.jump], [62, 4, true, true]);
+  assert.deepEqual([g.trouble.k, g.trouble.kind, g.trouble.ms], [PG.d, 'delay', 58]);
+  assert.equal(g.nodes.find((x) => x.k === PG.d).add, 62);
+  assert.deepEqual(g.bands.map((b) => [b.key, b.org]), [['home', null], ['provider', 'Example Broadband'], ['AS64501', 'Transit Example'], ['app', null]]);
+  // a long jump that is usual (a cable under the sea): a jump, not trouble
+  g = A.atGraph(paths, { meta, s: { [PG.a]: pgAcc(1), [PG.c]: pgAcc(10), [PG.d]: pgAcc(72), [PG.e]: pgAcc(73) }, dest: { dest: { acc: pgAcc(75) } }, usual: { [PG.a]: 1, [PG.c]: 10, [PG.d]: 71, [PG.e]: 73 }, usualDest: 74 });
+  assert.equal(g.trouble, null); assert.ok(g.edges.find((e) => e.a === PG.c && e.b === PG.d).jump);
+  // loss at c only (it skips trace replies) is harmless; loss from d on that reaches the app is where it starts
+  g = A.atGraph(paths, { meta, s: { [PG.a]: pgAcc(1), [PG.c]: pgAcc(10, 50), [PG.d]: pgAcc(15), [PG.e]: pgAcc(16) }, dest: { dest: { acc: pgAcc(17) } } });
+  assert.equal(g.nodes.find((x) => x.k === PG.c).lossOn, 0); assert.equal(g.trouble, null);
+  g = A.atGraph(paths, { meta, s: { [PG.a]: pgAcc(1), [PG.c]: pgAcc(10), [PG.d]: pgAcc(15, 20), [PG.e]: pgAcc(16, 30) }, dest: { dest: { acc: pgAcc(17, 20) } } });
+  assert.equal(g.nodes.find((x) => x.k === PG.d).lossOn, 20);
+  assert.deepEqual([g.trouble.k, g.trouble.kind, g.trouble.loss], [PG.d, 'loss', 20]);
+  // the app stopped answering
+  g = A.atGraph(paths, { s: { [PG.a]: pgAcc(1), [PG.c]: pgAcc(10), [PG.d]: pgAcc(15), [PG.e]: pgAcc(16) }, dest: { dest: { acc: [null, 0, null, 100, 1, 0, 0] } } });
+  assert.equal(g.trouble.kind, 'down');
+});
+t('App tests: a week of traces stays small - distinct paths once, hours rolled into six-hour sums, windows read back', () => {
+  const A = globalThis.__casatorchAT;
+  const now = Date.parse('2026-10-18T12:00:00Z'), st = {};
+  for (let k = 7 * 96 + 20; k >= 0; k--) {
+    const t0 = now - k * 15 * 60_000, b = k % 3 ? PG.b1 : PG.b2;
+    A.atRecord(st, { at: new Date(t0).toISOString(), mtu: 1500, hops: [{ n: 1, ip: PG.a, avg: 1, min: 0.8, max: 1.4, loss: 0 }, { n: 2, ip: b, avg: 9, min: 8, max: 11, loss: 0 }, { n: 3, ip: null, loss: 100 }, { n: 4, ip: PG.d, avg: 15, min: 14, max: 18, loss: 0, name: 'ae1.transit-example.net', asn: 64501, org: 'Transit Example', zone: 'internet' }],
+      dest: { ip: '203.0.113.10', avg: 16, min: 15, max: 19, loss: 0, name: 'app.example' } }, t0);   // scrub-ok
+  }
+  assert.equal(st.traces.length, 96); assert.equal(Object.keys(st.pd).length, 2);
+  assert.ok(st.tb.length <= 48 + 21 + 2, `buckets: ${st.tb.length}`); assert.ok(st.tb.every((b) => b.h + b.w > now - 7 * 86400_000 - 1));
+  assert.ok(st.tb.some((b) => b.w === 6 * 3600_000) && st.tb.filter((b) => b.w === 3600_000).length <= 50);
+  assert.ok(JSON.stringify(st).length < 80_000, 'a week of one test fits in well under 100 KB');
+  const hour = A.atObs(st, now - 3600_000 + 1, now);
+  assert.equal(hour.n, 4); assert.equal(Object.values(hour.p).reduce((s, c) => s + c, 0), 4);
+  const old = A.atObs(st, now - 5 * 86400_000, now - 5 * 86400_000 + 6 * 3600_000);
+  assert.ok(old.n >= 20 && Object.keys(old.p).length === 2, 'six hours five days ago, from the sums');
+  assert.equal(st.hm[PG.d].nm, 'ae1.transit-example.net'); assert.equal(st.hm[PG.d].a, 64501);
+  const g = A.atGraphFor(st, now - 3 * 3600_000 + 1, now, { now, name: 'app.example' });
+  assert.equal(g.traces, 12); assert.equal(g.nodes.filter((x) => x.ip === PG.b1 || x.ip === PG.b2).length, 2);
+  const cmp = A.atGraphFor(st, now - 6 * 86400_000, now - 6 * 86400_000 + 3600_000, { cmp: true, now });
+  assert.ok(cmp.nodes.every((x) => x.tags.includes('now') || x.tags.includes('then')));
+});
+t('App tests: paths to all your apps - where they part, and a shared problem marked once', () => {
+  const A = globalThis.__casatorchAT;
+  const hop = (n, ip, avg = 5, zone = 'provider') => ({ n, ip, avg, min: avg, max: avg, loss: 0, zone });
+  const trunk = [hop(1, PG.a, 1, 'home'), hop(2, PG.c, 9)];
+  const list = [{ id: 'x', name: 'X', path: { hops: [...trunk, hop(3, PG.d, 15, 'internet')], dest: { avg: 16, loss: 0 } }, down: true, culprit: { who: 'provider', ip: PG.c } },
+    { id: 'y', name: 'Y', path: { hops: [...trunk, hop(3, PG.e, 16, 'internet')], dest: { avg: 17, loss: 0 } }, down: true, culprit: { who: 'provider', ip: PG.c } },
+    { id: 'z', name: 'Z', path: { hops: [...trunk, hop(3, PG.e, 16, 'internet')], dest: { avg: 17, loss: 0 } } }];
+  const o = A.atOverview(list);
+  assert.equal(o.split, PG.c, 'they part after the provider');
+  assert.deepEqual([o.issue.k, o.issue.apps], [PG.c, ['x', 'y']]);
+  assert.equal(o.nodes.find((x) => x.k === PG.e).tags.length, 2);
+  assert.equal(o.nodes.filter((x) => x.kind === 'dest').length, 3); assert.ok(o.nodes.filter((x) => x.kind === 'dest').every((x) => x.col === o.layout.cols - 1));
+  assert.equal(A.atOverview(list.slice(0, 1)), null, 'one app: nothing to compare');
+});
+t('App tests: the demo path - a provider branch, a transit network, a lossy hop', () => {
+  const A = globalThis.__casatorchAT, st = A.atDemoState('demo-teams'), now = Date.now();
+  const g = A.atGraphFor(st, now - 3600_000, now, { now });
+  assert.ok(g.nodes.some((x) => x.ip === '198.51.100.17') && g.nodes.some((x) => x.ip === '198.51.100.21'));   // scrub-ok
+  assert.ok(g.bands.some((b) => b.org === 'Transit Example' && b.asn === 64501));
+  assert.deepEqual([g.trouble.kind, g.trouble.k], ['loss', '203.0.113.41']);   // scrub-ok
+  assert.ok(g.nodes.every((x) => !x.ip || /^(192\.168\.1\.|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.)/.test(x.ip)));   // scrub-ok
+});
 
 t('security: only home names reach CasaTorch (no DNS rebinding), and cloud metadata is never fetched', () => {
   for (const h of ['localhost:8090', '127.0.0.1:8090', '192.168.1.20:8090', '[::1]:8090', 'casatorch:8090', 'casatorch.local:8090', 'nas.lan', 'homehub', 'box.home.arpa']) assert.ok(H.hostAllowed(h), h);   // scrub-ok: examples
@@ -907,7 +1007,8 @@ await (await import('./floorplan-compat-unit.mjs')).default(t);   // the 3D home
 await (await import('./license-unit.mjs')).default(t);   // Pro keys, grace periods and the trial (license-unit.mjs)
 await (await import('./security-unit.mjs')).default(t);   // the pre-launch security review: outbound-request guard, member links, pre-setup gate (security-unit.mjs)
 await (await import('./makers-unit.mjs')).default(t);   // Security Center "Who is it?": makers, likely kind, normal ports (makers-unit.mjs)
-await (await import('./support-unit.mjs')).default(t);   // support: the support file's masking, activity log, getting-started checklist (support-unit.mjs)
+await (await import('./support-unit.mjs')).default(t);
+await (await import('./camlive-unit.mjs')).default(t);   // live camera video: stream choice, HLS file allow-list, MSE tunnel and HLS proxy (camlive-unit.mjs)   // support: the support file's masking, activity log, getting-started checklist (support-unit.mjs)
 t('3D Home: a plan damaged at start comes back from the newest restore point (with a Health note), never over a plan that is there', () => {
   const PB = globalThis.__casatorchPlan, was = fsMod.existsSync(PB.FP_FILE) ? fsMod.readFileSync(PB.FP_FILE) : null;
   try {

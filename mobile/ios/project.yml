@@ -1,8 +1,8 @@
 # The CasaTorch app for iPhone and iPad. Make the Xcode project with XcodeGen:
 #   brew install xcodegen && cd mobile/ios && xcodegen
 # then open CasaTorch.xcodeproj, pick your team under Signing & Capabilities, and run.
-# Push alerts also need GoogleService-Info.plist from your Firebase project in CasaTorch/ (see mobile/README.md);
-# without it the app works, with alerts switched off.
+# Push alerts go straight through Apple (APNs, no Firebase): the Push Notifications entitlement below is all the app
+# needs; casatorch.com needs the Apple push key once (see mobile/README.md, "Turning on alerts").
 name: CasaTorch
 options:
   bundleIdPrefix: com.casatorch
@@ -18,10 +18,6 @@ settings:
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
     SWIFT_STRICT_CONCURRENCY: minimal
-packages:
-  Firebase:
-    url: https://github.com/firebase/firebase-ios-sdk
-    from: "11.4.0"
 targets:
   CasaTorch:
     type: application
@@ -67,18 +63,17 @@ targets:
         NSBonjourServices: [_casatorch._tcp]   # Find my CasaTorch: boxes announce themselves on the home Wi-Fi
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        FirebaseAppDelegateProxyEnabled: true
     entitlements:
       path: CasaTorch/CasaTorch.entitlements
       properties:
+        # Push Notifications. "development" for builds run from Xcode; Xcode signs TestFlight and App Store builds with
+        # "production" itself. The app reads which one it got (Push.environment) and tells your CasaTorch.
         aps-environment: development
         # the app's own group first: sign-ins go there and stay out of the alerts extension's reach
         keychain-access-groups: [$(AppIdentifierPrefix)com.casatorch.app, $(AppIdentifierPrefix)com.casatorch.shared]
         com.apple.developer.usernotifications.time-sensitive: true
     dependencies:
       - target: NotificationService
-      - package: Firebase
-        product: FirebaseMessaging
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.casatorch.app

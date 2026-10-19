@@ -78,7 +78,8 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             let token = try await Push.enable()
             UserDefaults.standard.set(token, forKey: Push.homeKey(id))
             let key = HomeStore.shared.alertKey(for: id)
-            return ["platform": "ios", "token": token, "key": key.base64EncodedString()]
+            // "apns": Apple's own device token, sent by casatorch.com straight to Apple; env says which Apple server
+            return ["platform": "apns", "token": token, "env": Push.environment, "key": key.base64EncodedString()]
         case "lidar":
             if #available(iOS 16.0, *), RoomScan.isSupported { return ["available": true, "mesh": MeshScan.isSupported] }
             return ["available": false, "why": "Room scanning needs an iPhone Pro or iPad Pro with a LiDAR scanner (iOS 16 or later)."]

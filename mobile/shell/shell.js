@@ -465,10 +465,18 @@
     const on = el('button', { class: 'btn primary', type: 'button' }, T('Turn on alerts')), err = errBox();
     on.onclick = async () => {
       busy(on, true); err.textContent = '';
-      try { const p = await N.pushEnable(); await j(S.base, '/api/app/push', { ...p, level: 'important' }, { token: S.token }); j(S.base, '/api/app/push/test', {}, { token: S.token }).catch(() => {}); haptic('success'); finish(); }
-      catch (e) { err.textContent = e.message; busy(on, false, T('Try again')); haptic('error'); }
+      try {
+        const p = await N.pushEnable(), opt = { token: S.token };
+        try { await j(S.base, '/api/app/push', { ...p, level: 'important' }, opt); }
+        catch (e) { if (p.platform !== 'apns' || e.status !== 400) throw e; await j(S.base, '/api/app/push', { ...p, platform: 'ios', level: 'important' }, opt); }   // a CasaTorch before 0.8.1 knows Apple's tokens as "ios"
+        // the first test alert: only "not switched on yet" (casatorch.com can't send for this app) holds things up
+        let off = false;
+        try { await j(S.base, '/api/app/push/test', {}, opt); } catch (e) { off = !!(e.data && e.data.unavailable); }
+        if (off) { err.textContent = T('Phone alerts aren\'t switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.'); busy(on, false, T('Continue')); on.onclick = finish; haptic('warning'); return; }
+        haptic('success'); finish();
+      } catch (e) { err.textContent = e.message; busy(on, false, T('Try again')); haptic('error'); }
     };
-    screen(el('div', { class: 'spacer' }), bigIcon('bell'), el('h2', {}, T('Alerts on this phone?')), el('p', { class: 'muted' }, T('Water, smoke, the doorbell, a device going offline, your nudges - even when the app is closed. Encrypted by your CasaTorch; only this phone can read them.')),
+    screen(el('div', { class: 'spacer' }), bigIcon('bell'), el('h2', {}, T('Alerts on this phone?')), el('p', { class: 'muted' }, T('Water, smoke, the doorbell, a device going offline, your reminders - even when the app is closed. Encrypted by your CasaTorch; only this phone can read them.')),
       el('div', { class: 'spacer' }), err, on, el('button', { class: 'btn plain', type: 'button', onclick: finish }, T('Not now')));
   }
   function finish() { if (N && S.home) N.openHome(S.home.id); }

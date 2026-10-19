@@ -22,7 +22,8 @@
  * Everything runs from this box straight to the app: nothing goes through
  * casatorch.com. It only looks - the requests are what a browser opening the
  * page would send, without signing in. History (24 hours of tests, 7 days by
- * the hour, path and MTU changes) is kept in data/apptests.json.
+ * the hour, path and MTU changes, and every distinct path seen this week for the merged path graph) is kept in
+ * data/apptests.json.
  *
  * Basic: the built-in apps, up to 8 tests. Pro: your own websites, up to 30
  * tests, every minute if you like, and one alert when an app is down or slow,
@@ -436,28 +437,350 @@ async function atTracePath(t) {
   try {
     const p = await atTrace(t), st = (at.state[t.id] ||= { runs: [], fails: 0 });
     if (p.hops.length) {
-      const prev = st.path?.hops?.length ? st.path : null;
-      const changes = (st.changes ||= []);
-      if (prev && atPathKey(prev) !== atPathKey(p)) changes.push({ at: p.at, kind: 'route', from: atOwners(prev), to: atOwners(p), hopsFrom: prev.hops.length + 1, hopsTo: p.hops.length + 1 });
-      if (prev?.mtu && p.mtu && prev.mtu !== p.mtu) changes.push({ at: p.at, kind: 'mtu', mtuFrom: prev.mtu, mtuTo: p.mtu });
-      while (changes.length && (changes.length > 60 || Date.parse(changes[0].at) < Date.now() - 7 * 86400_000)) changes.shift();
-      if (prev && atPathKey(prev) !== atPathKey(p)) { st.prevPath = prev; st.changedAt = p.at; }
-      // A short memory of each hop's usual round trip, so "slower than usual" can be told from "far away".
-      (st.traces ||= []).push({ at: p.at, hops: p.hops.filter((h) => h.ip).map((h) => [h.ip, h.avg, h.loss]), dest: [p.dest?.avg ?? null, p.dest?.loss ?? null] });
-      while (st.traces.length > 96) st.traces.shift();
+      atNoteChange(st, st.path?.hops?.length ? st.path : null, p);
+      atRecord(st, p);   // the day trace by trace, the week in hourly and six-hourly sums (the path graph)
       st.path = p;
     } else if (!st.path || p.none) st.path = p;
     st.pathAt = Date.now(); at.dirty = true;
     return p;
   } finally { at.busy.delete(`path:${t.id}`); }
 }
+/* A route change (whose networks it crosses) or a new largest packet size, kept for a week. */
+function atNoteChange(st, prev, p) {
+  const changes = (st.changes ||= []);
+  if (prev && atPathKey(prev) !== atPathKey(p)) changes.push({ at: p.at, kind: 'route', from: atOwners(prev), to: atOwners(p), hopsFrom: prev.hops.length + 1, hopsTo: p.hops.length + 1 });
+  if (prev?.mtu && p.mtu && prev.mtu !== p.mtu) changes.push({ at: p.at, kind: 'mtu', mtuFrom: prev.mtu, mtuTo: p.mtu });
+  const old = (Date.parse(p.at) || Date.now()) - 7 * 86400_000;
+  while (changes.length && (changes.length > 60 || Date.parse(changes[0].at) < old)) changes.shift();
+  if (prev && atPathKey(prev) !== atPathKey(p)) { st.prevPath = prev; st.changedAt = p.at; }
+}
+/* One kept trace as [ip, avg, loss] for each hop that answered, and [avg, loss] for the app - both the current form
+   (addresses shared through st.pd) and the older one (written by 0.8.0). */
+function atTrHops(st, tr) {
+  if (tr.hops) return { hops: tr.hops, dest: tr.dest || [null, null] };
+  const s = st.pd?.[tr.pid]?.s || [];
+  return { hops: s.map((ip, i) => (ip && tr.h?.[i] ? [ip, tr.h[i][1], tr.h[i][3]] : null)).filter(Boolean), dest: [tr.d?.[2] ?? null, tr.d?.[4] ?? null] };
+}
 /* Each hop's usual round trip: the median over the last day's traces (needs three). */
 function atBaselines(st) {
   const by = new Map(), dest = [];
-  for (const tr of (st.traces || []).slice(0, -1)) { for (const [ip, avg] of tr.hops) if (avg != null) { if (!by.has(ip)) by.set(ip, []); by.get(ip).push(avg); } if (tr.dest?.[0] != null) dest.push(tr.dest[0]); }
+  for (const raw of (st.traces || []).slice(0, -1)) { const tr = atTrHops(st, raw); for (const [ip, avg] of tr.hops) if (avg != null) { if (!by.has(ip)) by.set(ip, []); by.get(ip).push(avg); } if (tr.dest?.[0] != null) dest.push(tr.dest[0]); }
   const base = {}; for (const [ip, v] of by) if (v.length >= 3) base[ip] = atR(atMedian(v));
   return { hops: base, dest: dest.length >= 3 ? atR(atMedian(dest)) : null };
 }
+
+/* ---- the path graph: every trace in a time window merged into one picture ----
+   A trace is kept as its addresses hop by hop (null where a hop didn't answer) plus each hop's numbers. Each distinct
+   list of addresses is stored once (st.pd, by a short id), so a week costs little: the last 96 traces one by one
+   (st.traces), and every trace also added into hourly sums (st.tb) that become six-hourly after two days and go after
+   a week. Each address's name, owner, zone and first/last seen: st.hm (at most 300). All of it is written with the
+   rest of apptests.json every 30 minutes - never once per trace - which spares an SD card. */
+const AT_PD_MAX = 48, AT_HM_MAX = 300, AT_H = 3600_000, AT_6H = 6 * AT_H;
+const atSig = (s) => s.map((x) => x || '*').join(',');
+const atPid = (s) => crypto.createHash('sha1').update(atSig(s)).digest('hex').slice(0, 8);
+const at1 = (v) => (v == null ? null : Math.round(v * 10) / 10);
+/* Sums for one address: [fastest, sum of averages, slowest, sum of loss, traces, sum of squared averages, traces with a time]. */
+function atAcc(o, k, min, avg, max, loss) {
+  const a = (o[k] ||= [null, 0, null, 0, 0, 0, 0]);
+  if (avg != null) { a[0] = a[0] == null ? (min ?? avg) : Math.min(a[0], min ?? avg); a[2] = a[2] == null ? (max ?? avg) : Math.max(a[2], max ?? avg); a[1] = at1(a[1] + avg); a[5] = Math.round(a[5] + avg * avg); a[6]++; }
+  a[3] = at1(a[3] + (loss ?? 0)); a[4]++;
+  return a;
+}
+const atAccJoin = (a, b) => {
+  if (!b) return a; if (!a) return b.slice();
+  a[0] = a[0] == null ? b[0] : b[0] == null ? a[0] : Math.min(a[0], b[0]); a[2] = a[2] == null ? b[2] : b[2] == null ? a[2] : Math.max(a[2], b[2]);
+  a[1] = at1(a[1] + b[1]); a[3] = at1(a[3] + b[3]); a[4] += b[4]; a[5] += b[5]; a[6] += b[6]; return a;
+};
+function atBuckJoin(m, b) {
+  m.n += b.n; for (const [id, c] of Object.entries(b.p || {})) m.p[id] = (m.p[id] || 0) + c;
+  for (const k of ['s', 'd']) for (const [ip, a] of Object.entries(b[k] || {})) m[k][ip] = atAccJoin(m[k][ip], a);
+  if (b.mtu) m.mtu = b.mtu; return m;
+}
+/* Keep one traced path: as a trace (the last 96), in its hour's sums, and its addresses' names. Exported for tests. */
+function atRecord(st, p, now = Date.now()) {
+  const t = Date.parse(p.at) || now, byN = new Map((p.hops || []).map((h, i) => [h.n || i + 1, h])), last = Math.max(0, ...byN.keys());
+  const s = [], h = [], alts = [];
+  for (let i = 1; i <= last; i++) {
+    const x = byN.get(i); s.push(x?.ip || null); h.push(x?.ip ? [x.min ?? null, x.avg ?? null, x.max ?? null, x.loss ?? 0] : null);
+    if (x?.ip && x.ips?.length > 1) for (const ip of x.ips.slice(1, 3)) if (ip !== x.ip) alts.push([i - 1, ip]);   // traffic spread over equal routers: each one is a branch
+  }
+  if (!s.some(Boolean)) return null;
+  const pd = (st.pd ||= {}), pid = atPid(s); pd[pid] = { s, u: t };
+  const alt = alts.map(([i, ip]) => { const s2 = s.slice(); s2[i] = ip; const id = atPid(s2); pd[id] = { s: s2, u: t }; return id; });
+  const d = p.dest ? [p.dest.ip || null, p.dest.min ?? null, p.dest.avg ?? null, p.dest.max ?? null, p.dest.loss ?? null] : null;
+  const tr = { at: p.at, pid, h, d, ...(alt.length ? { alt } : {}), ...(p.mtu ? { mtu: p.mtu } : {}) };
+  (st.traces ||= []).push(tr); while (st.traces.length > 96) st.traces.shift();
+  const hm = (st.hm ||= {});
+  const meta = (ip, x, z) => { const m = (hm[ip] ||= { f: t }); m.l = t; if (x.name) m.nm = x.name; if (z) m.z = z; if (x.asn) { m.a = x.asn; m.o = x.org || m.o || null; m.cc = x.cc || m.cc || null; } if (p.mtu) m.mtu = p.mtu; };
+  for (const x of p.hops) if (x.ip) meta(x.ip, x, x.zone);
+  for (const [i, ip] of alts) meta(ip, {}, byN.get(i + 1)?.zone);
+  if (p.dest?.ip) meta(p.dest.ip, p.dest, 'app');
+  const tb = (st.tb ||= []), hk = Math.floor(t / AT_H) * AT_H;
+  let b = tb.find((x) => x.h === hk && x.w === AT_H);
+  if (!b) { b = { h: hk, w: AT_H, n: 0, p: {}, s: {}, d: {} }; tb.push(b); tb.sort((x, y) => x.h - y.h || x.w - y.w); }
+  b.n++; for (const id of [pid, ...alt]) b.p[id] = (b.p[id] || 0) + 1;
+  s.forEach((ip, i) => { if (ip && h[i]) atAcc(b.s, ip, ...h[i]); });
+  for (const [i, ip] of alts) atAcc(b.s, ip, ...h[i]);
+  if (d) atAcc(b.d, d[0] || '?', d[1], d[2], d[3], d[4]);
+  if (p.mtu) b.mtu = p.mtu;
+  atRollup(st, now);
+  return tr;
+}
+/* Hours older than two days become six-hour sums; a week is the limit; distinct paths and names are capped. */
+function atRollup(st, now = Date.now()) {
+  const out = [], cut = now - 48 * AT_H, old = now - 7 * 86400_000;
+  for (const b of st.tb || []) {
+    if (b.h + b.w <= old) continue;
+    if (b.h < cut && b.w < AT_6H) {
+      const k = Math.floor(b.h / AT_6H) * AT_6H;
+      let m = out.find((x) => x.h === k && x.w === AT_6H); if (!m) { m = { h: k, w: AT_6H, n: 0, p: {}, s: {}, d: {} }; out.push(m); }
+      atBuckJoin(m, b);
+    } else out.push(b);
+  }
+  st.tb = out.sort((x, y) => x.h - y.h || x.w - y.w);
+  const pd = st.pd || {}, used = new Set();
+  for (const tr of st.traces || []) { used.add(tr.pid); for (const a of tr.alt || []) used.add(a); }
+  for (const b of st.tb) for (const id of Object.keys(b.p)) used.add(id);
+  for (const id of Object.keys(pd)) if (!used.has(id)) delete pd[id];
+  const ids = Object.keys(pd);
+  if (ids.length > AT_PD_MAX) for (const id of ids.sort((x, y) => pd[x].u - pd[y].u).slice(0, ids.length - AT_PD_MAX)) { delete pd[id]; for (const b of st.tb) delete b.p[id]; }
+  const hm = st.hm || {}, ips = Object.keys(hm).filter((ip) => { if (hm[ip].l < old) { delete hm[ip]; return false; } return true; });
+  if (ips.length > AT_HM_MAX) for (const ip of ips.sort((x, y) => hm[x].l - hm[y].l).slice(0, ips.length - AT_HM_MAX)) delete hm[ip];
+}
+/* What was seen in a time window: path ids with counts, sums per address and for the app. The kept traces when they
+   reach back far enough, else the hourly / six-hourly sums. */
+function atObs(st, from, to) {
+  const o = { n: 0, p: {}, s: {}, d: {}, mtu: null, first: null, last: null };
+  const raw = (st.traces || []).filter((tr) => tr.pid), rawFrom = raw.length ? Date.parse(raw[0].at) : Infinity;
+  if (from >= rawFrom - 60_000) {
+    for (const tr of raw) {
+      const t = Date.parse(tr.at), s = st.pd?.[tr.pid]?.s; if (t < from || t > to || !s) continue;
+      o.n++; for (const id of [tr.pid, ...(tr.alt || [])]) if (st.pd[id]) o.p[id] = (o.p[id] || 0) + 1;
+      s.forEach((ip, i) => { if (ip && tr.h?.[i]) atAcc(o.s, ip, ...tr.h[i]); });
+      for (const id of tr.alt || []) (st.pd[id]?.s || []).forEach((ip, i) => { if (ip && ip !== s[i] && tr.h?.[i]) atAcc(o.s, ip, ...tr.h[i]); });
+      if (tr.d) atAcc(o.d, tr.d[0] || '?', tr.d[1], tr.d[2], tr.d[3], tr.d[4]);
+      if (tr.mtu) o.mtu = tr.mtu; o.first ??= t; o.last = t;
+    }
+  } else for (const b of st.tb || []) { if (b.h >= to || b.h + b.w <= from) continue; atBuckJoin(o, b); o.first ??= b.h; o.last = Math.max(o.last || 0, b.h + b.w); }
+  return o;
+}
+/* Merge paths into one graph. paths: [{ s: [ip or null, hop by hop], c: traces, tag?, dk?: the app's node }]. A router is
+   one node however many paths cross it (by address); a hop that didn't answer is a "no reply" node between the hops
+   around it. s: sums per address, dest: { [dk]: { acc, ips, name, asn, org, cc } }, meta(ip): what's known about it. */
+function atMerge(paths, { s = {}, dest = {}, meta = () => ({}), n = null } = {}) {
+  const nodes = new Map(), edges = new Map(), total = n || paths.reduce((a, p) => a + p.c, 0) || 1;
+  const node = (k, o) => { let x = nodes.get(k); if (!x) { x = { k, c: 0, ns: [], tags: new Set(), ...o }; nodes.set(k, x); } return x; };
+  const you = node('you', { kind: 'you', ip: null, zone: 'home' });
+  for (const p of paths) {
+    const seq = ['you'], dk = p.dk || 'dest';
+    p.s.forEach((ip, i) => {
+      let k;
+      if (ip) { k = seq.includes(ip) ? `${ip}#${i + 1}` : ip; node(k, { kind: 'hop', ip }); }
+      else { k = `*${i + 1}:${[...seq].reverse().find((x) => !x.startsWith('*'))}`; node(k, { kind: 'silent', ip: null }); }
+      const x = nodes.get(k); x.c += p.c; if (!x.ns.includes(i + 1)) x.ns.push(i + 1); if (p.tag) x.tags.add(p.tag); seq.push(k);
+    });
+    const dn = node(dk, { kind: 'dest', ip: null }); dn.c += p.c; seq.push(dk);
+    you.c += p.c; for (const k of [dk, 'you']) if (p.tag) nodes.get(k).tags.add(p.tag);
+    for (let i = 1; i < seq.length; i++) {
+      const ek = `${seq[i - 1]}\n${seq[i]}`, e = edges.get(ek) || { a: seq[i - 1], b: seq[i], c: 0, tags: new Set() };
+      e.c += p.c; if (p.tag) e.tags.add(p.tag); edges.set(ek, e);
+    }
+  }
+  const fill = (x, a) => {
+    if (!a) return;
+    x.min = a[6] ? at1(a[0]) : null; x.avg = a[6] ? at1(a[1] / a[6]) : null; x.max = a[6] ? at1(a[2]) : null; x.loss = a[4] ? Math.round(a[3] / a[4]) : null;
+    x.jit = a[6] > 1 ? at1(Math.sqrt(Math.max(0, a[5] / a[6] - (a[1] / a[6]) ** 2))) : null;
+  };
+  for (const x of nodes.values()) {
+    x.c = Math.min(x.c, total);   // a trace that saw two routers at one hop counts once
+    if (x.kind === 'hop') {
+      fill(x, s[x.ip]); const m = meta(x.ip) || {};
+      Object.assign(x, { name: m.nm || null, zone: m.z || (atPrivate(x.ip) ? 'home' : 'internet'), asn: m.a || null, org: m.o || null, cc: m.cc || null, f: m.f || null, l: m.l || null, mtu: m.mtu || null });
+    } else if (x.kind === 'dest') {
+      const d = dest[x.k] || {}; fill(x, d.acc);
+      Object.assign(x, { ip: d.ips?.[0] || null, ips: d.ips?.length > 1 ? d.ips : undefined, name: d.name || null, zone: 'app', asn: d.asn || null, org: d.org || null, cc: d.cc || null, f: d.f || null, l: d.l || null, mtu: d.mtu || null });
+    }
+  }
+  for (const e of edges.values()) e.c = Math.min(e.c, total);
+  return { n: total, nodes: [...nodes.values()], edges: [...edges.values()] };
+}
+/* Lay the graph out in columns, left (home) to right (the app): the longest way from home decides a node's column,
+   so a branch that skips a hop still rejoins in the right place; long links get waypoints so they don't cut through
+   other nodes; nodes in a column are ordered to cross as little as possible (a few up-and-down passes), and the
+   busiest path runs straight along the middle. Positions are columns and lanes - the page turns them into pixels
+   (sideways on a wide screen, top to bottom on a phone). Exported for tests. */
+function atLayout(g, { center = false } = {}) {
+  const out = new Map(), inn = new Map();
+  for (const x of g.nodes) { out.set(x.k, []); inn.set(x.k, []); }
+  for (const e of g.edges) { out.get(e.a).push(e); inn.get(e.b).push(e); }
+  for (const l of out.values()) l.sort((p, q) => q.c - p.c);
+  const mark = new Map(), post = [];   // a routing loop (a router seen before and after another): that link is drawn but not followed
+  const visit = (k) => { mark.set(k, 1); for (const e of out.get(k)) { const m = mark.get(e.b); if (m === 1) e.back = true; else if (!m) visit(e.b); } mark.set(k, 2); post.push(k); };
+  if (out.has('you')) visit('you'); for (const x of g.nodes) if (!mark.has(x.k)) visit(x.k);
+  const col = new Map();
+  for (const k of post.reverse()) col.set(k, Math.max(0, ...inn.get(k).filter((e) => !e.back).map((e) => (col.get(e.a) ?? 0) + 1)));
+  const lastCol = Math.max(0, ...g.nodes.filter((x) => x.kind !== 'dest').map((x) => col.get(x.k))) + 1;
+  for (const x of g.nodes) if (x.kind === 'dest') col.set(x.k, lastCol);
+  const items = new Map(), add = (id, c, w) => items.set(id, { id, col: c, w, up: [], down: [] });
+  for (const x of g.nodes) add(x.k, col.get(x.k), x.c);
+  for (const e of g.edges) {
+    const chain = [e.a];
+    if (!e.back) for (let c = col.get(e.a) + 1; c < col.get(e.b); c++) { const id = `~${e.a}\n${e.b}\n${c}`; add(id, c, e.c); chain.push(id); }
+    chain.push(e.b); e.chain = chain;
+    if (!e.back && col.get(e.b) > col.get(e.a)) for (let i = 1; i < chain.length; i++) { items.get(chain[i - 1]).down.push([chain[i], e.c]); items.get(chain[i]).up.push([chain[i - 1], e.c]); }
+  }
+  const cols = Math.max(1, ...[...items.values()].map((it) => it.col + 1)), layers = Array.from({ length: cols }, () => []);
+  const placed = new Set(), walk = (id) => { if (placed.has(id)) return; placed.add(id); const it = items.get(id); layers[it.col].push(id); for (const [d] of it.down.slice().sort((p, q) => q[1] - p[1])) walk(d); };
+  walk('you'); for (const id of items.keys()) walk(id);
+  const pos = new Map(); layers.forEach((l) => l.forEach((id, i) => pos.set(id, i)));
+  const bary = (id, dir) => { let s = 0, w = 0; for (const [o, c] of items.get(id)[dir]) { s += pos.get(o) * c; w += c; } return w ? s / w : pos.get(id); };
+  const sweep = (c, dir) => { const b = new Map(layers[c].map((id) => [id, bary(id, dir)])); layers[c].sort((p, q) => b.get(p) - b.get(q)); layers[c].forEach((id, i) => pos.set(id, i)); };
+  for (let it = 0; it < 4; it++) { for (let c = 1; c < cols; c++) sweep(c, 'up'); for (let c = cols - 2; c >= 0; c--) sweep(c, 'down'); }
+  const main = new Set();
+  for (let id = 'you'; id && items.has(id) && !main.has(id);) { main.add(id); id = items.get(id).down.slice().sort((p, q) => q[1] - p[1])[0]?.[0]; }
+  const n = g.n || 1;
+  for (const l of layers) {
+    const m = l.findIndex((id) => main.has(id)), mid = center || m < 0 ? (l.length - 1) / 2 : m;
+    l.forEach((id, i) => { items.get(id).y = i - mid; });
+    if (!center && l.length === 2 && l.every((id) => items.get(id).w / n >= 0.3)) { items.get(l[0]).y = -0.5; items.get(l[1]).y = 0.5; }   // an even split: a diamond
+  }
+  for (const x of g.nodes) { const it = items.get(x.k); x.col = it.col; x.y = it.y; }
+  for (const e of g.edges) { e.pts = e.chain.map((id) => [items.get(id).col, items.get(id).y]); delete e.chain; }
+  const ys = [...items.values()].map((it) => it.y);
+  g.layout = { cols, y0: Math.min(0, ...ys), y1: Math.max(0, ...ys) };
+  return g;
+}
+/* What each hop adds: the delay between neighbors (delta latency) on every link, the share of loss that carries on to
+   the app (loss at one router only is that router skipping replies), and where trouble starts - loss that carries
+   through, or a link much slower than it usually is and staying slower after it. A big jump that's usual (a long
+   cable under the sea) is marked as a jump, not as trouble. Exported for tests. */
+function atAnalyze(g, { usual = {}, usualDest = null } = {}) {
+  const N = new Map(g.nodes.map((x) => [x.k, x])), inn = new Map(), out = new Map();
+  for (const x of g.nodes) { inn.set(x.k, []); out.set(x.k, []); }
+  for (const e of g.edges) if (!e.back) { inn.get(e.b).push(e); out.get(e.a).push(e); }
+  const order = g.nodes.slice().sort((p, q) => p.col - q.col), ref = new Map(), uref = new Map();
+  const wmean = (list, f) => { let s = 0, w = 0; for (const e of list) { const v = f(e); if (v != null) { s += v * e.c; w += e.c; } } return w ? s / w : null; };
+  for (const x of order) {
+    x.usual = x.kind === 'dest' ? usualDest ?? null : x.ip ? usual[x.ip] ?? null : null;
+    if (x.kind === 'you') { ref.set(x.k, 0); uref.set(x.k, 0); continue; }
+    const up = wmean(inn.get(x.k), (e) => ref.get(e.a)), uup = wmean(inn.get(x.k), (e) => uref.get(e.a));
+    ref.set(x.k, x.avg ?? up); uref.set(x.k, x.usual ?? uup);
+    x.add = x.avg != null && up != null ? at1(Math.max(0, x.avg - up)) : null;
+  }
+  for (const e of g.edges) {
+    const b = N.get(e.b), ra = ref.get(e.a), ua = uref.get(e.a);
+    e.dl = b.avg != null && ra != null ? at1(b.avg - ra) : null; e.udl = b.usual != null && ua != null ? at1(b.usual - ua) : null;
+  }
+  const below = (k) => { const seen = new Set(), stack = [k]; while (stack.length) for (const e of out.get(stack.pop())) if (!seen.has(e.b)) { seen.add(e.b); stack.push(e.b); } return [...seen].map((id) => N.get(id)); };
+  for (const x of g.nodes) {
+    if (x.loss == null || x.kind === 'you') continue;
+    const later = below(x.k).filter((y) => y.loss != null && (y.avg != null || y.kind === 'dest'));
+    x.lossOn = later.length ? Math.min(x.loss, ...later.map((y) => y.loss)) : x.loss;
+  }
+  let trouble = null;
+  const dests = g.nodes.filter((x) => x.kind === 'dest'), endLoss = dests.some((x) => x.loss != null) ? Math.max(...dests.map((x) => x.loss ?? 0)) : null;
+  if (dests.length === 1 && endLoss >= 100 && dests[0].avg == null) trouble = { k: dests[0].k, kind: 'down' };
+  else if (endLoss == null || endLoss >= 5) {
+    const x = order.find((y) => y.kind !== 'you' && (y.lossOn ?? 0) >= 5 && inn.get(y.k).every((e) => (N.get(e.a).lossOn ?? 0) < 5));
+    if (x) trouble = { k: x.k, kind: 'loss', loss: x.lossOn };
+  }
+  for (const e of g.edges.slice().sort((p, q) => N.get(p.a).col - N.get(q.a).col)) {
+    if (e.dl == null || e.back) continue;
+    const later = [N.get(e.b), ...below(e.b)].filter((y) => y.avg != null), ra = ref.get(e.a);
+    if (e.udl != null) {
+      const extra = e.dl - e.udl;
+      if (extra >= Math.max(20, Math.abs(e.udl) * 0.5) && later.every((y) => y.usual == null || y.avg - y.usual >= extra * 0.6)) { e.bad = true; if (!trouble) trouble = { k: e.b, kind: 'delay', ms: Math.round(extra), from: e.a }; }
+    }
+    if (e.dl >= 30 && later.every((y) => y.avg >= ra + e.dl * 0.6)) e.jump = true;
+  }
+  g.trouble = trouble;
+  return g;
+}
+/* Bands by whose network it is, as runs of columns: your home, your internet provider, each network in between (by
+   number), and the app's network. A column goes with its busiest node; a column of "no reply" hops with its neighbors. */
+function atBands(g) {
+  const key = (x) => (x.kind === 'you' || x.zone === 'home' ? 'home' : x.kind === 'dest' || x.zone === 'app' ? 'app' : x.zone === 'provider' ? 'provider' : x.asn ? `AS${x.asn}` : 'internet');
+  const byCol = Array.from({ length: g.layout.cols }, () => []);
+  for (const x of g.nodes) byCol[x.col].push(x);
+  const keys = byCol.map((l) => { const r = l.filter((x) => x.kind !== 'silent').sort((p, q) => q.c - p.c)[0]; return r ? key(r) : null; });
+  for (let c = 0; c < keys.length; c++) if (keys[c] == null) {
+    const prev = keys.slice(0, c).reverse().find(Boolean), next = keys.slice(c + 1).find(Boolean);
+    keys[c] = prev === next ? prev : prev === 'home' && next ? next : prev || next || 'internet';
+  }
+  const bands = [];
+  keys.forEach((k, c) => { const b = bands[bands.length - 1]; if (b && b.key === k) b.c1 = c; else bands.push({ key: k, c0: c, c1: c }); });
+  for (const b of bands) {
+    const ns = g.nodes.filter((x) => x.col >= b.c0 && x.col <= b.c1), own = ns.filter((x) => x.asn && x.kind !== 'silent').sort((p, q) => q.c - p.c)[0];
+    Object.assign(b, { zone: b.key.startsWith('AS') ? 'internet' : b.key, asn: own?.asn || null, org: own?.org || null, hops: ns.filter((x) => x.kind === 'hop' || x.kind === 'silent').length });
+    for (const x of ns) if (x.kind === 'silent') x.zone = b.zone;
+  }
+  return bands;
+}
+/* Merge, lay out, read: the whole graph for the page. Exported for tests. */
+function atGraph(paths, opts = {}) {
+  const g = atMerge(paths, opts);
+  atLayout(g, opts); atAnalyze(g, opts); g.bands = atBands(g);
+  for (const x of g.nodes) { x.tags = [...x.tags]; x.share = Math.round(x.c / g.n * 100) / 100; x.y = Math.round(x.y * 100) / 100; }
+  for (const e of g.edges) { e.tags = [...e.tags]; e.share = Math.round(e.c / g.n * 100) / 100; }
+  return g;
+}
+const atPathsOf = (st, o, tag) => Object.entries(o.p).map(([id, c]) => (st.pd?.[id] ? { s: st.pd[id].s, c, tag } : null)).filter(Boolean);
+function atDestOf(st, accs, name) {
+  let acc = null; const ips = [];
+  for (const o of accs) for (const [ip, a] of Object.entries(o.d)) { acc = atAccJoin(acc, a.slice()); if (ip !== '?' && !ips.includes(ip)) ips.push(ip); }
+  const m = st.hm?.[ips[0]] || {};
+  return { acc, ips, name: name || m.nm || null, asn: m.a || null, org: m.o || null, cc: m.cc || null, f: m.f || null, l: m.l || null, mtu: m.mtu || null };
+}
+/* The graph for one test over [from, to]; with cmp, merged with the last hour so the page can show what changed. */
+function atGraphFor(st, from, to, { cmp = false, now = Date.now(), name = null } = {}) {
+  const o = atObs(st, from, to), nowO = cmp ? atObs(st, now - AT_H, now) : null;
+  const paths = [...atPathsOf(st, o, cmp ? 'then' : null), ...(nowO ? atPathsOf(st, nowO, 'now') : [])];
+  if (!paths.length) return null;
+  const meta = (ip) => { const m = st.hm?.[ip] || {}, own = at.own[ip], asn = m.a || own?.asn || null; return { ...m, a: asn, o: m.o || (asn ? at.asn[asn]?.name : null) || null, cc: m.cc || own?.cc || null }; };
+  const s = { ...(nowO?.s || {}) }; for (const [ip, a] of Object.entries(o.s)) s[ip] = a;
+  const base = atBaselines(st), usual = {};
+  for (const b of st.tb || []) for (const [ip, a] of Object.entries(b.s)) if (a[6]) (usual[ip] ||= []).push(a[1] / a[6]);
+  for (const ip of Object.keys(usual)) usual[ip] = atR(atMedian(usual[ip]));
+  Object.assign(usual, base.hops);
+  const g = atGraph(paths, { s, dest: { dest: atDestOf(st, o.n ? [o] : [nowO], name) }, meta, n: o.n + (nowO?.n || 0), usual, usualDest: base.dest });
+  return { from, to, traces: o.n, tracesNow: nowO?.n ?? null, distinct: Object.keys(o.p).length, mtu: o.mtu, first: o.first, last: o.last, ...g };
+}
+/* Paths to all your apps as one tree from home: where they share hops and where they part. When two or more apps are
+   in trouble, the furthest hop they all pass through is marked - a shared provider problem shows up there. */
+function atOverview(list) {
+  const paths = [], s = {}, dest = {}, metaM = {};
+  for (const t of list) {
+    const p = t.path; if (!p?.hops?.length) continue;
+    const byN = new Map(p.hops.map((h, i) => [h.n || i + 1, h])), arr = [];
+    for (let i = 1; i <= Math.max(...byN.keys()); i++) { const h = byN.get(i); arr.push(h?.ip || null); if (h?.ip) { atAcc(s, h.ip, h.min, h.avg, h.max, h.loss); metaM[h.ip] = { nm: h.name, z: h.zone, a: h.asn, o: h.org, cc: h.cc }; } }
+    const dk = `dest:${t.id}`, d = p.dest || {}; paths.push({ s: arr, c: 1, tag: t.id, dk });
+    dest[dk] = { acc: d.avg != null || d.loss != null ? atAcc({}, 'x', d.min, d.avg, d.max, d.loss) : null, ips: d.ip ? [d.ip] : [], name: t.name, asn: d.asn, org: d.org, cc: d.cc };
+  }
+  if (paths.length < 2) return null;
+  const g = atGraph(paths, { s, dest, meta: (ip) => metaM[ip] || {}, n: paths.length, center: true });
+  const ids = paths.map((p) => p.tag), bad = list.filter((t) => ids.includes(t.id) && (t.down || t.slow)).map((t) => t.id);
+  const split = g.nodes.filter((x) => x.kind !== 'dest' && x.tags.length === ids.length).sort((p, q) => q.col - p.col)[0] || null;
+  // Shared trouble: the furthest hop all the troubled apps pass through - only when the apps that are fine don't pass
+  // through it too, or every troubled app's likely culprit is the home or the provider.
+  let issue = null;
+  const who = (id) => list.find((t) => t.id === id)?.culprit?.who;
+  if (bad.length >= 2) {
+    const x = g.nodes.filter((y) => y.kind !== 'you' && y.kind !== 'dest' && bad.every((id) => y.tags.includes(id))).sort((p, q) => q.col - p.col)[0], ok = x ? x.tags.filter((id) => !bad.includes(id)) : [];
+    if (x && (!ok.length || bad.every((id) => ['home', 'provider'].includes(who(id))))) issue = { k: x.k, apps: bad, ok };
+  }
+  // and each troubled app's own likely culprit, where it is on the tree
+  const marks = bad.map((id) => { const ip = list.find((t) => t.id === id)?.culprit?.ip, x = ip && g.nodes.find((y) => y.ip === ip); return x ? { k: x.k, app: id } : null; }).filter(Boolean);
+  for (const x of g.nodes) if (x.kind === 'dest') x.app = x.k.slice(5);
+  // bands for the shared part only; after the paths part, each app goes its own way through different networks
+  if (split) {
+    const sc = split.col, cols = g.layout.cols;
+    g.bands = g.bands.filter((b) => b.c0 <= sc).map((b) => ({ ...b, c1: Math.min(b.c1, sc) }));
+    if (sc < cols - 1) g.bands.push({ key: 'apps', zone: 'app', c0: sc + 1, c1: cols - 1, asn: null, org: null, hops: g.nodes.filter((x) => x.col > sc && x.kind !== 'dest').length });
+  }
+  return { ...g, split: split?.k || null, issue, marks, apps: list.filter((t) => ids.includes(t.id)).map((t) => ({ id: t.id, name: t.name, preset: t.preset || null, custom: !!t.custom, short: t.short, down: !!t.down, slow: !!t.slow })) };
+}
+/* When there's path data, for the strip above the graph: each kept trace, then each hourly / six-hourly sum. */
+const atMarks = (st) => ({ traces: (st.traces || []).filter((tr) => tr.pid).map((tr) => Date.parse(tr.at)), buckets: (st.tb || []).map((b) => [b.h, b.w, b.n]) });
 
 /* ---- the likely culprit ----
    Nodes run from the home to the app. Loss counts only when it carries on to the app (a router that doesn't bother
@@ -584,7 +907,7 @@ function atHoursView(st) {
 }
 function atPathView(st) {
   const p = st.path; if (!p) return null;
-  const base = atBaselines(st), seen = (ip) => (st.traces || []).filter((tr) => tr.hops.some(([x]) => x === ip)).length;
+  const base = atBaselines(st), seen = (ip) => (st.traces || []).filter((tr) => atTrHops(st, tr).hops.some(([x]) => x === ip)).length;
   return { ...p, traces: (st.traces || []).length, hops: (p.hops || []).map((h) => ({ ...h, usual: h.ip ? base.hops[h.ip] ?? null : null, seen: h.ip ? seen(h.ip) : 0 })), dest: p.dest ? { ...p.dest, usual: base.dest } : null };
 }
 function atView(t, full = false) {
@@ -610,7 +933,8 @@ app.get('/api/apptests', async (_req, res) => {
   if (isDemo()) return res.json(atDemo());
   const pro = proStatus().pro;
   res.json({ pro, max: atMax(), basicMax: AT_BASIC_MAX, every: pro ? AT_EVERY : [5, 15], groups: AT_GROUPS, presets: atPresetsOut(atHomeCc()), owners: atOwnersOn(),
-    trace: await atTraceInfo(), traceroute: (await atTools()).length > 0, tests: atCfg().map((t) => ({ ...atView(t), paused: !pro && t.custom })) });
+    trace: await atTraceInfo(), traceroute: (await atTools()).length > 0, tests: atCfg().map((t) => ({ ...atView(t), paused: !pro && t.custom })),
+    overview: atOverview(atActive().filter((t) => atKind(t) === 'web').map((t) => ({ ...t, path: at.state[t.id]?.path, ...atNow(t) }))) });
 });
 app.get('/api/apptests/:id', (req, res) => {
   if (isDemo()) { const d = atDemo(true).tests.find((t) => t.id === req.params.id); return d ? res.json(d) : res.status(404).json({ error: 'not found' }); }
@@ -716,46 +1040,94 @@ function atFromSetup(ans, prev) {
 }
 const atSetupCurrent = () => { const l = atCfg(); return l.length ? { want: 'yes', picks: l.filter((t) => t.preset && t.preset !== 'sharepoint').map((t) => t.preset), custom: l.filter((t) => t.custom).map((t) => ({ name: t.name, url: t.url })), every: l[0].every || 5, alert: l[0].alert === false ? 'no' : 'yes' } : {}; };
 
-/* ---- the demo house: made-up but realistic numbers, the same every load ---- */
+/* ---- the demo house: made-up but realistic numbers, the same every load ----
+   Documentation addresses (192.0.2.x, 198.51.100.x, 203.0.113.x) and private-use network numbers (64500-65534) only,
+   with plainly made-up names. The provider spreads traffic over two routers (a branch that rejoins), one of its routers
+   skips trace replies (harmless), Teams goes through a transit network that has started losing traffic, Zoom's route
+   moved three hours ago, and Netflix stopped answering half an hour ago. A week of traces is run through the same
+   code as real ones (atRecord), so the graph, the strip and the overview are what a real home would see. */
+const AT_DEMO_HOP = (ip, name, asn, org, zone, ms, extra = {}) => ({ ip, name, asn, org, cc: asn ? 'US' : null, zone, ms, ...extra });   // scrub-ok: demo
+const AT_DEMO_NET = {
+  home: AT_DEMO_HOP('192.168.1.1', null, null, null, 'home', 0.6),   // scrub-ok: demo
+  isp: [AT_DEMO_HOP('198.51.100.1', 'lo0.bras1.example-broadband.net', 64500, 'Example Broadband', 'provider', 8.9, { skips: true }),   // scrub-ok: demo
+    [AT_DEMO_HOP('198.51.100.17', 'be-10.agg1.example-broadband.net', 64500, 'Example Broadband', 'provider', 10.2), AT_DEMO_HOP('198.51.100.21', 'be-11.agg2.example-broadband.net', 64500, 'Example Broadband', 'provider', 11.4)],   // scrub-ok: demo
+    AT_DEMO_HOP('198.51.100.5', 'core1.example-broadband.net', 64500, 'Example Broadband', 'provider', 12.1), null],   // scrub-ok: demo
+};
+const AT_DEMO_TR = (ip, name, ms) => AT_DEMO_HOP(ip, name, 64501, 'Transit Example', 'internet', ms);
+const AT_DEMO_TESTS = {
+  'demo-m365': { preset: 'm365', base: 38, seed: 11, tail: [AT_DEMO_TR('203.0.113.40', 'ae25-0.icr01.transit-example.net', 14.8), AT_DEMO_HOP('203.0.113.77', null, 64510, 'Example Cloud', 'app', 15.9)],   // scrub-ok: demo
+    dest: ['203.0.113.10', 64510, 'Example Cloud', 16.8] },   // scrub-ok: demo
+  'demo-teams': { preset: 'teams', base: 41, seed: 23, slow: true, bad: { since: 50 * 60_000, from: 0, ms: 58, loss: 14 },
+    tail: [AT_DEMO_TR('203.0.113.41', 'ae26-0.icr02.transit-example.net', 15.2), AT_DEMO_TR('203.0.113.45', 'ae3-0.icr02.transit-example.net', 15.9), AT_DEMO_HOP('203.0.113.78', null, 64510, 'Example Cloud', 'app', 16.4)],   // scrub-ok: demo
+    dest: ['203.0.113.12', 64510, 'Example Cloud', 17.2] },   // scrub-ok: demo
+  'demo-zoom': { preset: 'zoom', base: 52, seed: 37, changeAt: 3 * 3600_000 + 60_000, mtuAt: 4 * 86400_000,
+    tail: [AT_DEMO_HOP('198.51.100.9', 'xe-0-1-0.edge3.example-backbone.net', 64502, 'Example Backbone', 'internet', 21.7), AT_DEMO_HOP('198.51.100.33', null, 64511, 'Example Video', 'app', 23.4)],   // scrub-ok: demo
+    old: [AT_DEMO_TR('203.0.113.40', 'ae25-0.icr01.transit-example.net', 14.8), AT_DEMO_TR('203.0.113.52', 'ae7-0.icr03.transit-example.net', 19.8), AT_DEMO_HOP('203.0.113.90', null, 64511, 'Example Video', 'app', 24.9)],   // scrub-ok: demo
+    dest: ['198.51.100.200', 64511, 'Example Video', 24.3] },   // scrub-ok: demo
+  'demo-google': { preset: 'google', base: 22, seed: 41, tail: [AT_DEMO_HOP('192.0.2.14', null, 64512, 'Example Search', 'app', 13.1)], dest: ['192.0.2.80', 64512, 'Example Search', 13.6] },   // scrub-ok: demo
+  'demo-netflix': { preset: 'netflix', base: 30, seed: 53, down: true, tail: [AT_DEMO_HOP('198.51.100.71', 'ipv4.example-cdn.net', 64513, 'Example Streaming', 'app', 16.6)], dest: ['198.51.100.240', 64513, 'Example Streaming', 17.4] },   // scrub-ok: demo
+};
+const atDemoRand = (s) => () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+/* One made-up trace at time t (k: how many traces ago). */
+function atDemoTrace(cfg, t, k, now) {
+  const rnd = atDemoRand(cfg.seed * 7919 + k * 104729 + 1), hr = new Date(t).getHours(), ev = hr >= 19 && hr <= 23 ? 2.5 : 0;
+  const bad = cfg.bad && now - t < cfg.bad.since, down = cfg.down && now - t < 35 * 60_000;
+  const hop = (x, n, lift = 0, loss = 0) => {
+    const j = rnd(), avg = at1(x.ms * (1 + j * 0.07) + (x.ms > 2 ? ev : 0) + lift);
+    return { n, ip: x.ip, name: x.name, asn: x.asn, org: x.org, cc: x.cc, zone: x.zone, sent: 10, loss: x.skips ? 20 + Math.round(rnd() * 4) * 10 : loss, min: at1(Math.max(0.2, avg * 0.9 - j)), avg, max: at1(avg * 1.22 + 1 + j * 3) };
+  };
+  const [ispA, branch, core] = AT_DEMO_NET.isp, tail = cfg.old && now - t > cfg.changeAt ? cfg.old : cfg.tail;
+  const hops = [hop(AT_DEMO_NET.home, 1), hop(ispA, 2), hop(branch[k % 5 < 3 ? 0 : 1], 3), hop(core, 4), { n: 5, ip: null, sent: 10, loss: 100, min: null, avg: null, max: null }];
+  tail.forEach((x, i) => hops.push(bad && i >= cfg.bad.from ? hop(x, 6 + i, cfg.bad.ms, cfg.bad.loss) : hop(x, 6 + i)));
+  const [ip, asn, org, ms] = cfg.dest, j = rnd(), dAvg = down ? null : at1(ms * (1 + j * 0.06) + ev + (bad ? cfg.bad.ms : 0));
+  const dest = { ip, name: new URL(atPreset(cfg.preset).url).hostname, asn, org, cc: 'US', zone: 'app', dest: true, sent: 5, from: 'probe', loss: down ? 100 : bad ? cfg.bad.loss : 0,
+    min: dAvg == null ? null : at1(dAvg * 0.92), avg: dAvg, max: dAvg == null ? null : at1(dAvg * 1.2 + 1) };
+  return { at: new Date(t).toISOString(), tool: 'mtr', mtu: cfg.mtuAt && now - t > cfg.mtuAt ? 1492 : 1500, hops, dest };
+}
+const atDemoCache = new Map();
+/* A week of made-up traces for one demo test, kept for five minutes. */
+function atDemoState(id) {
+  const cfg = AT_DEMO_TESTS[id]; if (!cfg) return null;
+  const c = atDemoCache.get(id); if (c && Date.now() - c.made < 5 * 60_000) return c.st;
+  const now = Date.now(), st = { runs: [] }; let prev = null;
+  for (let k = 7 * 96 - 1; k >= 0; k--) { const t = now - 4 * 60_000 - k * 15 * 60_000, p = atDemoTrace(cfg, t, k, now); atNoteChange(st, prev, p); atRecord(st, p, t); prev = p; }
+  st.path = prev; atDemoCache.set(id, { made: now, st });
+  return st;
+}
 function atDemo(full = false) {
-  const seedRand = (s) => () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-  const HOME = { n: 1, ip: '192.168.1.1', name: null, zone: 'home', sent: 5, loss: 0, min: 0.4, avg: 0.6, max: 1.1, usual: 0.6 };   // scrub-ok: documentation-style demo hops
-  const ISP = [
-    { n: 2, ip: '100.92.0.1', name: null, zone: 'provider', sent: 5, loss: 0, min: 7.9, avg: 8.9, max: 11.2, usual: 8.7 },   // scrub-ok: demo
-    { n: 3, ip: '198.51.100.1', name: 'po-302-1210-rur02.example-isp.net', asn: 64500, org: 'Example Broadband', cc: 'US', zone: 'provider', sent: 5, loss: 0, min: 9.6, avg: 10.4, max: 12.9, usual: 10.1 },   // scrub-ok: demo
-    { n: 4, ip: '198.51.100.5', name: 'be-36-ar01.example-isp.net', asn: 64500, org: 'Example Broadband', cc: 'US', zone: 'provider', sent: 5, loss: 0, min: 11.2, avg: 12.1, max: 14.0, usual: 11.8 },   // scrub-ok: demo
-    { n: 5, ip: null, name: null, zone: 'provider', sent: 5, loss: 100, min: null, avg: null, max: null },
-  ];
-  const mk = (id, preset, base, tail, o = {}) => {
-    const p = atPreset(preset), rnd = seedRand(id.length * 7919 + base), now = Date.now();
+  const mk = (id) => {
+    const cfg = AT_DEMO_TESTS[id], p = atPreset(cfg.preset), { base } = cfg, rnd = atDemoRand(id.length * 7919 + base), now = Date.now(), st = atDemoState(id);
     const runs = Array.from({ length: 288 }, (_, i) => {
-      const bad = o.down && i > 280, slow = o.slow && i > 278, j = rnd(), dns = 4 + j * 6, connect = base * 0.32 + j * 4 + (slow ? 70 : 0), tls = base * 0.38 + j * 5 + (slow ? 80 : 0), wait = base * 0.9 + j * 30 + (i > 150 && i < 170 ? 120 : 0) + (slow ? 300 : 0), download = 6 + j * 20;
-      return { at: new Date(now - (287 - i) * 300_000).toISOString(), ok: !bad, total: bad ? 15000 : Math.round(dns + connect + tls + wait + download), dns: Math.round(dns * 10) / 10, connect: Math.round(connect * 10) / 10, tls: Math.round(tls * 10) / 10, wait: bad ? null : Math.round(wait * 10) / 10, download: bad ? null : Math.round(download * 10) / 10,
-        latency: bad ? null : Math.round((base * 0.32 + j * 3 + (slow ? 70 : 0)) * 10) / 10, jitter: bad ? null : Math.round(j * 30) / 10, loss: bad ? 100 : slow ? 20 : j > 0.97 ? 20 : 0, error: bad ? 'no answer in 15 seconds (wait)' : null };
+      const bad = cfg.down && i > 280, slow = cfg.slow && i > 278, j = rnd(), dns = 4 + j * 6, connect = base * 0.32 + j * 4 + (slow ? 70 : 0), tls = base * 0.38 + j * 5 + (slow ? 80 : 0), wait = base * 0.9 + j * 30 + (i > 150 && i < 170 ? 120 : 0) + (slow ? 300 : 0), download = 6 + j * 20;
+      return { at: new Date(now - (287 - i) * 300_000).toISOString(), ok: !bad, total: bad ? 15000 : Math.round(dns + connect + tls + wait + download), dns: Math.round(dns * 10) / 10, connect: bad ? null : Math.round(connect * 10) / 10, tls: bad ? null : Math.round(tls * 10) / 10, wait: bad ? null : Math.round(wait * 10) / 10, download: bad ? null : Math.round(download * 10) / 10,
+        latency: bad ? null : Math.round((base * 0.32 + j * 3 + (slow ? 70 : 0)) * 10) / 10, jitter: bad ? null : Math.round(j * 30) / 10, loss: bad ? 100 : slow ? 14 : j > 0.97 ? 20 : 0, error: bad ? 'no answer in 15 seconds (connect)' : null, errKind: bad ? 'connect' : null };
     });
     const last = runs[runs.length - 1];
-    const isp = o.slow ? ISP.map((h) => (h.n >= 4 && h.ip ? { ...h, min: h.min + 64, avg: h.avg + 71, max: h.max + 90, loss: 20 } : h)) : ISP;
-    const tailHops = tail.map((h, k) => { const add = o.slow ? 71 : 0; return { n: 6 + k, ip: h[0], name: h[2], asn: h[3], org: h[4], cc: 'US', zone: h[5] || 'internet', sent: 5, loss: o.slow ? 20 : 0, min: atR(h[1] * 0.92 + add), avg: atR(h[1] + add), max: atR(h[1] * 1.2 + add + 4), usual: h[1] }; });
-    const hops = [HOME, ...isp, ...tailHops].map((h) => ({ ...h, seen: 96 }));
-    const dAvg = o.down ? null : last.latency;
-    const path = { at: new Date(now - 4 * 60_000).toISOString(), tool: 'mtr', mtu: 1500, traces: 96, hops,
-      dest: { ip: '203.0.113.10', name: new URL(p.url).hostname, asn: o.destAsn || 64510, org: o.destOrg || 'Example Cloud', cc: 'US', zone: 'app', dest: true, sent: 5, from: 'probe', loss: o.down ? 100 : last.loss, min: dAvg == null ? null : atR(dAvg * 0.9), avg: dAvg, max: dAvg == null ? null : atR(dAvg * 1.25), usual: atR(base * 0.33) } };   // scrub-ok: demo
-    const hours = Array.from({ length: 168 }, (_, i) => { const r = rnd(), evening = ((new Date(now - (167 - i) * 3600_000).getHours() + 24) % 24) >= 19 && ((new Date(now - (167 - i) * 3600_000).getHours()) <= 23);
-      return { at: new Date(Math.floor(now / 3600_000) * 3600_000 - (167 - i) * 3600_000).toISOString(), n: 12, up: o.down && i > 166 ? 50 : i === 70 ? 91.7 : 100, latency: atR(base * 0.33 + r * 3 + (evening ? 6 : 0) + (o.slow && i > 165 ? 70 : 0)), loss: i === 70 ? 8.3 : o.slow && i > 165 ? 18 : r > 0.95 ? 1.7 : 0, total: Math.round(base * 2.6 + r * 40 + (evening ? 30 : 0)) }; });
-    const changes = o.changed ? [{ at: new Date(now - 3 * 3600_000).toISOString(), kind: 'route', from: ['Example Broadband', 'Example Transit'], to: ['Example Broadband', 'Example Backbone'], hopsFrom: 9, hopsTo: 8 }, { at: new Date(now - 4 * 86400_000).toISOString(), kind: 'mtu', mtuFrom: 1492, mtuTo: 1500 }] : [];
-    const down = !!o.down, slow = !!o.slow;
-    const culprit = down ? { who: 'app', kind: 'down', hop: null, org: null, ip: null, sure: true } : slow ? { who: 'provider', kind: 'delay', hop: 4, org: 'Example Broadband', ip: '198.51.100.5', ms: 71, sure: true } : null;   // scrub-ok: demo
-    const v = { id, name: p.name, url: p.url, kind: 'web', preset, short: p.short, custom: false, every: 5, alert: true, last: { ...last, ip: '203.0.113.10', status: down ? null : 200 }, down, failing: down, slow, culprit,   // scrub-ok: demo
-      uptime24h: down ? 97.6 : 100, median24h: atMedian(runs.filter((r) => r.ok).map((r) => r.total)), spark: runs.slice(-96).map((r) => (r.ok ? r.total : -1)), pathChangedAt: o.changed ? changes[0].at : null, hops: hops.length + 1 };
-    return full ? { ...v, runs, hours, changes, path, prevPath: null } : v;
+    const hours = Array.from({ length: 168 }, (_, i) => { const r = rnd(), hr = new Date(now - (167 - i) * 3600_000).getHours(), evening = hr >= 19 && hr <= 23;
+      return { at: new Date(Math.floor(now / 3600_000) * 3600_000 - (167 - i) * 3600_000).toISOString(), n: 12, up: cfg.down && i > 166 ? 50 : i === 70 ? 91.7 : 100, latency: atR(base * 0.33 + r * 3 + (evening ? 6 : 0) + (cfg.slow && i > 166 ? 60 : 0)), loss: i === 70 ? 8.3 : cfg.slow && i > 166 ? 12 : r > 0.95 ? 1.7 : 0, total: Math.round(base * 2.6 + r * 40 + (evening ? 30 : 0)) }; });
+    const down = !!cfg.down, slow = !!cfg.slow, path = atPathView(st);
+    const culprit = down || slow ? atCulprit(st.path, { down, slow, kind: 'web', run: last, base: atBaselines(st), med: { wait: atMedian(runs.map((r) => r.wait)) }, othersDown: 0, othersUp: 4 }) : null;
+    const v = { id, name: p.name, url: p.url, kind: 'web', preset: cfg.preset, short: p.short, custom: false, every: 5, alert: true, last: { ...last, ip: cfg.dest[0], status: down ? null : 200 }, down, failing: down, slow, culprit,
+      uptime24h: down ? 97.6 : 100, median24h: atMedian(runs.filter((r) => r.ok).map((r) => r.total)), spark: runs.slice(-96).map((r) => (r.ok ? r.total : -1)), pathChangedAt: st.changedAt || null, hops: path.hops.length + 1 };
+    return full ? { ...v, runs, hours, changes: st.changes || [], path, prevPath: st.prevPath || null } : { ...v, _path: st.path };
   };
-  const tests = [
-    mk('demo-m365', 'm365', 38, [['203.0.113.40', 14.8, 'ae25-0.icr01.example-transit.net', 64501, 'Example Transit'], ['203.0.113.77', 15.9, null, 64510, 'Example Cloud', 'app']]),   // scrub-ok: demo
-    mk('demo-teams', 'teams', 41, [['203.0.113.41', 15.2, 'ae26-0.icr02.example-transit.net', 64501, 'Example Transit']], { slow: true }),   // scrub-ok: demo
-    mk('demo-zoom', 'zoom', 52, [['198.51.100.9', 21.7, 'xe-0-1-0.edge3.example-backbone.net', 64502, 'Example Backbone'], ['198.51.100.33', 23.4, null, 64511, 'Example Video', 'app']], { changed: true, destAsn: 64511, destOrg: 'Example Video' }),   // scrub-ok: demo
-    mk('demo-google', 'google', 22, [['192.0.2.14', 13.1, null, 64512, 'Example Search', 'app']], { destAsn: 64512, destOrg: 'Example Search' }),   // scrub-ok: demo
-    mk('demo-netflix', 'netflix', 30, [['198.51.100.71', 16.6, 'ipv4.example-cdn.net', 64513, 'Example Streaming', 'app']], { down: true, destAsn: 64513, destOrg: 'Example Streaming' }),   // scrub-ok: demo
-  ];
-  return { pro: true, max: AT_PRO_MAX, basicMax: AT_BASIC_MAX, every: AT_EVERY, demo: true, owners: true, groups: AT_GROUPS, trace: { ok: true, tool: 'mtr', platform: 'linux' }, traceroute: true, presets: atPresetsOut('US'), tests };
+  const tests = Object.keys(AT_DEMO_TESTS).map(mk);
+  const overview = full ? null : atOverview(tests.map((t) => ({ ...t, path: t._path })));
+  for (const t of tests) delete t._path;
+  return { pro: true, max: AT_PRO_MAX, basicMax: AT_BASIC_MAX, every: AT_EVERY, demo: true, owners: true, groups: AT_GROUPS, trace: { ok: true, tool: 'mtr', platform: 'linux' }, traceroute: true, presets: atPresetsOut('US'), tests, overview };
 }
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchAT = { atParseTrace, atZones, atCulprit, atCulpritText, atPathKey, atParseOrigin, atParseAsName, atRevName, atSuggest, atFromSetup, atIsSlow, atBaselines };
+/* The merged path for a time window: ?from&to (ms; default the last hour), &cmp=1 to compare with the last hour. */
+app.get('/api/apptests/:id/graph', (req, res) => {
+  const demo = isDemo(), id = String(req.params.id);
+  const t = demo ? (AT_DEMO_TESTS[id] ? { id, url: atPreset(AT_DEMO_TESTS[id].preset).url, kind: 'web' } : null) : atCfg().find((x) => x.id === id);
+  if (!t) return res.status(404).json({ error: 'That test is gone.' });
+  const st = (demo ? atDemoState(id) : at.state[t.id]) || {}, now = Date.now(), q = req.query, host = atKind(t) === 'web' ? atParseUrl(t.url)?.host || null : null;
+  let to = Math.min(now, Number(q.to) || now), from = Number(q.from) || to - AT_H;
+  from = Math.max(now - 7 * 86400_000, Math.min(from, to - 10 * 60_000));
+  const opts = { cmp: q.cmp === '1', now, name: host };
+  let g = atGraphFor(st, from, to, opts);
+  if (!g && !q.from && st.traces?.length) { to = Date.parse(st.traces[st.traces.length - 1].at) + 1000; from = to - AT_H; g = atGraphFor(st, from, to, opts); }   // nothing in the last hour (CasaTorch was off, say): the hour up to the latest trace
+  res.json({ from, to, now, graph: g, marks: atMarks(st), changes: st.changes || [] });
+});
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchAT = { atParseTrace, atZones, atCulprit, atCulpritText, atPathKey, atParseOrigin, atParseAsName, atRevName, atSuggest, atFromSetup, atIsSlow, atBaselines,
+  atRecord, atObs, atMerge, atLayout, atAnalyze, atGraph, atGraphFor, atOverview, atDemoState, atDemo };

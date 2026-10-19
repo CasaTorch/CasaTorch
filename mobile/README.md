@@ -63,7 +63,7 @@ shown in Android's clipboard preview). Web view debugging is off in release buil
 
 **Alerts are end-to-end encrypted.** When you turn alerts on, the phone makes a key for that home and gives it only
 to your CasaTorch. Each alert is encrypted (AES-256-GCM) by your box, signed with your box's own key, and handed to
-casatorch.com, which passes the sealed bytes to Apple or Google. Only the phone can read them. casatorch.com keeps
+casatorch.com, which passes the sealed bytes to Apple (iPhone, iPad) or Google (Android). Only the phone can read them. casatorch.com keeps
 no copy - only your box's public key (so nobody else can send as your home) and an hourly count, for rate limiting.
 
 **Room scans go home.** On a LiDAR iPhone or iPad, **3D home › Scan a room** runs Apple's RoomPlan and uploads
@@ -126,28 +126,80 @@ Requires JDK 17, Android 9+ on the phone.
 Every push to `mobile/` also builds both apps in GitHub Actions (**Mobile apps** workflow); the Android debug APK
 is attached to each run.
 
-## Turning on alerts (once, for the store builds)
+## Turning on alerts (once)
 
-Alerts run through Firebase Cloud Messaging for both platforms. Without the Firebase files the apps work fully,
-and the alerts screen says alerts aren't available in that build.
+iPhone and iPad alerts go **straight through Apple** (APNs): the app gets its device token from Apple and gives it
+to your CasaTorch, which seals each alert and hands it to casatorch.com's relay (`api/push/send`), which passes it
+to Apple. No Firebase on iPhone. Android alerts go through Firebase Cloud Messaging (below). Until the relay has
+the keys, the apps work fully and the alerts screen says "Phone alerts aren't switched on for this CasaTorch app
+yet" (the phone stays set up; alerts start by themselves once the relay has the keys).
 
-1. Create a Firebase project (console.firebase.google.com). Turn off Google Analytics for it - the apps don't use it.
-2. Add an **iOS app** with bundle id `com.casatorch.app`. Download `GoogleService-Info.plist` into
-   `mobile/ios/CasaTorch/`.
-3. In Apple Developer › Keys, make an **APNs key**. Upload it in Firebase › Project settings › Cloud Messaging ›
-   Apple app configuration.
-4. Add an **Android app** with package `com.casatorch.app`. Download `google-services.json` into
-   `mobile/android/app/`.
-5. In Firebase › Project settings › Service accounts, **Generate new private key**. Save the JSON file outside any
-   repository, then give it to the relay from the site folder:
+### iPhone and iPad: the Apple push key (about 5 minutes)
+
+1. In **developer.apple.com › Account › Certificates, IDs & Profiles › Keys**, click **+**.
+2. Name it `CasaTorch Push`, tick **Apple Push Notifications service (APNs)**, then **Continue › Register**.
+3. Click **Download**. This is the only time Apple lets you download it: the file is
+   `AuthKey_XXXXXXXXXX.p8` in Downloads (the X's are the **Key ID**, also shown on that page). Keep the file
+   somewhere safe, outside any repository.
+4. Note your **Team ID**: **Account › Membership details › Team ID** (10 characters).
+5. On the Mac, give the key to casatorch.com (replace `XXXXXXXXXX` with your Key ID):
 
    ```sh
-   npx wrangler pages secret put FCM_SERVICE_ACCOUNT --project-name casatorch < path/to/service-account.json
+   cd ~/Projects/casatorch-site && npx wrangler pages secret put APNS_KEY_P8 --project-name casatorch < ~/Downloads/AuthKey_XXXXXXXXXX.p8
+   ```
+
+6. On the Mac, the Key ID (paste it when asked):
+
+   ```sh
+   cd ~/Projects/casatorch-site && npx wrangler pages secret put APNS_KEY_ID --project-name casatorch
+   ```
+
+7. On the Mac, the Team ID (paste it when asked):
+
+   ```sh
+   cd ~/Projects/casatorch-site && npx wrangler pages secret put APNS_TEAM_ID --project-name casatorch
+   ```
+
+8. On the Mac, deploy the site so the relay picks up the secrets:
+
+   ```sh
+   cd ~/Projects/casatorch-site && npx wrangler pages deploy
+   ```
+
+9. On the Mac, make the Xcode project again (the app no longer uses Firebase) and open it (change
+   `~/Projects/casatorch` if your copy of this repository is elsewhere):
+
+   ```sh
+   cd ~/Projects/casatorch/mobile/ios && xcodegen && open CasaTorch.xcodeproj
+   ```
+
+   Run it on the iPhone (Product › Run). Xcode adds Push Notifications to the app id by itself (automatic
+   signing). In the app: **Turn on alerts** - a test alert arrives within a few seconds. Later tests: the
+   dashboard's **Settings › Health › Get help › Alerts don't reach my phone › Send me a test alert**.
+
+Which Apple server: a build run from Xcode gets "sandbox" tokens, TestFlight and App Store builds "production"
+(Xcode signs those with `aps-environment` production by itself). The app reads which one it has from its
+provisioning profile and tells your CasaTorch; if Apple ever says a token belongs to the other server, the relay
+tries that one and your CasaTorch remembers it. One key works for both servers and never expires (revoke it in the
+same Keys page if it's ever exposed, then repeat the steps with a new one). Apple's push service needs HTTP/2, which
+the deployed site has; `wrangler pages dev` on a Mac can't reach Apple, so test alerts on the deployed site.
+
+### Android: Firebase
+
+1. Create a Firebase project (console.firebase.google.com). Turn off Google Analytics for it - the app doesn't use it.
+2. Add an **Android app** with package `com.casatorch.app`. Download `google-services.json` into
+   `mobile/android/app/`.
+3. In Firebase › Project settings › Service accounts, **Generate new private key**. Save the JSON file outside any
+   repository, then on the Mac give it to the relay and deploy:
+
+   ```sh
+   cd ~/Projects/casatorch-site && npx wrangler pages secret put FCM_SERVICE_ACCOUNT --project-name casatorch < path/to/service-account.json && npx wrangler pages deploy
    ```
 
    Delete the downloaded file after.
 
-The two Firebase app files are listed in `.gitignore`; keep them out of the repository.
+`google-services.json` is listed in `.gitignore`; keep it out of the repository. (iPhone apps from before 0.8.1
+used Firebase too; the relay still delivers to them while `FCM_SERVICE_ACCOUNT` is set.)
 
 ## Store checklist
 
@@ -160,7 +212,8 @@ again from the demo house.
 
 - **Bundle ids:** `com.casatorch.app` and `com.casatorch.app.alerts`.
 - **Capabilities:** Push Notifications, Keychain Sharing, Time Sensitive Notifications.
-- **Before release:** set `aps-environment` to `production` in `ios/project.yml`.
+- **Push:** nothing to change before release - Xcode signs TestFlight and App Store builds with `aps-environment`
+  production by itself, and the app tells your CasaTorch which Apple server to use.
 - **Privacy:** "Data Not Collected". `PrivacyInfo.xcprivacy` is included, and the app has no tracking and no analytics.
 - **Texts:** `store/app-store/en-US/` (name, subtitle, description, keywords, release notes, URLs) and
   `store/app-store/review_notes.txt`. `node mobile/tools/store-check.mjs` checks the length limits.

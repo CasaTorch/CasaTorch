@@ -98,7 +98,7 @@ class Bridge(private val a: MainActivity) {
         }
         "pushEnable" -> {
             val id = HomeStore.currentId ?: a.currentHomeId() ?: throw Failure("Sign in to a home first.")
-            if (!CasaApp.pushConfigured(a)) throw Failure("Alerts aren't available in this build of the app yet.")
+            if (!CasaApp.pushConfigured(a)) throw Failure("Phone alerts aren't switched on for this CasaTorch app yet.")   // no google-services.json in this build
             if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(a, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 if (askNotify != null) throw Failure("Answer the question on screen first.")
                 val ok = suspendCancellableCoroutine { c -> askNotify = { if (c.isActive) c.resume(it) }; c.invokeOnCancellation { askNotify = null }; notifyPermission.launch(Manifest.permission.POST_NOTIFICATIONS) }

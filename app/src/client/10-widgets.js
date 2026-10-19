@@ -309,42 +309,68 @@ widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', cat: 'home', essen
 
 const snapUrl = (d) => (d.snapshot ? d.snapshot : d.provider === 'ha' ? `/api/ha/camera/${encodeURIComponent(d.id.slice(3))}` : `/api/${d.provider === 'ring' ? 'ring' : 'cameras'}/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`);
 /* Camera tiles: one lasting element per camera, so a dashboard refresh never blanks the picture. Each one
-   asks for a newer picture on its own beat (the CasaTorch keeps them ready, so the answer is instant),
-   sends If-None-Match so an unchanged picture costs nothing, decodes the new one off-screen and only then
-   swaps it in. Cameras that are scrolled away, or in a tab nobody is looking at, pause. */
+   asks for a newer picture on its own beat (the CasaTorch keeps them ready, so the answer is instant), at the
+   tile's real pixel size (so it's sharp on a Retina screen and small on a phone), sends If-None-Match so an
+   unchanged picture costs nothing, decodes the new one off-screen and fades it in. Tiles on screen play live
+   video where the camera has it (Frigate's small stream); cameras scrolled away, or in a tab nobody is
+   looking at, pause. */
 const CAMS = new Map();
 const camEvery = (d) => Math.max(1000, d.provider === 'camera' ? 1000 : d.every || (d.provider === 'ring' ? 4000 : d.provider === 'ha' ? 2000 : 2000));   // the integration's own pace (cameras on your network: every second)
-/* Live in the grid: a camera with its own stream (Frigate) plays live while its tile is on screen, at a gentle size and frame rate. */
-const camLiveTile = (d) => !!d.stream && d.provider === 'camera' && !navigator.connection?.saveData;
+const CAM_SIZES = [240, 360, 480, 720, 1080, 1440];
+/** The picture height a box needs in real pixels (the next size up, so it is never stretched). */
+const camPx = (box) => { const h = Math.max(120, box?.clientHeight || 270) * Math.min(3, window.devicePixelRatio || 1); return CAM_SIZES.find((s) => s >= h) || 1440; };
+const snapSized = (d, px) => { const u = snapUrl(d); return d.source === 'frigate' ? `${u}${u.includes('?') ? '&' : '?'}h=${px}` : u; };
+/* Live in the grid: Frigate cameras play their small stream while the tile is on screen - up to 4 at once on a
+   computer, 2 on a phone (none with Data Saver on); the rest keep a new picture every second. */
+const camLiveCap = () => (navigator.connection?.saveData ? 0 : (window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth < 760 || (navigator.hardwareConcurrency || 4) <= 2 ? 2 : 4));
+const camLiveTile = (d) => !!d.stream && d.provider === 'camera';
 function camLive(c, on) {
   if (!camLiveTile(c.d)) return;
-  if (on && !c.live && [...CAMS.values()].filter((x) => x.live).length >= 3) return;   // a browser keeps ~6 connections per address: at most 3 live tiles, the rest refresh every second
-  if (on && !c.live) { c.live = true; c.img.onerror = () => { c.live = false; c.liveFailed = Date.now(); c.img.onerror = null; camFetch(c, true); }; c.img.src = `${c.d.stream}${c.d.stream.includes('?') ? '&' : '?'}h=360&fps=5&t=${Date.now()}`; c.wrap.classList.remove('cam-wait', 'cam-err'); }
-  else if (!on && c.live) { c.live = false; c.img.onerror = null; c.img.removeAttribute('src'); if (c.url) c.img.src = c.url; }
+  if (on && !c.live) {
+    if ([...CAMS.values()].filter((x) => x.live).length >= camLiveCap()) return;
+    c.live = true;
+    c.player = camPlay(c.d, { role: 'tile', video: c.video, img: c.mjpeg, onState: (st) => {
+      if (!c.live) return;
+      if (st.state === 'playing') { if (!c.playing) { c.playing = st.kind; c.wrap.classList.add('cam-live'); c.wrap.classList.toggle('cam-live-img', st.kind === 'mjpeg'); c.wrap.classList.remove('cam-wait', 'cam-err'); c.age.textContent = ''; } }
+      else if (st.state === 'none') { camLive(c, false); c.liveFailed = Date.now(); camFetch(c, true); }
+    } });
+  } else if (!on && c.live) { c.live = false; c.playing = null; c.player?.stop(); c.player = null; c.wrap.classList.remove('cam-live', 'cam-live-img'); }
 }
-const camSeen = 'IntersectionObserver' in window ? new IntersectionObserver((es) => { for (const e of es) { const c = e.target.__cam; if (c) { c.visible = e.isIntersecting; camLive(c, c.visible && !document.hidden && !(c.liveFailed && Date.now() - c.liveFailed < 60_000)); } } }) : null;
-document.addEventListener('visibilitychange', () => { for (const c of CAMS.values()) camLive(c, !document.hidden && c.visible && c.wrap.isConnected); });
+const camLiveOk = (c) => !c.held && c.visible && !document.hidden && c.wrap.isConnected && !(c.liveFailed && Date.now() - c.liveFailed < 60_000);
+const camSeen = 'IntersectionObserver' in window ? new IntersectionObserver((es) => { for (const e of es) { const c = e.target.__cam; if (c) { c.visible = e.isIntersecting; camLive(c, camLiveOk(c)); if (c.visible) camFetch(c); } } }) : null;
+document.addEventListener('visibilitychange', () => { for (const c of CAMS.values()) camLive(c, camLiveOk(c)); });
 async function camFetch(c, force = false) {
-  if (c.live) return;   // playing live: no pictures needed
+  if (c.playing) return;   // playing live: no pictures needed
   if (c.busy || (!force && (!c.visible || document.hidden))) return;
   c.busy = true; c.last = Date.now();
   try {
-    const r = await fetch(snapUrl(c.d), { cache: 'no-store', headers: c.etag ? { 'If-None-Match': c.etag } : {} });
+    const px = camPx(c.wrap); if (px !== c.px) { c.px = px; c.etag = null; }
+    const r = await fetch(snapSized(c.d, px), { cache: 'no-store', headers: c.etag ? { 'If-None-Match': c.etag } : {} });
     const age = Number(r.headers.get('X-Snapshot-Age') || 0);
-    c.age.textContent = age > 15 ? (age > 120 ? T('{n} min ago', { n: Math.round(age / 60) }) : T('{n} s ago', { n: age })) : '';
+    if (!c.playing) c.age.textContent = age > 15 ? (age > 120 ? T('{n} min ago', { n: Math.round(age / 60) }) : T('{n} s ago', { n: age })) : '';
     if (r.status === 304) { c.wrap.classList.remove('cam-err'); return; }
     if (!r.ok) throw new Error('no picture');
-    const url = URL.createObjectURL(await r.blob()), tmp = new Image(); tmp.src = url;
-    await (tmp.decode ? tmp.decode() : new Promise((ok, no) => { tmp.onload = ok; tmp.onerror = no; }));
-    const old = c.url; c.img.src = url; c.url = url; c.etag = r.headers.get('ETag'); c.wrap.classList.remove('cam-err', 'cam-wait');
-    if (old) setTimeout(() => URL.revokeObjectURL(old), 1000);
+    const url = URL.createObjectURL(await r.blob());
+    // the new picture fades in over the old one, then takes its place: no flash, no blank frame
+    c.fade.src = url;
+    await (c.fade.decode ? c.fade.decode() : new Promise((ok, no) => { c.fade.onload = ok; c.fade.onerror = no; }));
+    const old = c.url; c.url = url; c.etag = r.headers.get('ETag');
+    if (c.wrap.classList.contains('cam-wait')) { c.img.src = url; c.wrap.classList.remove('cam-wait'); }
+    else {
+      c.fade.classList.add('on');
+      await new Promise((ok) => setTimeout(ok, 260));
+      c.img.src = url; await c.img.decode?.().catch(() => {});
+      c.fade.classList.remove('on');
+    }
+    c.wrap.classList.remove('cam-err');
+    if (old) setTimeout(() => URL.revokeObjectURL(old), 1500);
   } catch { c.wrap.classList.add('cam-err'); c.wrap.classList.remove('cam-wait'); }
   finally { c.busy = false; }
 }
 setInterval(() => {
   const now = Date.now();
   for (const [id, c] of CAMS) {
-    if (c.wrap.isConnected) { c.gone = 0; if (now - c.last >= camEvery(c.d)) camFetch(c); continue; }
+    if (c.wrap.isConnected) { c.gone = 0; if (now - c.last >= camEvery(c.d)) camFetch(c); if (!c.live && camLiveOk(c)) camLive(c, true); continue; }
     if (c.live) camLive(c, false);   // its page closed: stop the stream now
     // a camera no page shows any more (another tab, or it was removed): after a minute, let its picture go
     if (!c.gone) c.gone = now; else if (now - c.gone > 60_000 && !c.busy) { camSeen?.unobserve(c.wrap); if (c.url) URL.revokeObjectURL(c.url); CAMS.delete(id); }
@@ -354,24 +380,62 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) for 
 function camView(d) {
   let c = CAMS.get(d.id);
   if (!c) {
-    const img = el('img', { alt: d.name, decoding: 'async', role: 'button', tabindex: 0 }), age = el('span', { class: 'cam-age' }), name = el('span', {}, d.name);
-    const wrap = el('div', { class: 'cam cam-wait', onclick: () => { camLive(c, false); camModal(c.d, () => camLive(c, c.visible && !document.hidden)); } }, img, el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, [srcName(d.source || d.provider), camLiveTile(d) ? T('live') : d.stream ? T('live on tap') : ''].filter(Boolean).join(' · '))), age);
-    c = { d, img, age, name, wrap, visible: true, last: 0, etag: null, url: null, busy: false }; wrap.__cam = c; CAMS.set(d.id, c);
+    const img = el('img', { alt: d.name, decoding: 'async', role: 'button', tabindex: 0 }), fade = el('img', { class: 'cam-fade', alt: '', 'aria-hidden': 'true' });
+    const video = el('video', { class: 'cam-video', 'aria-hidden': 'true' }), mjpeg = el('img', { class: 'cam-mjpeg', alt: '', 'aria-hidden': 'true' });
+    const age = el('span', { class: 'cam-age' }), name = el('span', {}, d.name);
+    const wrap = el('div', { class: 'cam cam-wait', onclick: () => { c.held = true; camLive(c, false); camModal(c.d, () => { c.held = false; camLive(c, camLiveOk(c)); }); } }, img, fade, video, mjpeg,
+      el('div', { class: 'cap' }, name, el('span', { class: 'tiny muted' }, [srcName(d.source || d.provider), camLiveTile(d) ? T('live') : d.stream ? T('live on tap') : ''].filter(Boolean).join(' · '))), age);
+    c = { d, img, fade, video, mjpeg, age, name, wrap, visible: true, last: 0, etag: null, url: null, busy: false }; wrap.__cam = c; CAMS.set(d.id, c);
     camSeen?.observe(wrap); camFetch(c, true);
   }
   c.d = d; c.name.textContent = d.name; c.img.alt = d.name;
   return c.wrap;
 }
-/* Full screen: live video where the camera has it (Frigate), otherwise a new picture every second. */
+/* Full view: live video (the camera's main stream) where it has it, a new picture every second otherwise.
+   Tap the video for full screen; sound can be turned on when the camera has it. */
 function camModal(d, onClose) {
-  const img = el('img', { alt: d.name, class: 'cam-full' }), note = el('div', { class: 'tiny muted', style: 'margin-top:8px' }, d.stream ? T('Live video') : T('A new picture every second'));
-  const m = modal(el('div', {}, img, note), { wide: true, title: d.name });
-  let started = false;
-  const stills = () => { if (started) return; started = true; let etag = null; const tick = async () => { if (!m.isConnected) return; try { const r = await fetch(snapUrl(d), { cache: 'no-store', headers: etag ? { 'If-None-Match': etag } : {} }); if (r.ok && m.isConnected) { const u = URL.createObjectURL(await r.blob()), t = new Image(); t.src = u; await t.decode().catch(() => {}); const o = img.src; img.src = u; etag = r.headers.get('ETag'); if (o.startsWith('blob:')) URL.revokeObjectURL(o); } } catch { /* next tick */ } setTimeout(tick, 1000); }; tick(); };
-  if (d.stream) { img.src = `${d.stream}${d.stream.includes('?') ? '&' : '?'}t=${Date.now()}`; img.onerror = () => { if (!m.isConnected) return; note.textContent = T('Live video unavailable - showing pictures'); stills(); }; }
-  else stills();
-  // closing the window stops a live stream at once
-  new MutationObserver((_, o) => { if (!m.isConnected) { img.onerror = null; const u = img.src; img.removeAttribute('src'); if (u.startsWith('blob:')) URL.revokeObjectURL(u); o.disconnect(); onClose?.(); } }).observe(document.body, { childList: true });
+  const video = el('video', { class: 'camv-video' }), mjpeg = el('img', { class: 'camv-img', alt: d.name }), still = el('img', { class: 'camv-still', alt: d.name });
+  const badge = el('span', { class: 'camv-badge' }, T('Connecting…'));
+  const muteBtn = el('button', { class: 'camv-btn', type: 'button', hidden: true, title: T('Sound'), 'aria-label': T('Turn sound on'), onclick: (e) => { e.stopPropagation(); video.muted = !video.muted; muteBtn.replaceChildren(icon(video.muted ? 'mute' : 'vol', 18)); muteBtn.setAttribute('aria-label', video.muted ? T('Turn sound on') : T('Turn sound off')); } }, icon('mute', 18));
+  const fsBtn = el('button', { class: 'camv-btn', type: 'button', title: T('Full screen'), 'aria-label': T('Full screen'), onclick: (e) => { e.stopPropagation(); toggleFs(); } }, icon('expand', 18));
+  const stage = el('div', { class: 'camv', onclick: () => toggleFs() }, still, video, mjpeg, el('div', { class: 'camv-top' }, badge), el('div', { class: 'camv-ctl' }, muteBtn, fsBtn));
+  const note = el('div', { class: 'tiny muted camv-note' });
+  const m = modal(el('div', {}, stage, note), { wide: true, title: d.name });
+  const fsNow = () => document.fullscreenElement || document.webkitFullscreenElement;
+  function toggleFs() {
+    if (fsNow()) { (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); return; }
+    if (stage.classList.contains('camv-max')) { stage.classList.remove('camv-max'); return; }
+    const go = stage.requestFullscreen || stage.webkitRequestFullscreen;
+    if (go && (document.fullscreenEnabled || document.webkitFullscreenEnabled)) { try { const p = go.call(stage); if (p?.catch) p.catch(() => stage.classList.add('camv-max')); return; } catch { /* below */ } }
+    stage.classList.add('camv-max');   // iPhone: the picture fills the screen inside the page - no player taking over
+  }
+  let playing = false, etag = null;
+  // pictures first (so the sheet is never empty), and every second for as long as there's no live video
+  const tick = async () => {
+    if (!m.isConnected) return;
+    if (!playing) {
+      try {
+        const r = await fetch(snapSized(d, camPx(stage)), { cache: 'no-store', headers: etag ? { 'If-None-Match': etag } : {} });
+        if (r.ok && m.isConnected && !playing) { const u = URL.createObjectURL(await r.blob()), t = new Image(); t.src = u; await t.decode?.().catch(() => {}); const o = still.src; still.src = u; etag = r.headers.get('ETag'); if (o.startsWith('blob:')) URL.revokeObjectURL(o); }
+      } catch { /* next tick */ }
+    }
+    setTimeout(tick, 1000);
+  };
+  tick();
+  const player = camPlay(d, { role: 'full', video, img: mjpeg, onState: (st) => {
+    if (!m.isConnected) return;
+    if (st.state === 'trying') { if (!playing) badge.textContent = T('Connecting…'); return; }
+    if (st.state === 'playing') {
+      playing = true; stage.classList.add('is-live'); stage.classList.toggle('is-img', st.kind === 'mjpeg');
+      badge.textContent = st.latency != null && st.latency >= 0.3 && st.kind !== 'mjpeg' ? T('LIVE · {s} s', { s: st.latency < 10 ? st.latency.toFixed(1) : Math.round(st.latency) }) : T('LIVE');
+      muteBtn.hidden = !st.audio; note.textContent = st.kind === 'mjpeg' ? T('Live video in basic quality.') : '';
+      return;
+    }
+    playing = false; stage.classList.remove('is-live', 'is-img'); badge.textContent = T('Pictures');
+    note.textContent = `${T('This camera\'s live stream isn\'t available - showing pictures every second.')} ${camWhyText(st.why)}`;
+  } });
+  // closing the window stops the live stream at once
+  new MutationObserver((_, o) => { if (!m.isConnected) { player.stop(); if (fsNow()) (document.exitFullscreen || document.webkitExitFullscreen)?.call(document); const u = still.src; if (u.startsWith('blob:')) URL.revokeObjectURL(u); o.disconnect(); onClose?.(); } }).observe(document.body, { childList: true });
 }
 widget({ id: 'camera', title: 'Cameras', icon: 'camera', cat: 'safety', essential: true, multi: true, blurb: 'Your cameras, live - pick which, and let them take turns', keywords: 'ring frigate reolink doorbell video', min: [3, 2], size: [4, 3], noPreview: true,
   options: [

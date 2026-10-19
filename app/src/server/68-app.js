@@ -15,7 +15,8 @@
  * Alerts: the app makes a fresh 256-bit key for this home, registers its push
  * token and that key here, and every alert is encrypted on this CasaTorch
  * (AES-256-GCM) before it leaves. casatorch.com passes the sealed message to
- * Apple / Google (Firebase) to wake the phone; only the phone can read it.
+ * Apple (APNs, for iPhone and iPad) or Google (Firebase, for Android) to wake
+ * the phone; only the phone can read it.
  * casatorch.com never sees what an alert says, and keeps nothing.
  * Outside the sealed part travel only: this home's random id and public key,
  * each phone's push token and platform, "critical or not", and an opaque
@@ -133,22 +134,34 @@ app.get('/api/app/me', (req, res) => {
   const pd = (push.apps || []).find((x) => x.session === s.id);
   res.json({ user: safeUser(req.user), home: appHome(req), device: s.device || null, push: pd ? { on: true, level: pd.level, lastOk: pd.lastOk || null, broken: !!pd.lastError && !pd.lastOk } : { on: false }, relay: !!RELAY_URL });
 });
-/* The phone's alerts: its push token, which service (Apple through Firebase, or Google), and its own key for this home. */
+/* The phone's alerts: its push token, which service, and its own key for this home. Services: "apns" (iPhone and
+   iPad, the app 0.8.1+: Apple's own device token, hex, and which Apple server it belongs to - "sandbox" for a build
+   run from Xcode, "production" for TestFlight and the App Store), "android" (Firebase), "ios" (older iPhone apps,
+   through Firebase). */
+const APNS_TOKEN = /^[0-9a-f]{64,400}$/i;
+const okPushToken = (platform, token) => (platform === 'apns' ? APNS_TOKEN.test(token) : /^[\w:.-]{20,4096}$/.test(token));
+const apnsEnv = (e) => (e === 'sandbox' ? 'sandbox' : 'production');
 app.post('/api/app/push', express.json({ limit: '4kb' }), (req, res) => {
   const s = appSession(req, res); if (!s) return;
   const b = req.body || {}, key = Buffer.from(String(b.key || ''), 'base64');
-  if (!['ios', 'android'].includes(b.platform) || !/^[\w:.-]{20,4096}$/.test(String(b.token || '')) || key.length !== 32) return res.status(400).json({ error: 'That isn\'t a phone this can send to.' });
+  if (!['ios', 'android', 'apns'].includes(b.platform) || !okPushToken(b.platform, String(b.token || '')) || key.length !== 32) return res.status(400).json({ error: 'That isn\'t a phone this can send to.' });
   push.apps = (push.apps || []).filter((x) => x.session !== s.id && x.token !== b.token);
   if (push.apps.filter((x) => x.user === req.user.id).length >= 10) return res.status(400).json({ error: 'You already have 10 phones with alerts on - turn one off first.' });
-  push.apps.push({ id: crypto.randomBytes(6).toString('hex'), session: s.id, user: req.user.id, platform: b.platform, token: String(b.token), key: seal(key.toString('base64')), level: Object.hasOwn(LEVELS, String(b.level)) ? b.level : 'important', name: s.device?.name || 'Phone', at: nowIso() });
+  push.apps.push({ id: crypto.randomBytes(6).toString('hex'), session: s.id, user: req.user.id, platform: b.platform, token: String(b.token), ...(b.platform === 'apns' ? { env: apnsEnv(b.env) } : {}), key: seal(key.toString('base64')), level: Object.hasOwn(LEVELS, String(b.level)) ? b.level : 'important', name: s.device?.name || 'Phone', at: nowIso() });
   savePush(); res.json({ ok: true });
 });
 app.put('/api/app/push', express.json({ limit: '2kb' }), (req, res) => {
   const s = appSession(req, res); if (!s) return;
   const pd = (push.apps || []).find((x) => x.session === s.id); if (!pd) return res.status(404).json({ error: 'Alerts aren\'t on for this phone.' });
   if (Object.hasOwn(LEVELS, String(req.body?.level))) pd.level = req.body.level;
-  // the phone's push address changed (Apple and Google rotate them now and then): the app sends the new one
-  if (req.body?.token !== undefined) { if (!/^[\w:.-]{20,4096}$/.test(String(req.body.token))) return res.status(400).json({ error: 'That isn\'t a phone this can send to.' }); pd.token = String(req.body.token); delete pd.lastError; }
+  // the phone's push address changed (Apple and Google rotate them now and then): the app sends the new one - and an
+  // iPhone app updated from a Firebase build (0.8.0) moves itself to Apple directly ("apns")
+  if (req.body?.token !== undefined) {
+    const platform = req.body.platform === 'apns' ? 'apns' : pd.platform;
+    if (!okPushToken(platform, String(req.body.token)) || (platform === 'apns' && !['ios', 'apns'].includes(pd.platform))) return res.status(400).json({ error: 'That isn\'t a phone this can send to.' });
+    pd.token = String(req.body.token); pd.platform = platform; delete pd.lastError;
+    if (platform === 'apns') pd.env = apnsEnv(req.body.env ?? pd.env);
+  }
   savePush(); res.json({ ok: true });
 });
 app.delete('/api/app/push', (req, res) => { const s = appSession(req, res); if (!s) return; push.apps = (push.apps || []).filter((x) => x.session !== s.id); savePush(); res.json({ ok: true }); });
@@ -156,7 +169,7 @@ app.post('/api/app/push/test', async (req, res) => {
   const s = appSession(req, res); if (!s) return;
   const pd = (push.apps || []).find((x) => x.session === s.id); if (!pd) return res.status(404).json({ error: 'Turn on alerts first.' });
   const r = await appPushSend([pd], { title: 'CasaTorch', body: 'Alerts work on this phone.', tag: 'test', url: '/#alerts', sev: 'info' });
-  r.ok ? res.json({ ok: true }) : res.status(502).json({ error: r.error || 'The alert couldn\'t be sent.' });
+  r.ok ? res.json({ ok: true }) : res.status(r.unavailable ? 503 : 502).json({ error: r.error || 'The alert couldn\'t be sent.', ...(r.unavailable ? { unavailable: true } : {}) });
 });
 /* Signing this phone out: its session and its alerts go. */
 app.post('/api/app/signout', (req, res) => {
@@ -194,16 +207,24 @@ async function appPushSend(list, msg) {
   if (keep.length !== list.length) { const gone = new Set(list.filter((pd) => !live.has(pd.session)).map((pd) => pd.id)); push.apps = push.apps.filter((x) => !gone.has(x.id)); savePush(); }
   if (!keep.length) return { ok: false, error: 'This phone is signed out.' };
   const k = relayKey();
-  const body = JSON.stringify({ home: relayHomeId(k.pub), pub: k.pub, ts: Date.now(), msgs: keep.map((pd) => ({ p: pd.platform, t: pd.token, ...sealFor(pd, msg), crit: msg.sev === 'critical', tag: pushTagFor(pd, msg.tag) })) });
+  const body = JSON.stringify({ home: relayHomeId(k.pub), pub: k.pub, ts: Date.now(), msgs: keep.map((pd) => ({ p: pd.platform, t: pd.token, ...(pd.platform === 'apns' ? { e: apnsEnv(pd.env) } : {}), ...sealFor(pd, msg), crit: msg.sev === 'critical', tag: pushTagFor(pd, msg.tag) })) });
   const sig = crypto.sign(null, Buffer.from(body), k.priv).toString('base64');
   try {
     const r = await fetch(RELAY_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CT-Sig': sig }, body, signal: AbortSignal.timeout(15_000) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) { for (const pd of keep) pd.lastError = `relay ${r.status}`; savePush(); return { ok: false, error: j.error || `casatorch.com answered ${r.status}` }; }
+    if (!r.ok) { for (const pd of keep) pd.lastError = `relay ${r.status}`; savePush(); return { ok: false, unavailable: r.status === 503 && j.unavailable === true, error: j.error || `casatorch.com answered ${r.status}` }; }
     const dead = new Set((j.unregistered || []).map(String));
-    for (const pd of keep) { if (dead.has(pd.token)) continue; pd.lastOk = nowIso(); delete pd.lastError; }
+    // Apple said this phone's token belongs to its other server (a build from Xcode vs. TestFlight): remember which
+    const moved = j.env && typeof j.env === 'object' ? j.env : {};
+    for (const pd of keep) { if (pd.platform === 'apns' && Object.hasOwn(moved, pd.token)) pd.env = apnsEnv(moved[pd.token]); }
+    // nothing went out and nobody was dropped: Apple or Google said no (relays before 0.8.1 don't say; then it went)
+    const refused = typeof j.sent === 'number' && j.sent === 0 && !j.duplicate && keep.some((pd) => !dead.has(pd.token)) && !!j.error;
+    for (const pd of keep) { if (dead.has(pd.token)) continue; if (refused) pd.lastError = String(j.error).slice(0, 80); else { pd.lastOk = nowIso(); delete pd.lastError; } }
     if (dead.size) push.apps = push.apps.filter((x) => !dead.has(x.token));
-    savePush(); return { ok: true };
+    savePush();
+    if (refused) return { ok: false, error: String(j.error).slice(0, 160) };
+    if (dead.size && keep.every((pd) => dead.has(pd.token))) return { ok: false, error: 'This phone stopped taking alerts (the app was removed or alerts turned off). Turn them on again in the app.' };
+    return { ok: true };
   } catch (e) { for (const pd of keep) pd.lastError = String(e.message || e).slice(0, 80); savePush(); return { ok: false, error: 'casatorch.com couldn\'t be reached to wake the phone.' }; }
 }
 async function appPushAll(msg) {

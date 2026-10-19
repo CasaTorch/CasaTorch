@@ -266,6 +266,9 @@ async function fetchImage(url, user, pass) {
   for await (const c of r.body || []) { n += c.length; if (n > max) throw new Error('the camera sent something too big for a picture'); chunks.push(c); }
   return { type: r.headers.get('content-type') || 'image/jpeg', buf: Buffer.concat(chunks) };
 }
+const SNAP_SIZES = [240, 360, 480, 720, 1080, 1440];
+/** The picture height to make for a requested one: the next size up (so it is never blurry), 720 when none is asked. */
+const snapSize = (h) => { const n = Number(h); return Number.isFinite(n) && n > 0 ? SNAP_SIZES.find((s) => s >= n) || 1440 : 720; };
 const CAMERA_SNAPSHOT = {
   frigate: (c) => frigateSnapshot(c),
   reolink: (c) => fetchImage(`http://${c.host}/cgi-bin/api.cgi?cmd=Snap&channel=${c.channel || 0}&rs=casatorch${Date.now()}&user=${encodeURIComponent(c.username)}&password=${encodeURIComponent(c.password)}`),
@@ -292,6 +295,9 @@ app.get('/api/cameras/:id/snapshot', async (req, res) => {
   }
   const c = (config.cameras || []).find((x) => x.id === req.params.id);
   if (!c || !CAMERA_SNAPSHOT[c.type]) return res.status(404).end();
+  // Frigate makes the picture at the size asked for (?h= the tile's height in real pixels): a few sizes, each kept ready
+  const h = c.type === 'frigate' ? snapSize(req.query.h) : 720;
+  if (h !== 720) return sendSnap(req, res, `camera:${c.id}@${h}`, () => frigateSnapshot(c, h), 'local');
   return sendSnap(req, res, `camera:${c.id}`, () => CAMERA_SNAPSHOT[c.type](c), 'local');
 });
 

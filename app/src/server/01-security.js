@@ -69,11 +69,14 @@ app.use('/api', (req, res, next) => {
   if (/^\/(setup|license\/claim)\//.test(req.path)) return next();
   res.status(409).json({ error: 'Finish setup first.' });
 });
+/* Live camera video comes over a WebSocket to this same address. Newer browsers count ws:/wss: to the page's own
+   address as 'self'; older Safari (and so older iPhones) don't, so the page's own address is named too - only that one. */
+const wsSelf = (req) => { const h = String(req.headers.host || ''); return /^[\w.-]{1,253}(:\d{1,5})?$|^\[[\da-f:.]{2,45}\](:\d{1,5})?$/i.test(h) ? ` wss://${h}${req.secure ? '' : ` ws://${h}`}` : ''; };
 /* 'wasm-unsafe-eval' lets WebAssembly run (the 3D home's Draco, meshopt and KTX2 decoders for compressed scans); JavaScript eval stays off. */
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'", `script-src 'self' 'wasm-unsafe-eval' ${inlineScriptHashes}`.trim(), "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", "font-src 'self' data: https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https:", "media-src 'self' blob: https:", "connect-src 'self' blob: data:", "worker-src 'self' blob:", "frame-src 'self'",
+    "img-src 'self' data: blob: https:", "media-src 'self' blob: https:", `connect-src 'self' blob: data:${wsSelf(req)}`, "worker-src 'self' blob:", "frame-src 'self'",
     "object-src 'none'", "base-uri 'self'", "form-action 'self' https://accounts.google.com", `frame-ancestors ${frameAncestors()}`,
   ].join('; '));
   res.setHeader('X-Content-Type-Options', 'nosniff');

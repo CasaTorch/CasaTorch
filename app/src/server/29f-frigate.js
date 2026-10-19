@@ -70,8 +70,9 @@ async function frigateJson(c, path) {
   try { return JSON.parse(buf.toString('utf8')); } catch { return buf.toString('utf8').trim(); }
 }
 /** A camera's latest picture, as fetchImage returns it. */
-async function frigateSnapshot(c) {
-  const r = await frigateGet(c, `/api/${encodeURIComponent(c.camera)}/latest.jpg?h=720`);
+async function frigateSnapshot(c, h = 720) {
+  // sized for the screen that shows it (the tile's real pixels), no boxes drawn on it, a little better than Frigate's default quality
+  const r = await frigateGet(c, `/api/${encodeURIComponent(c.camera)}/latest.jpg?h=${Math.min(2160, Math.max(120, Math.round(Number(h) || 720)))}&quality=85&bbox=0`);
   if (r.statusCode >= 300) { r.resume(); throw Object.assign(new Error(`Frigate answered HTTP ${r.statusCode}`), { status: r.statusCode }); }
   const buf = await readAll(r, 20 * 1024 * 1024);
   return { type: r.headers['content-type'] || 'image/jpeg', buf };
