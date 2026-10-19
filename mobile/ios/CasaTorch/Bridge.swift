@@ -110,6 +110,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             return HomeStore.shared.homes.map { h -> [String: Any] in
                 var o: [String: Any] = ["id": h.id, "name": h.name, "user": ["name": h.user?.name ?? "", "role": h.user?.role ?? ""], "addresses": ["lan": h.addresses.lan.map { $0 as Any } ?? NSNull(), "remote": h.addresses.remote.map { $0 as Any } ?? NSNull(), "plain": h.addresses.plain.map { $0 as Any } ?? NSNull(), "here": h.addresses.here.map { $0 as Any } ?? NSNull()]]
                 if let l = h.last { o["last"] = ISO8601DateFormatter().string(from: l) }
+                o["launch"] = h.id == HomeStore.shared.launchHomeId
                 return o
             }
         case "saveHome":
@@ -122,8 +123,16 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             guard HomeStore.shared.upsert(home, token: token) else { throw Failure("This phone's secure storage didn't take the sign-in.") }
             return true
         case "openHome":
-            if let id = a["id"] as? String { vc.openHome(id) }
+            if let id = a["id"] as? String, HomeStore.shared.home(id) != nil {
+                if fromShell, (a["remember"] as? Bool) == true { HomeStore.shared.launchHomeId = id }   // "Remember my choice"
+                vc.openHome(id)
+            }
             return nil
+        case "setLaunchHome":
+            guard fromShell else { throw Failure("Not allowed here.") }
+            let id = a["id"] as? String
+            HomeStore.shared.launchHomeId = id.flatMap { HomeStore.shared.home($0) != nil ? $0 : nil }
+            return true
         case "removeHome":
             guard fromShell, let id = a["id"] as? String else { throw Failure("Not allowed here.") }
             HomeStore.shared.remove(id); vc.tokenCache[id] = nil; return true

@@ -33,11 +33,195 @@ const ICONS = {
   image: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15.5 10a1.5 1.5 0 1 0 0-.01', alarm: 'M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 1.5M5 3 2 6M19 3l3 3',
 };
 const icon = (name, size) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); if (size) { s.setAttribute('width', size); s.setAttribute('height', size); } s.innerHTML = `<path d="${ICONS[name] || ICONS.dotc}"/>`; return s; };
+/* ---- Talking to the CasaTorch over any network (home Wi-Fi, mobile data through secure access, a train tunnel) ----
+   Every request has a time limit (a connection the network change left dead never answers - it would wait forever);
+   a read that fails or times out is tried once more; the same read asked twice at once is asked once; the pages'
+   own reads stop when you leave the page. Pages draw at once from the last answer they had (kept in memory and, for
+   the everyday pages, a small copy in this browser - home data only, never sign-ins or keys, wiped on sign-out),
+   then catch up when the live answer lands. makeNet has no DOM in it: test/net-unit.mjs tests it in Node. */
+/* @net:start */
+/* Kept in this browser between visits (the everyday pages; home data only): */
+const NET_KEPT = /^\/api\/(home|alerts|devices|settings|layout|page-layout\/[\w-]+|ui|status|status-bar|updates|energy(\/[\w-]+)?|network|internet|calendar|mycal|nudges(\/active)?|household|family(\/(chips|meals))?|w\/(weather|sun|sports|stocks|teams|leagues)|photos|monitors|security|safety|reports|auth\/me|history|radar\/frames|apptests|frigate\/events)$/;
+/* Never drawn from an older answer (a step-by-step flow, a search, a job's progress), even in memory: */
+const NET_LIVE_ONLY = /^\/api\/(ha\/|find|live\/|app\/|support|doctor|system|w\/places|catalog|connections|integrations|local-https|remote|updates\/|apptests\/|plan|floorplan|scan|internet\/speedtest|camera|cam|snap)/;
+const NET_SECRET = /(token|secret|password|passkey|session|mfa|2fa|totp|recover|backup|support|pair|push|users|admin|license|keys?\b|log\b|doctor|setup)/i;
+const NET_RETRY_STATUS = new Set([502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 527, 530]);   // the tunnel or the box restarting
+const NET_HEAVY = /^\/api\/(history|reports|network|energy|security|photos|calendar|mycal|frigate|system|radar|monitors)/;
+const NET_SLOW = /^\/api\/(doctor|apptests\/|support|find|ha\/|setup|backup|updates|system\/log|local-https|connections|integrations|family\/setup|household\/setup|plan|floorplan|scan)/;
+/* What's kept of an answer in this browser: /api/auth/me without the list of sign-ins and addresses. */
+const NET_KEEP = { '/api/auth/me': (j) => ({ signIn: j.signIn, user: j.user ? { id: j.user.id, name: j.user.name, role: j.user.role, panel: j.user.panel, twoStep: j.user.twoStep } : null, terms: j.terms, needsTerms: j.needsTerms }) };
+function makeNet(o = {}) {
+  const fetchFn = o.fetch, store = o.store || null, now = o.now || (() => Date.now()), sleep = o.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const P = 'casa.c1:', BUDGET = o.budget || 1_500_000, MAX_ONE = o.maxOne || 300_000, FRESH_MS = o.freshMs ?? 2000;
+  const mem = new Map(), flights = new Map(), listeners = new Set();
+  const st = { okAt: 0, failAt: 0, epoch: 0, mutatedAt: 0, served: new Map() };
+  const emit = (what, url) => { for (const f of listeners) { try { f(what, url); } catch { /* a listener's own problem */ } } };
+  const pathOf = (url) => String(url).replace(/^https?:\/\/[^/]+/i, '').split('?')[0];
+  const swrOk = (url) => { const p = pathOf(url); return p.startsWith('/api/') && !NET_LIVE_ONLY.test(p) && !NET_SECRET.test(p); };
+  const keptOk = (url) => NET_KEPT.test(pathOf(url)) && swrOk(url);
+  const err = (name, message, extra = {}) => Object.assign(new Error(message), { name, ...extra });
+  const timeoutFor = (method, url, t) => (t != null ? t : method === 'GET' || method === 'HEAD' ? (NET_SLOW.test(pathOf(url)) ? 60_000 : NET_HEAVY.test(pathOf(url)) ? 15_000 : 8_000) : NET_SLOW.test(pathOf(url)) ? 120_000 : 30_000);
+  const backoff = () => 250 + Math.floor(Math.random() * 350);
+  const degraded = () => st.failAt > st.okAt && now() - st.failAt < 120_000;
+  /* ---- this browser's copy ---- */
+  let idx = null;
+  const sget = (k) => { try { return store ? store.get(k) : null; } catch { return null; } };
+  const sset = (k, v) => { try { if (store) store.set(k, v); return true; } catch { return false; } };
+  const sdel = (k) => { try { if (store) store.del(k); } catch { /* fine */ } };
+  const index = () => { if (idx) return idx; try { idx = JSON.parse(sget(`${P}idx`) || '{}') || {}; } catch { idx = {}; } return idx; };
+  const saveIdx = () => sset(`${P}idx`, JSON.stringify(idx || {}));
+  const evict = (need) => {
+    const i = index(), list = Object.entries(i).sort((a, b) => a[1].at - b[1].at);
+    let total = list.reduce((n, [, v]) => n + v.n, 0);
+    while (list.length && total + need > BUDGET) { const [u, v] = list.shift(); sdel(P + u); delete i[u]; total -= v.n; }
+  };
+  function persist(url, text, at) {
+    if (!store || !keptOk(url)) return;
+    let keep = text;
+    const tidy = NET_KEEP[pathOf(url)];
+    if (tidy) { try { keep = JSON.stringify(tidy(JSON.parse(text))); } catch { return; } }
+    if (keep.length > MAX_ONE) return;
+    const i = index(), v = JSON.stringify({ at, t: keep });
+    delete i[url]; evict(v.length);
+    if (!sset(P + url, v)) { evict(BUDGET / 2 + v.length); if (!sset(P + url, v)) { saveIdx(); return; } }
+    i[url] = { n: v.length, at }; saveIdx();
+  }
+  function load(url) {
+    if (!store || !keptOk(url)) return null;
+    const raw = sget(P + url); if (!raw) return null;
+    try { const v = JSON.parse(raw); if (typeof v?.t !== 'string') return null; const e = { text: v.t, at: v.at || 0, fresh: 0 }; mem.set(url, e); return e; } catch { return null; }
+  }
+  function remember(url, text) {
+    const old = mem.get(url), at = now();
+    mem.set(url, { text, at, fresh: at });
+    if (mem.size > 300) mem.delete(mem.keys().next().value);
+    if (!old || old.text !== text || at - (old.at || 0) > 60_000) persist(url, text, at);
+    return old;
+  }
+  /* ---- one request: a time limit, one more try for a read, shared by everyone asking at once ---- */
+  function attempt(url, init, ms, f) {
+    const ctl = new AbortController(); f.ctl = ctl;
+    const timer = ms ? setTimeout(() => ctl.abort(err('TimeoutError', 'The CasaTorch took too long to answer.', { retry: true })), ms) : null;
+    return Promise.resolve().then(() => fetchFn(url, { ...init, signal: ctl.signal })).then(async (r) => ({ status: r.status, ok: r.ok, text: await r.text() }))
+      .catch((e) => { throw (ctl.signal.aborted && ctl.signal.reason?.name ? ctl.signal.reason : err('NetworkError', 'Can\'t reach the CasaTorch right now.', { retry: true, cause: e })); })
+      .finally(() => clearTimeout(timer));
+  }
+  async function run(url, init, f, ms) {
+    for (let i = 0; ; i++) {
+      try {
+        const r = await attempt(url, init, ms, f);
+        if (f.idem && i === 0 && NET_RETRY_STATUS.has(r.status) && !f.cancelled) { await sleep(backoff()); continue; }
+        return r;
+      } catch (e) {
+        if (f.cancelled || !f.idem || !e.retry || i > 0 && e.name !== 'Reset' || i > 2) throw e;
+        if (e.name !== 'Reset') { st.failAt = now(); emit('state'); }   // pages draw from their last answers at once from here on
+        await sleep(e.name === 'Reset' ? 0 : backoff());   // the network changed: again at once, on a new connection
+      }
+    }
+  }
+  const abortErr = () => err('AbortError', 'Cancelled.', { aborted: true });
+  function join(f, signal) {
+    if (!signal) { f.pinned = true; return f.p; }   // someone without a way to cancel keeps it going
+    if (signal.aborted) return Promise.reject(abortErr());
+    f.users++;
+    return new Promise((res, rej) => {
+      const off = () => {
+        f.users--; rej(abortErr());
+        if (f.users <= 0 && !f.pinned && !f.cancelled) { f.cancelled = true; if (flights.get(f.key) === f) flights.delete(f.key); f.ctl?.abort(abortErr()); }
+      };
+      signal.addEventListener('abort', off, { once: true });
+      f.p.then((v) => { signal.removeEventListener('abort', off); res(v); }, (e) => { signal.removeEventListener('abort', off); rej(e); });
+    });
+  }
+  function request(url, init = {}, { signal, timeout } = {}) {
+    const method = String(init.method || 'GET').toUpperCase(), idem = (method === 'GET' || method === 'HEAD') && init.body == null;
+    if (!idem) { st.epoch++; st.mutatedAt = now(); for (const e of mem.values()) e.fresh = 0; }   // a change: nothing read before it counts as fresh
+    const key = idem ? `${method} ${url}` : null;
+    let f = key ? flights.get(key) : null;
+    if (!f || f.epoch !== st.epoch || f.cancelled) {
+      f = { key, users: 0, pinned: false, idem, epoch: st.epoch, ctl: null, cancelled: false };
+      f.p = run(url, init, f, timeoutFor(method, url, timeout))
+        .then((r) => { if (r.status < 500 || !NET_RETRY_STATUS.has(r.status)) { st.okAt = now(); } else st.failAt = now(); emit('state'); return r; },
+          (e) => { if (!e.aborted) { st.failAt = now(); emit('state'); } throw e; })
+        .finally(() => { if (key && flights.get(key) === f) flights.delete(key); });
+      f.p.catch(() => {});   // everyone may have left: not an unhandled rejection
+      if (key) flights.set(key, f);
+    }
+    return join(f, signal);
+  }
+  /* ---- a read that can draw from the last answer ---- */
+  async function get(url, { signal, timeout, patience, init = {} } = {}) {
+    if (!swrOk(url)) return request(url, init, { signal, timeout });
+    const hit = mem.get(url) || load(url);
+    if (hit && hit.fresh && now() - hit.fresh < FRESH_MS) return { status: 200, ok: true, text: hit.text, at: hit.at };   // just asked: the same answer
+    const p = request(url, init, { signal, timeout }).then((r) => {
+      if (r.status === 200) {
+        const old = remember(url, r.text);
+        if (st.served.has(url)) { st.served.delete(url); if (old && old.text !== r.text) emit('fresh', url); emit('state'); }
+      }
+      return r;
+    });
+    if (!hit) return p;
+    const wait = patience != null ? patience : degraded() ? 0 : now() - st.mutatedAt < 5000 ? 2500 : 350;
+    const STALE = {}; let timer = null;
+    const stale = () => { if (!st.served.has(url)) st.served.set(url, { at: hit.at, since: now() }); p.catch(() => {}); emit('state'); return { status: 200, ok: true, text: hit.text, at: hit.at, stale: true }; };
+    try {
+      const r = await Promise.race([p, new Promise((res) => { timer = setTimeout(res, wait, STALE); })]);
+      clearTimeout(timer);
+      if (r === STALE) return stale();   // no answer yet: the last one now, the live one when it lands
+      if (NET_RETRY_STATUS.has(r.status)) return stale();   // the tunnel or the box is down: the last answer, marked
+      return r;
+    } catch (e) {
+      clearTimeout(timer);
+      if (e.aborted) throw e;
+      return stale();
+    }
+  }
+  function reset() {   // the network changed: every read in flight starts again on a new connection
+    for (const f of flights.values()) if (f.idem && f.ctl && !f.ctl.signal.aborted) f.ctl.abort(err('Reset', 'The network changed.', { retry: true }));
+  }
+  function clear() {
+    mem.clear(); st.served.clear();
+    try { for (const k of store ? store.keys() : []) if (k.startsWith(P)) sdel(k); } catch { /* fine */ }
+    idx = {};
+  }
+  function scope(who) {   // a different person signed in on this browser: nothing of the last one's is shown
+    const k = `${P}who`, w = String(who || '');
+    if (!store || !w) return;
+    const was = sget(k);
+    if (was && was !== w) clear();
+    if (was !== w) sset(k, w);
+  }
+  const status = () => {
+    const v = [...st.served.values()], waiting = v.length ? now() - Math.min(...v.map((x) => x.since)) : 0;
+    // still no answer 6 s after drawing from the last one: as good as offline, and said so
+    return { offline: degraded() || waiting > 6000, stale: v.length > 0, since: v.length ? Math.min(...v.map((x) => x.at)) : 0, waiting, busy: flights.size, okAt: st.okAt, failAt: st.failAt };
+  };
+  return { get, request, reset, clear, scope, status, page: () => { st.served.clear(); emit('state'); }, on: (f) => listeners.add(f), peek: (url) => mem.get(url) || load(url), _st: st };
+}
+/* @net:end */
+const NET = makeNet({
+  fetch: (u, i) => fetch(u, i),
+  store: (() => { try { const ls = window.localStorage; ls.getItem('casa.c1:who'); return { get: (k) => ls.getItem(k), set: (k, v) => ls.setItem(k, v), del: (k) => ls.removeItem(k), keys: () => Object.keys(ls) }; } catch { return null; } })(),
+});
+let pageCtl = new AbortController();   // the reads of the page on show: they stop when you leave it
+/* Signing out (from anywhere: Settings, Security, the app) wipes this browser's copy of the home's data first. */
+{
+  const f0 = window.fetch;
+  window.fetch = function casaFetch(input, init) {
+    try { if (String(init?.method || input?.method || 'GET').toUpperCase() === 'POST' && /\/api\/(auth\/logout|logout|app\/signout)(\?|$)/.test(String(input?.url || input))) NET.clear(); } catch { /* fine */ }
+    return f0.apply(window, arguments);
+  };
+}
 const api = async (url, opts = {}) => {
-  const o = { ...opts, headers: { ...(opts.body && typeof opts.body === 'string' ? { 'Content-Type': 'application/json' } : {}), ...(opts.headers || {}) } };
-  const r = await fetch(url, o);
-  if (r.status === 401) { location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.hash)}`; throw new Error('sign in first'); }
-  const j = await r.json().catch(() => ({}));
+  const { timeout, global: keep, patience, signal: own, ...rest } = opts;
+  const o = { ...rest, headers: { ...(opts.body && typeof opts.body === 'string' ? { 'Content-Type': 'application/json' } : {}), ...(opts.headers || {}) } };
+  const method = String(o.method || 'GET').toUpperCase();
+  const signal = own || (method === 'GET' && !keep ? pageCtl.signal : null);
+  const r = method === 'GET' && o.body == null ? await NET.get(url, { signal, timeout, patience, init: o }) : await NET.request(url, o, { signal, timeout });
+  if (r.status === 401) { NET.clear(); location.href = `/login.html?next=${encodeURIComponent(location.pathname + location.hash)}`; throw new Error('sign in first'); }
+  let j = {}; try { j = r.text ? JSON.parse(r.text) : {}; } catch { j = {}; }
+  if (url === '/api/auth/me' && r.status === 200 && !r.stale) NET.scope(j.user?.id || j.user?.name || (j.signIn === false ? 'open' : ''));
   if (r.status === 403 && j.terms) { location.href = `/login.html?step=terms&next=${encodeURIComponent(location.pathname + location.search + location.hash)}`; throw new Error(j.error); }   // updated terms: one tap, then back here
   /* The server's error in the home's language when it's a known sentence (body.error keeps the English). */
   if (!r.ok) throw Object.assign(new Error(j.error ? TM(j.error, j.msg, j.vars) : `HTTP ${r.status}`), { status: r.status, body: j });
@@ -128,17 +312,71 @@ async function show(id) {
   if (window.innerWidth <= 760 && S.ui) drawNav();   // the phone bar's More lights up for a page inside it
   // live video left on the old page would keep downloading in the background: stop it
   for (const img of document.querySelectorAll('#view .cam.live img')) { img.onerror = null; img.removeAttribute('src'); }
+  // The last page's reads stop (a slow answer for a page you left only holds up this one).
+  pageCtl.abort(); pageCtl = new AbortController(); NET.page();
   // A fresh box per visit (a slow, older render can't write into the new page). The page you're on stays until the
-  // new one has drawn - or a quarter second has passed - so switching never flashes blank or jumps.
-  const view = $('#view'), main = el('div', { class: 'view-next' }); refresher = null; showSeq = (showSeq || 0) + 1; const seq = showSeq;
+  // new one has drawn - or a quarter second has passed - so switching never flashes or jumps. Still nothing to show
+  // by then: a skeleton of the page, until its first part draws. It never ends empty: an error is a card to try again.
+  const view = $('#view'), main = el('div', { class: 'view-next', 'data-page': t.id }); refresher = null; showSeq = (showSeq || 0) + 1; const seq = showSeq;
   view.append(main);
-  const reveal = () => { if (seq !== showSeq || !main.isConnected || !main.classList.contains('view-next')) return; for (const n of [...view.children]) if (n !== main) n.remove(); main.classList.remove('view-next'); main.classList.add('view-in'); };
+  const skelOff = new MutationObserver(() => { if ([...main.children].some((n) => !n.classList.contains('skel'))) { main.querySelectorAll(':scope > .skel').forEach((n) => n.remove()); skelOff.disconnect(); } });
+  skelOff.observe(main, { childList: true });
+  const reveal = () => {
+    if (seq !== showSeq || !main.isConnected || !main.classList.contains('view-next')) return;
+    if (!main.children.length) main.append(pageSkeleton());
+    for (const n of [...view.children]) if (n !== main) n.remove(); main.classList.remove('view-next'); main.classList.add('view-in');
+  };
   const early = setTimeout(reveal, 250);
   setTop(tabLabel(t));
   try { const r = (await t.render(main, sub || null)) || null; if (main.isConnected) refresher = r; }
-  catch (err) { main.append(el('div', { class: 'card empty' }, T('Couldn\'t load this page: {why}', { why: err.message }), el('div', { style: 'margin-top:10px' }, el('button', { class: 'btn small', onclick: () => show(location.hash.slice(1) || 'home') }, icon('reset'), T('Try again'))))); }
-  clearTimeout(early); reveal();
+  catch (err) { if (seq === showSeq && !err?.aborted) main.replaceChildren(loadFail(err)); }
+  clearTimeout(early);
+  if (seq !== showSeq) return;
+  skelOff.disconnect(); main.querySelectorAll(':scope > .skel').forEach((n) => n.remove());
+  if (!main.children.length) main.append(loadFail(null));
+  reveal(); netNote();
 }
+/* While a page's first answer is on its way: the shape of a page, softly pulsing. */
+const pageSkeleton = () => el('div', { class: 'skel', 'aria-busy': 'true', 'aria-label': T('Loading…') }, el('div', { class: 'skel-row' }, el('i', { class: 'skel-b skel-w40' }), el('i', { class: 'skel-b skel-w20' })),
+  el('div', { class: 'skel-grid' }, [0, 1, 2, 3].map(() => el('div', { class: 'skel-card' }, el('i', { class: 'skel-b skel-w60' }), el('i', { class: 'skel-b skel-w90' }), el('i', { class: 'skel-b skel-w75' })))));
+/* A page that couldn't load: why, in words, and a way to try again (never an empty page). */
+function loadFail(err) {
+  const off = !navigator.onLine || err?.retry || NET.status().offline;
+  return el('div', { class: 'card load-fail', role: 'alert' }, el('div', { class: 'row', style: 'gap:10px;align-items:flex-start' }, icon(off ? 'wifi' : 'info', 20),
+    el('div', { class: 'grow' }, el('b', {}, off ? T('Can\'t reach your home right now') : T('This page didn\'t load')),
+      el('div', { class: 'small muted', style: 'margin-top:4px' }, off ? T('It opens by itself once the connection is back.') : err?.message ? T('Couldn\'t load this page: {why}', { why: err.message }) : T('Something on this page didn\'t answer.')))),
+  el('div', { style: 'margin-top:12px' }, el('button', { class: 'btn small', onclick: () => { NET.reset(); show(location.hash.slice(1) || 'home'); } }, icon('reset'), T('Try again'))));
+}
+/* "Updating…" while the page shows its last answer and the live one is on its way; "Offline - showing data from
+   2 min ago" when the CasaTorch can't be reached. Next to the page title, small and quiet. */
+let netNoteT = null;
+function netNote() {
+  clearTimeout(netNoteT); netNoteT = null;
+  const n = $('#netstate'); if (!n) return;
+  const s = NET.status(), offline = !navigator.onLine || (s.offline && s.stale);
+  let text = '';
+  if (offline && s.stale) text = T('Offline - showing data from {when}', { when: ago(new Date(s.since).toISOString()) || T('just now') });
+  else if (!navigator.onLine) text = T('Offline');
+  else if (s.stale) text = T('Updating…');
+  n.hidden = !text; n.className = offline ? 'off' : 'busy'; n.textContent = text;
+  if (text) netNoteT = setTimeout(netNote, offline ? 30_000 : 1000);   // "2 min ago" keeps counting; "Updating…" goes as soon as it can
+}
+NET.on((what) => { if (what === 'state') { clearTimeout(netNoteT); netNoteT = setTimeout(netNote, 120); } else if (what === 'fresh') pageFresh(); });
+/* A live answer that differs from the one the page drew from: the page draws again (its own refresh, else the page). */
+let freshT = null;
+function pageFresh() {
+  clearTimeout(freshT);
+  freshT = setTimeout(() => {
+    if (document.body.classList.contains('editing-on') || $('#modal') || (document.activeElement?.closest?.('#view') && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))) return;
+    if (refresher) runRefresh(); else if (current && !$('#view .view-next')) show(location.hash.slice(1) || current);
+  }, 150);
+}
+/* The look of the bits above (kept here with the code that draws them). */
+document.head.append(el('style', {}, `#netstate{display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:3px 9px;border-radius:999px;font-size:12px;line-height:1.4;color:var(--muted,#9aa4b2);background:color-mix(in srgb,currentColor 9%,transparent);white-space:nowrap;vertical-align:middle}
+#netstate[hidden]{display:none}#netstate::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.8}#netstate.busy::before{animation:netpulse 1.2s ease-in-out infinite}#netstate.off{color:#fbbf24}
+.skel{padding:2px 0}.skel-row{display:flex;gap:10px;margin-bottom:14px}.skel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}.skel-card{border-radius:16px;padding:18px;background:color-mix(in srgb,var(--text,#e5e7eb) 5%,transparent);display:grid;gap:12px;min-height:120px}
+.skel-b{display:block;height:12px;border-radius:6px;background:color-mix(in srgb,var(--text,#e5e7eb) 10%,transparent);animation:netpulse 1.4s ease-in-out infinite}.skel-row .skel-b{height:16px}.skel-w20{width:20%}.skel-w40{width:40%}.skel-w60{width:60%}.skel-w75{width:75%}.skel-w90{width:90%}
+@keyframes netpulse{0%,100%{opacity:.45}50%{opacity:1}}@media (prefers-reduced-motion:reduce){.skel-b,#netstate.busy::before{animation:none}}`));
 /* Once the dashboard is up and the browser is idle, the 3D Home's files are fetched ahead (Pro only, only if its
    button is on the bar), so opening it is instant. Skipped on metered or "save data" connections. */
 function warmUp() {
@@ -195,17 +433,23 @@ function drawBanner() {
 }
 function tick() { $('#clock').textContent = fmt(new Date().toISOString(), { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
 async function loadStatus() {
-  api('/api/updates').then((u) => { S.updates = u; drawBanner(); }).catch(() => {});
+  api('/api/updates', { global: true }).then((u) => { S.updates = u; drawBanner(); }).catch(() => {});
   // status and alerts together, not one after the other
-  const [st, a] = await Promise.all([api('/api/status').catch(() => null), api('/api/alerts').catch(() => null)]);
+  const [st, a] = await Promise.all([api('/api/status', { global: true }).catch(() => null), api('/api/alerts', { global: true }).catch(() => null)]);
   if (st) { S.status = st; S.units = st.units || 'F'; }
   if (a) S.alertsOpen = a.now?.length || 0;
   drawBanner(); drawNav(); statusBar.draw();
 }
 async function boot() {
   // everything the first screen needs is asked for at once: one round trip of waiting, not five
-  const pUi = api('/api/ui').catch(() => null), pStatus = loadStatus();
-  try { S.settings = await api('/api/settings'); S.tz = S.settings.house?.timezone || undefined; } catch { /* default zone */ }
+  const pUi = api('/api/ui', { global: true }).catch(() => null), pStatus = loadStatus();
+  // Home's own reads start now too, not after the language and the layout: one round trip less over a slow link
+  // (Home asks again a moment later and gets these same answers)
+  if (/^#?(home)?$/.test(location.hash)) {
+    const sid = typeof screenId === 'function' ? screenId() : '';
+    for (const u of ['/api/home', '/api/devices', '/api/auth/me', `/api/layout${sid ? `?screen=${sid}` : ''}`]) api(u, { global: true }).catch(() => {});
+  }
+  try { S.settings = await api('/api/settings', { global: true }); S.tz = S.settings.house?.timezone || undefined; } catch { /* default zone */ }
   const [ui] = await Promise.all([pUi, S.settings && !S.settings.demo ? CasaI18n.use(S.settings.house?.lang || 'en') : null]);   // the demo keeps whatever this browser picked
   if (ui) S.ui = { ...S.ui, ...ui };
   applyUi();
@@ -234,18 +478,60 @@ async function runRefresh() {
   if (refreshAgain) { refreshAgain = false; if (r === refresher) runRefresh(); }
 }
 /* Real time: the server says when something in the house changed (34-live.js), and the screen on show refreshes
-   - at most about once a second, never while you're editing, and not in a hidden tab. */
+   - at most about once a second, never while you're editing, and not in a hidden tab.
+   The stream is watched: the server sends a beat every 20 seconds, so a stream silent for 50 is a dead connection
+   (the phone moved from Wi-Fi to mobile data, a tunnel restarted) and is opened again - at once when the network
+   changes or the app comes back, otherwise after 2, 4, 8... up to 30 seconds. A tab in the background closes it
+   (a phone's connections are few and its battery small) and opens it again when it's back. */
 let liveLast = 0, liveTimer = null, liveNudgeT = null;
+const LIVE_C = { es: null, heard: 0, opened: 0, wait: 2000, retryT: null, hiddenT: null, dogT: null };
+function liveStop() {
+  clearTimeout(LIVE_C.retryT); LIVE_C.retryT = null;
+  const es = LIVE_C.es; LIVE_C.es = null;
+  if (es) { es.onmessage = es.onerror = es.onopen = null; try { es.close(); } catch { /* gone */ } }
+}
+function liveLater() { clearTimeout(LIVE_C.retryT); const d = LIVE_C.wait; LIVE_C.wait = Math.min(30_000, LIVE_C.wait * 2); LIVE_C.retryT = setTimeout(liveStart, d); }
 function liveStart() {
-  if (typeof EventSource !== 'function') return;
+  if (typeof EventSource !== 'function' || document.hidden) return;
+  liveStop();
   const es = new EventSource('/api/live/events');
+  LIVE_C.es = es; LIVE_C.opened = Date.now(); LIVE_C.heard = Date.now();
+  es.onopen = () => { LIVE_C.heard = Date.now(); };
   es.onmessage = (ev) => {
+    LIVE_C.heard = Date.now(); LIVE_C.wait = 2000;
     let m; try { m = JSON.parse(ev.data); } catch { return; }
     if (m.type === 'tick' && !document.hidden && typeof nudgeCheck === 'function') { clearTimeout(liveNudgeT); liveNudgeT = setTimeout(nudgeCheck, 300); }   // a nudge going off shows at once
     if (m.type !== 'tick' || document.hidden || document.body.classList.contains('editing-on') || !refresher) return;
     if (document.activeElement?.closest?.('#view') && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;   // someone is typing: the next change (or the 30-second refresh) catches up
     clearTimeout(liveTimer); liveTimer = setTimeout(() => { liveLast = Date.now(); runRefresh(); }, Math.max(0, 1000 - (Date.now() - liveLast)));
   };
-  es.onerror = () => { if (es.readyState === 2) { es.onmessage = es.onerror = null; setTimeout(liveStart, 30_000); } };
+  es.onerror = () => { if (es.readyState === 2 && LIVE_C.es === es) { liveStop(); liveLater(); } };   // closed for good (a 503, signed out): again later
+  clearInterval(LIVE_C.dogT);
+  LIVE_C.dogT = setInterval(() => { if (LIVE_C.es && !document.hidden && Date.now() - LIVE_C.heard > 50_000) { liveStop(); liveStart(); } }, 10_000);
 }
+/* The network changed (the phone app says so; or the browser went offline and back), or the screen is back after a
+   while: reads still waiting on the old connection start again, the live stream opens again, and the page checks
+   for anything it missed. */
+let netKickT = null, hiddenAt = 0;
+function netKick(why) {
+  clearTimeout(netKickT);
+  netKickT = setTimeout(() => {
+    NET.reset(); liveStart(); netNote();
+    if (document.hidden) return;
+    loadStatus();
+    if (refresher) runRefresh(); else if (current && $('#view .load-fail')) show(location.hash.slice(1) || current);
+  }, why === 'online' ? 50 : 0);
+}
+window.addEventListener('online', () => netKick('online'));
+window.addEventListener('offline', () => netNote());
+window.addEventListener('casa:network', (e) => { if (e.detail?.online !== false) netKick('network'); else netNote(); });   // from the iPhone / Android app
+window.addEventListener('casa:resume', () => netKick('resume'));
+window.addEventListener('pageshow', (e) => { if (e.persisted) netKick('resume'); });   // back from the browser's back-forward cache
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { hiddenAt = Date.now(); clearTimeout(LIVE_C.hiddenT); LIVE_C.hiddenT = setTimeout(() => { if (document.hidden) liveStop(); }, 30_000); return; }
+  clearTimeout(LIVE_C.hiddenT);
+  if (!LIVE_C.es || Date.now() - hiddenAt > 15_000 || Date.now() - LIVE_C.heard > 50_000) netKick('visible');
+});
+/* For the tests (tools/test-remote-sim.mjs) and support: how the connection is doing. */
+window.__casaNet = Object.freeze({ status: () => NET.status(), live: () => ({ open: LIVE_C.es?.readyState === 1, heard: LIVE_C.heard }) });
 document.addEventListener('DOMContentLoaded', () => boot());

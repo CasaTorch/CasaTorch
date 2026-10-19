@@ -1,71 +1,7 @@
-/* ---- Alerts ---- */
-tab({ id: 'alerts', label: 'Alerts', icon: 'bell', async render(main) {
-  const draw = async () => {
-    const a = await api('/api/alerts');
-    const now = el('div', { class: 'card' }, el('h2', {}, T('Right now')));
-    if (!a.now?.length) now.append(el('div', { class: 'row' }, el('span', { class: 'dot good' }), T('All clear - nothing needs you.')));
-    for (const x of a.now || []) now.append(el('div', { class: `alert ${x.severity}` }, el('div', { class: 'grow' }, el('b', {}, alertTitle(x)), el('div', { class: 'small muted' }, [srcName(x.source), x.since ? T('since {when}', { when: fmtWhen(x.since) }) : '', x.acked ? T('{name} has it ({time})', { name: x.acked.by, time: fmtTime(x.acked.at) }) : ''].filter(Boolean).join(' · '))),
-      x.repeating ? el('button', { class: 'btn small', onclick: async (e) => { e.target.disabled = true; try { await post(`/api/alerts/${encodeURIComponent(x.id)}/ack`); toast(T('Got it - no more reminders for this one')); draw(); } catch (err) { toast(err.message); e.target.disabled = false; } } }, icon('check'), T('Got it')) : null));
-    const past = el('div', { class: 'card' }, el('h2', {}, T('Recent')));
-    past.append(a.recent?.length ? el('ul', { class: 'list' }, a.recent.slice(0, 50).map((x) => el('li', {}, el('span', { class: `dot ${x.severity === 'ok' ? 'good' : x.severity === 'critical' ? 'bad' : 'warn'}` }), el('div', { class: 'grow' }, alertTitle(x)), el('span', { class: 'small muted' }, fmtWhen(x.at))))) : el('p', { class: 'muted' }, T('Nothing yet.')));
-    main.replaceChildren(el('div', { class: 'cards' }, now, past), el('p', { class: 'small muted', style: 'margin-top:14px' }, `${T('Which alerts reach your phone, and quiet hours:')} `, el('a', { href: '#settings/phones' }, T('Phones & alerts'))));
-  };
-  await draw(); return draw;
-} });
-
-/* ---- Controls: everything that switches, plus sensors ---- */
-const GROUPS = [['Lights', (d) => d.kind === 'light'], ['Plugs & switches', (d) => d.kind === 'plug' || d.kind === 'switch'], ['Fans', (d) => d.kind === 'fan'], ['Media', (d) => d.kind === 'media'],
-  ['Climate', (d) => d.kind === 'climate'], ['Blinds, doors & covers', (d) => d.kind === 'cover'], ['Locks & alarm', (d) => d.kind === 'lock' || d.kind === 'alarm'], ['Scenes & scripts', (d) => d.kind === 'action'],
-  ['Vacuums', (d) => d.kind === 'vacuum'], ['People', (d) => d.kind === 'presence'], ['Sensors', (d) => d.kind === 'sensor'], ['Everything else', (d) => d.kind === 'value']];
-tab({ id: 'controls', label: 'Controls', icon: 'sliders', async render(main) {
-  let query = '';
-  const search = el('input', { type: 'search', placeholder: T('Search everything - lights, sensors, Home Assistant entities…'), style: 'max-width:520px' });
-  let devicesCache = [];
-  const paint = (devices, errors = []) => {
-    const t = query.toLowerCase(), list = devices.filter((d) => d.kind !== 'camera' && (!t || `${d.name} ${d.id} ${d.domain || ''}`.toLowerCase().includes(t)));
-    const out = [el('div', { class: 'row wrap', style: 'margin-bottom:6px' }, search, el('span', { class: 'small muted' }, T('{n} of {total}', { n: list.length, total: devices.filter((d) => d.kind !== 'camera').length })))];
-    for (const [name, f] of GROUPS) {
-      const ds = list.filter(f); if (!ds.length) continue;
-      const grid = el('div', { class: 'devs' }, ds.slice(0, name === 'Everything else' && !t ? 60 : 500).map((d) => devButton(d)));
-      if (name === 'Everything else' && !t && ds.length > 12) out.push(el('details', {}, el('summary', { class: 'section-title', style: 'cursor:pointer' }, `${T(name)} (${ds.length})`), grid));
-      else out.push(el('div', { class: 'section-title' }, `${T(name)} (${ds.length})`), grid);
-    }
-    if (!devices.filter((d) => d.kind !== 'camera').length) out.push(el('div', { class: 'card empty' }, T('No devices yet. Connect Hue, Shelly, YoLink or Home Assistant in setup.')));
-    else if (!list.length) out.push(el('p', { class: 'muted' }, T('Nothing matches that search.')));
-    for (const e of errors) out.push(el('p', { class: 'small muted' }, `${e.provider}: ${e.error}`));
-    const focused = document.activeElement === search; main.replaceChildren(...out); if (focused) { search.focus(); }
-  };
-  search.oninput = () => { query = search.value; paint(devicesCache); };
-  const draw = async () => {
-    const { devices = [], errors = [] } = await api('/api/devices'); devicesCache = devices;
-    if (!main.isConnected) return;   // left for another page while this was loading
-    setTop(tabLabel({ id: 'controls', label: T('Controls') }), `${devices.filter((d) => d.provider === 'ha').length ? T('Includes everything from Home Assistant') : ''}`, [el('button', { class: 'btn', onclick: () => renameDevices(devices, draw) }, icon('edit'), T('Rename devices'))]);
-    paint(devices, errors);
-  };
-  await draw(); return draw;
-} });
-
-/* ---- Cameras ---- */
-tab({ id: 'cameras', label: 'Cameras', icon: 'camera', async render(main) {
-  // Each camera tile keeps itself fresh (camView); the 30-second refresh only adds or removes cameras.
-  let ids = '', det = null;
-  const draw = async () => {
-    const { devices = [], hiddenCameras = [] } = await api('/api/devices');
-    const cams = devices.filter((d) => d.kind === 'camera'), now = `${cams.map((d) => d.id).join('|')}#${hiddenCameras.map((d) => d.id).join('|')}`;
-    if (now === ids && main.firstChild) return; ids = now;
-    const admin = (S.me ||= await api('/api/auth/me').catch(() => ({})))?.user?.role;
-    const canEdit = !S.status?.demo && (!admin || ['owner', 'admin'].includes(admin));
-    const vis = async (id, visible) => { try { await api(`/api/cameras/${encodeURIComponent(id)}/visible`, { method: 'PUT', body: JSON.stringify({ visible }) }); ids = ''; await draw(); toast(visible ? T('Camera added back') : T('Camera removed - find it under Detected cameras')); } catch (e) { toast(e.message); } };
-    const tiles = cams.map((d) => { const t = camView(d); if (canEdit && !t.querySelector('.cam-x')) t.append(el('button', { class: 'cam-x', title: T('Remove this camera'), 'aria-label': T('Remove {name}', { name: d.name }), onclick: (e) => { e.stopPropagation(); vis(d.id, false); } }, icon('x', 14))); return t; });
-    const extra = hiddenCameras.length ? el('details', { class: 'card camhidden' }, el('summary', {}, T('Detected cameras not shown ({n})', { n: hiddenCameras.length })),
-      el('p', { class: 'small muted' }, T('Removed ones, and the same camera reached a second way (through Home Assistant) - CasaTorch shows the faster direct one. Add any back if you want both.')),
-      el('div', { class: 'list' }, hiddenCameras.map((h) => el('div', { class: 'row between', style: 'padding:6px 0' }, el('div', {}, el('b', {}, h.name), el('div', { class: 'tiny muted' }, `${h.source} · ${h.why === 'duplicate' ? T('same camera as "{name}"', { name: h.of }) : T('removed')}`)),
-        canEdit ? el('button', { class: 'btn small', onclick: () => vis(h.id, true) }, icon('plus', 14), T('Add back')) : null)))) : null;
-    det ||= detectionsCard();
-    main.replaceChildren(cams.length ? el('div', {}, el('div', { class: 'cams' }, tiles), det, extra) : extra ? el('div', {}, el('div', { class: 'card empty' }, T('All your cameras are hidden.')), extra) : el('div', { class: 'card empty' }, T('No cameras yet. Add Frigate, Reolink, any camera with a snapshot address, Ring (Pro) or cameras in Home Assistant from Connect.')));
-  };
-  await draw(); return draw;
-} });
+/* ---- Alerts, Controls and Cameras: pages of tiles you can arrange (24-pages.js) ---- */
+tab({ id: 'alerts', label: 'Alerts', icon: 'bell', render: (main) => alertsPage(main) });
+tab({ id: 'controls', label: 'Controls', icon: 'sliders', render: (main) => controlsPage(main) });
+tab({ id: 'cameras', label: 'Cameras', icon: 'camera', render: (main) => camerasPage(main) });
 
 /* Detections (Frigate): what your cameras saw - counts by kind and camera, by hour, and the latest events with
    thumbnails. Every number is one of Frigate's own events, with Frigate's confidence score. Updates every minute. */
@@ -216,34 +152,6 @@ tab({ id: 'network', label: 'Network', icon: 'wifi', async render(main) {
 } });
 
 /* ---- Energy ---- */
-/* Daily energy as bars (today is lighter: it isn't over yet). Plain SVG so it works offline and on old tablets. */
-function historyChart(days, money) {
-  const box = el('div', { class: 'hist-chart' });
-  const paint = () => {
-    const W = Math.max(260, box.clientWidth || 600), H = W < 500 ? 150 : 190, padL = 50, padB = 22, padT = 10, n = days.length, max = Math.max(1, ...days.map((d) => d.kwh || 0));
-    const top = Math.ceil(max / 5) * 5, bw = (W - padL) / n, y = (v) => padT + (H - padT - padB) * (1 - v / top);
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('role', 'img');
-    svg.setAttribute('aria-label', T('Energy per day for the last {n} days, up to {top} kWh', { n, top }));
-    const add = (tag, attrs, text) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; svg.append(e); return e; };
-    for (const v of [0, top / 2, top]) { add('line', { x1: padL, x2: W, y1: y(v), y2: y(v), class: 'grid' }); add('text', { x: padL - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, v === top ? `${v} kWh` : `${v}`); }
-    days.forEach((d, i) => {
-      if (d.kwh == null) return;
-      const x = padL + i * bw + bw * 0.16, h = Math.max(1, y(0) - y(d.kwh));
-      const r = add('rect', { x, y: y(d.kwh), width: Math.max(1, bw * 0.68), height: h, rx: Math.min(3, bw * 0.2), class: d.partial ? 'bar partial' : 'bar' });
-      const t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-      t.textContent = `${fmt(`${d.date}T12:00:00Z`, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })}: ${d.kwh} kWh${d.cost != null ? ` (${money(d.cost)})` : ''}${d.partial ? ` ${T('so far today')}` : ''}${d.peakW ? ` · ${T('peak {n} kW', { n: (d.peakW / 1000).toFixed(1) })}` : ''}`;
-      r.append(t);
-    });
-    const lab = (i, anchor) => add('text', { x: anchor === 'start' ? padL + i * bw : anchor === 'end' ? padL + (i + 1) * bw : padL + i * bw + bw / 2, y: H - 5, 'text-anchor': anchor, class: 'axis' }, fmt(`${days[i].date}T12:00:00Z`, { month: 'short', day: 'numeric', timeZone: 'UTC' }));
-    lab(0, 'start'); lab(n - 1, 'end'); if (n > 10 && W > 420) lab(Math.floor(n / 2), 'middle');
-    box.replaceChildren(svg);
-  };
-  let lastW = 0;
-  const ro = new ResizeObserver(() => { if (!box.isConnected) { if (lastW) ro.disconnect(); return; } if (Math.abs(box.clientWidth - lastW) > 4) { lastW = box.clientWidth; paint(); } });   // let go once the chart is off the page
-  ro.observe(box);
-  return box;
-}
 function reportCard(rep, money, redraw) {
   const card = el('div', { class: 'card report' });
   const head = el('h2', {}, T('Weekly report'), el('span', { class: 'pill pro' }, 'Pro'));
@@ -278,84 +186,7 @@ function reportCard(rep, money, redraw) {
     rep.ai ? null : el('p', { class: 'tiny muted', style: 'margin-top:6px' }, T('Connect an AI in Settings › Connections & AI and the report is written by it, with tips in plain words.')));
   return card;
 }
-tab({ id: 'energy', label: 'Energy', icon: 'bolt', async render(main) {
-  let span = 30, hist = null, haCard = null;   // the history changes every few minutes: a live refresh reuses it for a minute
-  const history = async () => { const days = Math.max(span, 15); if (hist && hist.days === days && Date.now() - hist.at < 60_000) return hist.h; const h = await api(`/api/history?days=${days}`).catch(() => null); hist = h ? { days, at: Date.now(), h } : null; return h; };
-  const draw = async () => {
-    const [{ devices = [], power }, st, h, rep] = await Promise.all([api('/api/devices'), api('/api/settings').catch(() => ({})), history(), api('/api/reports').catch(() => ({ pro: false, reports: [] }))]);
-    const rate = st.energy?.ratePerKwh, cur = st.energy?.currency || 'USD';
-    const money = (v) => new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(v);
-    const ds = devices.filter((d) => typeof d.powerW === 'number' && !d.pairedTo).sort((a, b) => b.powerW - a.powerW);
-    const total = power?.watts ?? ds.reduce((s, d) => s + d.powerW, 0), max = Math.max(1, ...ds.map((d) => d.powerW));
-    const all = h?.days || [], days = all.slice(-span), have = days.filter((d) => d.kwh != null);
-    const full = all.filter((d) => !d.partial), last7 = full.slice(-7).filter((d) => d.kwh != null), prev7 = full.slice(-14, -7).filter((d) => d.kwh != null);
-    const sum = (a) => a.reduce((s, d) => s + d.kwh, 0), wk = sum(last7), pw = prev7.length >= 5 ? sum(prev7) : null;
-    const spans = h?.pro ? [[7, T('7 days')], [30, T('30 days')], [90, T('90 days')], [365, T('1 year')]] : [[7, T('7 days')]];
-    const seg = el('div', { class: 'seg' }, spans.map(([v, l]) => el('button', { class: v === Math.min(span, h?.maxDays || 7) ? 'on' : '', onclick: () => { span = v; draw(); } }, l)));
-    const histCard = el('div', { class: 'card', style: 'margin-top:14px' },
-      el('div', { class: 'row between wrap', style: 'margin-bottom:6px' }, el('h2', { style: 'margin:0' }, T('History')), seg),
-      have.length ? el('div', {},
-        el('div', { class: 'row wrap', style: 'gap:22px;margin:8px 0 6px' },
-          el('div', {}, el('div', { class: 'num', style: 'font-size:22px;font-weight:700' }, `${wk.toFixed(1)} kWh`), el('div', { class: 'tiny muted' }, `${last7.length === 7 ? T('last 7 full days') : T(last7.length === 1 ? 'last {n} full day' : 'last {n} full days', { n: last7.length })}${rate ? ` · ${money(wk * rate)}` : ''}`)),
-          pw ? el('div', {}, el('div', { class: 'num', style: 'font-size:22px;font-weight:700' }, `${wk >= pw ? '+' : ''}${Math.round((wk - pw) / pw * 100)}%`), el('div', { class: 'tiny muted' }, T('vs the 7 days before'))) : null,
-          h.forecast ? el('div', { title: `${T('{kwh} kWh so far this month; about {avg} kWh a day lately', { kwh: h.forecast.kwhSoFar, avg: h.forecast.avgKwhPerDay })}${h.forecast.missingDays ? `; ${T('{n} day(s) this month before CasaTorch was running aren\'t counted', { n: h.forecast.missingDays })}` : ''}` },
-            el('div', { class: 'num', style: `font-size:22px;font-weight:700${h.forecast.overBudget ? ';color:var(--warn)' : ''}` }, h.forecast.cost != null ? `~${money(h.forecast.cost)}` : T('~{kwh} kWh', { kwh: h.forecast.kwh })),
-            el('div', { class: 'tiny muted' }, `${T('this month, forecast')}${h.forecast.budget && h.forecast.cost != null ? ` · ${T('budget {money}', { money: money(h.forecast.budget) })}` : ''}${h.forecast.prevMonthCost != null ? ` · ${T('last month {money}', { money: money(h.forecast.prevMonthCost) })}` : ''}`)) : null),
-        historyChart(days, money),
-        h.pro ? null : el('p', { class: 'tiny muted', style: 'margin-top:8px' }, T('Basic keeps 7 days. Pro keeps 2 years.')))
-        : el('p', { class: 'muted' }, T('CasaTorch notes what the house uses every 5 minutes. The first day of history shows here tomorrow.')));
-    haCard ||= haEnergyCard();
-    main.replaceChildren(haCard, el('div', { class: 'cards' },
-      el('div', { class: 'card' }, el('h2', {}, T('Using now')), el('div', { class: 'big' }, `${Math.round(total)} W`), el('div', { class: 'muted small', style: 'margin-top:6px' }, T(ds.length === 1 ? 'on {n} metered device' : 'on {n} metered devices', { n: ds.length }))),
-      el('div', { class: 'card' }, el('h2', {}, T('If it stays like this')), rate ? el('div', {}, el('div', { class: 'big' }, money(total / 1000 * 24 * rate)), el('div', { class: 'muted small', style: 'margin-top:6px' }, T('a day · {month} a month at {rate}/kWh', { month: money(total / 1000 * 24 * 30 * rate), rate: money(rate) }))) : el('p', { class: 'muted' }, T('Add your electricity rate in Settings to see the cost.')))),
-    histCard,
-    el('div', { style: 'margin-top:14px' }, reportCard(rep, money, draw)),
-    el('div', { class: 'card', style: 'margin-top:14px' }, el('h2', {}, T('By device')), ds.length ? el('div', { class: 'bars' }, ds.map((d) => el('div', { class: 'bar-row' }, el('span', { class: 'ellipsis' }, d.name), el('div', { class: 'track' }, el('div', { class: 'fill', style: `width:${(d.powerW / max) * 100}%` })), el('span', { class: 'num', style: 'text-align:right' }, `${Math.round(d.powerW)} W`)))) : el('p', { class: 'muted' }, T('No smart plugs with power metering yet. Shelly plugs work without Home Assistant; Kasa, Tapo and others through Home Assistant.'))));
-  };
-  await draw(); return draw;
-} });
-
-/* Energy from Home Assistant's Energy dashboard (35-energy-ha.js): used, from the grid, solar, back to the grid, battery,
-   gas, water, costs and each device - today by hour, or 7 / 30 days by day. Shown only when Home Assistant has it. */
-function haEnergyCard() {
-  const card = el('div', { class: 'card hae', style: 'margin-bottom:14px' }); let days = 1;
-  const kwh = (v) => (v == null ? '-' : v >= 100 ? `${Math.round(v)} kWh` : `${v.toFixed(v < 10 ? 2 : 1)} kWh`);
-  const draw = async () => {
-    const d = await api(`/api/energy/ha?days=${days}`).catch(() => null);
-    if (!d?.ha || d.configured === false) { if (!card.dataset.shown) { card.remove(); clearInterval(tm); } return; }   // never shown: stop asking (it used to keep asking every 2 minutes after you left)
-    card.dataset.shown = '1';
-    const money = (v) => (v == null ? null : new Intl.NumberFormat(undefined, { style: 'currency', currency: d.currency || 'USD', maximumFractionDigits: 2 }).format(v));
-    const seg = el('div', { class: 'seg' }, [[1, 'Today'], [7, '7 days'], [30, '30 days']].map(([v, l]) => el('button', { class: v === days ? 'on' : '', onclick: () => { days = v; draw(); } }, T(l))));
-    const head = el('div', { class: 'row between wrap', style: 'gap:10px;margin-bottom:10px' }, el('div', {}, el('h2', { style: 'margin:0' }, T('Your home\'s energy')), el('div', { class: 'small muted' }, T('From Home Assistant\'s Energy dashboard'))), seg);
-    if (d.error) return card.replaceChildren(head, el('p', { class: 'small bad' }, d.error));
-    const t = d.totals, kpi = (label, value, sub, cls = '') => el('div', { class: `hk ${cls}` }, el('small', {}, T(label)), el('b', {}, value), sub ? el('span', { class: 'tiny muted' }, sub) : null);
-    const kpis = el('div', { class: 'hkpis' }, kpi('Used', kwh(t.used), t.cost != null ? `${money(t.cost)}${t.costFromHa ? '' : ` ${T('at your rate')}`}` : null, 'main'), kpi('From the grid', kwh(t.import)),
-      d.has.solar ? kpi('Solar', kwh(t.solar), null, 'sun') : null, d.has.export ? kpi('Sent back', kwh(t.export), null, 'good') : null,
-      d.has.battery ? kpi('From the battery', kwh(t.battOut), T('{kwh} charged in', { kwh: kwh(t.battIn) })) : null, d.selfPowered != null ? kpi('Self-powered', `${d.selfPowered}%`, T('of what you used'), 'good') : null,
-      d.has.gas ? kpi('Gas', `${t.gas} ${d.units.gas || ''}`, money(t.gasCost)) : null, d.has.water ? kpi('Water', `${t.water} ${d.units.water || ''}`, money(t.waterCost)) : null);
-    // the chart: what was used each hour (or day), split into grid / solar / battery; what went back out, below the line
-    const S = d.series, n = d.slots, W = 720, H = 190, base = 140, top = Math.max(0.001, ...Array.from({ length: n }, (_, i) => (S.import[i] || 0) + (S.solar[i] || 0) + (S.battOut[i] || 0), S.used)), low = Math.max(0, ...(S.export || []));
-    const yUp = (v) => (v / top) * (base - 10), yDn = (v) => (low ? (v / Math.max(low, top * 0.25)) * (H - base - 14) : 0), bw = (W / n) * 0.72, x = (i) => (W / n) * i + (W / n) * 0.14;
-    const bars = [], ns = 'http://www.w3.org/2000/svg', sv = (tag, a) => { const e = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); return e; };
-    for (let i = 0; i < n; i++) {
-      let y = base; for (const [k, c] of [['import', 'var(--accent)'], ['solar', 'var(--warn)'], ['battOut', 'var(--good)']]) { const v = S[k]?.[i] || 0, h = yUp(v); if (h > 0.3) { y -= h; bars.push(sv('rect', { x: x(i), y, width: bw, height: h, rx: 2, fill: c })); } }
-      const e = S.export?.[i] || 0; if (e > 0) bars.push(sv('rect', { x: x(i), y: base + 1, width: bw, height: Math.max(0.6, yDn(e)), rx: 2, fill: 'color-mix(in srgb, var(--good) 55%, transparent)' }));
-      const lbl = d.period === 'hour' ? (i % 6 === 0 ? hm(`${i}:00`).replace(':00', '') : '') : (n <= 7 || i % 5 === 0 ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(Date.parse(d.start) + i * 86400_000)) : '');
-      const total = (S.import[i] || 0) + (S.solar[i] || 0) + (S.battOut[i] || 0);
-      const hit = sv('rect', { x: (W / n) * i, y: 0, width: W / n, height: H, fill: 'transparent' }); const tt = sv('title', {}); tt.textContent = `${d.period === 'hour' ? hm(`${i}:00`) : new Date(Date.parse(d.start) + i * 86400_000).toDateString()}: ${T('{kwh} kWh in', { kwh: total.toFixed(2) })}${e ? `, ${T('{kwh} kWh sent back', { kwh: e.toFixed(2) })}` : ''}`; hit.append(tt); bars.push(hit);
-      if (lbl) { const tx = sv('text', { x: x(i), y: H - 2, 'font-size': 11, fill: 'var(--muted)' }); tx.textContent = lbl; bars.push(tx); }
-    }
-    const chart = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'hachart', role: 'img', 'aria-label': d.period === 'hour' ? T('Energy by hour') : T('Energy by day') }); chart.append(sv('line', { x1: 0, x2: W, y1: base, y2: base, stroke: 'var(--line)' }), ...bars);
-    const legend = el('div', { class: 'row wrap tiny muted', style: 'gap:14px;margin-top:4px' }, [['From the grid', 'var(--accent)'], d.has.solar && ['Solar', 'var(--warn)'], d.has.battery && ['Battery', 'var(--good)'], d.has.export && ['Sent back (below the line)', 'color-mix(in srgb, var(--good) 55%, transparent)']].filter(Boolean).map(([l, c]) => el('span', { class: 'row', style: 'gap:6px' }, el('i', { style: `width:10px;height:10px;border-radius:3px;background:${c};display:inline-block` }), T(l))));
-    const dmax = Math.max(1e-6, ...(d.devices || []).map((x) => x.kwh)), devs = (d.devices || []).slice(0, 12);
-    card.replaceChildren(...[head, kpis, el('div', { class: 'hachart-wrap' }, chart), legend,
-      devs.length ? el('div', { style: 'margin-top:16px' }, el('div', { class: 'tiny muted', style: 'margin-bottom:6px' }, t.used ? T('By device (share of what the house used)') : T('By device')),
-        el('div', { class: 'bars' }, devs.map((x) => el('div', { class: 'bar-row' }, el('span', { class: 'ellipsis' }, x.name), el('div', { class: 'track' }, el('div', { class: 'fill', style: `width:${(x.kwh / dmax) * 100}%` })), el('span', { class: 'num' }, `${kwh(x.kwh)}${t.used ? ` · ${Math.round(x.kwh / t.used * 100)}%` : ''}`))))) : null].filter(Boolean));
-  };
-  draw();
-  const tm = setInterval(() => { if (!card.isConnected && card.dataset.shown) { clearInterval(tm); return; } if (!document.hidden) draw(); }, 120_000);
-  return card;
-}
+tab({ id: 'energy', label: 'Energy', icon: 'bolt', render: (main) => energyPage(main) });   // a page of tiles (23-energy.js)
 
 /* ---- 3D Home (Pro) ---- */
 /* Full screen for the 3D home, in place: the frame fills the screen (the browser's full screen where it's allowed,

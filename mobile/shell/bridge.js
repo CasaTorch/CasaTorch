@@ -39,7 +39,9 @@
     /* scanning a room (iPhone / iPad with LiDAR): RoomPlan's walls and furniture (USDZ), or a photo-real scan (the LiDAR mesh colored from the camera, PLY) */
     lidar: () => call('lidar'), scanRoom: () => call('scanRoom'), scanMesh: () => call('scanMesh'),
     /* homes */
-    homes: () => call('homes'), saveHome: (h) => call('saveHome', h), openHome: (id) => fire('openHome', { id }), removeHome: (id) => call('removeHome', { id }),
+    homes: () => call('homes'), saveHome: (h) => call('saveHome', h), openHome: (id, o) => fire('openHome', { id, remember: !!(o && o.remember) }), removeHome: (id) => call('removeHome', { id }),
+    /* the home opened at launch (null: ask when there's more than one) */
+    setLaunchHome: (id) => call('setLaunchHome', { id: id || null }),
     switchHome: () => fire('switchHome'), signOut: () => fire('signOut'), scanQR: () => call('scanQR'), deviceInfo: () => call('deviceInfo'), copy: (text) => call('copy', { text: String(text || '').slice(0, 4096) }),
     /* finding a CasaTorch (the app's own screens only): "is there one at this address?" with the exact reason when not,
        and the ones announcing themselves on this Wi-Fi (Bonjour, "_casatorch._tcp") as addresses to check */

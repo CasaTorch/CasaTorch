@@ -21,7 +21,7 @@ const BK_MAGIC = Buffer.from('CTBK1\n');
    on new hardware), the radar map cache and the secure-access helper (fetched again), the settings history and 3D Home
    restore points (this device's own undo), and Health's bookkeeping. */
 const BK_FILES = ['config.json', 'secret.key', 'users.json', 'alerts.json', 'events.json', 'history.json', 'layout.json', 'push.json', 'audit.log',
-  'install-id', 'screen-layouts.json', 'security.json', 'nudges.json', 'household.json', 'family.json', 'apptests.json', 'replay.json', 'power-baseline.json', 'license-state.json'];
+  'install-id', 'screen-layouts.json', 'security.json', 'nudges.json', 'household.json', 'family.json', 'apptests.json', 'replay.json', 'power-baseline.json', 'license-state.json', 'page-layouts.json', 'energy-hours.json'];
 const BK_DIRS = ['floorplan', 'photos', 'nudges', 'tls'];
 const BK_SMALL = ['nudges', 'tls'];   // in every backup, with or without the photos and scans
 const bkKey = (pass, salt) => new Promise((ok, bad) => crypto.scrypt(String(pass), salt, 32, { N: 2 ** 15, r: 8, p: 1, maxmem: 96 * 1024 * 1024 }, (e, k) => (e ? bad(e) : ok(k))));

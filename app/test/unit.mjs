@@ -1008,7 +1008,10 @@ await (await import('./license-unit.mjs')).default(t);   // Pro keys, grace peri
 await (await import('./security-unit.mjs')).default(t);   // the pre-launch security review: outbound-request guard, member links, pre-setup gate (security-unit.mjs)
 await (await import('./makers-unit.mjs')).default(t);   // Security Center "Who is it?": makers, likely kind, normal ports (makers-unit.mjs)
 await (await import('./support-unit.mjs')).default(t);
-await (await import('./camlive-unit.mjs')).default(t);   // live camera video: stream choice, HLS file allow-list, MSE tunnel and HLS proxy (camlive-unit.mjs)   // support: the support file's masking, activity log, getting-started checklist (support-unit.mjs)
+await (await import('./ask-unit.mjs')).default(t);   // Home AI Agent: charts, no HTML from answers, safety rule, sources, tools, the loop end to end (ask-unit.mjs)
+await (await import('./camlive-unit.mjs')).default(t);
+await (await import('./pagegrid-unit.mjs')).default(t);   // page grids: suggested layouts, saving per page and screen; the Energy page's data (pagegrid-unit.mjs)   // live camera video: stream choice, HLS file allow-list, MSE tunnel and HLS proxy (camlive-unit.mjs)   // support: the support file's masking, activity log, getting-started checklist (support-unit.mjs)
+await (await import('./net-unit.mjs')).default(t);   // slow and flaky networks: time limits, retries, one request for many, last answers, the browser's copy; content-named files (net-unit.mjs)
 t('3D Home: a plan damaged at start comes back from the newest restore point (with a Health note), never over a plan that is there', () => {
   const PB = globalThis.__casatorchPlan, was = fsMod.existsSync(PB.FP_FILE) ? fsMod.readFileSync(PB.FP_FILE) : null;
   try {

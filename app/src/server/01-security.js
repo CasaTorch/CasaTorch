@@ -110,33 +110,74 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-/* Compressed static files, cached in memory per file version. Mounted later (99-start), after sign-in. */
+/* Compressed static files, cached in memory per file version. Mounted later (99-start), after sign-in.
+   The dashboard names each script and style sheet after its contents (app.js is asked for as app.3f2a9c1b7d.js): the browser
+   keeps those a year and never asks again - over a slow link that's no round trip per file on every open - and an
+   update changes the name. Pages themselves (and sw.js, which carries the same version) are always checked. */
 const packed = new Map();
 /* Brotli quality 6, not 8: a quarter of the time for 2% larger files - the 3D engine packed in about 70 ms instead of
    330 (four times that on a Raspberry Pi), and the page load no longer holds up the live updates. Done in line on
    purpose: on the thread pool each worker thread keeps its own copy of the encoder's memory (~100 MB more on a Pi). */
-function packFile(file, enc, v) {
-  const raw = fs.readFileSync(file);
+function packFile(file, enc, v, raw = fs.readFileSync(file)) {
   const body = enc === 'br' ? zlib.brotliCompressSync(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 6, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } }) : zlib.gzipSync(raw, { level: 6 });
   const hit = { v, body, etag: `"${crypto.createHash('sha1').update(raw).digest('base64url').slice(0, 16)}-${enc}"` };
   packed.set(`${file}|${enc}`, hit);
   return hit;
 }
+const ASSET_HASH = new Map();   // file -> { v, size, h }
+function assetHash(file) {
+  let st; try { st = fs.statSync(file); if (!st.isFile()) return null; } catch { return null; }
+  const hit = ASSET_HASH.get(file);
+  if (hit && hit.v === st.mtimeMs && hit.size === st.size) return hit.h;
+  const h = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 10);
+  ASSET_HASH.set(file, { v: st.mtimeMs, size: st.size, h });
+  return h;
+}
+const HASHED_ASSET = /^\/([\w-]+(?:\.[\w-]+)*)\.([0-9a-f]{10})\.(js|css)$/;
+const ASSET_REF = /(<(?:script|link)\b[^>]*?\b(?:src|href)=")(\/?)([\w-]+(?:\.[\w-]+)*\.(?:js|css))(")/g;
+/* A page's own scripts and style sheets, by their contents' names (only files right in public/, as the page names them). */
+const withHashedAssets = (html) => html.replace(ASSET_REF, (m, a, slash, name, z) => { const h = assetHash(path.join(PUBLIC_DIR, name)); return h ? `${a}${slash}${name.replace(/\.(js|css)$/, `.${h}.$1`)}${z}` : m; });
+/* The app shell's version (the service worker's cache name): changes whenever the dashboard page or anything it loads does. */
+function shellBuild() {
+  let html = ''; try { html = withHashedAssets(fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8')); } catch { /* none */ }
+  return crypto.createHash('sha256').update(html).update(assetHash(path.join(PUBLIC_DIR, 'sw.js')) || '').digest('hex').slice(0, 12);
+}
 function staticPacked(req, res, next) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   const vendor = req.path.startsWith('/vendor/three/');
+  let rel = req.path === '/' ? '/index.html' : req.path, hashed = null;
+  if (!vendor) { const m = HASHED_ASSET.exec(rel); if (m && fs.existsSync(path.join(PUBLIC_DIR, `${m[1]}.${m[3]}`))) { rel = `/${m[1]}.${m[3]}`; hashed = m[2]; } }
   let file;
-  try { file = vendor ? path.join(THREE_DIR, decodeURIComponent(req.path.slice('/vendor/three/'.length))) : path.join(PUBLIC_DIR, decodeURIComponent(req.path === '/' ? 'index.html' : req.path)); } catch { return next(); }   // a broken %-escape
+  try { file = vendor ? path.join(THREE_DIR, decodeURIComponent(rel.slice('/vendor/three/'.length))) : path.join(PUBLIC_DIR, decodeURIComponent(rel)); } catch { return next(); }   // a broken %-escape
   file = path.normalize(file);
   if (!file.startsWith((vendor ? THREE_DIR : PUBLIC_DIR) + path.sep) || !/\.(m?js|css|html|svg|json)$/.test(file)) return next();
-  const ae = String(req.headers['accept-encoding'] || ''), enc = /\bbr\b/.test(ae) ? 'br' : /\bgzip\b/.test(ae) ? 'gzip' : null;
-  let st; try { st = fs.statSync(file); if (!st.isFile() || st.size < 1024) return next(); } catch { return next(); }
-  if (!enc) return next();
-  let hit = packed.get(`${file}|${enc}`);
-  if (!hit || hit.v !== st.mtimeMs) { try { hit = packFile(file, enc, st.mtimeMs); } catch { return next(); } }
-  res.setHeader('Vary', 'Accept-Encoding'); res.setHeader('ETag', hit.etag);
-  res.setHeader('Cache-Control', vendor ? 'public, max-age=604800, immutable' : 'no-cache');
-  if (req.headers['if-none-match'] === hit.etag) return res.status(304).end();
-  res.type(path.extname(file)); res.setHeader('Content-Encoding', enc); res.setHeader('Content-Length', hit.body.length);
-  return req.method === 'HEAD' ? res.end() : res.end(hit.body);
+  let st; try { st = fs.statSync(file); if (!st.isFile()) return next(); } catch { return next(); }
+  const top = !vendor && path.dirname(file) === PUBLIC_DIR;
+  const kind = top && path.basename(file) === 'index.html' ? 'html' : top && path.basename(file) === 'sw.js' ? 'sw' : null;   // the dashboard (behind sign-in, as its files are); the sign-in and setup pages keep plain names
+  const ae = String(req.headers['accept-encoding'] || ''), enc0 = /\bbr\b/.test(ae) ? 'br' : /\bgzip\b/.test(ae) ? 'gzip' : null;
+  if (!kind && !hashed && (!enc0 || st.size < 1024)) return next();   // small or not compressible here: express.static as always
+  let raw = null, v = st.mtimeMs;
+  if (kind) {
+    try { const text = fs.readFileSync(file, 'utf8'); raw = Buffer.from(kind === 'html' ? withHashedAssets(text) : text.replaceAll('__CASATORCH_BUILD__', shellBuild())); } catch { return next(); }
+    v = crypto.createHash('sha1').update(raw).digest('base64url');
+  }
+  const size = raw ? raw.length : st.size, enc = enc0 && size >= 1024 ? enc0 : null;
+  let body, etag;
+  if (enc) {
+    let hit = packed.get(`${file}|${enc}`);
+    if (!hit || hit.v !== v) { try { hit = packFile(file, enc, v, raw || undefined); } catch { return next(); } }
+    body = hit.body; etag = hit.etag;
+  } else {
+    try { body = raw || fs.readFileSync(file); } catch { return next(); }
+    etag = `"${crypto.createHash('sha1').update(body).digest('base64url').slice(0, 16)}"`;
+  }
+  // named after its contents (and still that content): kept a year in this browser only (private: never by a shared cache)
+  const forever = hashed && assetHash(file) === hashed;
+  res.setHeader('Vary', 'Accept-Encoding'); res.setHeader('ETag', etag);
+  res.setHeader('Cache-Control', vendor ? 'public, max-age=604800, immutable' : forever ? 'private, max-age=31536000, immutable' : 'no-cache');
+  if (kind === 'sw') res.setHeader('Service-Worker-Allowed', '/');
+  if (req.headers['if-none-match'] === etag) return res.status(304).end();
+  res.type(path.extname(file)); if (enc) res.setHeader('Content-Encoding', enc); res.setHeader('Content-Length', body.length);
+  return req.method === 'HEAD' ? res.end() : res.end(body);
 }
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchAssets = { assetHash, withHashedAssets, shellBuild, HASHED_ASSET, staticPacked };

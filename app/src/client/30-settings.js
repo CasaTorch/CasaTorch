@@ -196,7 +196,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     ['appearance', T('Look & main bar'), 'palette', T('Dark or light, colors, the main bar and the Home screen'), async () => [lookCard(), barCard(), await famChipsCard(), homeCard]],   // famChipsCard: 38-family.js
     ['people', T('People & sign-in'), 'user', T('Your account, two-step sign-in, people in the house and the activity log'), async () => [...await securityCards(), await activityCard()]],   // activityCard: 39s-support.js
     ['safety', T('Safety'), 'shield', T('What CasaTorch will never switch, and your exceptions'), async () => [await safetyCard()], admin],
-    ['connections', T('Connections & AI'), 'link', T('Home Assistant and your brands, Home AI Agent, secure access'), async () => [conn, aiCard(s), await remoteCard(), await localHttpsCard()]],
+    ['connections', T('Connections & AI'), 'link', T('Home Assistant and your brands, Home AI Agent, secure access'), async () => [conn, aiCard(s), aiPrivacyCard(s), await remoteCard(), await localHttpsCard()]],
     ['household', T('Household'), 'trash', T('Bins, the mail, plants and laundry'), async () => householdCards()],   // 37h-household.js
     ['family', T('Family hub'), 'star', T('The family, chores and stars, lists and meals'), async () => familyCards()],   // 38-family.js
     ['phones', T('Phones & alerts'), 'phone', T('The CasaTorch app, alerts on your phones, quiet hours'), async () => [...(await appCards()), await phoneCard()]],

@@ -31,6 +31,7 @@ const STEPS = [
   ['camlive', APP, ['test/camlive-browser.cjs'], true],   // live camera video plays: MSE, HLS and MJPEG against a stand-in Frigate (needs ffmpeg)
   ['3d-compat', APP, ['test/floorplan-compat-browser.cjs'], true],   // the 3D home on older browsers (about 1 min on a software GPU)
   ['3d-perf', APP, ['test/floorplan-perf-budget.cjs'], true],       // the 3D home's draw-call/triangle budget (1-3 min)
+  ['remote-sim', ROOT, ['tools/test-remote-sim.mjs'], true],   // over a slow (150 ms), flaky link: never a blank page, tab switches within 1 s from the last answers, reconnects (about 30 s)
 ];
 
 const run = (name, cwd, argv, limitMs) => new Promise((ok) => {

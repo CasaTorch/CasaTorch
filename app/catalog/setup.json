@@ -498,13 +498,15 @@
                     "label": "Frigate address",
                     "type": "url",
                     "placeholder": "http://192.168.1.10:5000  or  https://192.168.1.10:8971",
-                    "required": true
+                    "required": true,
+                    "help": "The address you open Frigate with in a browser."
                   },
                   {
                     "id": "user",
                     "label": "Frigate username - secure port only",
                     "type": "text",
-                    "placeholder": "admin"
+                    "placeholder": "admin",
+                    "help": "Only for the secure port (8971): the login you use on Frigate's own page. Port 5000 needs none."
                   },
                   {
                     "id": "password",
@@ -514,6 +516,17 @@
                 ],
                 "test": "frigate",
                 "badge": "direct",
+                "haDomain": "frigate",
+                "why": "CasaTorch talks to Frigate itself, so you get live video on every tile and person and car detections with pictures. A login is only needed on Frigate's secure port.",
+                "alsoDirect": {
+                  "has": "Through Home Assistant you already get each camera's picture and full-screen video.",
+                  "gets": [
+                    "Live video right on the tiles, about half a second behind",
+                    "Person, car and animal detections with pictures, zones and how sure Frigate was",
+                    "Keeps working if Home Assistant is down"
+                  ],
+                  "dupes": "You won't see cameras twice - CasaTorch hides the Home Assistant copies (they're under Cameras › Detected cameras)."
+                },
                 "hint": "Port 5000 is Frigate's open port (http, no sign-in). Port 8971 is its secure port: use https:// plus your Frigate username and password. CasaTorch will ask you to trust Frigate's own certificate once.",
                 "find": {
                   "from": "frigate",
@@ -641,14 +654,17 @@
                     "id": "apiKey",
                     "label": "Meraki Dashboard API key",
                     "type": "password",
-                    "placeholder": "From dashboard.meraki.com › your profile › API access",
                     "required": true,
-                    "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers."
+                    "help": "Make one in the Meraki dashboard › Organization › API & webhooks (older dashboards: your profile › API access). Kept sealed on this CasaTorch."
                   }
                 ],
                 "test": "meraki",
                 "desc": "Paste your Meraki API key - cameras and sensors come in on their own (Pro; included in the 14-day trial)",
-                "badge": "direct"
+                "badge": "direct",
+                "haDomain": "meraki",
+                "why": "Meraki cameras are reached through Meraki's cloud, so CasaTorch needs an API key: it asks Meraki for a fresh picture from each camera about every 15 seconds while you watch. CasaTorch only reads - it never changes anything in Meraki.",
+                "haNote": "Home Assistant's built-in Meraki integration only tracks who's home - it doesn't bring in Meraki cameras, sensors or network status. That's why the key is asked here.",
+                "shareKey": "meraki"
               },
               {
                 "id": "wyze",
@@ -940,21 +956,24 @@
               },
               {
                 "id": "meraki-mt",
-                "label": "Cisco Meraki MT (Pro)",
+                "label": "Cisco Meraki MT",
                 "method": "direct",
                 "fields": [
                   {
                     "id": "apiKey",
                     "label": "Meraki Dashboard API key",
                     "type": "password",
-                    "placeholder": "From dashboard.meraki.com › your profile › API access",
                     "required": true,
-                    "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers."
+                    "help": "Make one in the Meraki dashboard › Organization › API & webhooks (older dashboards: your profile › API access). Kept sealed on this CasaTorch."
                   }
                 ],
                 "test": "meraki",
-                "desc": "Paste your Meraki API key - cameras and sensors come in on their own (Pro; included in the 14-day trial)",
-                "badge": "direct"
+                "desc": "Paste your Meraki API key - temperature, humidity, leak, door and battery readings, with alerts (they keep working without Pro)",
+                "badge": "direct",
+                "haDomain": "meraki",
+                "why": "Meraki sensors report to Meraki's cloud, so CasaTorch needs an API key: it reads each sensor once a minute and alerts you to leaks, low batteries and freezing or very hot rooms. CasaTorch only reads - it never changes anything in Meraki.",
+                "haNote": "Home Assistant's built-in Meraki integration only tracks who's home - it doesn't bring in Meraki cameras, sensors or network status. That's why the key is asked here.",
+                "shareKey": "meraki"
               },
               {
                 "id": "other",
@@ -1040,21 +1059,34 @@
       },
       "branches": {
         "unifi": {
-          "note": "UniFi: make an API key in UniFi Network › Settings › Control Plane › Integrations, then paste it with your console's address. CasaTorch shows every UniFi device online or offline and how many are connected. Part of Pro - included in your 14-day trial.",
+          "note": "Every UniFi device online or offline, and how many are connected.",
+          "why": {
+            "title": "What a UniFi key adds",
+            "gets": [
+              "Every access point, switch and gateway: online or offline",
+              "How many devices are on your network",
+              "An alert when one goes offline",
+              "Your network gear on the 3D floor plan"
+            ],
+            "need": "CasaTorch reads this straight from your UniFi console with a key of its own. It only reads - it never changes anything. Part of Pro - included in your 14-day trial.",
+            "haDomain": "unifi",
+            "ha": "UniFi in your Home Assistant keeps working as it is. CasaTorch's Network page doesn't read through Home Assistant, so it asks UniFi directly."
+          },
           "fields": [
             {
               "id": "url",
               "label": "UniFi console address",
               "type": "url",
               "placeholder": "https://192.168.1.1",
-              "required": true
+              "required": true,
+              "help": "The address you open UniFi with in a browser."
             },
             {
               "id": "apiKey",
               "label": "UniFi API key",
               "type": "password",
               "required": true,
-              "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers."
+              "help": "UniFi Network › Settings › Control Plane › Integrations › Create API key. Kept sealed on this CasaTorch."
             }
           ],
           "test": "unifi",
@@ -1064,18 +1096,30 @@
           }
         },
         "meraki": {
-          "note": "Paste a Meraki Dashboard API key (read-only is enough) and pick your network. CasaTorch shows every Meraki device's status, with alerts, plus Meraki cameras and sensors. Part of Pro - included in your 14-day trial.",
+          "note": "Every Meraki device's status, with alerts, plus Meraki cameras and sensors.",
+          "why": {
+            "title": "What a Meraki key adds",
+            "gets": [
+              "Every Meraki device: online, offline or alerting",
+              "An alert when one goes offline",
+              "Your network gear on the 3D floor plan",
+              "Meraki cameras and sensors too - with the same key"
+            ],
+            "need": "Meraki is run from Meraki's cloud, so CasaTorch needs an API key to read it. It only reads - it never changes anything. One key covers your network, cameras and sensors. Part of Pro - included in your 14-day trial.",
+            "haDomain": "meraki",
+            "ha": "Home Assistant's built-in Meraki integration only tracks who's home - it has no network status, so CasaTorch asks Meraki directly."
+          },
           "fields": [
             {
               "id": "apiKey",
               "label": "Meraki Dashboard API key",
               "type": "password",
-              "placeholder": "From dashboard.meraki.com › your profile › API access",
               "required": true,
-              "help": "Stored only on your CasaTorch, sealed with AES-256-GCM - never sent to CasaTorch's servers."
+              "help": "Make one in the Meraki dashboard › Organization › API & webhooks (older dashboards: your profile › API access). Kept sealed on this CasaTorch."
             }
           ],
-          "test": "meraki"
+          "test": "meraki",
+          "shareKey": "meraki"
         },
         "omada": {
           "note": "Omada support is planned. CasaTorch will still show your internet speed and devices from your DNS blocker."

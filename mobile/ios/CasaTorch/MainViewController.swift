@@ -19,6 +19,8 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
     var lock: LockOverlay?
     /// Sign-ins read since the last unlock, kept in memory only (forgotten after a while in the background).
     var tokenCache: [String: String] = [:]
+    /// The Face ID check that just unlocked the app, so opening the home picked at launch doesn't ask twice.
+    var unlockContext: LAContext?
     var fullscreen = false { didSet { setNeedsStatusBarAppearanceUpdate(); setNeedsUpdateOfHomeIndicatorAutoHidden() } }
 
     override var prefersStatusBarHidden: Bool { fullscreen }
@@ -76,9 +78,11 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
         UIView.animate(withDuration: 0.22) { self.web.alpha = 1 }
     }
 
-    /// First screen: your home if you have one (after Face ID), else welcome.
+    /// First screen: your home if you have one (after Face ID), else welcome. More than one home and no remembered
+    /// choice: which one to open.
     func start() {
-        if let h = HomeStore.shared.current { openHome(h.id) } else { openShell("welcome") }
+        if HomeStore.shared.shouldAskAtLaunch { openShell("choose"); return }
+        if let h = HomeStore.shared.launchHomeId.flatMap({ HomeStore.shared.home($0) }) ?? HomeStore.shared.current { openHome(h.id) } else { openShell("welcome") }
     }
     func openShell(_ hash: String) {
         openTask?.cancel(); openTask = nil
@@ -94,8 +98,8 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
         openingHome = home
         openTask = Task { @MainActor in
             // reading a Face ID-protected sign-in shows the system prompt: off the main thread
-            let cached = self.tokenCache[id]
-            let token = cached != nil ? cached : await Task.detached { HomeStore.shared.token(id, context: context) }.value
+            let cached = self.tokenCache[id], ctx = context ?? self.unlockContext
+            let token = cached != nil ? cached : await Task.detached { HomeStore.shared.token(id, context: ctx) }.value
             if let token { self.tokenCache[id] = token }
             guard let token else {
                 if HomeStore.shared.biometricLock { if let path { self.pendingAlert = (path, id) }; self.lock?.show(); return }   // Face ID was cancelled: the lock screen offers to try again
@@ -113,9 +117,13 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
     }
     /// Back from the lock: if a home is on screen, hand the sign-in back and carry on where you were; else open it.
     func resume(context: LAContext) {
+        unlockContext = context
         if let a = pendingAlert { pendingAlert = nil; openHome(a.home ?? HomeStore.shared.current?.id ?? "", context: context, path: a.path); return }
         if let u = web.url, u.scheme == ShellSchemeHandler.scheme, u.fragment != "homes" { return }   // pairing a phone, say: that screen stays
-        guard let id = currentHomeId(), let home = HomeStore.shared.home(id), let u = web.url, u.scheme != ShellSchemeHandler.scheme else { if let h = HomeStore.shared.current { openHome(h.id, context: context) } else { start() }; return }
+        guard let id = currentHomeId(), let home = HomeStore.shared.home(id), let u = web.url, u.scheme != ShellSchemeHandler.scheme else {
+            if HomeStore.shared.shouldAskAtLaunch { openShell("choose") } else if let h = HomeStore.shared.launchHomeId.flatMap({ HomeStore.shared.home($0) }) ?? HomeStore.shared.current { openHome(h.id, context: context) } else { start() }
+            return
+        }
         Task { @MainActor in
             guard let token = await Task.detached(operation: { HomeStore.shared.token(id, context: context) }).value else { self.openShell("signedout=\(id)"); return }
             self.tokenCache[id] = token
@@ -184,12 +192,12 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
 
     // MARK: - the network changed, or the app is back: keep the home at an address that works from here
     func networkChanged() {
-        if onShell {   // the app's own screens try again at once
-            let j = (try? JSONSerialization.data(withJSONObject: Net.shared.json)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
-            web.evaluateJavaScript("window.__casaEvent && window.__casaEvent('network', \(j)); 1", completionHandler: nil)
-            return
-        }
-        recheckHome(after: 1.5)   // let the new connection settle (Wi-Fi to mobile data takes a moment)
+        // the page hears it at once: the app's own screens try again; your home drops the requests and the live
+        // stream left on the old connection (dead, but nothing says so) and asks again on the new one
+        let j = (try? JSONSerialization.data(withJSONObject: Net.shared.json)).flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        web.evaluateJavaScript("window.__casaEvent && window.__casaEvent('network', \(j)); 1", completionHandler: nil)
+        if onShell { return }
+        recheckHome(after: 1.5, rerace: true)   // let the new connection settle (Wi-Fi to mobile data takes a moment)
     }
     /// Called by the scene when the app comes back to the screen.
     func cameBack(after away: TimeInterval) {
@@ -198,17 +206,21 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
     }
     /// A home is on screen: still answering at this address? If not, the best address that does (say, from
     /// anywhere instead of the home Wi-Fi), on the same page. If none does, "can't reach", which keeps trying.
-    func recheckHome(after delay: Double) {
+    /// After a network change (`rerace`) the addresses are raced again even when this one still answers: back on the
+    /// home Wi-Fi, the home address (much faster than going out and back in through secure access) takes over.
+    func recheckHome(after delay: Double, rerace: Bool = false) {
         guard lock?.isLocked != true, let cur = web.url, cur.scheme != ShellSchemeHandler.scheme, let id = currentHomeId(), let home = HomeStore.shared.home(id), let here = Home.originString(cur), let hereURL = URL(string: here) else { return }
         recheckTask?.cancel()
         recheckTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            if await Self.firstAnswering([hereURL], timeout: 3) != nil { return }   // still fine where it is
-            var found = await Self.firstAnswering(home.candidates)
-            if found == nil, !Task.isCancelled { try? await Task.sleep(nanoseconds: 3_000_000_000); found = await Self.firstAnswering(home.candidates) }
+            let hereOK = await Self.firstAnswering([hereURL], timeout: 3) != nil
+            if hereOK && !rerace { return }   // still fine where it is
+            let order = rerace ? home.raceOrder : home.candidates
+            var found = await Self.firstAnswering(order)
+            if found == nil, !hereOK, !Task.isCancelled { try? await Task.sleep(nanoseconds: 3_000_000_000); found = await Self.firstAnswering(order) }
             guard !Task.isCancelled, let now = self.web.url, Home.originString(now) == here else { return }   // you moved on meanwhile
-            guard let found else { self.openShell("unreachable=\(id)"); return }
+            guard let found else { if !hereOK { self.openShell("unreachable=\(id)") }; return }
             guard let base = Home.originString(found.0), base != here else { return }
             HomeStore.shared.learn(id, hello: found.1)
             HomeStore.shared.touch(id, workingAddress: found.0)

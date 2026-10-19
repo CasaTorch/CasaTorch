@@ -245,7 +245,8 @@ class MainActivity : AppCompatActivity() {
     private val bridgeJs by lazy { assets.open("shell/bridge.js").bufferedReader().use { it.readText() } }
 
     // MARK: - what's on screen
-    fun start() { HomeStore.current?.let { openHome(it.id) } ?: openShell("welcome") }
+    /** First screen: your home (after the lock), or - with more than one home and no remembered choice - which one. */
+    fun start() { if (HomeStore.shouldAskAtLaunch) openShell("choose") else HomeStore.launchHome?.let { openHome(it.id) } ?: openShell("welcome") }
     private var openJob: Job? = null
     private var recheckJob: Job? = null
     fun openShell(hash: String) { openJob?.cancel(); recheckJob?.cancel(); openingHome = null; web.loadUrl("$SHELL#$hash") }
@@ -276,7 +277,7 @@ class MainActivity : AppCompatActivity() {
         if (id == null || onShell) {
             // the app's own screen behind the lock stays (pairing a phone, say), unless it was just the homes list
             val u = web.url
-            if (u == null || u.endsWith("#homes")) HomeStore.current?.let { openHome(it.id) } ?: start()
+            if (u == null || u.endsWith("#homes")) start()
             return
         }
         val home = HomeStore.home(id) ?: return start()
@@ -325,14 +326,19 @@ class MainActivity : AppCompatActivity() {
     }
     private fun networkChanged() {
         if (!::web.isInitialized) return
-        if (onShell) { web.evaluateJavascript("window.__casaEvent && window.__casaEvent('network', ${Net.json(this)}); 1", null); return }   // the app's own screens try again at once
-        recheckHome(1500)   // let the new connection settle
+        // the page hears it at once: the app's own screens try again; your home drops the requests and the live stream
+        // left on the old connection (dead, but nothing says so) and asks again on the new one
+        web.evaluateJavascript("window.__casaEvent && window.__casaEvent('network', ${Net.json(this)}); 1", null)
+        if (onShell) return
+        recheckHome(1500, rerace = true)   // let the new connection settle
     }
     /**
      * A home is on screen: still answering at this address? If not, the best address that does (from anywhere instead
      * of the home Wi-Fi, say), on the same page. If none does, "can't reach", which keeps trying by itself.
+     * After a network change ([rerace]) the addresses are raced again even when this one still answers: back on the
+     * home Wi-Fi, the home address (much faster than going out and back in through secure access) takes over.
      */
-    private fun recheckHome(delayMs: Long) {
+    private fun recheckHome(delayMs: Long, rerace: Boolean = false) {
         if (lockView.visibility == View.VISIBLE || onShell) return
         val cur = web.url?.let(Uri::parse) ?: return
         val id = currentHomeId() ?: return
@@ -341,12 +347,14 @@ class MainActivity : AppCompatActivity() {
         recheckJob?.cancel()
         recheckJob = lifecycleScope.launch {
             delay(delayMs)
-            if (firstAnswering(listOf(Uri.parse(here)), 3000) != null) return@launch   // still fine where it is
-            var found = firstAnswering(home.candidates)
-            if (found == null) { delay(3000); found = firstAnswering(home.candidates) }
+            val hereOk = firstAnswering(listOf(Uri.parse(here)), 3000) != null
+            if (hereOk && !rerace) return@launch   // still fine where it is
+            val order = if (rerace) home.raceOrder else home.candidates
+            var found = firstAnswering(order)
+            if (found == null && !hereOk) { delay(3000); found = firstAnswering(order) }
             val now = web.url?.let(Uri::parse) ?: return@launch
             if (Home.originOf(now) != here) return@launch   // you moved on meanwhile
-            if (found == null) return@launch openShell("unreachable=$id")
+            if (found == null) { if (!hereOk) openShell("unreachable=$id"); return@launch }
             val base = Home.originOf(found.first)
             if (base == here) return@launch
             HomeStore.learn(id, found.second)

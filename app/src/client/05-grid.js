@@ -34,7 +34,7 @@ const fromSpan = (s, cols) => (cols === 12 ? s : cols === 4 ? (s <= 2 ? 3 : 6) :
 const SIZE_PRESETS = [['s', 'Small', [3, 2]], ['m', 'Medium', [6, 2]], ['l', 'Large', [6, 4]], ['xl', 'Extra large', [12, 4]]];
 function presetsFor(w) {
   const seen = new Set(), out = [];
-  for (const [k, label, [pw, ph]] of SIZE_PRESETS) {
+  for (const [k, label, [pw, ph]] of (w.presets || SIZE_PRESETS)) {   // w.presets: a page tile's own sizes (06-pagegrid.js)
     const sz = [Math.max(w.min[0], Math.min(w.max[0], pw)), Math.max(w.min[1], Math.min(w.max[1], ph))], key = sz.join('x');
     if (!seen.has(key)) { seen.add(key); out.push([k, label, sz]); }
   }
@@ -69,8 +69,9 @@ function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize }) {
   let cols = gridCols(grid);
   const live = new Map();   // tile element -> { t, body, widget }
   const editing = () => grid.classList.contains('editing');
-  function sizeOf(t) { const span = toSpan(t.w, cols); return { w: cols === 4 ? (span <= 2 ? 2 : 4) : t.w, h: t.h, narrow: cols === 4, span, cols }; }
-  function place(node, t) { const span = toSpan(t.w, cols); node.style.gridColumn = `span ${span}`; node.style.gridRow = `span ${t.h}`; node.style.setProperty('--h', t.h); const tag = node.querySelector('.size-tag'); if (tag) tag.textContent = `${span} × ${t.h}`; }
+  const spanOf = (t) => (cols === 4 && wOf(t)?.phoneFull ? 4 : toSpan(t.w, cols));   // phoneFull: a page tile that takes the whole row on a phone (06-pagegrid.js)
+  function sizeOf(t) { const span = spanOf(t); return { w: cols === 4 ? (span <= 2 ? 2 : 4) : t.w, h: t.h, narrow: cols === 4, span, cols }; }
+  function place(node, t) { const span = spanOf(t); node.style.gridColumn = `span ${span}`; node.style.gridRow = `span ${t.h}`; node.style.setProperty('--h', t.h); const tag = node.querySelector('.size-tag'); if (tag) tag.textContent = `${span} × ${t.h}`; }
   async function paint(node, force) {
     const L = live.get(node); if (!L) return;
     if (typeof famShowWhen === 'function' && L.t.showWhen) {   // "Show only when..." (38-family.js): hidden tiles collapse; nothing runs inside one

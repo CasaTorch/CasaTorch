@@ -35,6 +35,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             // back within two minutes: no prompt, the sign-in comes back quietly (it's still in memory in the web view's page)
             lock.isHidden = true
             if let id = vc.currentHomeId() { vc.openHomeQuietly(id) }
-        } else { vc.tokenCache.removeAll(); lock.unlock() }
+        } else { vc.tokenCache.removeAll(); vc.unlockContext = nil; lock.unlock() }
     }
 }

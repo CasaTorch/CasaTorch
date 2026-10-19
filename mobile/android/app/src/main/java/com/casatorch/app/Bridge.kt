@@ -128,7 +128,7 @@ class Bridge(private val a: MainActivity) {
             JSONArray(discover(x.optLong("timeout", 3000).coerceIn(1000, 8000)))
         }
         "scanQR" -> scanQR()
-        "homes" -> JSONArray(HomeStore.homes.sortedByDescending { it.last }.map { it.toJson().apply { if (it.last > 0) put("last", java.time.Instant.ofEpochMilli(it.last).toString()) else remove("last") } })
+        "homes" -> JSONArray(HomeStore.homes.sortedByDescending { it.last }.map { it.toJson().apply { if (it.last > 0) put("last", java.time.Instant.ofEpochMilli(it.last).toString()) else remove("last"); put("launch", it.id == HomeStore.launchHomeId) } })
         "saveHome" -> {
             if (!fromShell) throw Failure("Not allowed here.")
             val id = x.optString("id"); val name = x.optString("name"); val token = x.optString("token")
@@ -143,7 +143,19 @@ class Bridge(private val a: MainActivity) {
             a.installBridge()
             true
         }
-        "openHome" -> { a.openHome(x.optString("id")); null }
+        "openHome" -> {
+            val id = x.optString("id")
+            if (HomeStore.home(id) != null) {
+                if (fromShell && x.optBoolean("remember", false)) HomeStore.launchHomeId = id   // "Remember my choice"
+                a.openHome(id)
+            }
+            null
+        }
+        "setLaunchHome" -> {
+            if (!fromShell) throw Failure("Not allowed here.")
+            val id = if (x.isNull("id")) null else x.optString("id").takeIf { HomeStore.home(it) != null }
+            HomeStore.launchHomeId = id; true
+        }
         "removeHome" -> {
             if (!fromShell) throw Failure("Not allowed here.")
             val id = x.optString("id"); HomeStore.remove(id); a.tokenCache.remove(id); a.installBridge(); true

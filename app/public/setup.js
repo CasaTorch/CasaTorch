@@ -374,8 +374,50 @@ function shownOptions(list) {
 function badge(o) {
   if (o.method === 'ring') return el('span', { class: 'badge pro' }, T('Pro · Labs'));
   if (needsHa(o)) return el('span', { class: 'badge ha' }, W.ha ? T('via Home Assistant') : T('needs Home Assistant'));
+  if (inHaAlready(o)) return el('span', { class: 'badge ha' }, T('in Home Assistant ✓'));
   if (o.method === 'direct' || o.method === 'hue') return el('span', { class: 'badge direct' }, T('no Home Assistant needed'));
   return null;
+}
+/* Gear CasaTorch can reach itself that is ALREADY in your Home Assistant (Frigate's own integration, say): it comes in
+   from there, and connecting it directly as well is a choice - with the honest reasons (catalog: alsoDirect). */
+const inHaAlready = (o) => !!(o.alsoDirect && W.ha && W.haDomains?.includes(o.haDomain || o.id));
+const viaHaOnly = (o, sub) => inHaAlready(o) && sub?._via !== 'direct';
+function alsoDirectEl(opt, sub) {
+  const a = opt.alsoDirect, direct = sub._via === 'direct';
+  const pick = (v) => { if (sub._via === v || (v === 'ha' && !direct)) return; sub._via = v; if (v === 'ha') delete sub._test; go(); };
+  const choice = (v, on, title, small) => el('button', { type: 'button', role: 'radio', 'aria-checked': on ? 'true' : 'false', class: `opt${on ? ' on' : ''}`, onclick: () => pick(v) }, T(title), el('small', {}, T(small)));
+  return el('div', { class: 'alsodirect' },
+    el('div', { class: 'ok' }, el('b', {}, T('Already in Home Assistant ✓ - you\'re set.'))),
+    a.has ? el('p', { class: 'note', style: 'margin:4px 0 0' }, T(a.has)) : null,
+    el('p', { class: 'note', style: 'margin:10px 0 2px' }, T('Connect it directly too for:')),
+    el('ul', { class: 'note', style: 'margin:0 0 10px;padding-left:20px' }, a.gets.map((g) => el('li', {}, T(g)))),
+    el('div', { class: 'opts', role: 'radiogroup', 'aria-label': T('How to connect {name}', { name: T(opt.label) }) },
+      choice('ha', !direct, 'Keep using Home Assistant', 'Nothing more to do - no extra login'),
+      choice('direct', direct, 'Also connect directly', 'Add its address below - about a minute')),
+    a.dupes ? el('p', { class: 'note', style: 'margin:10px 0 0' }, T(a.dupes)) : null);
+}
+/* One Meraki key does it all (network, MV cameras, MT sensors): typed once, used on every step that needs it. */
+function sharedKeyEl(sub) {
+  const others = [W.a.cameras?.['meraki-mv'], W.a.sensors?.['meraki-mt'], W.a.network?.meraki].filter((x) => x && x !== sub && x.apiKey);
+  if (!sub.apiKey && others[0]) { sub.apiKey = others[0].apiKey; sub._shared = true; }
+  return sub._shared && others.some((x) => x.apiKey === sub.apiKey) ? el('div', { class: 'found' }, '✓ ', T('Using the Meraki key you already entered - nothing more to paste.')) : null;
+}
+/* Network: UniFi or Meraki need a key of their own - say what it adds and why, and let it wait for later. */
+function netKeyEl(br, sub) {
+  const w = br.why, skip = !!sub._skip;
+  const choice = (v, title, small) => el('button', { type: 'button', role: 'radio', 'aria-checked': v === skip ? 'true' : 'false', class: `opt${v === skip ? ' on' : ''}`,
+    onclick: () => { if (v === skip) return; sub._skip = v; if (v) { delete sub.apiKey; delete sub._test; delete sub._shared; } go(); } }, T(title), el('small', {}, T(small)));
+  const card = el('div', { class: 'card' }, el('h3', {}, T(w.title)),
+    el('ul', { class: 'note', style: 'margin:4px 0 8px;padding-left:20px' }, w.gets.map((g) => el('li', {}, T(g)))),
+    el('p', { class: 'note' }, T(w.need)),
+    w.ha && W.ha && W.haDomains?.includes(w.haDomain) ? el('p', { class: 'note' }, el('b', {}, T('Already in Home Assistant?')), ' ', T(w.ha)) : null,
+    el('div', { class: 'opts', role: 'radiogroup', 'aria-label': T(w.title) }, choice(false, 'Connect it', 'Paste a key below'), choice(true, 'Not now', 'Internet status and speed tests still work')));
+  if (skip) return card;
+  if (br.find) { const f = prefillFound(sub, br.find); if (f) card.append(f); }
+  if (br.shareKey) { const s = sharedKeyEl(sub); if (s) card.append(s); }
+  card.append(...fieldsEl(br.fields, sub, go));
+  if (br.test) card.append(testEl(br.test, sub));
+  return card;
 }
 function hueEl(card) {
   const st = W.hue ||= { host: '', msg: null };
@@ -414,15 +456,19 @@ function ringEl(card) {
 function setupFor(stepId, opt) {
   const store = ans(stepId);
   const card = el('div', { class: 'card' }, el('h3', {}, T(opt.label), badge(opt)));
-  // Already in Home Assistant (Frigate's own integration, say): it comes in from there; connecting it here too is faster, and CasaTorch shows each camera once.
-  if (opt.method === 'direct' && W.haDomains?.includes(opt.id)) card.append(el('div', { class: 'ok' }, `✓ ${T('Already in your Home Assistant - its cameras come in from there.')}`),
-    el('p', { class: 'note' }, T('Connect it here as well for faster live video and detection stats. Each camera still shows once: CasaTorch keeps the direct one and lists the other under Cameras › Detected cameras.')));
   if (opt.method === 'hue') return hueEl(card);
   if (opt.method === 'ring') return ringEl(card);
   if (opt.method === 'ha' || opt.method === 'ha-ui') {
     if (!W.ha) { card.append(el('div', { class: 'warn' }, T('Needs Home Assistant. Connect it in the Home Assistant step, or add this later from Settings.'))); return card; }
     const added = W.added.find((x) => x.domain === opt.domain);
-    if (W.haDomains.includes(opt.domain) || added) { card.append(el('div', { class: 'ok' }, added ? T('✓ Added to Home Assistant: {title}', { title: added.title }) : T('✓ Already in Home Assistant'))); return card; }
+    if (W.haDomains.includes(opt.domain) || added) {
+      // There, so nothing more to sign in to. A direct twin (Hue, Shelly, Reolink, Ring, YoLink) adds nothing CasaTorch
+      // doesn't already get from Home Assistant - it's for homes without it - so it isn't offered on top.
+      const twin = W.steps.find((s) => s.id === stepId)?.branches?.yes?.pick?.options.some((x) => x.haTwin === opt.id);
+      card.append(el('div', { class: 'ok' }, added ? T('✓ Added to Home Assistant: {title}', { title: added.title }) : T('✓ Already in Home Assistant'), ` - ${T('you\'re set, nothing more to log into.')}`),
+        twin ? el('p', { class: 'note' }, T('CasaTorch can also connect it without Home Assistant. That\'s meant for homes that don\'t use Home Assistant - here it would only help while Home Assistant is down.')) : null);
+      return card;
+    }
     if (opt.method === 'ha-ui') {
       card.append(el('p', { class: 'note' }, T(opt.hint || 'This one signs in on a page only Home Assistant can show.')),
         el('button', { type: 'button', class: 'small', onclick: async () => { const r = await api(`/api/setup/ha/link?domain=${encodeURIComponent(opt.domain)}`); window.open(r.url, '_blank', 'noopener'); } }, T('Set it up in Home Assistant')));
@@ -436,6 +482,10 @@ function setupFor(stepId, opt) {
   }
   if (opt.method === 'direct') {
     const sub = store[opt.id] ||= {};
+    if (inHaAlready(opt)) { card.append(alsoDirectEl(opt, sub)); if (sub._via !== 'direct') return card; }
+    else if (opt.why) card.append(el('p', { class: 'note' }, T(opt.why)));
+    if (opt.haNote && W.ha && W.haDomains?.includes(opt.haDomain)) card.append(el('p', { class: 'note' }, T(opt.haNote)));
+    if (opt.shareKey) { const s = sharedKeyEl(sub); if (s) card.append(s); }
     const found = prefillFound(sub, opt.find);
     if (found) card.append(found);
     card.append(...fieldsEl(opt.fields, sub, go));
@@ -561,15 +611,18 @@ function stepPage(step) {
     out.push(el('div', { class: 'q' }, T(q.label)), el('div', { class: 'opts' }, ...q.options.map(([v, l]) => el('button', { type: 'button', class: `opt${store[q.id] === v ? ' on' : ''}`, onclick: () => { if (store[q.id] !== v && step.id === 'ai') { delete store._test; delete store.apiKey; } store[q.id] = v; go(); } }, T(l)))));
     const br = step.branches?.[store[q.id]];
     if (br) {
-      if (br.note) out.push(el('p', { class: 'note' }, T(br.note)));
+      if (br.note && !br.why) out.push(el('p', { class: 'note' }, T(br.note)));
       if (br.guide) out.push(el('pre', {}, W.cat.guides[br.guide] || ''));
       const sub = branchStore(step, store);
       // Questions that follow a pick (alerts for people? a budget?) come after it.
       const late = !!(br.pick || br.provider);
       if (step.id === 'homeassistant' && store[q.id] === 'yes') out.push(haSigninEl(sub));
-      if (br.find) { const f = prefillFound(sub, br.find); if (f) out.push(f); }
-      if (br.fields && !late && !(step.id === 'homeassistant' && sub._signedIn)) out.push(...fieldsEl(br.fields, sub, go));
-      if (br.test && !(step.id === 'homeassistant' && sub._signedIn)) out.push(testEl(br.test, sub));
+      if (br.why) out.push(netKeyEl(br, sub));   // UniFi / Meraki: what the key adds, then its fields (or "Not now")
+      else {
+        if (br.find) { const f = prefillFound(sub, br.find); if (f) out.push(f); }
+        if (br.fields && !late && !(step.id === 'homeassistant' && sub._signedIn)) out.push(...fieldsEl(br.fields, sub, go));
+        if (br.test && !(step.id === 'homeassistant' && sub._signedIn)) out.push(testEl(br.test, sub));
+      }
       if (br.provider) out.push(utilityEl(br.provider, store));
       if (br.pick) {
         const p = br.pick, cur = new Set(store[p.id] || []);
@@ -660,7 +713,7 @@ function problems(step) {
   if (step.id === 'ai' && store.provider !== 'later' && !store._test?.ok) return T('Press "Test connection" so your Home AI Agent is ready - or pick "Not now".');
   const br = step.question ? step.branches?.[store[step.question.id]] : null;
   const sub = br ? branchStore(step, store) : store;
-  for (const [list, src] of [[step.fields, store], [br?.fields, sub]]) for (const f of (list || []).filter((g) => visible(g, src) && g.required && !(step.id === 'homeassistant' && sub._signedIn) && !(W.rerun && step.id === 'account' && g.id === 'password') && !(W.rerun && W.ha && step.id === 'homeassistant' && g.id === 'token'))) {
+  for (const [list, src] of [[step.fields, store], [br?.fields, sub]]) for (const f of (list || []).filter((g) => visible(g, src) && g.required && !(step.id === 'homeassistant' && sub._signedIn) && !(step.id === 'network' && br?.why && sub._skip) && !(W.rerun && step.id === 'account' && g.id === 'password') && !(W.rerun && W.ha && step.id === 'homeassistant' && g.id === 'token'))) {
     const v = src[f.id];
     if ((v == null || v === '' || v === false) && f.type === 'consent') { problems.field = null; return T('To continue, agree to the Terms of Use and the Privacy Notice.'); }
     if (v == null || v === '') return needMsg(f.label, f.id);
@@ -671,6 +724,7 @@ function problems(step) {
   if (step.id === 'apptests' && window.atSetupProblem) { const m = window.atSetupProblem(store); if (m) return m; }   // setup-apptests.js
   if (br?.pick) for (const o of shownOptions(br.pick.options)) if ((store[br.pick.id] || []).includes(o.id) && o.method === 'direct') {
     const d = store[o.id] || {};
+    if (viaHaOnly(o, d)) continue;   // already in Home Assistant, kept there: nothing to fill in
     for (const f of (o.fields || []).filter((g) => g.required)) if (!d[f.id]) { problems.field = f.id; return T('{thing}: {field} is needed.', { thing: T(o.label), field: T(f.label).replace(/\s*\(.*\)\s*$/, '') }); }
     if (o.id === 'frigate' && !d._test?.ok) return T('Press "Test connection" for Frigate so CasaTorch can find your cameras.');
   }

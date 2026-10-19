@@ -58,12 +58,15 @@ app.get('/api/live/events', (req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.write(`retry: 5000\ndata: ${JSON.stringify({ type: 'hello', live: LIVE.ok })}\n\n`);
   LIVE.clients.add(res);
-  // Signed out elsewhere (or removed): the open stream ends too, at the next beat.
+  // Signed out elsewhere (or removed): the open stream ends too, at the next beat. The beat is a real message (not a
+  // comment, which pages can't see): a page that hears nothing for 50 seconds knows its connection died (a phone
+  // that moved from Wi-Fi to mobile data) and opens a new one. It also keeps tunnels and proxies from closing it.
   const sk = req.session?.key;
+  req.socket?.setNoDelay?.(true); req.socket?.setKeepAlive?.(true, 20_000);
   const beat = setInterval(() => {
     if (sk && signInOn() && !sessions[sk]) { res.end(); return; }
-    try { res.write(': keep-alive\n\n'); } catch { /* closing */ }
-  }, 25_000);
+    try { res.write(`data: {"type":"beat","at":${Date.now()}}\n\n`); } catch { /* closing */ }
+  }, 20_000);
   res.on('close', () => { clearInterval(beat); LIVE.clients.delete(res); });
 });
 /* A connection that went quiet is a dead one: Home Assistant's machine lost power, Wi-Fi dropped, a router forgot

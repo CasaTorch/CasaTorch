@@ -19,6 +19,14 @@ struct Home: Codable, Equatable {
         }
         return out
     }
+    /// After a network change: the home Wi-Fi addresses first (fastest), then from anywhere, then the one in use.
+    var raceOrder: [URL] {
+        var seen = Set<String>(), out: [URL] = []
+        for s in [addresses.lan, addresses.plain, addresses.remote, addresses.here].compactMap({ $0 }) where !seen.contains(s) {
+            seen.insert(s); if let u = URL(string: s), isAllowedAddress(u) { out.append(u) }
+        }
+        return out
+    }
     var hosts: Set<String> { Set(candidates.compactMap { $0.host?.lowercased() }) }
     /// scheme + host + port of each address, to check exactly where a page or a bridge call comes from.
     var originKeys: Set<String> { Set(candidates.compactMap { u in u.scheme.flatMap { s in u.host.map { Home.originKey(s, $0, u.port) } } }) }
@@ -37,7 +45,7 @@ struct Home: Codable, Equatable {
 
 final class HomeStore {
     static let shared = HomeStore()
-    private let key = "casatorch.homes", currentKey = "casatorch.currentHome", lockKey = "casatorch.biometricLock"
+    private let key = "casatorch.homes", currentKey = "casatorch.currentHome", lockKey = "casatorch.biometricLock", launchKey = "casatorch.launchHome"
     private(set) var homes: [Home] = []
     private init() { load() }
 
@@ -52,6 +60,13 @@ final class HomeStore {
     }
     var current: Home? { homes.first { $0.id == currentId } ?? homes.first }
     func home(_ id: String) -> Home? { homes.first { $0.id == id } }
+    /// The home to open at launch ("Remember my choice"). None: with more than one home, the app asks.
+    var launchHomeId: String? {
+        get { UserDefaults.standard.string(forKey: launchKey).flatMap { id in homes.contains { $0.id == id } ? id : nil } }
+        set { UserDefaults.standard.set(newValue, forKey: launchKey) }
+    }
+    /// More than one home and no remembered choice: ask which one at launch.
+    var shouldAskAtLaunch: Bool { homes.count > 1 && launchHomeId == nil }
 
     /// Face ID lock for the whole app (and the tokens behind it).
     var biometricLock: Bool {
@@ -92,6 +107,7 @@ final class HomeStore {
         Keychain.delete(service: Keychain.alertKeyService, account: id, shared: true)
         UserDefaults.standard.removeObject(forKey: Push.homeKey(id))
         if currentId == id { currentId = homes.first?.id }
+        if UserDefaults.standard.string(forKey: launchKey) == id { launchHomeId = nil }
     }
     func token(_ id: String, context: LAContext? = nil) -> String? {
         guard let d = Keychain.get(service: Keychain.tokenService, account: id, context: context, prompt: "Unlock CasaTorch") else { return nil }

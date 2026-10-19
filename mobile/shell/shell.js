@@ -552,13 +552,30 @@
     const h = Math.round(m / 60); if (h < 24) return h === 1 ? T('an hour ago') : T('{n} hours ago', { n: h });
     try { return new Date(t).toLocaleDateString(LANG === 'en' ? undefined : LANG, { month: 'short', day: 'numeric' }); } catch { return ''; }
   };
+  /** More than one home on this phone: which one to open (at launch), with "Remember my choice". */
+  async function choose() {
+    remember('choose');
+    let list = []; try { list = await N.homes(); } catch { /* none */ }
+    if (!list.length) return welcome();
+    if (list.length === 1) { N.openHome(list[0].id); return homes(); }
+    const keep = el('input', { type: 'checkbox', class: 'switch', id: 'keep', role: 'switch' });
+    const open = (h) => { haptic('light'); N.openHome(h.id, { remember: keep.checked }); };
+    const rows = el('div', { class: 'group' }, ...list.map((h) => el('button', { class: 'row', type: 'button', onclick: () => open(h) }, el('span', { class: 'ic', html: svg('home') }),
+      el('div', { class: 'grow' }, el('b', {}, h.name), el('small', {}, [(h.user && h.user.name) || '', h.last ? T('last opened {when}', { when: lastSeen(h.last) }) : ''].filter(Boolean).join(' · '))), el('span', { class: 'chev', html: svg('chev', 18) }))));
+    screen(el('h1', {}, T('Which home?')), el('p', { class: 'muted' }, T('This phone is signed in to more than one CasaTorch. Pick the one to open.')), rows,
+      el('label', { class: 'group row toggle', for: 'keep' }, el('div', { class: 'grow' }, el('b', {}, T('Remember my choice')), el('small', { class: 'wrap' }, T('Opens that home straight away next time. To change it, use Switch or add a home in Settings › Phones & alerts.'))), keep),
+      el('div', { class: 'spacer' }), el('button', { class: 'btn plain', type: 'button', onclick: homes }, T('Manage homes')));
+  }
   async function homes() {
     remember('homes');
     let list = []; try { list = await N.homes(); } catch { /* none */ }
     if (!list.length) return welcome();
+    const pinned = list.find((h) => h.launch);
+    const ask = pinned && list.length > 1 ? el('div', { class: 'group' }, el('button', { class: 'row', type: 'button', onclick: async () => { haptic('light'); try { await N.setLaunchHome(null); } catch { /* older app */ } homes(); } },
+      el('div', { class: 'grow' }, el('b', {}, T('Ask which home to open')), el('small', { class: 'wrap' }, T('Right now {name} opens when the app starts.', { name: pinned.name }))), el('span', { class: 'chev', html: svg('chev', 18) }))) : null;
     const rows = el('div', { class: 'group' }, ...list.map((h) => el('button', { class: 'row', type: 'button', onclick: () => { haptic('light'); N.openHome(h.id); } }, el('span', { class: 'ic', html: svg('home') }),
       el('div', { class: 'grow' }, el('b', {}, h.name), el('small', {}, [(h.user && h.user.name) || '', h.last ? T('last opened {when}', { when: lastSeen(h.last) }) : ''].filter(Boolean).join(' · '))), el('span', { class: 'chev', html: svg('chev', 18) }))));
-    screen(el('h1', {}, T('Your homes')), rows, el('button', { class: 'btn', type: 'button', onclick: welcome }, el('span', { html: svg('plus') }), T('Add a home')),
+    screen(el('h1', {}, T('Your homes')), rows, el('button', { class: 'btn', type: 'button', onclick: welcome }, el('span', { html: svg('plus') }), T('Add a home')), ask,
       el('div', { class: 'spacer' }), el('div', { class: 'group' }, ...list.map((h) => el('button', { class: 'row', type: 'button', onclick: () => confirmRemove(h) }, el('div', { class: 'grow' }, el('b', { class: 'danger-text' }, T('Sign out of {name}', { name: h.name })), el('small', {}, T('Removes it from this phone')))))));
   }
   function confirmRemove(h) {
@@ -625,7 +642,7 @@
     address(hostOf(base));
   }
 
-  /* ---- routing: the app opens this page at #welcome, #homes, #pair=<link>, #unreachable=<id> or #signedout=<id> ---- */
+  /* ---- routing: the app opens this page at #welcome, #homes, #choose (which home, at launch), #pair=<link>, #unreachable=<id> or #signedout=<id> ---- */
   function route() {
     const raw = location.hash.slice(1), i = raw.indexOf('='), k = i < 0 ? raw : raw.slice(0, i);
     let v = i < 0 ? '' : raw.slice(i + 1); try { v = decodeURIComponent(v); } catch { /* as is */ }
@@ -634,6 +651,7 @@
     if (k === 'unreachable' && v) return unreachable(v);
     if (k === 'signedout' && v) return signedOut(v);
     if (k === 'signin' && v && allowed(v)) return resumeSignin(v);
+    if (k === 'choose') return choose();
     if (k === 'welcome') return welcome();
     if (k === 'find') return find();
     if (k === 'address') return address();

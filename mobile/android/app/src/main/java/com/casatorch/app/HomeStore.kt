@@ -34,6 +34,9 @@ data class Home(
     /** The address that worked last time first, then the secure one at home, then from anywhere, then plain. */
     val candidates: List<Uri>
         get() = listOfNotNull(here, lan, remote, plain).distinct().map(Uri::parse).filter(::allowed)   // plain http only on the home network
+    /** After a network change: the home Wi-Fi addresses first (fastest), then from anywhere, then the one in use. */
+    val raceOrder: List<Uri>
+        get() = listOfNotNull(lan, plain, remote, here).distinct().map(Uri::parse).filter(::allowed)
     val hosts: Set<String> get() = candidates.mapNotNull { it.host?.lowercase() }.toSet()
     val origins: Set<String> get() = candidates.map(::originOf).toSet()
 
@@ -157,6 +160,13 @@ object HomeStore {
         get() = prefs.getString("current", null)
         set(v) { prefs.edit().putString("current", v).apply() }
     val current: Home? get() = list.firstOrNull { it.id == currentId } ?: list.firstOrNull()
+    /** The home to open at launch ("Remember my choice"). None: with more than one home, the app asks. */
+    var launchHomeId: String?
+        get() = prefs.getString("launch", null)?.takeIf { id -> list.any { it.id == id } }
+        set(v) { prefs.edit().putString("launch", v).apply() }
+    /** More than one home and no remembered choice: ask which one at launch. */
+    val shouldAskAtLaunch: Boolean get() = list.size > 1 && launchHomeId == null
+    val launchHome: Home? get() = launchHomeId?.let { home(it) } ?: current
     fun home(id: String) = list.firstOrNull { it.id == id }
     val origins: Set<String> get() = list.flatMap { it.origins }.toSet()
 
@@ -193,6 +203,7 @@ object HomeStore {
         list.removeAll { it.id == id }
         prefs.edit().remove("token.$id").remove("alertkey.$id").remove("pushtoken.$id").apply()
         if (currentId == id) currentId = list.firstOrNull()?.id
+        if (prefs.getString("launch", null) == id) launchHomeId = null
         save()
     }
     /** The sign-in for a home. Throws [NeedsUnlock] when the lock is on and it's been more than a few seconds. */
