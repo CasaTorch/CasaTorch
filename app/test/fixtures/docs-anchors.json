@@ -199,7 +199,19 @@
   "v080-reliable",
   "v080-support",
   "v080-trust",
-  "v081"
+  "v081",
+  "v090",
+  "v090-ai",
+  "v090-alerts",
+  "v090-anywhere",
+  "v090-cameras",
+  "v090-energy",
+  "v090-household",
+  "v090-network",
+  "v090-pages",
+  "v090-setup",
+  "v090-trust",
+  "v090-voice"
  ],
  "index.html": [
   "basic-pro",
@@ -384,6 +396,7 @@
  "use/home-screen.html": [
   "control",
   "look",
+  "more",
   "own-weather",
   "pages",
   "pages-customize",
@@ -444,6 +457,20 @@
   "network",
   "wall",
   "who"
+ ],
+ "use/voice.html": [
+  "alexa",
+  "alexa-ask",
+  "another",
+  "apple",
+  "before",
+  "google",
+  "never",
+  "setup",
+  "shared",
+  "siri",
+  "smartthings",
+  "trouble"
  ],
  "use/wall-tablet.html": [
   "battery",
