@@ -23,14 +23,18 @@ function alertRaise(a) {
    critical alerts, "only when nobody's home") are Pro. Tested in test/unit.mjs. */
 const SAFETY_ALERT_KINDS = Object.freeze(['leak', 'smoke', 'temp']);
 const isSafetyAlert = (id) => SAFETY_ALERT_KINDS.includes(String(id || '').split(':')[0]);
-/* Does this critical alert go out again until someone taps "Got it"? */
-const alertRepeats = (a, pro = proStatus().pro) => a?.severity === 'critical' && !a.acked && config.alerts?.repeat !== false && (pro || isSafetyAlert(a.id));
+/* Does this alert go out again until someone taps "Got it"? Critical ones every 10 minutes unless Settings › Alerts
+   says otherwise (alertDecide in 40r-alert-rules.js); snoozed or acknowledged ones don't. */
+const alertSnoozed = (a, now = Date.now()) => !!a?.snoozed && Date.parse(a.snoozed.until) > now;
+const alertRepeatMin = (a, pro = proStatus().pro) => alertDecide(a, { rules: alertRulesHouse(), pro, target: null, device: alertDevCtx(a) }).repeat;
+const alertRepeats = (a, pro = proStatus().pro) => !!a && !a.acked && !alertSnoozed(a) && alertRepeatMin(a, pro) > 0;
 async function alertConditions() {
   const found = {};
   const add = (id, x) => { found[id] = { id, ...x }; };
   const want = new Set(config.sensors?.alertOn || ['leak', 'smoke', 'battery']), offline = [];
   const { devices } = await allDevices();
   for (const d of devices) {
+    if (d.area) alertDevInfo.set(d.id, { room: d.area, name: d.name });
     if (d.water && want.has('leak')) add(`leak:${d.id}`, { severity: 'critical', title: `Water detected: ${d.name}`, source: d.provider });
     if (d.smoke && want.has('smoke')) add(`smoke:${d.id}`, { severity: 'critical', title: `Smoke alarm: ${d.name}`, source: d.provider });
     if (d.battery != null && d.battery <= 15 && want.has('battery') && !/phone|ipad|tablet|laptop|macbook|watch|car\b|_car_|vehicle|tesla|\bev\b|ups/i.test(`${d.id} ${d.name}`)) add(`battery:${d.id}`, { severity: 'notice', title: `Low battery (${d.battery}%): ${d.name}`, source: d.provider });
@@ -53,6 +57,9 @@ async function alertConditions() {
   /* Fewer false alarms: a new alert must still be there a minute later before it counts (a sensor that
      blinks offline for a moment, or the internet dropping for a few seconds, doesn't wake anyone up).
      Water and smoke are the exception - those go out straight away. */
+  /* "Mark resolved": stays off the list while the problem is still there; counts again once it has cleared. */
+  const resolved = (alerts.resolved ||= {});
+  for (const id of Object.keys(resolved)) { if (found[id]) delete found[id]; else delete resolved[id]; }
   const pending = (alerts.pending ||= {}), seen = new Set(Object.keys(found));
   for (const id of Object.keys(pending)) if (!seen.has(id)) delete pending[id];   // gone again: it was a blip
   for (const id of seen) {
@@ -60,15 +67,36 @@ async function alertConditions() {
     if (pending[id]) { delete pending[id]; continue; }   // still there a minute later: it counts
     pending[id] = now; delete found[id];
   }
-  for (const [id, a] of Object.entries(found)) { const o = alerts.open[id]; found[id] = { ...a, since: o?.since || now, ...(o?.acked ? { acked: o.acked } : {}), pushes: o?.pushes || 0, lastPush: o?.lastPush || null }; }
-  for (const id of Object.keys(alerts.open)) if (!found[id]) alertRaise({ id: `cleared:${id}`, severity: 'ok', title: `Cleared: ${alerts.open[id].title}`, source: alerts.open[id].source });
-  for (const id of Object.keys(found)) if (!alerts.open[id]) { alertRaise({ ...found[id], id: `${id}:${now}` }); found[id].pushes = 1; found[id].lastPush = now; }
-  /* Smart alerts: a critical alert nobody has acknowledged goes out again every 10 minutes, up to 6 times
-     (water and smoke on every edition, everything else with Pro). */
+  for (const [id, a] of Object.entries(found)) { const o = alerts.open[id]; found[id] = { ...a, since: o?.since || now, ...(o?.acked ? { acked: o.acked } : {}), ...(alertSnoozed(o) ? { snoozed: o.snoozed } : {}), ...(o?.flapping ? { flapping: o.flapping } : {}), pushes: o?.pushes || 0, lastPush: o?.lastPush || null }; }
+  /* Flap damping (flapStep in 40r-alert-rules.js): something that clears and comes back within 15 minutes is the same
+     alert - it reopens without a new push, the history says "on and off" once, and "Cleared" waits until it stays
+     cleared. Water and smoke always go out. */
+  const flap = (alerts.flap ||= {}), nowMs = Date.now();
+  for (const id of Object.keys(alerts.open)) if (!found[id]) {
+    const o = alerts.open[id], r = flapStep(flap[id], 'clear', nowMs, isSafetyAlert(id));
+    flap[id] = { ...r.st, title: o.title, source: o.source, since: o.since };
+    if (r.action === 'clear') alertRaise({ id: `cleared:${id}`, severity: 'ok', title: `Cleared: ${o.title}`, source: o.source });
+  }
+  for (const id of Object.keys(found)) if (!alerts.open[id]) {
+    const was = flap[id], r = flapStep(was, 'raise', nowMs, isSafetyAlert(id)); flap[id] = r.st;
+    if (r.action === 'push') { alertRaise({ ...found[id], id: `${id}:${now}` }); found[id].pushes = 1; found[id].lastPush = now; continue; }
+    found[id] = { ...found[id], since: was?.since || found[id].since, flapping: r.st.n, pushes: 1, lastPush: now };
+    if (r.action === 'note') { alerts.events.unshift({ at: now, ...found[id], id: `${id}:${now}`, title: `${found[id].title} (on and off)`, flapping: true }); alerts.events = alerts.events.slice(0, 300); }
+  }
+  for (const id of Object.keys(flap)) if (!found[id]) {
+    const st = flap[id], r = flapStep(st, 'tick', nowMs);
+    if (r.st) flap[id] = { ...st, ...r.st }; else delete flap[id];
+    if (r.action === 'clear' && st?.title) alertRaise({ id: `cleared:${id}`, severity: 'ok', title: `Cleared: ${st.title}`, source: st.source });
+  }
+  for (const id of Object.keys(flap)) if (!flap[id] || !Object.keys(flap[id]).some((k) => k === 'lastClear' || k === 'n')) delete flap[id];
+  /* Smart alerts: a critical alert nobody has acknowledged goes out again every 10 minutes (or as Settings › Alerts
+     says), up to 6 times (water and smoke on every edition, everything else with Pro). Each phone's own rules
+     (quiet hours, "no repeats for me", mutes) still apply to every reminder. */
   if (!isDemo()) {
-    const pro = proStatus().pro;
+    const pro = proStatus().pro, max = alertRulesHouse().repeatMax || 6;
     for (const a of Object.values(found)) {
-      if (!alertRepeats(a, pro) || (a.pushes || 0) >= 6 || !a.lastPush || Date.now() - Date.parse(a.lastPush) < 10 * 60_000) continue;
+      const every = alertRepeats(a, pro) ? alertRepeatMin(a, pro) : 0;
+      if (!every || (a.pushes || 0) >= max || !a.lastPush || Date.now() - Date.parse(a.lastPush) < every * 60_000) continue;
       a.pushes = (a.pushes || 0) + 1; a.lastPush = now;
       notify({ ...a, id: `${a.id}:repeat`, title: `Still happening: ${a.title}`, body: 'Open CasaTorch and tap "Got it" to stop these reminders.' }).catch(() => {});
     }
@@ -76,13 +104,21 @@ async function alertConditions() {
   alerts.open = found; saveAlerts();
 }
 setInterval(() => { if (isConfigured() && !isDemo()) alertConditions().catch(() => {}); }, 60_000).unref?.();
+/* What this person sees: kinds they turned off "In the app" are left out (safety never is); each alert says its kind,
+   its device, and what wall panels do with it (show, or say it out loud). */
 app.get('/api/alerts', (req, res, next) => {
   if (isDemo()) return next();
-  const rank = { critical: 0, warning: 1, notice: 2, info: 3, ok: 4 };
-  res.json({ now: Object.values(alerts.open).sort((a, b) => rank[a.severity] - rank[b.severity]).map(({ pushes, lastPush, ...a }) => ({ ...a, repeating: alertRepeats(a) })), recent: alerts.events.slice(0, 100) });
+  const rank = { critical: 0, warning: 1, notice: 2, info: 3, ok: 4 }, ctx = { rules: alertRulesHouse(), user: alertRulesUser(alertUserKey(req)), pro: !!proStatus().pro, target: null };
+  const view = (a) => { const d = alertDecide(a, { ...ctx, device: alertDevCtx(a) }); return d.app && !(req.user?.panel && d.panel === 'off') ? { ...a, kind: a.kind || d.kind, alertKind: d.kind, device: d.device, safety: d.safety, panel: d.panel, sound: d.sound } : null; };
+  const now = Object.values(alerts.open).sort((a, b) => rank[a.severity] - rank[b.severity]).map(({ pushes, lastPush, ...a }) => { const v = view(a); return v && { ...v, repeating: alertRepeats(a), ...(alertSnoozed(a) ? {} : { snoozed: undefined }) }; }).filter(Boolean);
+  const all = alerts.events.slice(0, 160).map(view), recent = all.filter(Boolean).slice(0, 100);
+  res.json({ now, recent, hidden: all.length - all.filter(Boolean).length });
 });
-/* "Got it": stops the reminders for this alert. It stays on the list until the problem clears. */
+/* "Got it": stops the reminders for this alert. It stays on the list until the problem clears. History entries
+   (a doorbell press) can be marked "Got it" too. */
 app.post('/api/alerts/:id/ack', requireRole('member'), (req, res) => {
+  const ev = !Object.hasOwn(alerts.open, req.params.id) ? alerts.events.find((x) => x.id === req.params.id) : null;
+  if (ev) { ev.acked = { by: req.user?.name || req.user?.username || 'someone', at: nowIso() }; saveAlerts(); return res.json({ ok: true, acked: ev.acked }); }
   const a = Object.hasOwn(alerts.open, req.params.id) ? alerts.open[req.params.id] : null; if (!a) return res.status(404).json({ error: 'That alert has already cleared.' });
   a.acked = { by: req.user?.name || req.user?.username || 'someone', at: nowIso() }; saveAlerts();
   if (typeof audit === 'function' && req.user) audit(req, 'alert-acknowledged', { alert: a.title });

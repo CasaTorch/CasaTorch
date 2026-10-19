@@ -48,7 +48,7 @@ function atTile(t, onOpen) {
   return el('button', { class: `attile${t.down ? ' down' : t.slow ? ' slow' : ''}`, onclick: () => onOpen(t.id) },
     el('div', { class: 'row', style: 'gap:10px' }, el('span', { class: 'atbadge', 'aria-hidden': 'true' }, t.kind === 'router' ? icon('wifi') : t.short || t.name[0]), el('b', { class: 'grow ellipsis' }, atName(t)), el('span', { class: `pill ${dot}` }, el('span', { class: `dot ${dot}` }), word)),
     el('div', { class: 'row', style: 'gap:8px;align-items:baseline;margin-top:10px' }, el('span', { class: `atbig${l && !l.ok ? ' fail' : ''}` }, l?.ok ? atMs(l.total) : l ? T('No answer') : '…'),
-      l?.ok ? el('span', { class: 'tiny muted' }, web ? T('to load') : t.kind === 'dns' ? T('to look up a name') : T('round trip')) : el('span', { class: 'tiny muted ellipsis' }, l?.error || '')),
+      l?.ok ? el('span', { class: 'tiny muted' }, web ? T('to load') : t.kind === 'dns' || t.kind === 'dnsq' ? T('to look up a name') : T('round trip')) : el('span', { class: 'tiny muted ellipsis' }, l?.error || '')),
     web ? atBar(l) : null,
     el('div', { class: 'tiny muted atnet' }, l?.latency != null ? T('latency {lat} · jitter {jit} · loss {loss}%', { lat: atMs(l.latency), jit: atMs(l.jitter), loss: l.loss }) : l?.loss === 100 ? T('no answer to network probes (100% loss)') : T('network: -')),
     t.culprit?.who ? el('div', { class: 'tiny atculprit' }, `${T('Likely')}: ${T(AT_WHO_UI[t.culprit.who])}${t.culprit.hop ? ` · ${T('hop {n}', { n: t.culprit.hop })}` : ''}`) : null,
@@ -60,7 +60,7 @@ const atNoTrace = (a) => el('p', { class: 'tiny muted', style: 'margin:10px 0 0'
   el('a', { href: 'https://casatorch.com/docs/use/app-tests.html#path', target: '_blank', rel: 'noopener' }, T('How to add it')));
 function appTestsCard(a, redraw) {
   const card = el('div', { class: 'card apptests', style: 'margin-top:14px' });
-  const head = el('div', {}, el('h2', { style: 'margin:0' }, T('App tests')), el('p', { class: 'small muted', style: 'margin:4px 0 0' }, T('How fast your apps answer from home, and the path your traffic takes to get there.')));
+  const head = el('div', {}, el('h2', { style: 'margin:0' }, T('App tests'), docLink('page.apptests', { icon: true, topic: T('App tests') })), el('p', { class: 'small muted', style: 'margin:4px 0 0' }, T('How fast your apps answer from home, and the path your traffic takes to get there.')));
   const add = !a.demo && a.tests.length < a.max ? el('button', { class: 'btn small', onclick: () => atAdd(a, redraw) }, icon('plus'), T('Add a test')) : null;
   card.append(el('div', { class: 'row between', style: 'margin-bottom:12px;align-items:flex-start;gap:12px' }, head, add));
   if (!a.tests.length) {
@@ -99,6 +99,67 @@ function atAdd(a, redraw) {
     el('div', { class: 'row', style: 'gap:10px;margin-top:14px' }, el('span', { class: 'small muted' }, T('Test')), every),
     el('p', { class: 'tiny muted' }, T('Tests run from this CasaTorch straight to the app - they load the app\'s sign-in or home page, without signing in. Nothing goes through casatorch.com.')), msg), { title: T('Add an app test'), wide: true });
 }
+/* "Slower than ... ms, or more than ...% loss": your own alert limits (Pro). Empty: CasaTorch's own sense of slow. */
+function atLimitsRow(t, a, id) {
+  const inp = (v, max, label) => el('input', { type: 'number', min: 1, max, step: 1, value: v ?? '', placeholder: T('auto'), 'aria-label': label, disabled: a.demo ? true : null, style: 'width:84px' });
+  const ms = inp(t.slowMs, 60000, T('Slower than (ms)')), loss = inp(t.lossPct, 100, T('Loss over (%)'));
+  const save = async () => { try { await post(`/api/apptests/${encodeURIComponent(id)}`, { slowMs: ms.value === '' ? null : Number(ms.value), lossPct: loss.value === '' ? null : Number(loss.value) }, 'PUT'); toast(T('Saved')); } catch (e) { toast(e.message); } };
+  ms.onchange = save; loss.onchange = save;
+  return el('div', { class: 'row wrap atlimits', style: 'gap:8px;align-items:center;margin:4px 0' }, el('span', { class: 'small muted' }, T('Slow when over')), ms, el('span', { class: 'small muted' }, T('ms, or loss over')), loss, el('span', { class: 'small muted' }, '%'));
+}
+/* "Add a test", from anywhere on the Network page: an app, a network test (ping, a port, a name lookup), or a server to watch. */
+function atAddAny(a, redraw, data = {}) {
+  const have = new Set(a.tests.map((t) => t.preset).filter(Boolean)), full = a.tests.length >= a.max;
+  const quick = ['router', 'dns'].map((id) => a.presets.find((p) => p.id === id)).filter((p) => p && !have.has(p.id));
+  const opt = (ic, title, text, onclick, pro) => el('button', { type: 'button', class: 'atchoice', disabled: full && !pro?.server ? true : null, onclick: () => { m.remove(); onclick(); } },
+    el('span', { class: 'atchoice-ic' }, icon(ic, 22)), el('span', { class: 'grow' }, el('b', {}, title, pro?.need ? el('span', { class: 'pill pro', style: 'margin-left:6px' }, 'Pro') : null), el('span', { class: 'tiny muted' }, text)), icon('chevr', 18));
+  const m = modal(el('div', { class: 'atchoices' },
+    opt('gauge', T('An app or website'), T('Teams, Zoom, Netflix, your bank or your company\'s portal: how fast it loads from home, and the path there.'), () => atAdd(a, redraw)),
+    opt('wifi', T('A network test'), T('A ping, a port or a name lookup to anything - your NAS, the gateway, a game server - with your own alert limits.'), () => atAddNet(a, redraw, data), { need: !a.pro }),
+    opt('nbox', T('A server or app at home'), T('Your NAS, Plex or Home Assistant: up or down, response time and certificates.'), () => (data.mo?.pro ? monAdd(redraw) : (location.hash = '#settings/pro')), { need: !data.mo?.pro, server: true }),
+    quick.length && !full ? el('div', { class: 'atquick' }, el('span', { class: 'tiny muted' }, T('One tap:')), quick.map((p) => el('button', { class: 'btn small', onclick: async (e) => { e.currentTarget.disabled = true; try { await post('/api/apptests', { preset: p.id }); m.remove(); toast(T('{name} added', { name: T(p.name) })); redraw(); } catch (err) { toast(err.message); e.target.disabled = false; } } }, icon('plus', 14), T(p.name)))) : null,
+    full ? el('p', { class: 'small muted' }, a.pro ? T('Up to {n} tests - remove one first.', { n: a.max }) : T('Up to {n} tests on Basic. Pro allows up to 30.', { n: a.max })) : null), { title: T('Add a test') });
+}
+const AT_NET_DNS = [['', 'The one this CasaTorch uses (usually your provider\'s)'], ['1.1.1.1', 'Cloudflare (1.1.1.1)'], ['8.8.8.8', 'Google (8.8.8.8)'], ['9.9.9.9', 'Quad9 (9.9.9.9)'], ['other', 'Another one...']];
+function atAddNet(a, redraw, data = {}) {
+  let kind = 'ping';
+  const seg = el('div', { class: 'seg', role: 'group', 'aria-label': T('Kind of test') });
+  const host = el('input', { autocomplete: 'off', placeholder: '192.168.1.20  or  example.com' });   // scrub-ok: example
+  const port = el('input', { type: 'number', min: 1, max: 65535, placeholder: '445', style: 'width:110px' });
+  const qname = el('input', { autocomplete: 'off', placeholder: 'example.com' });
+  const server = el('select', {}, AT_NET_DNS.map(([v, l]) => el('option', { value: v }, T(l)))), other = el('input', { autocomplete: 'off', placeholder: '192.168.1.1', hidden: true });
+  const name = el('input', { maxlength: 40, placeholder: T('Name (optional)') });
+  const every = el('select', { 'aria-label': T('How often'), style: 'width:auto' }, a.every.map((x) => el('option', { value: x, selected: x === 5 ? true : null }, x === 1 ? T('Every minute') : T('Every {n} minutes', { n: x }))));
+  const slow = el('input', { type: 'number', min: 10, max: 60000, placeholder: T('auto'), style: 'width:90px' }), loss = el('input', { type: 'number', min: 1, max: 100, placeholder: T('auto'), style: 'width:76px' });
+  const msg = el('p', { class: 'small', style: 'min-height:1.2em;margin:8px 0 0' });
+  const field = (label, ...k) => el('label', { class: 'field' }, el('span', {}, label), ...k);
+  const gw = data.inet?.gateway;
+  const chip = (label, fill) => el('button', { type: 'button', class: 'chipbtn', onclick: () => { fill(); } }, label);
+  const hostF = field(T('Host name or address'), host, el('div', { class: 'row wrap', style: 'gap:6px;margin-top:6px' },
+    gw ? chip(T('Your router ({ip})', { ip: gw }), () => { host.value = gw; name.value ||= T('Router'); }) : null, chip('Cloudflare 1.1.1.1', () => { host.value = '1.1.1.1'; }), chip('Google 8.8.8.8', () => { host.value = '8.8.8.8'; })));
+  const portF = field(T('Port'), el('div', { class: 'row wrap', style: 'gap:6px' }, port, ...[[22, 'SSH'], [445, T('File sharing')], [8123, 'Home Assistant'], [32400, 'Plex']].map(([p, l]) => chip(`${l} (${p})`, () => { port.value = p; }))));
+  const dnsF = el('div', {}, field(T('Name to look up'), qname), field(T('Name server'), server, other));
+  server.onchange = () => { other.hidden = server.value !== 'other'; };
+  const url = el('input', { type: 'url', placeholder: 'https://example.com', autocomplete: 'off' }), urlF = field(T('Web address'), url);
+  const kinds = [['ping', T('Ping')], ['tcp', T('Port')], ['dnsq', T('Name lookup')], ['web', T('Website')]];
+  const help = el('p', { class: 'tiny muted', style: 'margin:4px 0 0' });
+  const HELP = { ping: T('Round trip, jitter and loss to any device on your network or on the internet.'), tcp: T('Whether it accepts a connection on that port, and how fast.'), dnsq: T('How fast a name server answers - yours, or a public one to compare.'), web: T('How fast a web page loads, step by step.') };
+  const sync = () => { [...seg.children].forEach((x, i) => x.classList.toggle('on', kinds[i][0] === kind)); hostF.hidden = !['ping', 'tcp'].includes(kind); portF.hidden = kind !== 'tcp'; dnsF.hidden = kind !== 'dnsq'; urlF.hidden = kind !== 'web'; help.textContent = HELP[kind]; };
+  seg.append(...kinds.map(([k, l]) => el('button', { type: 'button', onclick: () => { kind = k; sync(); } }, l)));
+  const go = el('button', { class: 'btn primary', disabled: a.pro ? null : true, onclick: async () => {
+    go.disabled = true; msg.style.color = ''; msg.textContent = T('Testing it…');
+    const lim = { slowMs: slow.value === '' ? null : Number(slow.value), lossPct: loss.value === '' ? null : Number(loss.value) };
+    const body = kind === 'web' ? { url: url.value, name: name.value } : kind === 'dnsq' ? { kind, host: qname.value, server: server.value === 'other' ? other.value : server.value, name: name.value } : { kind, host: host.value, port: kind === 'tcp' ? Number(port.value) : undefined, name: name.value };
+    try { const r = await post('/api/apptests', { ...body, ...lim, every: Number(every.value) }); m.remove(); toast(r.test.last?.ok ? `${atName(r.test)}: ${atMs(r.test.last.total)}` : T('{name} added - it didn\'t answer yet', { name: atName(r.test) })); redraw(); }
+    catch (e) { msg.style.color = 'var(--bad)'; msg.textContent = e.message; go.disabled = false; }
+  } }, T('Add test'));
+  const m = modal(el('div', {}, seg, help, hostF, portF, dnsF, urlF, field(T('Name'), name),
+    el('div', { class: 'row wrap', style: 'gap:10px;align-items:center;margin-top:6px' }, el('span', { class: 'small muted' }, T('Test')), every),
+    el('div', { class: 'row wrap', style: 'gap:8px;align-items:center;margin-top:10px' }, el('span', { class: 'small muted' }, T('Alert when slower than')), slow, el('span', { class: 'small muted' }, T('ms, or loss over')), loss, el('span', { class: 'small muted' }, '%')),
+    a.pro ? null : el('p', { class: 'small muted' }, T('Network tests are part of Pro.'), ' ', el('a', { href: '#settings/pro', onclick: () => m.remove() }, T('Unlock with Pro'))),
+    el('p', { class: 'tiny muted' }, T('Tests run from this CasaTorch. Nothing goes through casatorch.com.')), msg, el('div', { class: 'row', style: 'justify-content:flex-end' }, go)), { title: T('Add a network test') });
+  sync(); setTimeout(() => host.focus(), 30);
+}
 /* The detail sheet: what's wrong (if anything), the last test step by step, the path hop by hop, and the history. */
 async function atOpen(id, a, redraw) {
   const body = el('div', { class: 'atdetail' }, el('p', { class: 'muted' }, T('Loading…')));
@@ -119,15 +180,16 @@ async function atOpen(id, a, redraw) {
     const verdict = t.culprit?.who ? el('div', { class: `atverdict ${t.down ? 'bad' : 'warn'}`, role: 'status' }, el('b', {}, t.down ? T('{name} isn\'t answering from home', { name: nm }) : T('{name} is slow from home', { name: nm })), el('span', {}, el('span', { class: 'muted' }, `${T('Likely culprit')} · `), atCulpritLine(t.culprit, nm)), t.culprit.sure === false ? el('span', { class: 'tiny muted' }, T('A best guess from the path and your other tests.')) : null)
       : t.down || t.slow ? el('div', { class: `atverdict ${t.down ? 'bad' : 'warn'}`, role: 'status' }, el('b', {}, t.down ? T('{name} isn\'t answering from home', { name: nm }) : T('{name} is slow from home', { name: nm })), el('span', {}, T('Nothing along the path stands out yet - CasaTorch keeps watching.'))) : null;
     body.replaceChildren(...[
-      el('div', { class: 'row between wrap', style: 'gap:10px' }, el('div', { class: 'row', style: 'gap:12px;min-width:0' }, el('span', { class: 'atbadge lg', 'aria-hidden': 'true' }, t.kind === 'router' ? icon('wifi') : t.short), el('div', { style: 'min-width:0' }, el('h2', { style: 'margin:0' }, nm), el('div', { class: 'tiny muted ellipsis' }, t.url || (t.kind === 'router' ? T('Your router, timed from this CasaTorch') : T('How fast this home looks up names'))))),
+      el('div', { class: 'row between wrap', style: 'gap:10px' }, el('div', { class: 'row', style: 'gap:12px;min-width:0' }, el('span', { class: 'atbadge lg', 'aria-hidden': 'true' }, t.kind === 'router' ? icon('wifi') : t.short), el('div', { style: 'min-width:0' }, el('h2', { style: 'margin:0' }, nm), el('div', { class: 'tiny muted ellipsis' }, t.url || t.target || (t.kind === 'router' ? T('Your router, timed from this CasaTorch') : T('How fast this home looks up names'))))),
         el('span', { class: `pill ${dot}` }, el('span', { class: `dot ${dot}` }), word)),
       el('div', { class: 'row wrap', style: 'gap:8px;margin:12px 0 4px;align-items:center' }, a.demo ? null : runBtn, a.demo || !canTrace ? null : pathBtn, every, alertBox, del),
+      a.pro ? atLimitsRow(t, a, id) : null,
       verdict,
       el('div', { class: 'atcols' },
         web ? el('section', {}, el('h3', {}, T('Last test'), l ? el('span', { class: 'tiny muted', style: 'font-weight:400;margin-left:6px' }, atAgo(l.at)) : null), atBar(l, true), steps, l?.error ? el('p', { class: 'small', style: 'color:var(--bad)' }, T('Didn\'t work: {why}', { why: l.error })) : null,
           l?.status ? el('p', { class: 'tiny muted' }, l.ip ? T('The app answered {status} from {ip}.', { status: l.status, ip: l.ip }) : T('The app answered {status}.', { status: l.status })) : null)
-          : el('section', {}, el('h3', {}, T('Last test'), l ? el('span', { class: 'tiny muted', style: 'font-weight:400;margin-left:6px' }, atAgo(l.at)) : null), el('div', { class: 'atsteps' }, el('div', { class: 'atstep total' }, el('span', { class: 'grow' }, t.kind === 'dns' ? T('Time to look up a name') : T('Round trip to the router')), el('b', {}, l?.ok ? atMs(l.total) : T('No answer')))),
-            l?.ip ? el('p', { class: 'tiny muted' }, t.kind === 'dns' ? T('Asked {ip}, the name server this computer uses.', { ip: l.ip }) : T('Your router is {ip}.', { ip: l.ip })) : null, l?.error ? el('p', { class: 'small', style: 'color:var(--bad)' }, T('Didn\'t work: {why}', { why: l.error })) : null),
+          : el('section', {}, el('h3', {}, T('Last test'), l ? el('span', { class: 'tiny muted', style: 'font-weight:400;margin-left:6px' }, atAgo(l.at)) : null), el('div', { class: 'atsteps' }, el('div', { class: 'atstep total' }, el('span', { class: 'grow' }, t.kind === 'dns' || t.kind === 'dnsq' ? T('Time to look up a name') : t.kind === 'router' ? T('Round trip to the router') : T('Round trip')), el('b', {}, l?.ok ? atMs(l.total) : T('No answer')))),
+            l?.ip ? el('p', { class: 'tiny muted' }, t.kind === 'dns' ? T('Asked {ip}, the name server this computer uses.', { ip: l.ip }) : t.kind === 'dnsq' ? T('Asked {ip}.', { ip: l.ip }) : t.kind === 'router' ? T('Your router is {ip}.', { ip: l.ip }) : T('Its address: {ip}', { ip: l.ip })) : null, l?.error ? el('p', { class: 'small', style: 'color:var(--bad)' }, T('Didn\'t work: {why}', { why: l.error })) : null),
         el('section', {}, el('h3', {}, web ? T('Network to the app') : T('Network')), el('div', { class: 'atstats' },
           [['Latency', atMs(l?.latency), 'how long a round trip takes'], ['Jitter', atMs(l?.jitter), 'how much that wobbles'], ['Loss', l?.loss != null ? `${l.loss}%` : '-', 'probes that got no answer']].map(([k, v, s]) => el('div', { class: 'atstat' }, el('span', { class: 'tiny muted' }, T(k)), el('b', {}, v), el('span', { class: 'tiny muted' }, T(s))))),
           el('p', { class: 'tiny muted' }, T('From five quick connections each test. Video calls stay smooth with latency under about 100 ms, jitter under 30 ms and no loss.')))),
@@ -193,7 +255,7 @@ function atPathNodes(t, nm) {
 const atLossReal = (nodes, i) => nodes[i].loss >= 10 && nodes[i].loss < 100 && nodes.slice(i + 1).filter((x) => x.dest ? x.loss != null : x.ip && x.loss < 100).every((x) => x.loss >= 10);
 function atPath(t, a, nm) {
   const p = t.path;
-  if (t.kind === 'router' || (t.kind === 'dns' && p?.none === 'home')) return el('p', { class: 'small muted' }, T('This test stays inside your home, so there\'s no path to trace.'));
+  if (t.kind === 'router' || (['dns', 'dnsq', 'ping', 'tcp'].includes(t.kind) && p?.none === 'home')) return el('p', { class: 'small muted' }, T('This test stays inside your home, so there\'s no path to trace.'));
   if (!(a.trace?.ok ?? a.traceroute) || p?.none === 'tool') return atNoTrace(a);
   if (!p || !p.hops?.length) return el('p', { class: 'small muted' }, p ? T('The last trace got no answers along the way - some networks block traces. CasaTorch tries again every 15 minutes.') : T('Tracing the path - it shows up here within a few minutes.'));
   const nodes = atPathNodes(t, nm), scale = Math.max(5, ...nodes.map((n) => n.max ?? n.avg ?? 0)) * 1.05;
@@ -527,7 +589,7 @@ function pvStrip(t, st, onPick) {
 /* The path section of a test's details: the strip, the graph (or the hop list), the selected hop, the legend. */
 function pvSection(t, a, nm, id) {
   const p = t.path;
-  if (t.kind === 'router' || (t.kind === 'dns' && p?.none === 'home') || !(a.trace?.ok ?? a.traceroute) || p?.none === 'tool' || !p?.hops?.length) return atPath(t, a, nm);
+  if (t.kind === 'router' || (['dns', 'dnsq', 'ping', 'tcp'].includes(t.kind) && p?.none === 'home') || !(a.trace?.ok ?? a.traceroute) || p?.none === 'tool' || !p?.hops?.length) return atPath(t, a, nm);
   const st = { range: '24h', from: null, to: null, cmp: false, mode: 'graph', collapsed: null, sel: null, data: null, seq: 0, vertical: null };
   try { if (localStorage.getItem('ct.pathview') === 'list') st.mode = 'list'; } catch { /* private window */ }
   const segOf = (opts, cur, on) => { const s = el('div', { class: 'seg seg-mini', role: 'tablist' }, opts.map(([k, l]) => el('button', { type: 'button', role: 'tab', class: k === cur ? 'on' : '', 'aria-selected': k === cur ? 'true' : 'false', onclick: (e) => { for (const b of s.children) { b.classList.toggle('on', b === e.currentTarget); b.setAttribute('aria-selected', b === e.currentTarget ? 'true' : 'false'); } on(k); } }, l))); return s; };

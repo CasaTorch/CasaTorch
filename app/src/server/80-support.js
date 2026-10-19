@@ -472,6 +472,7 @@ app.get('/api/support/activity', requireRole('admin'), (req, res) => {
 function checklistState(f, s = {}) {
   const items = [
     { id: 'ha', done: !!f.ha, href: f.haHref || '#connect' },
+    { id: 'twostep', done: !!f.twoStep, href: '#settings/people' },   // the gentle reminder after "Not now" in setup's "Protect your CasaTorch"
     { id: 'phone', done: !!f.phone, href: '#settings/phones' },
     { id: 'alerts', done: !!f.alerts, href: '#settings/phones' },
     { id: 'backup', done: !!f.backup, href: '#settings/updates' },
@@ -489,6 +490,7 @@ function checklistFacts(req) {
   return {
     configured: isConfigured(), demo: isDemo(), admin: !signInOn() || (req.user && rank(req.user.role) >= rank('admin') && !req.user.panel),
     ha: !!config.homeAssistant?.url, haHref: setupLink('homeassistant'),
+    twoStep: !signInOn() || !req.user || !!req.user.totp?.on,
     phone: sess.some((x) => x.kind === 'app') || push.subs.length > 0 || (push.apps || []).length > 0,
     alerts: push.subs.length > 0 || (push.apps || []).length > 0 || (config.alerts?.phone === 'homeassistant' && !!config.homeAssistant?.url),
     backup: INSTALL === 'ha-addon' || !!lastBackupAt(),

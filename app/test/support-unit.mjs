@@ -90,8 +90,8 @@ export default async function supportTests(t) {
   t('support: the getting-started checklist ticks itself off and hides when it should', () => {
     const base = { configured: true, demo: false, admin: true };
     const none = S.checklistState(base);
-    assert.equal(none.show, true); assert.equal(none.done, 0); assert.equal(none.total, 6);
-    assert.deepEqual(none.items.map((i) => i.id), ['ha', 'phone', 'alerts', 'backup', 'town', '3d']);
+    assert.equal(none.show, true); assert.equal(none.done, 0); assert.equal(none.total, 7);
+    assert.deepEqual(none.items.map((i) => i.id), ['ha', 'twostep', 'phone', 'alerts', 'backup', 'town', '3d']);
     const some = S.checklistState({ ...base, ha: true, town: true, backup: true });
     assert.deepEqual(some.items.filter((i) => i.done).map((i) => i.id), ['ha', 'backup', 'town']);
     assert.equal(S.checklistState(base, { seen3d: true }).items.find((i) => i.id === '3d').done, true, 'opening the 3D home counts');
@@ -99,7 +99,7 @@ export default async function supportTests(t) {
     assert.equal(S.checklistState({ ...base, admin: false }).show, false, 'not for viewers and members');
     assert.equal(S.checklistState({ ...base, demo: true }).show, false);
     assert.equal(S.checklistState({ ...base, configured: false }).show, false);
-    const all = { ...base, ha: 1, phone: 1, alerts: 1, backup: 1, town: 1, plan: 1 };
+    const all = { ...base, ha: 1, twoStep: 1, phone: 1, alerts: 1, backup: 1, town: 1, plan: 1 };
     assert.equal(S.checklistState(all, { allDoneAt: new Date().toISOString() }).show, true, 'all done: still shows "all set" for a day');
     assert.equal(S.checklistState(all, { allDoneAt: new Date(Date.now() - 2 * 86400_000).toISOString() }).show, false);
   });

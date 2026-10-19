@@ -55,7 +55,7 @@ function accountCard(me) {
       s.current ? pill(T('This screen'), 'good') : el('button', { class: 'btn ghost sm', onclick: async () => { try { await api(`/api/auth/sessions/${s.id}`, { method: 'DELETE' }); me.sessions = me.sessions.filter((x) => x !== s); draw(); } catch (x) { toast(x.message); } } }, T('Sign out')))));
     fillCard(box, el('h2', {}, icon('lock'), T('Your account & security')),
       el('div', { class: 'acct' }, el('div', { class: 'avatar' }, (u.name || u.username || '?').slice(0, 1).toUpperCase()), el('div', {}, el('b', {}, u.name || u.username), el('div', { class: 'small muted' }, `${u.username} · ${u.role}${u.email ? ` · ${u.email}` : ''}${me.google?.linked ? T(' · Google linked') : ''}`))),
-      el('h3', {}, T('Two-step sign-in')), tsa,
+      el('h3', {}, T('Two-step sign-in'), docLink('settings.twostep', { icon: true, topic: T('Two-step sign-in') })), tsa,
       el('h3', {}, T('Password')), el('div', { class: 'row wrap' }, el('label', { class: 'field grow' }, el('span', {}, T('Current')), cur), el('label', { class: 'field grow' }, el('span', {}, T('New (10+ characters)')), nw)), pwBtn,
       el('h3', {}, T('Where you are signed in')), sess,
       el('div', { class: 'row wrap', style: 'margin-top:10px' },

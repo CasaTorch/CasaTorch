@@ -4,6 +4,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const pgSrc = fs.readFileSync(path.join(HERE, '..', 'src', 'client', '06-pagegrid.js'), 'utf8');
+const { sizeTier, atLeast } = new Function(`${pgSrc.slice(pgSrc.indexOf('/* @tier:start */'), pgSrc.indexOf('/* @tier:end */'))}; return { sizeTier, atLeast };`)();
 
 export default async function pageGridTests(t) {
   const P = globalThis.__casatorchPages, E = globalThis.__casatorchEnergy, H = globalThis.__casatorch;
@@ -51,7 +56,8 @@ export default async function pageGridTests(t) {
     const c = P.cleanTiles(s);
     assert.equal(c.length, s.length);
     assert.equal(c.find((x) => x.id === 'en-dev').device, 'ha:switch.tv_stand');
-    assert.deepEqual(P.cleanSeen(['en-flow', 'en-dev@ha:switch.x', 'BAD ID', 'x'.repeat(80)]), ['en-flow']);
+    assert.deepEqual(P.cleanSeen(['en-flow', 'en-dev@ha:switch.x', 'ctl-group#lights', 'ctl-room~Living room', 'BAD ID', 'x'.repeat(80)]), ['en-flow', 'en-dev@ha:switch.x', 'ctl-group#lights', 'ctl-room~Living room']);
+    for (const t of s) assert.deepEqual(P.cleanSeen([P.pageTileKey(t)]), [P.pageTileKey(t)], 'every suggested tile\'s key can be remembered as seen');
   });
 
   await t('page grid: layouts are saved per page and per screen, read back, and reset', async () => {
@@ -136,5 +142,123 @@ export default async function pageGridTests(t) {
     assert.equal(d.live.length, 60);
     const solar = Object.values(d.hours).map((b) => b.f.s[0] / b.f.s[1]);
     assert.ok(Math.max(...solar) > 1000 && Math.min(...solar) === 0, 'sun by day, none at night');
+  });
+
+  t('page grid: Home is suggested from what the house has - cameras, switches, a thermostat, locks - and is shorter on a phone', () => {
+    const full = P.suggestPageTiles('home', { devices: 40, cameras: 3, switchable: 12, climate: 1, secure: 2, media: 2, metered: 4, pro: true });
+    for (const id of ['clock', 'weather', 'alerts', 'energy', 'camera', 'lights', 'thermostat', 'secure', 'calendar', 'media', 'ask']) assert.ok(ids(full).includes(id), id);
+    assert.equal(new Set(ids(full)).size, full.length, 'each widget once');
+    const bare = P.suggestPageTiles('home', { devices: 3, switchable: 3 });
+    for (const id of ['camera', 'thermostat', 'secure', 'energy', 'ask']) assert.ok(!ids(bare).includes(id), `no ${id} without one`);
+    assert.ok(ids(bare).includes('internet'), 'no meter: the internet tile instead');
+    const phone = P.suggestPageTiles('home', { devices: 40, cameras: 3, switchable: 12, metered: 4 }, 'phone');
+    assert.ok(phone.length < P.suggestPageTiles('home', { devices: 40, cameras: 3, switchable: 12, metered: 4 }, 'desktop').length, 'fewer tiles on a phone');
+    assert.ok(!ids(phone).includes('news') && !ids(phone).includes('photos'));
+    for (const x of full) assert.ok(x.w >= 1 && x.w <= 12 && x.h >= 1 && x.h <= 10, `${x.id} size`);
+    assert.equal(P.cleanTiles(full).length, full.length, 'all pass the cleaner');
+  });
+  t('page grid: Controls gets a tile per Home Assistant room (busiest first), scenes and climate - or groups by kind without rooms', () => {
+    const dev = (id, kind, area, x = {}) => ({ id, kind, name: id, area, ...x });
+    const devices = [dev('l1', 'light', 'Kitchen'), dev('l2', 'light', 'Kitchen'), dev('p1', 'plug', 'Kitchen'), dev('l3', 'light', 'Office'), dev('c1', 'climate', 'Hall'), dev('s1', 'action'), dev('x1', 'plug'), dev('cam', 'camera', 'Kitchen')];
+    const f = P.ctlFacts(devices);
+    assert.deepEqual(f.areas.map((a) => a.name), ['Kitchen', 'Hall', 'Office']);
+    assert.equal(f.areas[0].n, 3, 'cameras are not Controls');
+    assert.equal(f.loose, 1, 'the plug without a room (scenes have their own tile)');
+    const s = P.suggestPageTiles('controls', f);
+    assert.equal(s[0].id, 'ctl-summary');
+    assert.ok(s.some((x) => x.id === 'ctl-group' && x.opts.group === 'actions'), 'scenes');
+    assert.ok(ids(s).includes('ctl-climate'));
+    assert.deepEqual(s.filter((x) => x.id === 'ctl-room').map((x) => x.opts.area), ['Kitchen', 'Hall', 'Office', '-']);
+    const noRooms = P.suggestPageTiles('controls', P.ctlFacts(devices.map((d) => ({ ...d, area: undefined }))));
+    assert.ok(!ids(noRooms).includes('ctl-room'));
+    assert.deepEqual(noRooms.filter((x) => x.id === 'ctl-group').map((x) => x.opts.group), ['lights', 'plugs', 'climate', 'actions']);
+  });
+  t('page grid: Security suggests the wall (or how to add cameras), doors, alarm, events, checklist, network - and detected cameras when some are hidden', () => {
+    assert.deepEqual(ids(P.suggestPageTiles('security', { cameras: 2, hidden: 1 })), ['sec-wall', 'sec-doors', 'sec-alarm', 'sec-events', 'sec-check', 'sec-hidden', 'sec-lan']);
+    assert.equal(P.suggestPageTiles('security', { cameras: 0 })[0].id, 'sec-start');
+  });
+  t('page grid: size tiers - Small the key number, Medium + controls, Large + a chart, Extra large + details', () => {
+    assert.equal(sizeTier({ w: 3, h: 2 }), 's'); assert.equal(sizeTier({ w: 2, h: 4 }), 's');
+    assert.equal(sizeTier({ w: 6, h: 2 }), 'm'); assert.equal(sizeTier({ w: 4, h: 3 }), 'm'); assert.equal(sizeTier({ w: 12, h: 2 }), 'm', 'a wide strip is still medium');
+    assert.equal(sizeTier({ w: 6, h: 4 }), 'l'); assert.equal(sizeTier({ w: 8, h: 4 }), 'l');
+    assert.equal(sizeTier({ w: 12, h: 4 }), 'xl'); assert.equal(sizeTier({ w: 10, h: 6 }), 'xl');
+    assert.deepEqual([4, 6, 8, 12].map((w) => sizeTier({ w, h: 1, auto: true })), ['s', 'm', 'l', 'xl'], 'pages sized to their content go by width');
+    assert.equal(sizeTier({ w: 12, h: 4, narrow: true, span: 2 }), 'm', 'half a phone is at most medium');
+    assert.equal(sizeTier({ w: 12, h: 4, narrow: true, span: 4 }), 'xl');
+    assert.ok(atLeast({ tier: 'xl' }, 'l') && !atLeast({ tier: 'm' }, 'l') && atLeast({}, 'm'));
+  });
+  t('page grid: old Home layouts are carried over once - the shared one and each screen\'s - and never overwrite a newer one', () => {
+    const pl = { house: {}, forms: {}, users: {}, screens: { tabletA0001: { home: { tiles: [{ id: 'clock', w: 4, h: 2 }], seen: [] } } } };
+    const home = { tiles: [{ id: 'weather', w: 5, h: 4 }, { id: 'device:ab12', w: 3, h: 2, device: 'hue:1' }], savedAt: '2026-01-01T00:00:00.000Z' };
+    const screens = { tabletA0001: { tiles: [{ id: 'news', w: 4, h: 3 }] }, phoneB00002: { tiles: [{ id: 'alerts', w: 3, h: 2 }], at: 'x' }, emptyC0003: { tiles: [] } };
+    assert.equal(P.migrateHomeLayouts(pl, home, screens), true);
+    assert.deepEqual(pl.house.home.tiles, home.tiles); assert.equal(pl.house.home.seen, null, 'what is suggested on first look counts as seen');
+    assert.equal(pl.screens.tabletA0001.home.tiles[0].id, 'clock', 'a screen\'s newer page layout is kept');
+    assert.equal(pl.screens.phoneB00002.home.tiles[0].id, 'alerts');
+    assert.ok(!pl.screens.emptyC0003, 'nothing to carry');
+    assert.equal(P.migrateHomeLayouts(pl, home, screens), false, 'only once');
+    assert.equal(P.migrateHomeLayouts({ house: {}, forms: {}, users: {}, screens: {} }, null, {}), false);
+  });
+  t('cameras: each camera once - Frigate over Home Assistant over the cloud, matched by name, Frigate camera name or address', () => {
+    const cam = (id, provider, name, x = {}) => ({ id, provider, name, kind: 'camera', ...x });
+    const cams = [cam('camera:fd', 'camera', 'Front Door', { source: 'frigate', frigateCam: 'front_door' }), cam('ha:camera.front_door', 'ha', 'Front door camera'), cam('ha:camera.frigate_yard', 'ha', 'Yard'),
+      cam('camera:yard', 'camera', 'Back yard', { source: 'frigate', frigateCam: 'frigate_yard' }), cam('meraki:Q2XX', 'meraki', 'Garage Cam'), cam('ha:camera.garage', 'ha', 'Garage'), cam('ring:1', 'ring', 'Garage'),
+      cam('camera:a', 'camera', 'Shed', { source: 'reolink', camHost: '192.168.1.20#0' }), cam('camera:b', 'camera', 'Shed again', { source: 'reolink', camHost: '192.168.1.20#0' }),
+      cam('ha:camera.one', 'ha', 'Driveway'), cam('ha:camera.two', 'ha', 'Driveway'), cam('ring:2', 'ring', 'Camera')];   // scrub-ok
+    const { show, hidden } = P.camDedupe(cams, {});
+    assert.deepEqual([...show].sort(), ['camera:a', 'camera:fd', 'camera:yard', 'ha:camera.one', 'ha:camera.two', 'meraki:Q2XX', 'ring:2'].sort());
+    const why = Object.fromEntries(hidden.map((h) => [h.id, h]));
+    assert.equal(why['ha:camera.front_door'].of, 'Front Door'); assert.equal(why['ha:camera.frigate_yard'].ofId, 'camera:yard', 'Home Assistant\'s Frigate entity is the Frigate camera');
+    assert.equal(why['ha:camera.garage'].ofId, 'meraki:Q2XX'); assert.equal(why['ring:1'].ofId, 'meraki:Q2XX');
+    assert.equal(why['camera:b'].ofId, 'camera:a', 'the same address twice');
+    assert.ok(!why['ha:camera.two'], 'two cameras of one connection with one name are two cameras');
+    // added back: both show; the best one removed: the next one takes its place
+    let r = P.camDedupe(cams, { shown: ['ha:camera.front_door'] }); assert.ok(r.show.has('ha:camera.front_door') && r.show.has('camera:fd'));
+    r = P.camDedupe(cams, { hidden: ['camera:fd'] }); assert.ok(!r.show.has('camera:fd') && r.show.has('ha:camera.front_door'));
+    assert.equal(r.hidden.find((h) => h.id === 'camera:fd').why, 'removed');
+  });
+  t('sensor history: one number per device, every 5 minutes, gaps left empty, at most a day', () => {
+    assert.deepEqual(P.shField({ kind: 'sensor', tempC: 21.5, humidity: 40 }), ['tempC', 21.5]);
+    assert.deepEqual(P.shField({ kind: 'sensor', humidity: 40 }), ['humidity', 40]);
+    assert.deepEqual(P.shField({ kind: 'plug', powerW: 90 }), ['powerW', 90]);
+    assert.deepEqual(P.shField({ kind: 'value', value: '12.5' }), ['value', 12.5]);
+    assert.equal(P.shField({ kind: 'value', value: 'Washing' }), null); assert.equal(P.shField({ kind: 'camera' }), null);
+    const st = {}, t0 = Date.parse('2026-10-18T10:00:00Z');
+    P.shRecord(st, [{ id: 'a', kind: 'sensor', tempC: 20 }], t0);
+    P.shRecord(st, [{ id: 'a', kind: 'sensor', tempC: 21 }], t0 + 60_000);   // same slot: replaced
+    P.shRecord(st, [{ id: 'a', kind: 'sensor', tempC: 22 }], t0 + 15 * 60_000);   // two slots missed
+    assert.deepEqual(st.a.v, [21, null, null, 22]);
+    for (let i = 1; i < 400; i++) P.shRecord(st, [{ id: 'a', kind: 'sensor', tempC: 20 + (i % 3) }], t0 + 15 * 60_000 + i * 300_000);
+    assert.equal(st.a.v.length, 288, '24 hours');
+    const d = P.shDemo({ id: 'ha:sensor.x', kind: 'sensor', tempC: 21 }, t0);
+    assert.equal(d.v.length, 288); assert.equal(d.v.at(-1), 21, 'ends at the reading now');
+    assert.deepEqual(P.shDemo({ id: 'ha:sensor.x', kind: 'sensor', tempC: 21 }, t0).v, d.v, 'the same every time');
+  });
+  await t('page grid: Home is kept in step with the old layout files, both ways; per-kind (phone/tablet/computer) layouts', async () => {
+    const H2 = globalThis.__casatorch, srv = H2.app.listen(0, '127.0.0.1'); await new Promise((ok) => srv.once('listening', ok)); const B = `http://127.0.0.1:${srv.address().port}`;
+    const cfgFile = path.join(process.env.CASATORCH_DATA_DIR, 'config.json'), made = !fs.existsSync(cfgFile);
+    if (made) fs.writeFileSync(cfgFile, '{}');
+    const undo = globalThis.__casatorchRemote.patchConfig({ house: { name: 'Test house' } });
+    const req = (m, u, body) => fetch(`${B}${u}`, { method: m, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    try {
+      const tiles = [{ id: 'clock', w: 4, h: 2 }, { id: 'weather', w: 5, h: 4 }];
+      assert.equal((await req('PUT', '/api/layout', { tiles })).status, 200);
+      let r = await (await req('GET', '/api/page-layout/home')).json();
+      assert.deepEqual(r.house.tiles, tiles, 'the old Home save shows on the Home page');
+      assert.ok(Array.isArray(r.house.seen), 'seen filled in on first look');
+      assert.equal((await req('PUT', '/api/page-layout/home', { scope: 'house', tiles: [{ id: 'alerts', w: 3, h: 2 }] })).status, 200);
+      assert.deepEqual((await (await req('GET', '/api/layout')).json()).layout.tiles, [{ id: 'alerts', w: 3, h: 2 }], 'and the other way: an older app sees it');
+      assert.equal((await req('PUT', '/api/layout', { reset: true })).status, 200);
+      assert.equal((await (await req('GET', '/api/page-layout/home')).json()).house, null, 'Settings > Reset the Home screen resets it');
+      // every phone
+      assert.equal((await req('PUT', '/api/page-layout/controls', { scope: 'form', form: 'phone', tiles: [{ id: 'ctl-summary', w: 12, h: 1 }] })).status, 200);
+      r = await (await req('GET', '/api/page-layout/controls?form=phone')).json();
+      assert.equal(r.form.tiles[0].id, 'ctl-summary'); assert.equal(r.house, null);
+      assert.equal((await (await req('GET', '/api/page-layout/controls?form=desktop')).json()).form, null, 'computers keep theirs');
+      assert.equal((await req('PUT', '/api/page-layout/controls', { scope: 'form', form: 'fridge', tiles: [] })).status, 400);
+      assert.equal((await req('PUT', '/api/page-layout/controls', { scope: 'form', form: 'phone', reset: true })).status, 200);
+      assert.equal((await (await req('GET', '/api/page-layout/security')).json()).page, 'security');
+      assert.deepEqual((await (await req('GET', '/api/device-history?ids=nope:1,bad id')).json()).series, {});
+    } finally { srv.close(); undo(); if (made) fs.rmSync(cfgFile, { force: true }); }
   });
 }

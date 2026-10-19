@@ -144,6 +144,17 @@
       ]
     },
     {
+      "id": "look",
+      "title": "Make it yours",
+      "intro": "Pick a theme and a background - you see it right here as you choose. Change it any time in Settings › Look & main bar, where you can also use your own photo.",
+      "fields": [
+        {
+          "id": "pick",
+          "type": "look"
+        }
+      ]
+    },
+    {
       "id": "account",
       "title": "Your CasaTorch login",
       "intro": "Your own sign-in for CasaTorch. You'll use it on phones and other screens; later you can add family members, turn on two-step sign-in, or connect Google sign-in in Settings › People & sign-in.",
@@ -173,6 +184,18 @@
           "type": "consent",
           "required": true,
           "label": "I have read and agree to the Terms of Use and the Privacy Notice."
+        }
+      ]
+    },
+    {
+      "id": "protect",
+      "title": "Protect your CasaTorch",
+      "intro": "One more thing for your login: a second step at sign-in, so your home stays yours even if someone learns your password.",
+      "fields": [
+        {
+          "id": "twostep",
+          "label": "Two-step sign-in",
+          "type": "protect"
         }
       ]
     },

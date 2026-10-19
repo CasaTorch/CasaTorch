@@ -28,6 +28,7 @@ const STEPS = [
   ['chaos', ROOT, ['tools/test-chaos.mjs']],   // Home Assistant down/silent/slow/flapping, damaged files, a full disk (about 80 s)   // attack checks against a fresh server (its browser part is skipped with --no-e2e)
   ['e2e-wizard', ROOT, ['tools/test-setup-wizard.cjs'], true],
   ['e2e-noha', ROOT, ['tools/test-setup-noha.cjs'], true],
+  ['secrets', ROOT, ['tools/test-secrets.mjs'], true],   // passwords and keys entered in setup, sign-in and Settings: searched for in every file, log, API answer, the support file, browser storage and what was sent (about 15 s)
   ['camlive', APP, ['test/camlive-browser.cjs'], true],   // live camera video plays: MSE, HLS and MJPEG against a stand-in Frigate (needs ffmpeg)
   ['3d-compat', APP, ['test/floorplan-compat-browser.cjs'], true],   // the 3D home on older browsers (about 1 min on a software GPU)
   ['3d-perf', APP, ['test/floorplan-perf-budget.cjs'], true],       // the 3D home's draw-call/triangle budget (1-3 min)

@@ -181,7 +181,7 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
     const tag = it.how === 'soon' ? el('span', { class: 'pill' }, T('Coming soon')) : it.how === 'pro' ? el('span', { class: 'pill pro' }, 'Pro') : it.how === 'ha' ? el('span', { class: 'pill ha' }, ha ? T('via Home Assistant') : T('needs Home Assistant')) : it.alsoHa ? el('span', { class: 'pill' }, T('Direct or via HA')) : el('span', { class: 'pill' }, T('Direct'));
     return el('div', { class: `connect-card${on ? ' on' : ''}` },
       el('div', { class: 'row', style: 'gap:12px;align-items:center' }, monogram(it.label), el('div', { style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, it.label), el('div', { class: 'row', style: 'gap:6px;margin-top:3px' }, on ? el('span', { class: 'pill good' }, T('✓ Connected')) : null, tag))),
-      el('p', { class: 'small muted' }, it.desc ? T(it.desc) : ''),
+      el('p', { class: 'small muted' }, it.desc ? T(it.desc) : '', it.desc ? ' ' : '', docLink(`connect.${it.add}`) || docLink(`connect.${it.step}`) || docLink(`connect.${it.key}`)),   // the guide for it (39d-docs-links.js)
       it.how === 'soon' ? el('button', { class: 'btn small', disabled: true }, T('Coming soon')) : it.href ? el('a', { class: `btn small${on ? '' : ' primary'}`, href: it.href }, on ? T('Open') : T('Connect')) : el('button', { class: `btn small${on ? '' : ' primary'}`, onclick: () => startConnect(it, conn) }, on ? T('Change') : it.how === 'ha' && !ha ? T('Set up') : T('Connect')),
       on ? removeBtn(it, conn, draw) : null);
   };

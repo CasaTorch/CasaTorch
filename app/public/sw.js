@@ -74,7 +74,7 @@ self.addEventListener('fetch', (e) => {
 });
 self.addEventListener('push', (e) => {
   let m = {}; try { m = e.data.json(); } catch { m = { title: 'CasaTorch', body: e.data?.text() || '' }; }
-  e.waitUntil(self.registration.showNotification(m.title || 'CasaTorch', { body: m.body || '', tag: m.tag || undefined, renotify: !!m.tag, icon: '/icons/icon-192.png', badge: '/icons/badge-96.png', requireInteraction: m.sev === 'critical', data: { url: m.url || '/#alerts' } }));
+  e.waitUntil(self.registration.showNotification(m.title || 'CasaTorch', { body: m.body || '', tag: m.tag || undefined, renotify: !!m.tag, icon: '/icons/icon-192.png', badge: '/icons/badge-96.png', requireInteraction: m.sev === 'critical', silent: m.silent === true, data: { url: m.url || '/#alerts' } }));
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();

@@ -9,12 +9,24 @@
  * home name, short password), resume after a reload (and the password asked again before Finish), a
  * phone login, Home Assistant with an address tidied by CasaTorch, integrations added through Home
  * Assistant's own setup (Ring sign-in, Hue already there, the power company with a wrong password then a
- * verification code), review, Finish with the phone pairing QR code, then signing in to the dashboard.
+ * verification code), two-step sign-in turned on in "Protect your CasaTorch" (QR code, a wrong code, the recovery
+ * codes), review, Finish (what's ready) with the phone pairing QR code, then signing in to the dashboard with a recovery code.
  * Options: BASE=http://... HA=http://... to use servers already running; SHOTS=<dir> for screenshots
  * (default <temp>/casatorch-test-results); TEST_PORT_BASE=18290 to pick ports from there; KEEP_TEST_DATA=1.
  */
 'use strict';
+const crypto = require('node:crypto');
 const L = require('./test-e2e-lib.cjs');
+
+/* The 6-digit code an authenticator app shows for a base32 key (RFC 6238), to answer setup's two-step sign-in. */
+function totpNow(key) {
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; let bits = '';
+  for (const ch of key.replace(/\s/g, '').toUpperCase()) bits += A.indexOf(ch).toString(2).padStart(5, '0');
+  const raw = []; for (let i = 0; i + 8 <= bits.length; i += 8) raw.push(parseInt(bits.slice(i, i + 8), 2));
+  const msg = Buffer.alloc(8); msg.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
+  const h = crypto.createHmac('sha1', Buffer.from(raw)).update(msg).digest(), o = h[h.length - 1] & 15;
+  return String((h.readUInt32BE(o) & 0x7fffffff) % 1e6).padStart(6, '0');
+}
 
 const PW = 'Lantern-harbor-42', PHONE_PW = 'Phone-pass-1234';
 const { check, finish } = L.runner('setup wizard (with Home Assistant)');
@@ -52,6 +64,7 @@ let page, shot;
   await shot('02-house');
 
   // Account: short password refused, then a good one
+  await nextTo('Make it yours'); await p.locator('main .lk-stage').waitFor();   // the look step: a theme and background are already picked
   await nextTo('Your CasaTorch login');
   await field('Username').fill('owner');
   await field('Password (10+ characters - a short sentence works well)').fill('short');
@@ -59,6 +72,31 @@ let page, shot;
   await next();
   check('a password under 10 characters is refused', /at least 10 characters/.test(await msg()), await msg());
   await field('Password (10+ characters - a short sentence works well)').fill(PW);
+
+  // Protect your CasaTorch: two-step sign-in - recommended, an answer needed, a wrong code refused, recovery codes kept
+  await nextTo('Protect your CasaTorch');
+  await p.locator('main .badge.rec').waitFor();
+  check('two-step sign-in is marked Recommended, with the Face ID note', await p.locator('main .badge.rec', { hasText: 'Recommended' }).count() === 1 && /Face ID, Touch ID or fingerprint/.test(await p.locator('main').innerText()));
+  check('the step says what it unlocks and links to its guide', await p.locator('main .unlocks').count() === 1 && /docs\/start\/setup\.html#protect$/.test(await p.locator('#meter a.doclink').getAttribute('href')));
+  check('the step count and time left show', /Step \d+ of \d+ · about \d+ min left/.test(await p.locator('#meter').innerText()), await p.locator('#meter').innerText());
+  await next();
+  check('two-step sign-in needs an answer', /Not now/.test(await msg()), await msg());
+  await p.locator('main [role=radio]', { hasText: 'Turn it on (recommended)' }).click();
+  await p.locator('main .enrol .qr svg').waitFor();
+  const key = (await p.locator('main .tfa-key').textContent()).trim();
+  check('a QR code and a key to type', key.replace(/\s/g, '').length === 32);
+  await shot('03a-two-step');
+  await p.locator('#tfa-code').fill('000000');
+  await p.locator('main .enrol .err', { hasText: 'isn\'t right' }).waitFor();
+  check('a wrong code is refused', true);
+  await p.locator('#tfa-code').fill(totpNow(key));
+  await p.locator('main .rcodes').waitFor();
+  const codes = (await p.locator('main .rcodes code').allTextContents()).map((c) => c.trim());
+  check('ten recovery codes are shown', codes.length === 10 && codes.every((c) => /^[0-9a-f]{5}-[0-9a-f]{5}$/.test(c)), codes.join(' '));
+  await next();
+  check('the codes must be saved first', /recovery codes/.test(await msg()), await msg());
+  await p.locator('#tfa-saved').check();
+  await shot('03b-recovery-codes');
   await nextTo('Your phone');
 
   // Resume after a reload: same step, a welcome-back note, answers kept
@@ -157,6 +195,12 @@ let page, shot;
   await p.locator('#progress button', { hasText: 'Review' }).click();
   await h1('All set?');
   await next();
+  await h1('Your CasaTorch is ready');
+  const ready = await p.locator('main ul.ready').innerText();
+  check('the end shows what\'s ready, with two-step sign-in', /Two-step sign-in/.test(ready) && /Test Home/.test(ready), ready.replace(/\n/g, ' / '));
+  check('the end suggests next steps', await p.locator('main .nextcard').count() >= 3);
+  await shot('07b-ready');
+  await p.locator('#next', { hasText: 'Next: your phone' }).click();
   await h1('Now your phone');
   check('finish shows the pairing QR code', await p.locator('.pairbox .qr svg').count() === 1);
   check('finish shows a pairing code', ((await p.locator('.paircode').textContent()) || '').trim().length >= 6);
@@ -167,6 +211,11 @@ let page, shot;
   await p.waitForURL(/login/);
   await p.locator('#u').fill('owner'); await p.locator('#p').fill(PW);
   await p.locator('button[type=submit]').click();
+  await p.locator('h1', { hasText: 'Two-step sign-in' }).waitFor();
+  check('sign-in asks for the two-step code set up in setup', true);
+  await p.getByRole('button', { name: 'Lost your phone? Use a recovery code' }).click();
+  await p.locator('form input').first().fill(codes[0]);
+  await p.locator('form button[type=submit]').click();
   await p.waitForURL((u) => !/login/.test(u.pathname));
   await p.locator('nav.nav').waitFor();
   check('owner signs in to the dashboard', !/login/.test(new URL(p.url()).pathname), p.url());

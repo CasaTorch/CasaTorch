@@ -171,7 +171,7 @@ async function supGuideModal(id, s) {
   };
   again.onclick = run;
   modal(el('div', {}, body, extra,
-    el('div', { class: 'row between wrap', style: 'margin-top:14px;gap:8px' }, el('a', { class: 'small', href: supDocs(SUP_ANCHOR[id]), target: '_blank', rel: 'noopener' }, T('Read the full guide')), again)), { title: T(g[2]), wide: true });
+    el('div', { class: 'row between wrap', style: 'margin-top:14px;gap:8px' }, el('a', { class: 'small', href: docUrl(`trouble.${id}`) || supDocs(SUP_ANCHOR[id]), target: '_blank', rel: 'noopener' }, T('Read the full guide')), again)), { title: T(g[2]), wide: true });
   run();
 }
 const SUP_ANCHOR = { reach: 'phone', ha: 'ha-test', cameras: 'camera', slow3d: 'slow', remote: 'secure-access', locked: 'password', alerts: 'alerts', tablet: 'tablet-sleep', frigate: 'frigate-cert', update: 'update-failed' };
@@ -263,6 +263,7 @@ async function activityCard() {
 /* ---- Home: getting started (admins, after setup, until done or hidden) ---- */
 const SUP_CHECK = {
   ha: ['home', 'Connect Home Assistant', 'Or your lights, plugs and cameras directly'],
+  twostep: ['lock', 'Turn on two-step sign-in', 'A code from your phone, so a password alone can\'t get in'],
   phone: ['phone', 'Add your phone', 'The CasaTorch app or the web app on your phone'],
   alerts: ['bell', 'Turn on alerts', 'Leaks, smoke and the doorbell on your phone'],
   backup: ['download', 'Make a backup', 'One encrypted file to keep somewhere safe'],

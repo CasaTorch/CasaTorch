@@ -121,6 +121,9 @@ function docSettings() {
 function docSignIns() {
   if (!isConfigured()) return null;
   const ok = Array.isArray(users?.list) && users.list.some((u) => u.role === 'owner');
+  // amber, never an alert: setup's "Protect your CasaTorch" was answered "Not now" (or an admin has no second step)
+  const open = ok && signInOn() ? users.list.filter((u) => ['owner', 'admin'].includes(u.role) && u.password && !u.panel && !u.totp?.on) : [];
+  if (open.length) return chk('signins', 'system', 'Sign-ins', 'warn', open.some((u) => u.role === 'owner') ? 'Two-step sign-in is off for the owner login.' : ['Two-step sign-in is off for {n} admin login(s).', { n: open.length }], { why: 'With it on, a stolen password alone can\'t get in: sign-in also asks for a code from your phone. It takes two minutes with any authenticator app.', fix: { action: 'link', href: '#settings/people', label: 'Turn on two-step sign-in' } });
   return ok ? chk('signins', 'system', 'Sign-ins', 'ok', users.list.length === 1 ? '1 login, with an owner.' : ['{n} logins, with an owner.', { n: users.list.length }])
     : chk('signins', 'system', 'Sign-ins', 'bad', 'There is no owner login.', { why: 'Restore a backup, or put back a saved copy of the settings from before this happened.', fix: { action: 'history', label: 'See saved copies' } });
 }

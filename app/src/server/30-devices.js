@@ -77,21 +77,53 @@ async function houseDevices() {
   r.hiddenCameras = hidden;
   return r;
 }
-/* Which cameras show. A camera reached both directly (Frigate, Reolink, Ring, Meraki...) and through Home Assistant
-   shows once - the direct one, which is faster and can stream live. You can remove any camera, and add any back. */
+/* Which cameras show: each physical camera once. The same camera often arrives several ways - Frigate directly, Frigate
+   again through Home Assistant, a Reolink or Meraki camera that Home Assistant also has, Ring. Cameras from different
+   connections are the same camera when they share a name (spelling, accents and "camera"/"cam" ignored), a Frigate
+   camera name (Home Assistant's Frigate entities are named after it), or the address they are reached at.
+   The best way in stays: Frigate (live video) first, then other direct cameras, then cloud ones, Home Assistant last.
+   You can remove any camera, and add any back ("Detected cameras" on the Cameras and Security pages). */
 const camKey = (d) => String(d.originalName || d.name || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/\b(camera|cam|doorbell cam|ipcam)\b/g, '').replace(/[^a-z0-9]+/g, '');
-function cameraSort(devices) {
-  const prefs = config.cameraHide || {}, removed = new Set(prefs.hidden || []), kept = new Set(prefs.shown || []);
-  const cams = devices.filter((d) => d.kind === 'camera'), direct = new Map();
-  for (const d of cams) if (d.provider !== 'ha' && camKey(d)) direct.set(camKey(d), d);
+const camSlug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+/** The ways two cameras can be recognized as one: name, Frigate camera name, address. */
+function camKeys(d) {
+  const k = [], n = camKey(d);
+  if (n.length >= 3) k.push(`n:${n}`);
+  if (d.frigateCam) k.push(`f:${camSlug(d.frigateCam)}`);
+  if (d.provider === 'ha' && /^ha:camera\./.test(d.id)) { const e = camSlug(d.id.slice(10)); if (e.length >= 3) k.push(`f:${e}`); }
+  if (d.camHost) k.push(`h:${String(d.camHost).toLowerCase()}`);
+  if (d.mac) k.push(`m:${String(d.mac).toLowerCase().replace(/[^0-9a-f]/g, '')}`);
+  return k;
+}
+/** Lower is better: Frigate, other cameras on your network, integrations (Meraki, Reolink...), Ring, Home Assistant. */
+const camRank = (d) => (d.provider === 'camera' ? (d.source === 'frigate' ? 0 : 1) : d.provider === 'ring' ? 3 : d.provider === 'ha' ? 4 : 2);
+/** Pure: which cameras show and which are hidden (removed by you, or the same camera as one shown). */
+function camDedupe(cams, prefs = {}) {
+  const removed = new Set(prefs.hidden || []), kept = new Set(prefs.shown || []);
+  const up = cams.map((_, i) => i), find = (i) => (up[i] === i ? i : (up[i] = find(up[i])));
+  const byKey = new Map();
+  cams.forEach((d, i) => { for (const k of camKeys(d)) { if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(i); } });
+  for (const [k, list] of byKey) for (const j of list.slice(1)) {
+    const a = cams[list[0]], b = cams[j];
+    if (a.provider !== b.provider || /^[hm]:/.test(k)) up[find(j)] = find(list[0]);   // one connection doesn't list a camera twice by name - but the same address twice is one camera
+  }
+  const groups = new Map();
+  cams.forEach((d, i) => { const g = find(i); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(d); });
   const show = new Set(), hidden = [];
-  for (const d of cams) {
-    const twin = d.provider === 'ha' ? direct.get(camKey(d)) : null;
-    if (removed.has(d.id)) hidden.push({ id: d.id, name: d.name, source: d.source || d.provider, why: 'removed' });
-    else if (twin && !kept.has(d.id)) hidden.push({ id: d.id, name: d.name, source: d.source || d.provider, why: 'duplicate', of: twin.name });
-    else show.add(d.id);
+  for (const g of groups.values()) {
+    const best = [...g].sort((a, b) => camRank(a) - camRank(b) || String(a.id).localeCompare(String(b.id)))[0];
+    for (const d of g) {
+      const source = d.source || d.provider;
+      if (removed.has(d.id)) hidden.push({ id: d.id, name: d.name, source, why: 'removed' });
+      else if (d !== best && !kept.has(d.id) && !removed.has(best.id)) hidden.push({ id: d.id, name: d.name, source, why: 'duplicate', of: best.name, ofId: best.id });
+      else show.add(d.id);
+    }
   }
   return { show, hidden };
+}
+function cameraSort(devices) {   // the address stays here: it is matched on, never sent to the page
+  const hosts = new Map((config.cameras || []).map((c) => [`camera:${c.id}`, camHostOf(c)]));
+  return camDedupe(devices.filter((d) => d.kind === 'camera').map((d) => (hosts.get(d.id) ? { ...d, camHost: hosts.get(d.id) } : d)), config.cameraHide || {});
 }
 app.put('/api/cameras/:id/visible', requireRole('admin'), express.json({ limit: '1kb' }), (req, res) => {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
@@ -266,16 +298,40 @@ async function fetchImage(url, user, pass) {
   for await (const c of r.body || []) { n += c.length; if (n > max) throw new Error('the camera sent something too big for a picture'); chunks.push(c); }
   return { type: r.headers.get('content-type') || 'image/jpeg', buf: Buffer.concat(chunks) };
 }
+/* Reolink: the password goes to the camera once, in the body of its sign-in (cmd=Login), never in an address; pictures
+   are then asked for with the short-lived token it gives back (kept sealed in memory until it runs out). Only a camera
+   whose firmware has no sign-in command gets the older way (the login in the address), on the home network. */
+const REOLINK_TOKENS = new Map();   // host#user -> { t: sealed token, exp }
+async function reolinkToken(c, fresh) {
+  const id = `${c.host}#${c.username || 'admin'}`, hit = REOLINK_TOKENS.get(id);
+  if (!fresh && hit && hit.exp > Date.now()) return unseal(hit.t);
+  const r = await fetch(`http://${c.host}/cgi-bin/api.cgi?cmd=Login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([{ cmd: 'Login', action: 0, param: { User: { userName: c.username || 'admin', password: c.password || '' } } }]), signal: AbortSignal.timeout(10000) });
+  let j = null; try { j = await r.json(); } catch { /* not this API */ }
+  const tok = j?.[0]?.value?.Token;
+  if (!tok?.name) { if (!r.ok || !Array.isArray(j)) return null; throw Object.assign(new Error('the camera refused that user name or password'), { status: 401 }); }
+  REOLINK_TOKENS.set(id, { t: seal(tok.name), exp: Date.now() + Math.max(60, Math.min(3600, Number(tok.leaseTime) || 3600) - 60) * 1000 });
+  if (REOLINK_TOKENS.size > 50) REOLINK_TOKENS.delete(REOLINK_TOKENS.keys().next().value);
+  return tok.name;
+}
+async function reolinkSnap(c) {
+  const snap = (auth) => fetchImage(`http://${c.host}/cgi-bin/api.cgi?cmd=Snap&channel=${c.channel || 0}&rs=casatorch${Date.now()}&${auth}`);
+  const tok = await reolinkToken(c);
+  if (tok === null) return snap(`user=${encodeURIComponent(c.username)}&password=${encodeURIComponent(c.password)}`);   // older firmware without cmd=Login
+  try { return await snap(`token=${encodeURIComponent(tok)}`); }
+  catch { return snap(`token=${encodeURIComponent(await reolinkToken(c, true))}`); }   // the token ran out early (the camera restarted)
+}
 const SNAP_SIZES = [240, 360, 480, 720, 1080, 1440];
 /** The picture height to make for a requested one: the next size up (so it is never blurry), 720 when none is asked. */
 const snapSize = (h) => { const n = Number(h); return Number.isFinite(n) && n > 0 ? SNAP_SIZES.find((s) => s >= n) || 1440 : 720; };
 const CAMERA_SNAPSHOT = {
   frigate: (c) => frigateSnapshot(c),
-  reolink: (c) => fetchImage(`http://${c.host}/cgi-bin/api.cgi?cmd=Snap&channel=${c.channel || 0}&rs=casatorch${Date.now()}&user=${encodeURIComponent(c.username)}&password=${encodeURIComponent(c.password)}`),
+  reolink: (c) => reolinkSnap(c),
   snapshot: (c) => fetchImage(c.snapshotUrl, c.username, c.password),
 };
+/* Where a camera on your network is reached (host, plus the channel on a recorder): two entries with the same one are one camera. */
+const camHostOf = (c) => { try { if (c.type === 'reolink' && c.host) return `${c.host}#${c.channel || 0}`; if (c.type === 'snapshot' && c.snapshotUrl) { const u = new URL(c.snapshotUrl); return `${u.host}${u.pathname}${u.search}`; } } catch { /* not an address */ } return null; };
 PROVIDERS.camera = {
-  async list() { return (config.cameras || []).map((c) => ({ id: `camera:${c.id}`, provider: 'camera', kind: 'camera', name: c.name, source: c.type, live: c.type === 'frigate', stream: c.type === 'frigate' ? `/api/cameras/${encodeURIComponent(c.id)}/live` : undefined, snapshot: `/api/cameras/${encodeURIComponent(c.id)}/snapshot`, every: 2000, online: true })); },
+  async list() { return (config.cameras || []).map((c) => ({ id: `camera:${c.id}`, provider: 'camera', kind: 'camera', name: c.name, source: c.type, live: c.type === 'frigate', ...(c.type === 'frigate' && c.camera ? { frigateCam: c.camera } : {}), stream: c.type === 'frigate' ? `/api/cameras/${encodeURIComponent(c.id)}/live` : undefined, snapshot: `/api/cameras/${encodeURIComponent(c.id)}/snapshot`, every: 2000, online: true })); },
 };
 /* Ready pictures for every camera soon after start-up, so the first look is never blank. */
 setTimeout(() => { if (!isDemo()) for (const c of config.cameras || []) if (CAMERA_SNAPSHOT[c.type]) snapRefresh(snapEntry(`camera:${c.id}`, () => CAMERA_SNAPSHOT[c.type](c), 'local')); }, 2000).unref?.();
@@ -308,9 +364,9 @@ async function yolinkCall(body) {
   if (!yolink.token || Date.now() > yolink.exp) {
     const r = await fetch('https://api.yosmart.com/open/yolink/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'client_credentials', client_id: c.uaid, client_secret: c.secret }), signal: AbortSignal.timeout(10000) });
     const j = await r.json(); if (!j.access_token) throw new Error('YoLink refused the credentials');
-    yolink.token = j.access_token; yolink.exp = Date.now() + ((j.expires_in || 3600) - 120) * 1000;
+    yolink.token = seal(j.access_token); yolink.exp = Date.now() + ((j.expires_in || 3600) - 120) * 1000;
   }
-  const r = await fetch('https://api.yosmart.com/open/yolink/v2/api', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${yolink.token}` }, body: JSON.stringify({ time: Date.now(), ...body }), signal: AbortSignal.timeout(10000) });
+  const r = await fetch('https://api.yosmart.com/open/yolink/v2/api', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${unseal(yolink.token) || ''}` }, body: JSON.stringify({ time: Date.now(), ...body }), signal: AbortSignal.timeout(10000) });
   const j = await r.json(); if (j.code !== '000000') throw new Error(j.desc || `YoLink error ${j.code}`);
   return j.data;
 }

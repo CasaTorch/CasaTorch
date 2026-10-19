@@ -82,10 +82,10 @@ app.post('/api/app/enroll', express.json({ limit: '4kb' }), async (req, res) => 
   const u = userById(t.userId); if (!u || nextStep(t, u) !== 'enroll') return res.status(400).json({ error: 'Sign in again.' });
   // "Not now": allowed unless the household requires two-step sign-in (Settings › People)
   if (req.body?.skip === true) { if (users.policy?.require2fa) return res.status(400).json({ error: 'This home requires two-step sign-in.' }); t.passed.add('skip2fa'); audit(req, '2fa-skipped', { user: u.username, via: 'app' }); return appProceed(req, res, t); }
-  if (!req.body?.code) { const e = await totpEnrolment(u); t.pending = e.secret; return res.json({ uri: e.uri, qr: e.qr, secret: e.secret }); }
-  if (!t.pending || !totpOk(t.pending, req.body.code)) return res.status(400).json({ error: 'That code isn\'t right - check the time on your phone and try again.' });
+  if (!req.body?.code) { const e = await totpEnrolment(u); t.pending = seal(e.secret, 'pending.totp'); return res.json({ uri: e.uri, qr: e.qr, secret: e.secret }); }
+  if (!t.pending || !totpOk(unseal(t.pending, 'pending.totp') || '', req.body.code)) return res.status(400).json({ error: 'That code isn\'t right - check the time on your phone and try again.' });
   const codes = recoveryCodes();
-  u.totp = { on: true, secret: seal(t.pending), recovery: await rcHashAllAsync(codes), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
+  u.totp = { on: true, secret: seal(unseal(t.pending, 'pending.totp'), 'users.totp'), recovery: await rcHashAllAsync(codes), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
   saveUsers(); audit(req, '2fa-on', { user: u.username, via: 'app' }); t.passed.add('enroll'); t.recovery = codes;
   appProceed(req, res, t);
 });

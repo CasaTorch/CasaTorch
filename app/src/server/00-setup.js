@@ -64,36 +64,90 @@ function loadKeyFile(file, tries = 0) {
   return k;
 }
 const keyOf = () => secretKey || (secretKey = loadKeyFile(KEY_FILE));
-function seal(text) {
+/* Sealed values: AES-256-GCM, a fresh 96-bit nonce each time.
+     v1.<nonce>.<data>.<tag>   older values (and other files' secrets): the value alone
+     v2.<nonce>.<data>.<tag>   the value bound to its place: the field's name ("homeAssistant.token") is sealed in with
+                               it (inside the authenticated data), so a sealed value moved to another field won't open there.
+   seal(text, field) makes v2 when given a field; unseal(s, field) opens v2 only for that same field (unseal(s) with no
+   field opens either - for checks like "does the key file still open these settings"; the settings always pass their field). */
+function seal(text, field) {
   const iv = crypto.randomBytes(12), c = crypto.createCipheriv('aes-256-gcm', keyOf(), iv);
-  const enc = Buffer.concat([c.update(String(text), 'utf8'), c.final()]);
-  return `v1.${iv.toString('base64url')}.${enc.toString('base64url')}.${c.getAuthTag().toString('base64url')}`;
+  const plain = field ? Buffer.concat([Buffer.from(String(field), 'utf8'), Buffer.from([0]), Buffer.from(String(text), 'utf8')]) : Buffer.from(String(text), 'utf8');
+  const enc = Buffer.concat([c.update(plain), c.final()]); plain.fill(0);
+  return `${field ? 'v2' : 'v1'}.${iv.toString('base64url')}.${enc.toString('base64url')}.${c.getAuthTag().toString('base64url')}`;
 }
-function unseal(s) {
-  const [v, iv, enc, tag] = String(s || '').split('.');
-  if (v !== 'v1') return null;
-  try { const d = crypto.createDecipheriv('aes-256-gcm', keyOf(), Buffer.from(iv, 'base64url')); d.setAuthTag(Buffer.from(tag, 'base64url')); return Buffer.concat([d.update(Buffer.from(enc, 'base64url')), d.final()]).toString('utf8'); }
+function unseal(s, field) {
+  const [v, iv, enc, tag, extra] = String(s || '').split('.');
+  if ((v !== 'v1' && v !== 'v2') || extra !== undefined || !iv || !tag) return null;
+  let out = null;
+  try { const d = crypto.createDecipheriv('aes-256-gcm', keyOf(), Buffer.from(iv, 'base64url')); d.setAuthTag(Buffer.from(tag, 'base64url')); out = Buffer.concat([d.update(Buffer.from(enc, 'base64url')), d.final()]); }
   catch { return null; }
+  try {
+    if (v === 'v1') return out.toString('utf8');
+    const z = out.indexOf(0); if (z < 0) return null;
+    if (field !== undefined && out.subarray(0, z).toString('utf8') !== String(field)) return null;   // sealed for another field
+    return out.subarray(z + 1).toString('utf8');
+  } finally { out.fill(0); }   // the opened bytes don't linger in memory (the text itself is a JavaScript string, which can't be wiped)
 }
 /* Which config.json values are secrets: anything called token, refreshToken, apiKey, secret, password or
    clientSecret, anywhere in the file, plus the Hue bridge's username (it is the bridge's password). */
 const SECRET_KEYS = /^(token|refreshToken|apiKey|secret|password|clientSecret|privateKey|license|snapshotUrl)$/;   // snapshot addresses can carry a camera login
-const SEALED = /^v1\.[\w-]+\.[\w-]*\.[\w-]+$/;
-function mapSecrets(obj, fn, trail = '') {
-  if (Array.isArray(obj)) return obj.map((v) => mapSecrets(v, fn, trail));
+const SEALED = /^v[12]\.[\w-]+\.[\w-]*\.[\w-]+$/;
+const isSecretKey = (k, v, trail) => typeof v === 'string' && v !== '' && (SECRET_KEYS.test(k) || (trail === 'hue' && k === 'username') || (trail === 'dns' && k === 'key') || (trail === 'yolink' && k === 'uaid') || (trail === 'calendars' && k === 'url'));   // a private calendar link is a password too
+/** fn(value, place) for every secret; place is where it sits, like "homeAssistant.token" or "cameras[].password".
+    For the settings in memory, fn gets the sealed value as kept (nothing is opened to walk them). */
+const BOXES = new WeakMap();   // object -> { field: its sealed value } (sealedView)
+function mapSecrets(obj, fn, trail = '', place = '') {
+  if (Array.isArray(obj)) return obj.map((v) => mapSecrets(v, fn, trail, `${place}[]`));
   if (!obj || typeof obj !== 'object') return obj;
-  const out = {};
-  for (const [k, v] of Object.entries(obj)) {
-    const secret = typeof v === 'string' && v !== '' && (SECRET_KEYS.test(k) || (trail === 'hue' && k === 'username') || (trail === 'dns' && k === 'key') || (trail === 'yolink' && k === 'uaid') || (trail === 'calendars' && k === 'url'));   // a private calendar link is a password too
-    out[k] = secret ? fn(v) : mapSecrets(v, fn, k);
+  const out = {}, boxes = BOXES.get(obj);
+  for (const k of Object.keys(obj)) {
+    const v = boxes && Object.hasOwn(boxes, k) ? boxes[k] : obj[k], at = place ? `${place}.${k}` : k;
+    out[k] = isSecretKey(k, v, trail) ? fn(v, at) : mapSecrets(v, fn, k, at);
   }
   return out;
 }
-/** A secret from config: sealed on disk, open in memory after loading - either way, the plain value. */
+const sealConfig = (c) => mapSecrets(c, (v, at) => {
+  if (!SEALED.test(v)) return seal(v, at);
+  if (v.startsWith('v2.') && unseal(v, at) !== null) return v;
+  const plain = unseal(v); return plain === null ? v : seal(plain, at);   // an older value, or one moved here in memory: bound to this field now (one that won't open is kept as it is)
+});
+const openConfig = (c) => mapSecrets(c, (v, at) => (SEALED.test(v) ? (unseal(v, v.startsWith('v2.') ? at : undefined) ?? '') : v));
+/* In memory, too, every secret in the settings stays sealed: each one is kept as its sealed value, and opened only at
+   the moment it's read (config.homeAssistant.token opens the token for that one use). Nothing keeps an opened copy,
+   and saving writes the sealed values as they are. Writing a secret (h.token = '...') seals it on the spot. */
+function sealedView(obj, trail = '', place = '') {
+  if (Array.isArray(obj)) { obj.forEach((v) => sealedView(v, trail, `${place}[]`)); return obj; }
+  if (!obj || typeof obj !== 'object' || Object.isFrozen(obj)) return obj;
+  let boxes = BOXES.get(obj);
+  for (const k of Object.keys(obj)) {
+    const at = place ? `${place}.${k}` : k;
+    if (boxes && Object.hasOwn(boxes, k)) continue;   // already kept sealed
+    const v = obj[k];
+    if (!isSecretKey(k, v, trail)) { sealedView(v, k, at); continue; }
+    if (!boxes) BOXES.set(obj, boxes = {});
+    boxes[k] = SEALED.test(v) ? v : seal(v, at);
+    if (boxes[k].startsWith('v2.') && unseal(boxes[k], at) === null && unseal(boxes[k]) !== null) { console.warn(`A saved secret was in the wrong place in the settings file (${at}), so it isn't used. Enter it again.`); boxes[k] = ''; }   // sealed for another field: moved by hand
+    Object.defineProperty(obj, k, {
+      enumerable: true, configurable: true,
+      get: () => { const b = boxes[k]; return typeof b === 'string' && b ? unseal(b, b.startsWith('v2.') ? at : undefined) ?? '' : b; },   // '' when sealed for another field
+      set: (nv) => { boxes[k] = typeof nv === 'string' && nv !== '' && !SEALED.test(nv) ? seal(nv, at) : nv; },
+    });
+  }
+  return obj;
+}
+/** A secret from config: the plain value, opened into the caller's own variable at the moment it's used. */
 const secretOf = (v) => (SEALED.test(String(v || '')) ? unseal(v) || '' : String(v || ''));
-const sealConfig = (c) => mapSecrets(c, (v) => (SEALED.test(v) ? v : seal(v)));
-const openConfig = (c) => mapSecrets(c, (v) => (SEALED.test(v) ? (unseal(v) ?? '') : v));
+/** What a page may be shown of a saved secret: that one is saved, and a short fingerprint to tell two apart
+    (a keyed hash - not any part of the secret itself). */
+const maskSecret = (v) => { const s = secretOf(v); return s ? `•••• ${crypto.createHmac('sha256', keyOf()).update(`mask:${s}`).digest('hex').slice(0, 4)}` : null; };
 let plaintextOnDisk = false;
+/* Passwords and keys typed into CasaTorch's pages arrive sealed to this box (02s-sealed-input.js): every JSON body
+   is opened right after it's read, by the one body reader every route uses. */
+{
+  const json0 = express.json;
+  express.json = (opts) => { const parse = json0(opts); return (req, res, next) => parse(req, res, (err) => (err ? next(err) : openSealedRequest(req, res, next))); };
+}
 
 /* Never fetch the cloud's own metadata service (it hands out credentials when CasaTorch runs on a cloud
    server). Every address CasaTorch is given - cameras, monitors, app tests, AI, Home Assistant - goes
@@ -196,8 +250,8 @@ const loadConfig = () => {
   try { disk = JSON.parse(raw); if (!disk || typeof disk !== 'object' || Array.isArray(disk)) throw new Error('not a settings object'); }
   catch (e) { configProblem = { kind: 'damaged', detail: `CasaTorch's settings file is damaged (${CONFIG_FILE}: ${String(e.message).slice(0, 120)}).` }; config = withAddonHa({}); return; }
   configProblem = null;
-  plaintextOnDisk = JSON.stringify(sealConfig(disk)) !== JSON.stringify(disk);
-  config = withAddonHa(openConfig(disk));
+  plaintextOnDisk = false; mapSecrets(disk, (v) => { if (!v.startsWith('v2.') || !SEALED.test(v)) plaintextOnDisk = true; return v; });   // a plain or older (v1) secret: sealed again below
+  config = sealedView(withAddonHa(disk));
 };
 loadConfig();
 /** Written owner-only: it holds tokens and API keys. */
@@ -205,7 +259,7 @@ function saveConfig(next) {
   if (configProblem) throw new Error('The settings file is damaged; CasaTorch won\'t write over it.');
   const disk = next.homeAssistant?.url === SUPERVISOR_HA ? { ...next, homeAssistant: { ...next.homeAssistant, token: undefined } } : next;
   writeFileSafe(CONFIG_FILE, JSON.stringify(sealConfig(disk), null, 2), 0o600);
-  config = withAddonHa(next);
+  config = sealedView(withAddonHa(next));
 }
 /** Every save: write a temp file, flush it to the disk, then swap it in - so a power cut mid-save
     can never leave a half-written file. Used for every file CasaTorch keeps. */

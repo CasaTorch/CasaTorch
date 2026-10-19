@@ -1,0 +1,449 @@
+{
+ "compatibility.html": [
+  "compat"
+ ],
+ "connect/cameras.html": [
+  "detections",
+  "frigate",
+  "ha",
+  "live",
+  "meraki",
+  "other",
+  "refresh",
+  "remove",
+  "reolink",
+  "ring"
+ ],
+ "connect/energy.html": [
+  "ha-energy",
+  "history",
+  "how",
+  "measure",
+  "page",
+  "price",
+  "settings",
+  "utility",
+  "whole-house"
+ ],
+ "connect/everyday.html": [
+  "calendars",
+  "news",
+  "photos",
+  "reminders",
+  "teams",
+  "weather"
+ ],
+ "connect/home-assistant.html": [
+  "add",
+  "after",
+  "signin",
+  "token",
+  "trouble",
+  "why"
+ ],
+ "connect/lights-plugs.html": [
+  "ha-can",
+  "hue",
+  "shelly",
+  "through-ha"
+ ],
+ "connect/locks-climate.html": [
+  "alarm",
+  "blinds",
+  "climate",
+  "garage",
+  "locks",
+  "media",
+  "more"
+ ],
+ "connect/network.html": [
+  "apptests",
+  "devices",
+  "internet",
+  "not-yet",
+  "sources",
+  "speed"
+ ],
+ "connect/overview.html": [
+  "change",
+  "local",
+  "safety",
+  "secrets",
+  "speed"
+ ],
+ "connect/sensors.html": [
+  "alerts",
+  "ha",
+  "meraki",
+  "shelly",
+  "yolink"
+ ],
+ "help/backup.html": [
+  "make",
+  "move",
+  "what"
+ ],
+ "help/contact.html": [
+  "discord",
+  "email",
+  "more"
+ ],
+ "help/get-help.html": [
+  "activity",
+  "contact",
+  "getting-started",
+  "locked-out",
+  "support-file",
+  "troubleshooters"
+ ],
+ "help/privacy-safety.html": [
+  "cameras",
+  "leaves",
+  "never",
+  "security",
+  "stays"
+ ],
+ "help/remote-access.html": [
+  "app",
+  "basic",
+  "diagram",
+  "faq",
+  "on",
+  "onoff",
+  "secure",
+  "short",
+  "trouble",
+  "vpn",
+  "who",
+  "working"
+ ],
+ "help/security.html": [
+  "alerts",
+  "backups",
+  "browser",
+  "casatorch-com",
+  "crypto",
+  "entry",
+  "key",
+  "limits",
+  "logs",
+  "map",
+  "phone",
+  "report",
+  "sealed",
+  "signin",
+  "stored",
+  "testing",
+  "threats",
+  "transit"
+ ],
+ "help/troubleshooting.html": [
+  "alerts",
+  "camera",
+  "cant-open",
+  "device-offline",
+  "flag-bar",
+  "frigate-cert",
+  "ha-test",
+  "home-page",
+  "host",
+  "installer-warning",
+  "no-setup",
+  "password",
+  "phone",
+  "secure-access",
+  "secure-address",
+  "slow",
+  "tablet-sleep",
+  "update-failed"
+ ],
+ "help/updates.html": [
+  "check",
+  "progress",
+  "safe"
+ ],
+ "help/whats-new.html": [
+  "v040",
+  "v041",
+  "v0410",
+  "v0411",
+  "v0412",
+  "v042",
+  "v043",
+  "v044",
+  "v045",
+  "v046",
+  "v047",
+  "v048",
+  "v049",
+  "v050",
+  "v051",
+  "v060",
+  "v070",
+  "v071",
+  "v071-health",
+  "v071-more",
+  "v071-security",
+  "v071-setup",
+  "v080",
+  "v080-apptests",
+  "v080-draw",
+  "v080-family",
+  "v080-household",
+  "v080-live",
+  "v080-more",
+  "v080-outdoor",
+  "v080-radar",
+  "v080-reliable",
+  "v080-support",
+  "v080-trust",
+  "v081"
+ ],
+ "index.html": [
+  "basic-pro",
+  "early",
+  "gb",
+  "how-it-works",
+  "new",
+  "start"
+ ],
+ "pro/3d-home.html": [
+  "backups",
+  "browsers",
+  "devices",
+  "drawing",
+  "editor",
+  "floors",
+  "import-plans",
+  "live",
+  "network",
+  "outdoor",
+  "photo-real",
+  "replay",
+  "rooms-furniture",
+  "scan",
+  "start",
+  "tablets",
+  "use",
+  "voice",
+  "what"
+ ],
+ "pro/about.html": [
+  "add",
+  "buy",
+  "renew",
+  "trial",
+  "what"
+ ],
+ "pro/ask.html": [
+  "chats",
+  "choose",
+  "key",
+  "local",
+  "privacy",
+  "setup",
+  "web",
+  "what"
+ ],
+ "pro/network.html": [
+  "3d",
+  "adguard",
+  "connect",
+  "limits",
+  "meraki",
+  "pihole",
+  "unifi",
+  "what"
+ ],
+ "pro/ring.html": [
+  "connect",
+  "disconnect",
+  "speed",
+  "what"
+ ],
+ "pro/server-monitor.html": [
+  "add",
+  "limits",
+  "what"
+ ],
+ "pro/weekly-report.html": [
+  "ai",
+  "forecast",
+  "history",
+  "report"
+ ],
+ "requirements.html": [
+  "devices",
+  "home-assistant",
+  "internet",
+  "pro",
+  "run",
+  "screens"
+ ],
+ "start/box.html": [
+  "after",
+  "box",
+  "plug-in",
+  "scan",
+  "setup",
+  "wifi"
+ ],
+ "start/find.html": [
+  "find-page",
+  "local",
+  "router",
+  "still"
+ ],
+ "start/install.html": [
+  "choose",
+  "next",
+  "open",
+  "steps"
+ ],
+ "start/setup.html": [
+  "done",
+  "errors",
+  "everyday",
+  "film",
+  "found",
+  "frigate",
+  "gear",
+  "language",
+  "later",
+  "moving",
+  "open",
+  "phone",
+  "protect",
+  "resume",
+  "safe",
+  "tested",
+  "tidy",
+  "tour"
+ ],
+ "use/alerts.html": [
+  "advanced",
+  "devices",
+  "kinds",
+  "noise",
+  "on-an-alert",
+  "pro",
+  "quiet",
+  "safety",
+  "table",
+  "whose"
+ ],
+ "use/app-tests.html": [
+  "add",
+  "alerts",
+  "culprit",
+  "history",
+  "overview",
+  "path",
+  "plans",
+  "privacy",
+  "read",
+  "setup",
+  "tools"
+ ],
+ "use/choosing-a-screen.html": [
+  "checklist",
+  "monitor",
+  "next",
+  "size",
+  "tablet"
+ ],
+ "use/family-hub.html": [
+  "chores",
+  "family",
+  "lists",
+  "meals",
+  "routines",
+  "who"
+ ],
+ "use/family.html": [
+  "add",
+  "google",
+  "roles",
+  "safety",
+  "two-step"
+ ],
+ "use/health.html": [
+  "alerts",
+  "checks",
+  "fix",
+  "history",
+  "open",
+  "privacy",
+  "self-repair"
+ ],
+ "use/home-screen.html": [
+  "control",
+  "look",
+  "own-weather",
+  "pages",
+  "pages-customize",
+  "phone",
+  "radar",
+  "show-when",
+  "sizes",
+  "themes",
+  "tiles",
+  "whose"
+ ],
+ "use/household.html": [
+  "bins",
+  "holidays",
+  "laundry",
+  "mail",
+  "phones",
+  "plants",
+  "reminder",
+  "who",
+  "widget"
+ ],
+ "use/mobile-app.html": [
+  "accounts",
+  "add",
+  "away",
+  "needs",
+  "safe",
+  "two-step",
+  "what"
+ ],
+ "use/nudges.html": [],
+ "use/phone-app.html": [
+  "alerts",
+  "ha",
+  "install",
+  "levels",
+  "local",
+  "privacy",
+  "quiet",
+  "secure",
+  "smart"
+ ],
+ "use/reminders.html": [
+  "add",
+  "answer",
+  "ideas",
+  "phones",
+  "setup",
+  "where",
+  "who"
+ ],
+ "use/security.html": [
+  "alarm",
+  "checklist",
+  "doors",
+  "events",
+  "network",
+  "wall",
+  "who"
+ ],
+ "use/wall-tablet.html": [
+  "battery",
+  "secure",
+  "steps",
+  "today"
+ ]
+}

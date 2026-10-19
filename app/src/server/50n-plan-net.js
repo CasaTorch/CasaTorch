@@ -73,8 +73,8 @@ function fpnTests() {
 }
 /* The demo house has its network placed already: the internet box and the NAS by the network rack in the office,
    two access points and the one that is offline. */
-const FPN_DEMO_PINS = [['modem', 'ground', [0.9, 1.0, 8.2]], ['net:demo-unifi:Living Room AP', 'ground', [3.5, 2.5, 3.6]], ['net:demo-unifi:Upstairs AP', 'upstairs', [6.2, 2.5, 4.2]],
-  ['net:demo-unifi:Garage AP', 'ground', [11.2, 2.5, 8.6]], ['mon:demo0', 'ground', [1.6, 0.7, 8.6]], ['mon:demo4', 'top', [10.5, 0.7, 7.5]]];
+const FPN_DEMO_PINS = [['modem', 'ground', [0.9, 1.0, 8.2]], ['net:demo-meraki:Living Room AP', 'ground', [3.5, 2.5, 3.6]], ['net:demo-meraki:Upstairs AP', 'upstairs', [6.2, 2.5, 4.2]],
+  ['net:demo-meraki:Garage AP', 'ground', [11.2, 2.5, 8.6]], ['mon:demo0', 'ground', [1.6, 0.7, 8.6]], ['mon:demo4', 'top', [10.5, 0.7, 7.5]]];
 app.get('/api/floorplan/network', async (_req, res) => {
   const d = fpData();
   if (isDemo() && !Array.isArray(d.netPins)) d.netPins = FPN_DEMO_PINS.filter(([, f]) => d.floors.some((x) => x.id === f)).map(([ref, floor, pos]) => ({ ref, floor, pos }));

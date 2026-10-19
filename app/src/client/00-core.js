@@ -302,7 +302,7 @@ const srcName = (s) => { const k = String(s || '').toLowerCase(); return Object.
 const TABS = [];   // filled by the tab files
 const tab = (t) => { const k = t.after ? TABS.findIndex((x) => x.id === t.after) : -1; if (k >= 0) TABS.splice(k + 1, 0, t); else TABS.push(t); };   // after: its place on the main bar
 let refresher = null, current = null;
-function setTop(title, sub = '', actions = []) { $('#title').textContent = title; $('#subtitle').textContent = sub; $('#actions').replaceChildren(...actions); }
+function setTop(title, sub = '', actions = []) { $('#title').textContent = title; $('#subtitle').textContent = sub; $('#actions').replaceChildren(...actions); if (typeof docTitleLink === 'function') docTitleLink(current); }   // docTitleLink: the page's "?" guide link (39d-docs-links.js)
 let showSeq = 0;
 async function show(id) {
   const [base, sub] = String(id || '').split('/');   // #settings/people opens Settings at People

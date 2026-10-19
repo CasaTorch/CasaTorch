@@ -208,6 +208,92 @@ const CUSTOM = {
   },
 };
 
+/* ---------- "Make it yours": a theme and a background, with a live preview. The themes and the art come from
+   CasaTorch (09t-themes.js); the choice is kept as you pick, and everything is in Settings › Look later. ---------- */
+const LOOK_BG_KINDS = [['weather', 'Weather'], ['season', 'Seasons'], ['gradient', 'Gradient'], ['sport', 'Sports'], ['none', 'Plain']];
+const LK = { cat: null, saveT: null };
+const lookArt = (q) => `/api/looks/art.svg?${new URLSearchParams(q)}`;
+function lookStepStyle() {
+  if (document.getElementById('lookstep-css')) return;
+  document.head.append(el('style', { id: 'lookstep-css' }, `
+.lk-stage { position: relative; border-radius: 18px; overflow: hidden; aspect-ratio: 16 / 9; background: var(--p-bg); border: 1px solid var(--line); margin: 6px 0 16px; color: var(--p-text); }
+.lk-stage > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lk-stage-ui { position: relative; padding: 4% 4.5%; display: flex; flex-direction: column; gap: 4%; height: 100%; }
+.lk-stage-top { display: flex; justify-content: space-between; align-items: baseline; font-weight: 700; font-size: clamp(14px, 3.2vw, 22px); text-shadow: 0 1px 2px var(--p-bg), 0 0 16px var(--p-bg); }
+.lk-stage-top span { font-weight: 500; font-size: .7em; }
+.lk-stage-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3%; align-items: start; }
+.lk-stage-card { background: var(--p-card); border: 1px solid var(--p-line); border-radius: 12px; padding: 8% 9%; min-height: 9em; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow: hidden; backdrop-filter: blur(10px); font-size: clamp(10px, 1.9vw, 14px); }
+.lk-stage-card small { text-transform: uppercase; letter-spacing: .08em; font-size: .78em; color: var(--p-muted); font-weight: 600; }
+.lk-stage-card big { font-size: 2.2em; font-weight: 700; line-height: 1.1; }
+.lk-stage-card .m { color: var(--p-muted); } .lk-stage-card .pill { align-self: flex-start; margin-top: auto; padding: 3px 10px; border-radius: 999px; background: linear-gradient(90deg, var(--p-accent), var(--p-accent2)); color: var(--p-on); font-weight: 650; }
+.lk-tiles { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
+.lk-tile { display: flex; flex-direction: column; gap: 6px; padding: 6px 6px 8px; border-radius: 14px; border: 1px solid var(--line); background: color-mix(in srgb, var(--text) 4%, transparent); color: var(--text); cursor: pointer; font: inherit; font-size: 13px; text-align: left; }
+.lk-tile.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.lk-tile img, .lk-sw { width: 100%; aspect-ratio: 16 / 10; border-radius: 9px; display: block; object-fit: cover; }
+.lk-sw { display: grid; grid-template-columns: 1.2fr 1fr; gap: 6%; padding: 9%; background: var(--p-bg); }
+.lk-sw i { border-radius: 5px; background: var(--p-card2); border: 1px solid var(--p-line); position: relative; } .lk-sw i::after { content: ""; position: absolute; left: 14%; bottom: 16%; width: 48%; height: 18%; border-radius: 4px; background: var(--p-accent); }
+.lk-sw.split { grid-template-columns: 1fr 1fr; padding: 0; gap: 0; overflow: hidden; } .lk-sw.split i { border-radius: 0; border: 0; }
+.lk-pairs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.lk-pair { display: inline-flex; padding: 4px; border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; } .lk-pair.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.lk-pair i { width: 18px; height: 18px; border-radius: 50%; display: block; } .lk-pair i + i { margin-left: -5px; } .lk-pair.none { font-size: 12px; padding: 4px 10px; color: var(--text); }
+@media (max-width: 560px) { .lk-stage { aspect-ratio: 4 / 5; } .lk-stage-grid { grid-template-columns: 1fr 1fr; } .lk-stage-card:nth-child(3) { grid-column: span 2; } }
+`));
+}
+/* The art for the preview: the weather by this device's clock (a fair sky - the real weather once CasaTorch knows your town). */
+function lookStepArt(bg, mode) {
+  const h = new Date().getHours(), t = h >= 8 && h < 18 ? 'day' : (h >= 6 && h < 8) || (h >= 18 && h < 20) ? 'twilight' : 'night', mo = new Date().getMonth();
+  if (bg.kind === 'weather') return lookArt({ k: 'weather', c: 'partly', t, m: mode });
+  if (bg.kind === 'season') { const lat = W.a.house?.location?.lat ?? 40, n = ['winter', 'winter', 'spring', 'spring', 'spring', 'summer', 'summer', 'summer', 'fall', 'fall', 'fall', 'winter'][mo]; return lookArt({ k: 'season', s: lat < 0 ? { winter: 'summer', summer: 'winter', spring: 'fall', fall: 'spring' }[n] : n, m: mode }); }
+  if (bg.kind === 'gradient') return lookArt({ k: 'gradient', g: bg.gradient || 'aurora', m: mode });
+  if (bg.kind === 'sport') return lookArt({ k: 'sport', s: bg.sport || 'field', m: mode, ...(bg.team ? { c1: bg.team[0], c2: bg.team[1] } : {}) });
+  return null;
+}
+const lookVars = (tk, frosted) => `--p-bg:${tk.bg};--p-card:${frosted ? tk.frost : tk.surface};--p-card2:${tk.solid};--p-text:${tk.text};--p-muted:${tk.muted};--p-line:${tk['line-2']};--p-accent:${tk.accent};--p-accent2:${tk['accent-2']};--p-on:${tk['on-accent']}`;
+CUSTOM.look = (f, store) => {
+  lookStepStyle();
+  const box = el('div', { class: 'lookstep' });
+  if (!LK.cat) {
+    box.append(el('p', { class: 'note' }, T('Loading the themes…')));
+    api('/api/looks').then((c) => {
+      LK.cat = c;
+      if (!store.theme) { const fresh = !c.chosen && !W.rerun; store.theme = fresh ? 'midnight' : c.look.theme; store.bg = fresh ? { kind: 'weather', gradient: 'aurora', season: 'auto', sport: 'field', team: null } : { ...c.look.bg }; if (fresh) lookStepSave(store); }
+      go();
+    }).catch((e) => box.replaceChildren(el('p', { class: 'note' }, e.message)));
+    return box;
+  }
+  const c = LK.cat, bg = (store.bg ||= { kind: 'weather', gradient: 'aurora', season: 'auto', sport: 'field', team: null });
+  const pickId = store.theme === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'midnight' : 'daylight') : store.theme;
+  const th = c.themes.find((x) => x.id === pickId) || c.themes[0], art = lookStepArt(bg, th.mode);
+  const set = (patch) => { Object.assign(store, patch); lookStepSave(store); go(); };
+  const setBg = (patch) => { store.bg = { ...bg, ...patch }; lookStepSave(store); go(); };
+  const temp = W.a.house?.units === 'C' ? '22°' : '72°';
+  box.append(el('div', { class: 'lk-stage', style: lookVars(th.tokens, !!art), role: 'img', 'aria-label': T('Preview of your Home screen') }, art ? el('img', { src: art, alt: '' }) : null,
+    el('div', { class: 'lk-stage-ui' }, el('div', { class: 'lk-stage-top' }, el('span', { style: 'font-size:1em;font-weight:700' }, T('Good morning')), el('span', {}, '8:30')),
+      el('div', { class: 'lk-stage-grid' },
+        el('div', { class: 'lk-stage-card' }, el('small', {}, T('Weather')), el('big', {}, temp), el('span', { class: 'm' }, T('Partly cloudy'))),
+        el('div', { class: 'lk-stage-card' }, el('small', {}, T('Today')), el('span', {}, T('Soccer practice · 6:00')), el('span', { class: 'm' }, T('Trash night'))),
+        el('div', { class: 'lk-stage-card' }, el('small', {}, T('Lights')), el('span', {}, T('Kitchen, porch')), el('span', { class: 'pill' }, T('2 on')))))));
+  box.append(el('div', { class: 'q' }, T('Theme')), el('div', { class: 'lk-tiles' },
+    el('button', { type: 'button', class: `lk-tile${store.theme === 'auto' ? ' on' : ''}`, 'aria-pressed': String(store.theme === 'auto'), onclick: () => set({ theme: 'auto' }) },
+      el('span', { class: 'lk-sw split' }, el('i', { style: `background:${(c.themes.find((x) => x.id === 'midnight') || th).tokens.bg}` }), el('i', { style: `background:${(c.themes.find((x) => x.id === 'daylight') || th).tokens.bg}` })), T('Auto')),
+    ...c.themes.map((x) => el('button', { type: 'button', class: `lk-tile${store.theme === x.id ? ' on' : ''}`, 'aria-pressed': String(store.theme === x.id), onclick: () => set({ theme: x.id }) }, el('span', { class: 'lk-sw', style: lookVars(x.tokens) }, el('i', {}), el('i', {})), T(x.name)))));
+  box.append(el('div', { class: 'q' }, T('Background')), el('div', { class: 'opts big', style: 'grid-template-columns:repeat(auto-fill,minmax(130px,1fr))' }, ...LOOK_BG_KINDS.map(([k, l]) => el('button', { type: 'button', class: `opt${bg.kind === k ? ' on' : ''}`, 'aria-pressed': String(bg.kind === k), onclick: () => setBg({ kind: k }) }, T(l)))));
+  const m = th.mode;
+  if (bg.kind === 'weather') box.append(el('p', { class: 'note' }, T('Changes with the weather at your home and the time of day - sun, clouds, rain, snow and starry nights.')));
+  if (bg.kind === 'season') box.append(el('p', { class: 'note' }, T('Spring, summer, fall and winter as they come where you live, with a few holidays - all CasaTorch\'s own art.')));
+  if (bg.kind === 'gradient') box.append(el('div', { class: 'lk-tiles', style: 'margin-top:10px' }, ...c.gradients.map((g) => el('button', { type: 'button', class: `lk-tile${bg.gradient === g.id ? ' on' : ''}`, onclick: () => setBg({ gradient: g.id }) }, el('img', { src: lookArt({ k: 'gradient', g: g.id, m }), alt: '', loading: 'lazy' }), T(g.name)))));
+  if (bg.kind === 'sport') box.append(el('div', { class: 'lk-tiles', style: 'margin-top:10px' }, ...c.sports.map((s) => el('button', { type: 'button', class: `lk-tile${bg.sport === s.id ? ' on' : ''}`, onclick: () => setBg({ sport: s.id }) }, el('img', { src: lookArt({ k: 'sport', s: s.id, m, ...(bg.team ? { c1: bg.team[0], c2: bg.team[1] } : {}) }), alt: '', loading: 'lazy' }), T(s.name)))),
+    el('div', { class: 'q' }, T('Team colors')), el('div', { class: 'lk-pairs' }, el('button', { type: 'button', class: `lk-pair none${!bg.team ? ' on' : ''}`, onclick: () => setBg({ team: null }) }, T('Natural colors')),
+      ...c.teamColors.map((tc) => el('button', { type: 'button', class: `lk-pair${bg.team && bg.team[0] === tc.colors[0] && bg.team[1] === tc.colors[1] ? ' on' : ''}`, title: T(tc.name), 'aria-label': T(tc.name), onclick: () => setBg({ team: tc.colors }) }, el('i', { style: `background:${tc.colors[0]}` }), el('i', { style: `background:${tc.colors[1]}` })))),
+    el('p', { class: 'note' }, T('Pick your team\'s colors - CasaTorch draws its own generic art and never shows team names or logos.')));
+  box.append(el('p', { class: 'note' }, T('Cards get a frosted surface over any background, so text stays easy to read.')));
+  return box;
+};
+function lookStepSave(store) {
+  clearTimeout(LK.saveT);
+  LK.saveT = setTimeout(() => api('/api/setup/look', { body: { theme: store.theme, accent: null, bg: store.bg } }).catch(() => {}), 300);
+}
+
 /* ---------- Home Assistant: find it, then sign in on its own page - no token to copy ---------- */
 function haSigninEl(sub) {
   const box = el('div', { class: 'card' });
@@ -254,6 +340,7 @@ function testEl(kind, store, label = T('Test connection')) {
   const show = (r) => {
     out.replaceChildren(r.ok ? el('span', { class: 'ok' }, `✓ ${r.message || T('Connected')}`) : el('span', { class: 'err' }, `✗ ${TM(r.error, r.msg, r.vars)}`));
     if (!r.ok && r.fix) out.append(el('div', { class: 'fix' }, el('b', {}, T('How to fix:')), ' ', TM(r.fix, r.fixMsg || r.fix, r.vars)));
+    if (!r.ok && window.SetupHelp) out.append(SetupHelp.fixFor());   // never a dead end: the guide for this step, and a person to ask
     if (r.ok && r.warning) out.append(el('div', { class: 'warn' }, `⚠ ${T(r.warning)}`));
     if (r.fixedNote) out.append(el('div', { class: 'note' }, r.fixedNote));
     // a device with its own certificate (Frigate's secure port): show its fingerprint and trust exactly that one
@@ -605,6 +692,7 @@ function stepPage(step) {
   const out = [el('h1', {}, T(step.title))];
   if (W.focus?.step === step.id) out.push(el('div', { class: 'focus-note' }, el('b', {}, W.focus.label ? T('Adding {name}', { name: T(W.focus.label) }) : T('Picking up where you left off')), el('span', {}, ` - ${T('follow the card below. When you see a green check, press "Review & save". Everything else in your setup stays as it is.')}`)));
   if (step.intro) out.push(el('p', { class: 'intro' }, T(step.intro)));
+  if (window.SetupHelp) out.push(...SetupHelp.top(step, store));   // "This unlocks: ..." and what was found (setup-help.js)
   if (step.id === 'phone') out.push(el('p', { class: 'note' }, T('The CasaTorch app for iPhone, iPad and Android is coming soon to the App Store and Google Play. You can make its login now, or add a phone later.')));
   if (step.question) {
     const q = step.question;
@@ -681,6 +769,7 @@ function review() {
   const add = (k, v) => dl.append(el('dt', {}, T(k)), el('dd', {}, v || '-'));
   add('Home|house', `${a.house?.name} · ${a.house?.timezone} · °${a.house?.units} · ${a.house?.currency}`);
   add('Weather for', a.house?.location?.name || T('not set'));
+  if (a.look?.theme) add('Look', `${T(LK.cat?.themes.find((x) => x.id === a.look.theme)?.name || (a.look.theme === 'auto' ? 'Auto' : a.look.theme))} · ${T(({ photo: 'Your photo', reel: 'Photo reel', solid: 'Color' })[a.look.bg?.kind] || (LOOK_BG_KINDS.find(([k]) => k === a.look.bg?.kind) || [0, 'Plain'])[1])}`);
   add('Login', `${a.account?.username} (${T('owner')})${a.account?.license ? ` · ${T('Pro key entered')}` : ''}`);
   add('Your phone', a.phone?.how === 'new' ? T('{user} - QR code at the end', { user: a.phone.username }) : a.phone?.how === 'owner' ? T('owner login - QR code at the end') : T('later'));
   add('Calendars', (a.calendars?.list || []).filter((c) => c.url).map((c) => c.name).join(', ') || T('none'));
@@ -709,6 +798,7 @@ function problems(step) {
   problems.field = null;
   if (!step) return null;
   const store = ans(step.id);
+  const own = window.SetupHelp?.problem(step, store); if (own) return own;   // a step's own check (setup-help.js: two-step sign-in)
   if (step.question && !store[step.question.id]) return T('Pick an answer to continue.');
   if (step.id === 'ai' && store.provider !== 'later' && !store._test?.ok) return T('Press "Test connection" so your Home AI Agent is ready - or pick "Not now".');
   const br = step.question ? step.branches?.[store[step.question.id]] : null;
@@ -742,6 +832,7 @@ function go() {
     return el('li', { class: `${k === W.i ? 'on' : k <= W.max ? 'done' : 'ahead'}${can ? ' can' : ''}` }, can ? el('button', { type: 'button', onclick: () => { W.i = k; go(); scrollTo(0, 0); } }, t) : el('span', { 'aria-current': k === W.i ? 'step' : null, title: k > W.max ? T('Use Next to get here') : null }, t));
   }));
   $('#page').replaceChildren(...(W.i === 0 ? welcome() : W.i > W.steps.length ? review() : stepPage(W.steps[W.i - 1])));
+  window.SetupHelp?.progress();   // "Step 3 of 19 · about 8 min left" and the guide for this page (setup-help.js)
   $('#back').disabled = W.i === 0;
   $('#next').textContent = T(W.i === 0 ? 'Set up my home' : W.i > W.steps.length ? (W.focus ? 'Save' : 'Finish') : W.focus && W.steps[W.i - 1]?.id === W.focus.step ? 'Review & save' : 'Next');
   $('#back').textContent = T('Back');
@@ -758,14 +849,14 @@ $('#next').onclick = async () => {
     if (missing) { W.i = stepIndex(missing); go(); scrollTo(0, 0); $('#navmsg').textContent = T('Type the password again - for your safety it isn\'t kept between visits.'); return; }
     const msg = $('#finishMsg'), next = $('#next'), back = $('#back'), label = next.textContent;
     finishing = true; next.disabled = back.disabled = true; next.textContent = T('Saving…'); msg.replaceChildren(el('div', { class: 'note' }, T('Saving your setup…')));
-    const done = (r) => { W.done = true; clearTimeout(saveT); if (r?.pair) return pairDone(r.pair); location.href = W.focus ? '/#connect' : W.rerun ? '/' : '/?tour'; };
+    const done = (r) => { W.done = true; clearTimeout(saveT); if (window.SetupHelp && !W.focus && !W.rerun) return SetupHelp.celebrate(r, () => pairDone(r.pair)); if (r?.pair) return pairDone(r.pair); location.href = W.focus ? '/#connect' : W.rerun ? '/' : '/?tour'; };   // celebrate: what's ready and what's next (setup-help.js)
     try { const r = await api('/api/setup/finish', { body: { answers: { ...W.a, _added: W.added } }, noRetry: true }); if (r.ok) return done(r); msg.replaceChildren(el('div', { class: 'err' }, r.error)); }
     catch (e) {
       // The answer may have been lost on the way back (Wi-Fi, CasaTorch restarting): check whether it saved before saying it didn't.
       await wait(1500);
       const st = await api('/api/setup/state').catch(() => null);
       if (st && !W.rerun && st.configured && !st.demo) return done(null);
-      msg.replaceChildren(el('div', { class: 'err' }, e.status === 409 ? T('Already saving - one moment.') : e.message), el('div', { class: 'note' }, T('Nothing is lost - press Finish again.')));
+      msg.replaceChildren(el('div', { class: 'err' }, e.status === 409 ? T('Already saving - one moment.') : e.message), el('div', { class: 'note' }, T('Nothing is lost - press Finish again.')), window.SetupHelp ? SetupHelp.fixFor() : null);
     } finally { if (!W.done) { finishing = false; next.disabled = false; back.disabled = W.i === 0; next.textContent = label; } }
     return;
   }

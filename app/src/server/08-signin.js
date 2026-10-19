@@ -205,7 +205,7 @@ async function secondFactorAsync(u, code) {
     const i = hit && u.totp?.recovery ? u.totp.recovery.indexOf(hit) : -1; if (i < 0) return false;   // used up by a parallel request meanwhile
     u.totp.recovery.splice(i, 1); saveUsers(); return 'recovery';
   }
-  const step = totpOk(unseal(u.totp.secret), c, u.totp.lastStep || 0); if (!step) return false;
+  const step = totpOk(unseal(u.totp.secret, 'users.totp'), c, u.totp.lastStep || 0); if (!step) return false;
   u.totp.lastStep = step; saveUsers(); return 'totp';
 }
 
@@ -232,7 +232,7 @@ function proceed(req, res, t, { redirect = false } = {}) {
 }
 
 /* ---- gate: who may load what ---- */
-const OPEN = [/^\/api\/app\/(login|mfa|enroll|terms|claim|hello)$/, /^\/login\.(html|css|js)$/, /^\/(manifest\.webmanifest|sw\.js|apple-touch-icon\.png)$/, /^\/(terms|privacy)\.html$/, /^\/legal\.css$/, /^\/api\/auth\/(login|mfa|enroll|terms|state|invite|panel|google\/start|google\/callback)$/, /^\/api\/health$/, /^\/api\/lang$/, /^\/go-secure\.(html|js)$/, /^\/i18n(\.js|\/[a-z]{2}\.json)$/, /^\/icons\//, /^\/favicon/, /^\/setup\.css$/];
+const OPEN = [/^\/api\/app\/(login|mfa|enroll|terms|claim|hello)$/, /^\/login\.(html|css|js)$/, /^\/(manifest\.webmanifest|sw\.js|apple-touch-icon\.png)$/, /^\/(terms|privacy)\.html$/, /^\/legal\.css$/, /^\/api\/auth\/(login|mfa|enroll|terms|state|invite|panel|google\/start|google\/callback)$/, /^\/api\/health$/, /^\/api\/lang$/, /^\/go-secure\.(html|js)$/, /^\/i18n(\.js|\/[a-z]{2}\.json)$/, /^\/icons\//, /^\/favicon/, /^\/setup\.css$/, /^\/sealed-input\.js$/];   // sealed-input.js: the sign-in page seals the password before sending it (02s-sealed-input.js)
 const SETUP_PATHS = [/^\/setup\.(html|js)$/, /^\/setup-ha-done\.(html|js)$/, /^\/api\/setup\//];
 /* Changes must come from this site: a page elsewhere can't make your browser switch your lights. */
 app.use('/api', (req, res, next) => {
@@ -304,10 +304,10 @@ app.post('/api/auth/enroll', express.json({ limit: '4kb' }), async (req, res) =>
   const t = ticketOf(req.body?.ticket); if (!t) return res.status(401).json({ error: 'That took too long - sign in again.' });
   const u = userById(t.userId);
   if (!u || nextStep(t, u) !== 'enroll') return res.status(400).json({ error: 'Sign in again.' });   // never a way around a code you already have
-  if (!req.body?.code) { const e = await totpEnrolment(u); t.pending = e.secret; return res.json({ uri: e.uri, qr: e.qr, secret: e.secret }); }
-  if (!t.pending || !totpOk(t.pending, req.body.code)) return res.status(400).json({ error: 'That code is not right - check the time on your phone and try again.' });
+  if (!req.body?.code) { const e = await totpEnrolment(u); t.pending = seal(e.secret, 'pending.totp'); return res.json({ uri: e.uri, qr: e.qr, secret: e.secret }); }
+  if (!t.pending || !totpOk(unseal(t.pending, 'pending.totp') || '', req.body.code)) return res.status(400).json({ error: 'That code is not right - check the time on your phone and try again.' });
   const codes = recoveryCodes();
-  u.totp = { on: true, secret: seal(t.pending), recovery: await rcHashAllAsync(codes), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
+  u.totp = { on: true, secret: seal(unseal(t.pending, 'pending.totp'), 'users.totp'), recovery: await rcHashAllAsync(codes), since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
   saveUsers(); audit(req, '2fa-on', { user: u.username }); t.passed.add('enroll'); t.recovery = codes;
   const step = nextStep(t, u);
   if (step) return res.json({ step, ticket: t.id, recovery: codes, terms: TERMS_VERSION });
@@ -385,7 +385,7 @@ app.post('/api/auth/2fa/start', express.json({ limit: '4kb' }), async (req, res)
     if (!await verifySecretAsync(u.password, req.body?.password || '')) return res.status(403).json({ error: 'Your password is not right.' });
     undo();
   }
-  const e = await totpEnrolment(u); req.session && (pendingTotp.set(u.id, { secret: e.secret, exp: Date.now() + 10 * 60_000 }));
+  const e = await totpEnrolment(u); req.session && (pendingTotp.set(u.id, { secret: seal(e.secret, 'pending.totp'), exp: Date.now() + 10 * 60_000 }));
   res.json({ uri: e.uri, qr: e.qr, secret: e.secret });
 });
 const pendingTotp = new Map();
@@ -393,10 +393,10 @@ app.post('/api/auth/2fa/enable', express.json({ limit: '4kb' }), asyncRoute(asyn
   const u = me(req, res); if (!u) return;
   const p = pendingTotp.get(u.id);
   if (!p || p.exp < Date.now()) return res.status(400).json({ error: 'Start again - that took too long.' });
-  if (!totpOk(p.secret, req.body?.code)) return res.status(400).json({ error: 'That code is not right - check the time on your phone and try again.' });
+  if (!totpOk(unseal(p.secret, 'pending.totp') || '', req.body?.code)) return res.status(400).json({ error: 'That code is not right - check the time on your phone and try again.' });
   const codes = recoveryCodes();
   const recovery = await rcHashAllAsync(codes);
-  u.totp = { on: true, secret: seal(p.secret), recovery, since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
+  u.totp = { on: true, secret: seal(unseal(p.secret, 'pending.totp'), 'users.totp'), recovery, since: nowIso(), lastStep: Math.floor(Date.now() / 30000) };
   pendingTotp.delete(u.id); saveUsers(); endSessionsOf(u.id, req.session.key); audit(req, '2fa-on');
   res.json({ ok: true, recovery: codes });
 }));
@@ -498,7 +498,7 @@ app.put('/api/auth/admin/google', express.json({ limit: '8kb' }), requireRole('a
   const b = req.body || {};
   if (!b.clientId) { users.google = null; saveUsers(); audit(req, 'google-off'); return res.json({ ok: true }); }
   if (!/^[\w.-]+\.apps\.googleusercontent\.com$/.test(String(b.clientId))) return res.status(400).json({ error: 'That is not a Google client ID (it ends in .apps.googleusercontent.com).' });
-  users.google = { clientId: String(b.clientId), secret: b.clientSecret ? seal(String(b.clientSecret)) : users.google?.secret || null };
+  users.google = { clientId: String(b.clientId), secret: b.clientSecret ? seal(String(b.clientSecret), 'users.google.secret') : users.google?.secret || null };
   if (!users.google.secret) return res.status(400).json({ error: 'Paste the client secret too.' });
   saveUsers(); audit(req, 'google-on'); res.json({ ok: true });
 });
@@ -547,7 +547,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
   if (!st || st.exp < Date.now() || cookie !== state || !req.query.code) return res.redirect('/login.html?error=google-state');
   try {
     const tok = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(10000),
-      body: new URLSearchParams({ code: String(req.query.code), client_id: users.google.clientId, client_secret: unseal(users.google.secret) || '', redirect_uri: st.redirectUri, grant_type: 'authorization_code', code_verifier: st.verifier }) }).then((r) => r.json());
+      body: new URLSearchParams({ code: String(req.query.code), client_id: users.google.clientId, client_secret: unseal(users.google.secret, 'users.google.secret') || '', redirect_uri: st.redirectUri, grant_type: 'authorization_code', code_verifier: st.verifier }) }).then((r) => r.json());
     if (!tok.access_token) throw new Error(tok.error_description || tok.error || 'Google said no');
     const info = await fetch('https://openidconnect.googleapis.com/v1/userinfo', { headers: { Authorization: `Bearer ${tok.access_token}` }, signal: AbortSignal.timeout(10000) }).then((r) => r.json());
     const email = String(info.email || '').toLowerCase();

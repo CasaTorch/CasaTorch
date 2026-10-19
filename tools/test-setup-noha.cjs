@@ -8,8 +8,8 @@
  * Covers: the everyday steps with their validation errors (an empty calendar, a reminder without a name,
  * a camera without a name), resume after a reload mid-way, a camera address tidied by CasaTorch and
  * tested, direct gear (Shelly) instead of the "through Home Assistant" twins, energy by price per kWh,
- * review, Finish without a phone (straight to the dashboard and its tour), sign-in, and the camera
- * showing up on the dashboard. Options: BASE=http://... to use a server already running; SHOTS=<dir>;
+ * "Not now" to two-step sign-in (and its gentle reminders), review, Finish without a phone (what's ready, then
+ * the dashboard and its tour), sign-in, and the camera showing up on the dashboard. Options: BASE=http://... to use a server already running; SHOTS=<dir>;
  * TEST_PORT_BASE=18290; KEEP_TEST_DATA=1.
  */
 'use strict';
@@ -48,12 +48,19 @@ let page, shot, camServer;
 
   await nextTo('Your home');
   await field('What should we call your home?').fill('Quiet House');
+  await nextTo('Make it yours'); await p.locator('main .lk-stage').waitFor();   // the look step: a theme and background are already picked
   await nextTo('Your CasaTorch login');
   await field('Username').fill('owner');
   await field('Password (10+ characters - a short sentence works well)').fill(PW);
   await next();
   check('the terms must be accepted', /agree to the Terms/.test(await msg()), await msg());
   await p.locator('main label.check input[type=checkbox]').check();
+  await nextTo('Protect your CasaTorch');
+  await p.locator('main .badge.rec').waitFor();
+  await next();
+  check('two-step sign-in needs an answer', /Not now/.test(await msg()), await msg());
+  await p.locator('main [role=radio]', { hasText: 'Not now' }).click();
+  check('"Not now" says how it will remind you', /remind you gently/.test(await p.locator('main .later').innerText()));
   await nextTo('Your phone');
   await btn('Not now').click();
 
@@ -117,6 +124,10 @@ let page, shot, camServer;
   await field('Password (10+ characters - a short sentence works well)').fill(PW);
   await p.locator('#progress button', { hasText: 'Review' }).click(); await h1('All set?');
   await next();
+  await h1('Your CasaTorch is ready');
+  check('the end shows what\'s ready and nudges two-step sign-in', /Quiet House/.test(await p.locator('main ul.ready').innerText()) && await p.locator('main .warnline', { hasText: 'Two-step sign-in is off' }).count() === 1);
+  await shot('03b-ready');
+  await p.locator('#next', { hasText: 'Open my dashboard' }).click();
   await p.waitForURL(/login/);
   check('finish without a phone goes to sign-in', true);
   await p.locator('#u').fill('owner'); await p.locator('#p').fill('wrong-password-1'); await p.locator('button[type=submit]').click();
@@ -128,6 +139,10 @@ let page, shot, camServer;
   await p.locator('.tour-offer').waitFor();
   check('the dashboard offers the tour', true);
   await shot('04-dashboard');
+  const health = await p.evaluate(async () => (await (await fetch('/api/doctor')).json()));
+  check('Health shows two-step sign-in in amber after "Not now"', health.checks?.find((c) => c.id === 'signins')?.status === 'warn', JSON.stringify(health.checks?.find((c) => c.id === 'signins')));
+  const gs = await p.evaluate(async () => (await (await fetch('/api/support/checklist')).json()));
+  check('Getting started has "Turn on two-step sign-in"', gs.items?.some((i) => i.id === 'twostep' && !i.done), JSON.stringify(gs.items));
   const cams = await p.evaluate(async () => (await (await fetch('/api/devices')).json()));
   const names = JSON.stringify(cams);
   check('the snapshot camera is among the devices', names.includes('Back yard'), names.slice(0, 200));

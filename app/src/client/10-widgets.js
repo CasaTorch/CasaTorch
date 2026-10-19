@@ -9,7 +9,7 @@ const dayName = (ymd) => dtf(dateLoc(), { timeZone: 'UTC', weekday: 'short' }).f
 const fits = (h, per, head = 46) => Math.max(1, Math.floor((h * ROW_PX + (h - 1) * GAP_PX - head) / per));
 /* Weather words ("Clear") in the home's language - with their own context, so "Clear" isn't read as an alert clearing. */
 const wxWord = (w) => (w ? T(`${w}|weather`) : '');
-const empty = (text, link, label) => el('div', { class: 'allclear' }, el('div', {}, el('div', { class: 'small' }, T(text)), link ? el('a', { class: 'btn small', href: link, style: 'margin-top:10px' }, T(label)) : null));   // T(): a sentence already translated passes through unchanged
+const empty = (text, link, label) => el('div', { class: 'allclear' }, el('div', {}, el('div', { class: 'small' }, T(text)), link ? el('a', { class: 'btn small', href: link, style: 'margin-top:10px' }, T(label)) : null, link && typeof docLink === 'function' ? el('div', { style: 'margin-top:6px' }, docLink(`empty.${current}`)) : null));   // docLink: 39d-docs-links.js. T(): a sentence already translated passes through unchanged
 
 widget({ id: 'clock', title: 'Clock', icon: 'clock', bare: true, live: true, cat: 'time', essential: true, blurb: 'The time and date, digital or a clock face', min: [2, 1], size: [4, 2],
   options: [
@@ -199,7 +199,16 @@ function deviceSheet(d, onChange) {
     clearTimeout(timer); timer = setTimeout(sync, 900);
   }
   draw();
-  modal(el('div', {}, el('div', { class: 'small muted', style: 'margin:-6px 0 10px' }, [d.area, d.provider === 'ha' ? 'Home Assistant' : pretty(d.provider)].filter(Boolean).join(' · ')), body), { title: d.name });
+  modal(el('div', {}, el('div', { class: 'small muted', style: 'margin:-6px 0 10px' }, [d.area, d.provider === 'ha' ? 'Home Assistant' : pretty(d.provider)].filter(Boolean).join(' · ')), body, typeof alertDeviceLink === 'function' ? alertDeviceLink(d) : null), { title: d.name });   // alertDeviceLink: 37a-alert-rules.js
+}
+/* Press and hold (or right-click) an element to do something else than a tap: the tap that ends the hold is swallowed. */
+function holdFor(node, fn, ms = 520) {
+  let t = null, x0 = 0, y0 = 0, fired = false;
+  node.addEventListener('pointerdown', (e) => { if (e.button > 0 || document.body.classList.contains('editing-on')) return; fired = false; x0 = e.clientX; y0 = e.clientY; t = setTimeout(() => { t = null; fired = true; try { navigator.vibrate?.(10); } catch { /* not here */ } fn(); }, ms); });
+  node.addEventListener('pointermove', (e) => { if (t && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) { clearTimeout(t); t = null; } });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) node.addEventListener(ev, () => { clearTimeout(t); t = null; });
+  node.addEventListener('click', (e) => { if (fired) { e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
+  node.addEventListener('contextmenu', (e) => { if (document.body.classList.contains('editing-on')) return; e.preventDefault(); fn(); });
 }
 function devButton(d, compact) {
   const cls = ['dev', d.online === false && 'offline', (d.water || d.smoke || d.triggered) && 'alarm', d.playing && 'playing', !d.playing && (d.on || (d.kind === 'presence' && d.home) || (d.kind === 'cover' && d.open)) && !['sensor'].includes(d.kind) && 'on'].filter(Boolean).join(' ');
@@ -212,6 +221,7 @@ function devButton(d, compact) {
   const redraw = () => { if (root.isConnected) root.replaceWith(devButton(d, compact)); };
   if (toggles) b.onclick = async () => { try { await toggleDevice(d); redraw(); } catch (err) { toast(err.message); } };
   else if (sheet) b.onclick = () => deviceSheet(d, redraw);
+  holdFor(b, () => deviceDetails(d));   // press and hold: everything about it
   if (sheet && toggles) root.append(el('button', { class: 'dev-more', title: T('More controls'), 'aria-label': `${T('More controls')}: ${d.name}`, onclick: () => deviceSheet(d, redraw) }, icon('sliders', 16)));
   return root;
 }
@@ -257,27 +267,85 @@ function devHeadline(d) {
   if (d.on != null) return d.on ? (d.brightness ? T('On · {brightness}%', { brightness: d.brightness }) : T('On')) : T('Off');
   return pretty(d.state || '-');
 }
-function deviceCard(d, { w, h }) {
-  if (d.kind === 'camera') return camView(d);
-  const act = async (action, label, value) => { try { await post(`/api/devices/${encodeURIComponent(d.id)}/${action}`, value != null ? { value } : {}); toast(`${d.name}: ${label}`); } catch (err) { toast(err.message, 4000); } };
-  const sub = devMeta(d, false), head = devHeadline(d);
+/* One device, size-adaptive (sizeTier, 06-pagegrid.js):
+     S  - the key number or state
+     M  - + what it is (sub line) and its controls (or a sparkline for a sensor)
+     L  - + a chart of the last 24 hours, the brightness slider, the thermostat's up/down, the media buttons
+     XL - + the details: room, where it comes from, battery, today's low, high and average
+   Locks only lock, garage doors and gates only close, alarms only arm - here as everywhere (the server checks too). */
+const DEV_MODES = { heat: 'Heating', cool: 'Cooling', heat_cool: 'Auto', auto: 'Auto', off: 'Off', eco: 'Eco', dry: 'Dry', fan_only: 'Fan' };
+async function devAct(d, action, label, value) { try { await post(`/api/devices/${encodeURIComponent(d.id)}/${action}`, value != null ? { value } : {}); if (label) toast(`${d.name}: ${label}`); return true; } catch (err) { toast(err.message, 4000); return false; } }
+/** The controls a device has, for a tile or the details sheet. tier: how many to show. */
+function devControls(d, tier, redraw) {
   const lit = d.on || d.playing || (d.kind === 'presence' && d.home) || (d.kind === 'cover' && d.open);
-  const controls = [];
-  if (TOGGLES.has(d.kind) && d.online !== false) controls.push(el('button', { class: `btn small${lit ? ' primary' : ''}`, onclick: async (e) => { try { await toggleDevice(d); e.target.closest('.devcard').replaceWith(deviceCard(d, { w, h })); } catch (err) { toast(err.message); } } }, d.kind === 'media' ? (d.playing ? T('Pause') : T('Play')) : d.on ? T('Turn off') : T('Turn on')));
-  if (d.kind === 'cover') { if (!d.risky) controls.push(el('button', { class: 'btn small', onclick: () => act('open', 'opening') }, T('Open'))); controls.push(el('button', { class: 'btn small', onclick: () => act('close', 'closing') }, T('Close'))); }
-  if (d.kind === 'action') controls.push(el('button', { class: 'btn small primary', onclick: () => act('run', 'done') }, T('Run')));
-  if (d.kind === 'vacuum') controls.push(el('button', { class: 'btn small', onclick: () => act('start', 'starting') }, T('Start')), el('button', { class: 'btn small', onclick: () => act('dock', T('going home')) }, T('Dock')));
-  if (hasSheet(d)) controls.push(el('button', { class: 'btn small', title: T('Every control for this device'), onclick: () => deviceSheet(d) }, icon('sliders', 14), T('More')));
-  const dim = d.kind === 'light' && d.on && h >= 3 ? el('input', { type: 'range', min: 1, max: 100, value: d.brightness || 100, 'aria-label': `${d.name} brightness`, style: 'margin-top:10px', onchange: (e) => { d.brightness = Number(e.target.value); act('brightness', `${d.brightness}%`, d.brightness); } }) : null;
-  return el('div', { class: `devcard${lit ? ' on' : ''}${d.water || d.smoke || d.triggered ? ' alarm' : ''}${d.online === false ? ' offline' : ''}` },
-    el('div', { class: 'row', style: 'gap:12px;align-items:center' }, el('span', { class: 'ic' }, icon(devIconName(d), 22)),
-      el('div', { style: 'min-width:0' }, el('div', { class: 'devcard-big ellipsis', style: w <= 2 ? 'font-size:22px' : null }, head || ''), h >= 2 && sub && sub !== head ? el('div', { class: 'small muted ellipsis' }, sub) : null)),
-    dim, controls.length && h >= 2 ? el('div', { class: 'row', style: 'gap:6px;margin-top:auto;padding-top:10px;flex-wrap:wrap' }, controls) : null,
-    h >= 3 ? el('div', { class: 'tiny faint', style: 'margin-top:8px' }, [d.area, d.provider === 'ha' ? 'Home Assistant' : pretty(d.provider)].filter(Boolean).join(' · ')) : null);
+  const out = [];
+  if (d.online === false) return out;
+  if (TOGGLES.has(d.kind)) out.push(el('button', { class: `btn small${lit ? ' primary' : ''}`, onclick: async () => { try { await toggleDevice(d); redraw(); } catch (err) { toast(err.message); } } }, d.kind === 'media' ? (d.playing ? T('Pause') : T('Play')) : d.on ? T('Turn off') : T('Turn on')));
+  if (d.kind === 'media' && TIER_RANK[tier] >= 2 && C()?.can(d, 'next')) out.push(el('button', { class: 'btn small', 'aria-label': T('Next'), onclick: () => devAct(d, 'next') }, '⏭'));
+  if (d.kind === 'cover') { if (!d.risky) out.push(el('button', { class: 'btn small', onclick: () => devAct(d, 'open', T('opening')) }, T('Open'))); out.push(el('button', { class: 'btn small', onclick: () => devAct(d, 'close', T('closing')) }, T('Close'))); }
+  if (d.kind === 'lock' && d.locked === false) out.push(el('button', { class: 'btn small primary', onclick: () => devAct(d, 'lock', T('locking')).then(() => setTimeout(redraw, 1200)) }, icon('lock', 14), T('Lock')));
+  if (d.kind === 'action') out.push(el('button', { class: 'btn small primary', onclick: () => devAct(d, 'run', T('done')) }, T('Run')));
+  if (d.kind === 'vacuum') out.push(el('button', { class: 'btn small', onclick: () => devAct(d, 'start', T('starting')) }, T('Start')), el('button', { class: 'btn small', onclick: () => devAct(d, 'dock', T('going home')) }, T('Dock')));
+  if (d.kind === 'climate' && d.targetC != null && d.mode !== 'off' && TIER_RANK[tier] >= 1) {
+    const step = d.stepC || (S.units === 'C' ? 0.5 : 5 / 9);
+    let t = null; const show = el('b', { class: 'num' }, tempOf(d.targetC));
+    const nudge = (k) => { d.targetC = Math.round((d.targetC + k * step) * 100) / 100; show.textContent = tempOf(d.targetC); clearTimeout(t); t = setTimeout(() => devAct(d, 'target', null, S.units === 'C' ? Math.round(d.targetC * 2) / 2 : d.targetC), 700); };
+    out.push(el('div', { class: 'thermo-set' }, el('button', { class: 'btn round', 'aria-label': T('Down'), onclick: () => nudge(-1) }, '−'), el('div', {}, el('div', { class: 'tiny muted' }, T('Set to')), show), el('button', { class: 'btn round', 'aria-label': T('Up'), onclick: () => nudge(1) }, '+')));
+  }
+  if (hasSheet(d) && d.kind !== 'climate') out.push(el('button', { class: 'btn small', title: T('Every control for this device'), onclick: () => deviceSheet(d) }, icon('sliders', 14), T('More')));
+  return out;
+}
+/** Details for the XL tile and the long-press sheet: a small table. h: 24 h of history (or null). */
+function devFacts(d, h) {
+  const rows = [[T('Room'), d.area], [T('From'), d.provider === 'ha' ? 'Home Assistant' : srcName(d.source || d.provider) || pretty(d.provider)], [T('State'), devMeta(d, false)], [T('Battery'), d.battery != null ? `${Math.round(d.battery)}%` : null]];
+  const nums = (h?.v || []).filter(Number.isFinite);
+  if (nums.length > 2) { const f = histFmt(h.field, d); rows.push([T('Today\'s low'), f(Math.min(...nums))], [T('Today\'s high'), f(Math.max(...nums))], [T('Average'), f(nums.reduce((a, b) => a + b, 0) / nums.length)]); }
+  if (d.kind === 'climate' && d.mode) rows.push([T('Mode'), T(DEV_MODES[d.mode] || pretty(d.mode))]);
+  return el('dl', { class: 'kv small dev-facts' }, rows.filter(([, v]) => v != null && v !== '').flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)]));
+}
+function deviceCard(d, size) {
+  if (d.kind === 'camera') return camView(d);
+  const { w, h } = size, tier = size.tier || sizeTier({ w, h });
+  const box = el('div', { class: `devcard tier-${tier}` });
+  const draw = () => {
+    const sub = devMeta(d, false), head = devHeadline(d), lit = d.on || d.playing || (d.kind === 'presence' && d.home) || (d.kind === 'cover' && d.open);
+    box.className = `devcard tier-${tier}${lit ? ' on' : ''}${d.water || d.smoke || d.triggered ? ' alarm' : ''}${d.online === false ? ' offline' : ''}`;
+    const ctl = tier === 's' ? [] : devControls(d, tier, draw);
+    const dim = d.kind === 'light' && d.on && atLeast({ tier }, 'l') && C()?.can(d, 'brightness') !== false ? el('input', { type: 'range', min: 1, max: 100, value: d.brightness || 100, 'aria-label': T('{name} brightness', { name: d.name }), style: 'margin-top:10px', onchange: (e) => { d.brightness = Number(e.target.value); devAct(d, 'brightness', `${d.brightness}%`, d.brightness); } }) : null;
+    const hist = shFieldOf(d) && tier !== 's' && !(tier === 'm' && ctl.length && h <= 2) ? el('div', { class: 'dev-hist' }) : null;   // a medium tile with controls keeps its room for them
+    box.replaceChildren(el('div', { class: 'dev-main' }, ...[
+      el('div', { class: 'row', style: 'gap:12px;align-items:center' }, el('span', { class: 'ic' }, icon(devIconName(d), tier === 's' ? 20 : 22)),
+        el('div', { style: 'min-width:0' }, el('div', { class: 'devcard-big ellipsis', style: w <= 2 ? 'font-size:22px' : null }, head || ''), tier !== 's' && sub && sub !== head ? el('div', { class: 'small muted ellipsis' }, sub) : null)),
+      dim, hist, ctl.length ? el('div', { class: 'row dev-ctl' }, ctl) : null,
+      tier === 'l' ? el('div', { class: 'tiny faint', style: 'margin-top:8px' }, [d.area, d.provider === 'ha' ? 'Home Assistant' : pretty(d.provider)].filter(Boolean).join(' · ')) : null].filter(Boolean)),
+      tier === 'xl' ? el('div', { class: 'dev-facts-wrap' }, devFacts(d, null)) : '');
+    if (hist || tier === 'xl') devHistory([d.id]).then((sr) => {
+      const s = sr[d.id];
+      if (hist && s) hist.replaceChildren(tier === 'm' ? pgSpark(s.v, { w: 300, h: 34, label: T('The last 24 hours'), min: Math.min(...s.v.filter(Number.isFinite)), max: Math.max(...s.v.filter(Number.isFinite)) }) : pgLine(s.v, { end: s.end, step: s.step, fmt: histFmt(s.field, d), label: d.name, h: tier === 'xl' ? 110 : 90 }));
+      box.querySelector('.dev-facts-wrap')?.replaceChildren(devFacts(d, s));
+    });
+  };
+  draw();
+  return box;
+}
+/** Which devices have a history worth a chart (the same rule as shField in 60-layout.js). */
+const shFieldOf = (d) => d.kind !== 'camera' && (Number.isFinite(d.tempC) || Number.isFinite(d.humidity) || Number.isFinite(d.powerW) || (d.kind === 'value' && d.value !== '' && d.value != null && Number.isFinite(Number(d.value))));
+/** Press and hold a device (or right-click): everything about it - state, controls, 24 h chart, details. */
+function deviceDetails(d) {
+  const body = el('div', { class: 'dev-details' });
+  const draw = () => {
+    body.replaceChildren(el('div', { class: 'row', style: 'gap:14px;align-items:center;margin-bottom:12px' }, el('span', { class: 'ic big' }, icon(devIconName(d), 28)), el('div', {}, el('div', { class: 'devcard-big' }, devHeadline(d) || ''), el('div', { class: 'small muted' }, devMeta(d, false)))),
+      C() && hasSheet(d) ? el('div', { class: 'dsheet' }, ...C().build(d, { units: S.units, act: async (a, v) => { await devAct(d, a, null, v); } })) : el('div', { class: 'row', style: 'gap:6px;flex-wrap:wrap' }, devControls(d, 'xl', draw).filter((x) => !x.title)),
+      el('div', { class: 'dev-hist', style: 'margin-top:12px' }), el('div', { class: 'dev-facts-wrap' }, devFacts(d, null)));
+    devHistory(shFieldOf(d) ? [d.id] : []).then((sr) => { const s = sr[d.id]; if (s) body.querySelector('.dev-hist')?.replaceChildren(pgLine(s.v, { end: s.end, step: s.step, fmt: histFmt(s.field, d), label: d.name })); body.querySelector('.dev-facts-wrap')?.replaceChildren(devFacts(d, s)); });
+  };
+  draw();
+  modal(body, { title: d.name, wide: true });
 }
 widget({ id: 'device', title: 'Device', icon: 'plug', multi: true, hidden: true, min: [2, 1], size: [3, 2], render(b, ctx, size) {
   const d = (ctx.data.devices?.devices || []).find((x) => x.id === b._t?.device);
   if (!d) return b.replaceChildren(empty(T('This device is not reporting right now. If it was removed from Home Assistant, remove this tile.')));
+  tileHeader(b, d.name);   // a device tile without a name of its own is called after the device
   b.replaceChildren(deviceCard(d, size));
 } });
 /* A whole room (a Home Assistant area): every device in it, its temperature and what is on. */
@@ -327,7 +395,7 @@ const camLiveTile = (d) => !!d.stream && d.provider === 'camera';
 function camLive(c, on) {
   if (!camLiveTile(c.d)) return;
   if (on && !c.live) {
-    if ([...CAMS.values()].filter((x) => x.live).length >= camLiveCap()) return;
+    if ([...CAMS.values()].filter((x) => x.live).length >= (c.boost ? camLiveCap() * 2 + 1 : camLiveCap())) return;   // the Security wall with Live video on: more at once (small streams over one socket each - no MJPEG pile-up)
     c.live = true;
     c.player = camPlay(c.d, { role: 'tile', video: c.video, img: c.mjpeg, onState: (st) => {
       if (!c.live) return;
@@ -377,7 +445,8 @@ setInterval(() => {
   }
 }, 400);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) for (const c of CAMS.values()) if (c.wrap.isConnected) camFetch(c); });
-function camView(d) {
+/* camView(d, { live }): live true (the Security wall's "Live video: on") lets more cameras play at once. */
+function camView(d, o = {}) {
   let c = CAMS.get(d.id);
   if (!c) {
     const img = el('img', { alt: d.name, decoding: 'async', role: 'button', tabindex: 0 }), fade = el('img', { class: 'cam-fade', alt: '', 'aria-hidden': 'true' });
@@ -388,7 +457,7 @@ function camView(d) {
     c = { d, img, fade, video, mjpeg, age, name, wrap, visible: true, last: 0, etag: null, url: null, busy: false }; wrap.__cam = c; CAMS.set(d.id, c);
     camSeen?.observe(wrap); camFetch(c, true);
   }
-  c.d = d; c.name.textContent = d.name; c.img.alt = d.name;
+  c.d = d; c.name.textContent = d.name; c.img.alt = d.name; c.boost = !!o.live;
   return c.wrap;
 }
 /* Full view: live video (the camera's main stream) where it has it, a new picture every second otherwise.

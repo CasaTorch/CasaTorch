@@ -7,6 +7,8 @@
  *   - the Home Assistant phone app, if setup chose that.
  * Quiet hours hold back everything except critical alerts. Each device picks
  * how much it hears: only critical, important (the default), or everything.
+ * Settings › Alerts fine-tunes it per kind, room, device and person: the
+ * decision for each phone is alertDecide() in 40r-alert-rules.js.
  *
  * Security: a device can only be registered by a signed-in person; push
  * addresses must belong to a real push service (Google, Apple, Mozilla,
@@ -62,37 +64,64 @@ async function someoneHome() {
     return { v: ppl.length ? ppl.some((d) => d.home) : null, n: ppl.length };
   });
 }
-const isArrival = (a) => /:(doorbell|motion):/.test(String(a.id || '')) || ['doorbell', 'motion'].includes(a.kind);
 let sentThisHour = { hour: -1, n: 0 };
+const recentTags = new Map();   // the same alert twice within 2 minutes (two sources saying the same thing) goes out once
+/* An alert goes to each phone its rules allow (40r-alert-rules.js: alertDecide), with that phone's sound. */
 async function notify(a) {
   const sev = sevOf(a);
   if (sev === 'ok') return;   // "Cleared: ..." stays on the dashboard
-  if (sev !== 'critical' && quietNow()) return;
-  // Smart alerts: doorbell and motion only reach phones when nobody's home (they stay on the dashboard).
-  if (config.alerts?.awayOnly && isArrival(a) && proStatus().pro && (await someoneHome()).v === true) return;
-  const hr = Math.floor(Date.now() / 3_600_000); if (sentThisHour.hour !== hr) sentThisHour = { hour: hr, n: 0 };
-  if (++sentThisHour.n > 30 && sev !== 'critical') return;   // a flapping sensor must not buzz a phone all night
+  const base = alertBaseId(a.id || a.title), isRepeat = /:repeat$/.test(String(a.id || ''));
+  const now = Date.now();
+  for (const [k, at] of recentTags) if (now - at > 120_000) recentTags.delete(k);
+  if (!isRepeat && recentTags.has(base) && !isSafetyAlert(base)) return;
+  recentTags.set(base, now);
+  const hr = Math.floor(now / 3_600_000); if (sentThisHour.hour !== hr) sentThisHour = { hour: hr, n: 0 };
+  if (++sentThisHour.n > 30 && sev !== 'critical' && !isSafetyAlert(base)) return;   // a flapping sensor must not buzz a phone all night
+  const m = await alertMoment(), open = alerts.open[base], snoozedUntil = open?.snoozed ? Date.parse(open.snoozed.until) : 0, device = alertDevCtx(a);
+  const decide = (t) => alertDecide(a, { ...m, user: t.user ? alertRulesUser(t.user) : {}, target: t, isRepeat, snoozedUntil, device });
+  const go = [], dec = new Map();
+  for (const t of alertTargets()) { const d = decide(t); dec.set(t, d); if (d.push) go.push(t); else if (d.digest) digestAdd(t.id, a); }
+  if (!go.length) return;
   const msg = { title: a.title || 'CasaTorch', body: a.body || (sev === 'critical' ? 'Open CasaTorch to see what is happening.' : ''), tag: String(a.id || a.title || '').slice(0, 64), url: a.url || '/#alerts', sev };
-  await Promise.allSettled([webPushAll(msg), haPhone(msg), appPushAll(msg)]);   // the browser web app, Home Assistant's app, the CasaTorch app
+  await alertSendTo(go, msg, (t) => dec.get(t));
 }
-async function webPushAll(msg) {
-  if (!push.subs.length) return;
-  const k = vapid(); let changed = false;
-  await Promise.allSettled(push.subs.filter((s) => (Object.hasOwn(LEVELS, s.level) ? LEVELS[s.level] : LEVELS.important).includes(msg.sev)).map(async (s) => {
-    try {
-      await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(msg), { TTL: msg.sev === 'critical' ? 86_400 : 3_600, urgency: msg.sev === 'critical' ? 'high' : 'normal', vapidDetails: { subject: 'mailto:support@casatorch.com', publicKey: k.publicKey, privateKey: k.privateKey }, timeout: 10_000 });   // scrub-ok: public support address
-      s.lastOk = nowIso(); changed = true;
-    } catch (err) {
-      if ([404, 410].includes(err.statusCode)) { push.subs = push.subs.filter((x) => x !== s); changed = true; }   // the device turned alerts off or the browser was reset
-      else s.lastError = `${err.statusCode || ''} ${String(err.message).slice(0, 80)}`.trim();
-    }
-  }));
-  if (changed) savePush();
+/** Send one message to these phones (each with the sound its decision picked). Resolves to how many it reached. */
+async function alertSendTo(targets, msg, decisionOf = () => null) {
+  const forT = (t) => {
+    const d = decisionOf(t); if (!d) return msg;
+    const sev = d.sound === 'urgent' ? 'critical' : msg.sev === 'critical' ? 'warning' : msg.sev;   // "urgent" is how a phone treats critical alerts
+    return { ...msg, sev, ...(d.sound === 'silent' ? { silent: true } : {}) };
+  };
+  let ok = 0;
+  const apps = new Map();
+  const jobs = targets.map(async (t) => {
+    const m = forT(t);
+    if (t.type === 'web') { if (await webSendOne(t.ref, m)) ok++; }
+    else if (t.type === 'ha') { await haPhone(m, true); ok++; }
+    else if (t.type === 'app') { const k = JSON.stringify([m.sev, !!m.silent]); if (!apps.has(k)) apps.set(k, { m, list: [] }); apps.get(k).list.push(t.ref); }
+  });
+  await Promise.allSettled(jobs);
+  if (!isDemo()) await Promise.allSettled([...apps.values()].map(async ({ m, list }) => { const r = await appPushSend(list, m); if (r?.ok) ok += list.length; }));
+  if (pushDirty) { pushDirty = false; savePush(); }
+  return ok;
+}
+let pushDirty = false;
+async function webSendOne(s, msg) {
+  if (!push.subs.includes(s)) return false;
+  const k = vapid();
+  try {
+    await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(msg), { TTL: msg.sev === 'critical' ? 86_400 : 3_600, urgency: msg.sev === 'critical' ? 'high' : 'normal', vapidDetails: { subject: 'mailto:support@casatorch.com', publicKey: k.publicKey, privateKey: k.privateKey }, timeout: 10_000 });   // scrub-ok: public support address
+    s.lastOk = nowIso(); pushDirty = true; return true;
+  } catch (err) {
+    if ([404, 410].includes(err.statusCode)) push.subs = push.subs.filter((x) => x !== s);   // the device turned alerts off or the browser was reset
+    else s.lastError = `${err.statusCode || ''} ${String(err.message).slice(0, 80)}`.trim();
+    pushDirty = true; return false;
+  }
 }
 /* The Home Assistant phone app: every phone that has it ("notify.mobile_app_<phone>"), or the ones chosen. */
-async function haPhone(msg) {
+async function haPhone(msg, decided = false) {   // decided: the alert rules already said yes (alertSendTo)
   const h = config.homeAssistant; if (config.alerts?.phone !== 'homeassistant' || !h?.url) return;
-  if (!(LEVELS.important).includes(msg.sev)) return;
+  if (!decided && !(LEVELS.important).includes(msg.sev)) return;
   const H = { Authorization: `Bearer ${h.token}`, 'Content-Type': 'application/json' };
   let targets = config.alerts?.haTargets;
   if (!targets?.length) {

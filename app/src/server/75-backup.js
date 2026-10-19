@@ -136,6 +136,7 @@ app.post('/api/backup', requireRole('owner'), express.json({ limit: '2kb' }), as
 });
 async function restoreHandler(req, res) {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
+  try { openSealedHeader(req, 'x-backup-passphrase'); } catch (e) { res.setHeader('X-CasaTorch-Seal', e.seal === 'retry' ? 'retry' : 'bad'); return res.status(e.seal === 'retry' ? 409 : 400).json({ error: e.seal === 'retry' ? SEAL_RETRY : 'Enter the backup\'s passphrase again.' }); }   // sealed by the page (02s-sealed-input.js)
   const pass = bkPass(req.headers['x-backup-passphrase'] ? decodeURIComponent(String(req.headers['x-backup-passphrase'])) : '');
   if (!pass) return res.status(400).json({ error: 'Enter the backup\'s passphrase.' });
   if (bkBusy) return res.status(409).json({ error: 'A backup or restore is already running.' });

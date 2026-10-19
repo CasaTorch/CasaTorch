@@ -25,9 +25,15 @@
  * the hour, path and MTU changes, and every distinct path seen this week for the merged path graph) is kept in
  * data/apptests.json.
  *
- * Basic: the built-in apps, up to 8 tests. Pro: your own websites, up to 30
- * tests, every minute if you like, and one alert when an app is down or slow,
- * with the likely culprit.
+ * Network tests (Pro, added from the Network page): a ping, a TCP port or a
+ * DNS lookup against any host - on your network or on the internet - timed
+ * the same way, with optional alert thresholds ("slower than 80 ms", "more
+ * than 5% loss"). Ping uses the computer's own ping (no special rights); where
+ * that isn't allowed, five TCP connections stand in for it.
+ *
+ * Basic: the built-in apps, up to 8 tests. Pro: your own websites and network
+ * tests, up to 30 tests, every minute if you like, and one alert when an app
+ * is down or slow, with the likely culprit.
  * ====================================================================== */
 import dnsCb from 'node:dns';
 const AT_EVERY = [1, 5, 15], AT_PATH_EVERY = 15 * 60_000, AT_KEEP = 1440, AT_BASIC_MAX = 8, AT_PRO_MAX = 30, AT_FILE = path.join(DATA_DIR, 'apptests.json');
@@ -194,6 +200,55 @@ async function atRunDns() {
     min: got.length ? Math.round(Math.min(...got) * 10) / 10 : null, max: got.length ? Math.round(Math.max(...got) * 10) / 10 : null, loss: Math.round((times.length - got.length) / times.length * 100), jitter: null,
     error: got.length ? null : 'names could not be looked up', errKind: got.length ? null : 'dns' };
 }
+/* ---- network tests: ping, a TCP port, a DNS lookup (Pro) ---- */
+const AT_NET_KINDS = ['ping', 'tcp', 'dnsq'];
+/* The host's address (a name is looked up first, like any app would). */
+async function atResolve(host) {
+  if (net.isIP(host)) return { ip: host, dns: 0 };
+  const t0 = process.hrtime.bigint();
+  const a = await dnsP.lookup(host).catch(() => null);
+  return a ? { ip: a.address, dns: Math.round(Number(process.hrtime.bigint() - t0) / 1e5) / 10 } : null;
+}
+/* "time=12.3 ms" lines and the loss summary from ping on Linux, a Mac or Windows. */
+function atParsePing(text) {
+  const rtts = [...String(text).matchAll(/time[=<]\s*([\d.]+)\s*ms/gi)].map((m) => Number(m[1])).filter(Number.isFinite);
+  const lm = String(text).match(/([\d.]+)%\s*(?:packet\s*)?loss/i);
+  return { rtts, loss: lm ? Math.round(Number(lm[1])) : null };
+}
+async function atRunPing(t) {
+  const r = await atResolve(t.host); if (!r) return { ok: false, error: 'its name could not be found (DNS)', errKind: 'dns' };
+  const ping = process.platform === 'win32' ? 'ping' : atWhich('ping');
+  let rtts = [], loss = null, how = 'ping';
+  if (ping && !at.pingBad) {
+    const args = process.platform === 'win32' ? ['-n', '5', '-w', '2000', r.ip] : process.platform === 'darwin' ? ['-n', '-c', '5', '-i', '0.3', '-W', '2000', r.ip] : ['-n', '-c', '5', '-i', '0.3', '-W', '2', r.ip];
+    const o = await atRunCmd(ping, args, 15_000), p = atParsePing(o.out + o.errOut);
+    if (/not permitted|permission denied|operation not permitted/i.test(o.errOut)) at.pingBad = true; else { rtts = p.rtts; loss = p.loss ?? Math.round((5 - rtts.length) / 5 * 100); }
+  }
+  if (!ping || at.pingBad) {   // no ping allowed here: five TCP connections (an answer or a refusal both count) stand in for it
+    how = 'tcp'; for (const port of [443, 80, 22]) { const pr = await atProbe(r.ip, port, true); if (pr?.latency != null) { rtts = [pr.min, pr.latency, pr.max].filter((v) => v != null); loss = pr.loss; break; } }
+    if (!rtts.length) loss = 100;
+  }
+  const got = rtts.length ? rtts : null, jit = got && got.length > 1 ? got.slice(1).reduce((x, v, i) => x + Math.abs(v - got[i]), 0) / (got.length - 1) : null;
+  const lat = got ? Math.round(got.reduce((x, v) => x + v, 0) / got.length * 10) / 10 : null;
+  return { ok: lat != null, ip: r.ip, dns: r.dns, total: lat, latency: lat, min: got ? Math.min(...got) : null, max: got ? Math.max(...got) : null, jitter: jit == null ? null : Math.round(jit * 10) / 10, loss: loss ?? (lat == null ? 100 : 0), how,
+    error: lat == null ? 'it didn\'t answer' : null, errKind: lat == null ? 'connect' : null };
+}
+async function atRunTcp(t) {
+  const r = await atResolve(t.host); if (!r) return { ok: false, error: 'its name could not be found (DNS)', errKind: 'dns' };
+  const p = await atProbe(r.ip, t.port);
+  return { ok: p.latency != null, ip: r.ip, dns: r.dns, total: p.latency, ...p, error: p.latency == null ? `port ${t.port} didn't accept a connection` : null, errKind: p.latency == null ? 'connect' : null };
+}
+async function atRunDnsQ(t) {
+  const r = new dnsP.Resolver({ timeout: 3000, tries: 1 });
+  if (t.server) r.setServers([t.server]);
+  const server = t.server || (r.getServers()[0] || '').replace(/^\[|\]$/g, '').replace(/:53$/, '') || null, times = [];
+  for (let i = 0; i < 3; i++) { const t0 = process.hrtime.bigint(); try { await r.resolve4(t.host); times.push(Number(process.hrtime.bigint() - t0) / 1e6); } catch { times.push(null); } }
+  const got = times.filter((v) => v != null), med = got.length ? Math.round(atMedian(got) * 10) / 10 : null;
+  return { ok: got.length > 0, ip: server, total: med, dns: med, latency: got.length ? Math.round(Math.min(...got) * 10) / 10 : null, min: got.length ? Math.min(...got) : null, max: got.length ? Math.max(...got) : null,
+    loss: Math.round((times.length - got.length) / times.length * 100), jitter: null, error: got.length ? null : `${t.host} could not be looked up`, errKind: got.length ? null : 'dns' };
+}
+/* Your own limits: slower than slowMs, or more loss than lossPct. */
+const atOver = (t, run) => run.ok && ((t.slowMs && run.total > t.slowMs) || (t.lossPct && run.loss != null && run.loss >= t.lossPct));
 const atHourKey = (iso) => Math.floor(Date.parse(iso) / 3600_000) * 3600_000;
 function atAddHour(st, run) {
   const h = atHourKey(run.at), hours = (st.hours ||= []);
@@ -210,6 +265,9 @@ async function atRun(t) {
     let r, p = null;
     if (kind === 'router') r = await atRunRouter();
     else if (kind === 'dns') r = await atRunDns();
+    else if (kind === 'ping') r = await atRunPing(t);
+    else if (kind === 'tcp') r = await atRunTcp(t);
+    else if (kind === 'dnsq') r = await atRunDnsQ(t);
     else { r = await atHttp(t.url); p = r.ip ? await atProbe(r.ip, new URL(t.url).protocol === 'http:' ? 80 : 443) : null; }
     const run = { at: nowIso(), ok: r.ok, status: r.status ?? null, ip: r.ip ?? null, dns: r.dns ?? null, connect: r.connect ?? null, tls: r.tls ?? null, wait: r.wait ?? null, download: r.download ?? null, total: r.total ?? null, bytes: r.bytes || 0, error: r.error || null, errKind: r.errKind || null,
       latency: p ? p.latency : r.latency ?? null, jitter: p ? p.jitter : r.jitter ?? null, loss: p ? p.loss : r.loss ?? null, lmin: p ? p.min : r.min ?? null, lmax: p ? p.max : r.max ?? null };
@@ -217,7 +275,7 @@ async function atRun(t) {
     st.runs.push(run); if (st.runs.length > AT_KEEP) st.runs.splice(0, st.runs.length - AT_KEEP);
     st.last = run; st.fails = run.ok ? 0 : (st.fails || 0) + 1;
     const med = atMedian(st.runs.filter((x) => x.ok && Date.now() - Date.parse(x.at) < 86400_000).map((x) => x.total));
-    st.slow = run.ok && atIsSlow(run.total, med, kind) ? (st.slow || 0) + 1 : 0;
+    st.slow = run.ok && (atOver(t, run) || (!t.slowMs && atIsSlow(run.total, med, kind === 'web' ? 'web' : 'home'))) ? (st.slow || 0) + 1 : 0;
     atAddHour(st, run); at.dirty = true;
     return run;
   } finally { at.busy.delete(t.id); }
@@ -403,12 +461,13 @@ async function atRunTools(host) {
 function atTarget(t) {
   const kind = atKind(t);
   if (kind === 'router') return null;
-  if (kind === 'dns') { const ip = at.state[t.id]?.last?.ip; return ip && !atPrivate(ip) && net.isIP(ip) ? ip : null; }
+  if (kind === 'dns' || kind === 'dnsq') { const ip = kind === 'dnsq' && t.server ? t.server : at.state[t.id]?.last?.ip; return ip && !atPrivate(ip) && net.isIP(ip) ? ip : null; }
+  if (kind === 'ping' || kind === 'tcp') { const ip = at.state[t.id]?.last?.ip || (net.isIP(t.host) ? t.host : null); return t.host && atHostOk(t.host) && !(ip && atPrivate(ip)) && !isLanHost(t.host) ? t.host : null; }
   return atParseUrl(t.url)?.host || null;
 }
 async function atTrace(t) {
   const host = atTarget(t), tools = await atTools();
-  if (!host) return { at: nowIso(), hops: [], none: atKind(t) === 'router' || atKind(t) === 'dns' ? 'home' : 'bad' };
+  if (!host) return { at: nowIso(), hops: [], none: ['router', 'dns', 'dnsq', 'ping', 'tcp'].includes(atKind(t)) ? 'home' : 'bad' };
   if (!tools.length) return { at: nowIso(), hops: [], none: 'tool' };
   const { hops: raw, mtu, tool } = await atRunTools(host);
   let hops = raw;
@@ -914,6 +973,7 @@ function atView(t, full = false) {
   const st = at.state[t.id] || { runs: [] }, runs = st.runs || [], last = st.last || null, day = runs.filter((r) => Date.now() - Date.parse(r.at) < 86400_000), kind = atKind(t);
   const now = atNow(t);
   const v = { id: t.id, name: t.name, url: kind === 'web' ? t.url : null, kind, preset: t.preset || null, short: t.short || (t.name || '?')[0].toUpperCase(), custom: !!t.custom, every: t.every || 5, alert: t.alert !== false,
+    target: AT_NET_KINDS.includes(kind) ? `${t.host}${kind === 'tcp' ? `:${t.port}` : ''}${kind === 'dnsq' && t.server ? ` @ ${t.server}` : ''}` : null, slowMs: t.slowMs || null, lossPct: t.lossPct || null,
     last, down: now.down, failing: (st.fails || 0) >= 1, slow: now.slow, culprit: now.culprit,
     uptime24h: day.length ? Math.round(day.filter((r) => r.ok).length / day.length * 1000) / 10 : null,
     median24h: atMedian(day.filter((r) => r.ok).map((r) => r.total)),
@@ -954,10 +1014,28 @@ function atMake(b, list, pro) {
     if (list.some((x) => x.url === url)) return { status: 400, error: `${name} is already tested.` };
     return { test: { id: crypto.randomBytes(5).toString('hex'), preset: p.id, name, url, short: p.short, ...(p.kind !== 'web' ? { kind: p.kind } : {}) } };
   }
+  if (AT_NET_KINDS.includes(String(b.kind))) {
+    if (!pro) return { status: 402, error: 'Network tests are a CasaTorch Pro feature.' };
+    const kind = String(b.kind), host = String(b.host || '').trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+    if (!host || (!atHostOk(host) && !net.isIP(host)) || blockedUrl(`http://${net.isIP(host) === 6 ? `[${host}]` : host}/`)) return { status: 400, error: kind === 'dnsq' ? 'Enter a name to look up, like example.com.' : 'Enter a host name or address, like 192.168.1.20 or example.com.' };   // scrub-ok: example
+    const port = kind === 'tcp' ? Number(b.port) : null;
+    if (kind === 'tcp' && !(Number.isInteger(port) && port >= 1 && port <= 65535)) return { status: 400, error: 'Enter a port from 1 to 65535.' };
+    const server = kind === 'dnsq' && String(b.server || '').trim() ? String(b.server).trim() : null;
+    if (server && (!net.isIP(server) || blockedUrl(`http://${server}/`))) return { status: 400, error: 'The name server must be an address, like 1.1.1.1.' };
+    if (list.some((x) => x.kind === kind && x.host === host && (x.port || null) === port && (x.server || null) === server)) return { status: 400, error: 'That test is already there.' };
+    const label = { ping: 'Ping', tcp: 'Port', dnsq: 'DNS' }[kind];
+    return { test: { id: crypto.randomBytes(5).toString('hex'), custom: true, kind, host, ...(port ? { port } : {}), ...(server ? { server } : {}), name: String(b.name || '').trim().slice(0, 40) || `${label} ${host}${port ? `:${port}` : ''}`, short: label[0] } };
+  }
   if (!pro) return { status: 402, error: 'Testing your own websites is a CasaTorch Pro feature.' };
   const u = atParseUrl(b.url); if (!u) return { status: 400, error: 'Enter a web address, like https://example.com.' };
   if (list.some((x) => x.url === u.url)) return { status: 400, error: 'That address is already tested.' };
   return { test: { id: crypto.randomBytes(5).toString('hex'), custom: true, name: String(b.name || '').trim().slice(0, 40) || u.host, url: u.url } };
+}
+/* Alert thresholds (Pro): slower than 10 ms to 60 s, or 1 to 100% loss. Empty: CasaTorch's own sense of "slow". */
+function atLimits(b, pro) {
+  if (!pro) return {};
+  const ms = Math.round(Number(b.slowMs)), loss = Math.round(Number(b.lossPct));
+  return { ...(ms >= 10 && ms <= 60_000 ? { slowMs: ms } : {}), ...(loss >= 1 && loss <= 100 ? { lossPct: loss } : {}) };
 }
 app.post('/api/apptests', requireRole('admin'), express.json({ limit: '2kb' }), async (req, res) => {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
@@ -965,6 +1043,7 @@ app.post('/api/apptests', requireRole('admin'), express.json({ limit: '2kb' }), 
   if (list.length >= atMax()) return res.status(400).json({ error: pro ? `Up to ${AT_PRO_MAX} tests - remove one first.` : `Up to ${AT_BASIC_MAX} tests on Basic - remove one first, or go Pro for up to ${AT_PRO_MAX}.` });
   const m = atMake(b, list, pro); if (m.error) return res.status(m.status).json({ error: m.error, ...(m.status === 402 ? { upgrade: 'https://casatorch.com/pro' } : {}) });
   const t = m.test, every = Number(b.every); t.every = (pro ? AT_EVERY : [5, 15]).includes(every) ? every : 5;
+  Object.assign(t, atLimits(b, pro));
   saveConfig({ ...config, appTests: [...list, t] });
   await atRun(t).catch(() => {});
   atTracePath(t).catch(() => {});   // takes up to a minute; shows up when it's done
@@ -983,6 +1062,7 @@ app.put('/api/apptests/:id', requireRole('admin'), express.json({ limit: '1kb' }
     const n = { ...t };
     if ('every' in b) { const e = Number(b.every); if (!(pro ? AT_EVERY : [5, 15]).includes(e)) return t; n.every = e; }
     if ('alert' in b) n.alert = !!b.alert;
+    if ('slowMs' in b || 'lossPct' in b) { delete n.slowMs; delete n.lossPct; Object.assign(n, atLimits({ slowMs: 'slowMs' in b ? b.slowMs : t.slowMs, lossPct: 'lossPct' in b ? b.lossPct : t.lossPct }, pro)); }
     if ('name' in b && String(b.name).trim()) n.name = String(b.name).trim().slice(0, 40);
     return n;
   });
@@ -991,7 +1071,7 @@ app.put('/api/apptests/:id', requireRole('admin'), express.json({ limit: '1kb' }
 app.post('/api/apptests/:id/run', requireRole('member'), async (req, res) => {
   if (isDemo()) return res.json(atDemo(true).tests.find((t) => t.id === req.params.id) || {});
   const t = atCfg().find((x) => x.id === req.params.id); if (!t) return res.status(404).json({ error: 'That test is gone.' });
-  if (t.custom && !proStatus().pro) return res.status(402).json({ error: 'Testing your own websites is a CasaTorch Pro feature.' });
+  if (t.custom && !proStatus().pro) return res.status(402).json({ error: AT_NET_KINDS.includes(t.kind) ? 'Network tests are a CasaTorch Pro feature.' : 'Testing your own websites is a CasaTorch Pro feature.' });
   await atRun(t);
   if (req.query.path === '1') await atTracePath(t);
   res.json(atView(t, true));
@@ -1094,6 +1174,15 @@ function atDemoState(id) {
   st.path = prev; atDemoCache.set(id, { made: now, st });
   return st;
 }
+/* The demo's two network tests: a ping to the NAS and a DNS lookup through a public name server. */
+function atDemoNet(id, name, kind, target, base, full, extra = {}) {
+  const rnd = atDemoRand(id.length * 104729 + Math.round(base * 10)), now = Date.now();
+  const runs = Array.from({ length: 288 }, (_, i) => { const j = rnd(), v = atR(base * (1 + j * 0.25) + (i > 200 && i < 206 ? base * 3 : 0)); return { at: new Date(now - (287 - i) * 300_000).toISOString(), ok: true, total: v, dns: kind === 'dnsq' ? v : null, latency: v, jitter: atR(base * j * 0.2), loss: 0, error: null }; });
+  const last = { ...runs[runs.length - 1], ip: kind === 'dnsq' ? '1.1.1.1' : target, status: null };
+  const v = { id, name, url: null, kind, preset: null, short: kind === 'dnsq' ? 'D' : 'P', custom: true, every: 5, alert: true, target, slowMs: extra.slowMs || null, lossPct: null, last, down: false, failing: false, slow: false, culprit: null,
+    uptime24h: 100, median24h: atMedian(runs.map((r) => r.total)), spark: runs.slice(-96).map((r) => r.total), pathChangedAt: null, hops: null };
+  return full ? { ...v, runs, hours: [], changes: [], path: { at: last.at, hops: [], none: 'home' }, prevPath: null } : v;
+}
 function atDemo(full = false) {
   const mk = (id) => {
     const cfg = AT_DEMO_TESTS[id], p = atPreset(cfg.preset), { base } = cfg, rnd = atDemoRand(id.length * 7919 + base), now = Date.now(), st = atDemoState(id);
@@ -1114,6 +1203,7 @@ function atDemo(full = false) {
   const tests = Object.keys(AT_DEMO_TESTS).map(mk);
   const overview = full ? null : atOverview(tests.map((t) => ({ ...t, path: t._path })));
   for (const t of tests) delete t._path;
+  tests.push(atDemoNet('demo-nas', 'NAS', 'ping', '192.168.1.20', 0.9, full), atDemoNet('demo-dnsq', 'Cloudflare DNS', 'dnsq', 'example.com @ 1.1.1.1', 11.5, full, { slowMs: 80 }));   // scrub-ok: demo
   return { pro: true, max: AT_PRO_MAX, basicMax: AT_BASIC_MAX, every: AT_EVERY, demo: true, owners: true, groups: AT_GROUPS, trace: { ok: true, tool: 'mtr', platform: 'linux' }, traceroute: true, presets: atPresetsOut('US'), tests, overview };
 }
 /* The merged path for a time window: ?from&to (ms; default the last hour), &cmp=1 to compare with the last hour. */
@@ -1129,5 +1219,5 @@ app.get('/api/apptests/:id/graph', (req, res) => {
   if (!g && !q.from && st.traces?.length) { to = Date.parse(st.traces[st.traces.length - 1].at) + 1000; from = to - AT_H; g = atGraphFor(st, from, to, opts); }   // nothing in the last hour (CasaTorch was off, say): the hour up to the latest trace
   res.json({ from, to, now, graph: g, marks: atMarks(st), changes: st.changes || [] });
 });
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchAT = { atParseTrace, atZones, atCulprit, atCulpritText, atPathKey, atParseOrigin, atParseAsName, atRevName, atSuggest, atFromSetup, atIsSlow, atBaselines,
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchAT = { atParsePing, atMake, atLimits, atOver, atParseTrace, atZones, atCulprit, atCulpritText, atPathKey, atParseOrigin, atParseAsName, atRevName, atSuggest, atFromSetup, atIsSlow, atBaselines,
   atRecord, atObs, atMerge, atLayout, atAnalyze, atGraph, atGraphFor, atOverview, atDemoState, atDemo };

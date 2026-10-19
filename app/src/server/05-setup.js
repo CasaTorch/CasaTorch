@@ -33,7 +33,7 @@ function setupCaller(req) {
   }
   return { ok: true, user: u };
 }
-const draft = { ha: null, hue: null, ring: null };   // what the wizard has proven so far (memory only)
+const draft = sealedHolder(['ha', 'hue', 'ring'], 'draft');   // what the wizard has proven so far (memory only; its tokens kept sealed there too, 02s-sealed-input.js)
 
 app.use('/api/setup', express.json({ limit: '64kb' }), (req, res, next) => {
   if (req.path === '/state') return next();
@@ -43,8 +43,8 @@ app.use('/api/setup', express.json({ limit: '64kb' }), (req, res, next) => {
   next();
 });
 /* ---- progress: every answer is kept as you go, so a refresh, a closed tab, a crash or a power cut picks up at the same
-   step. Kept sealed (AES-256-GCM, like config.json) in data/setup-progress.json; sign-in passwords are never kept (they're
-   asked again), and the file is deleted when setup finishes. What setup has proven (Home Assistant, Hue, Ring) comes back too. */
+   step. Kept sealed (AES-256-GCM, like config.json) in data/setup-progress.json; no password or key typed into setup is kept (they're
+   asked again; the browser leaves them out too, public/sealed-input.js), and the file is deleted when setup finishes. What setup has proven (Home Assistant, Hue, Ring) comes back too. */
 const PROGRESS_FILE = path.join(DATA_DIR, 'setup-progress.json');
 const PROGRESS_DAYS = 30;
 const dropSignInPasswords = (a) => { const o = JSON.parse(JSON.stringify(a || {})); for (const k of ['account', 'phone']) if (o[k]) { delete o[k].password; delete o[k].password2; } return o; };
@@ -70,7 +70,7 @@ app.put('/api/setup/progress', (req, res) => {
   const b = req.body || {};
   if (!b.answers || typeof b.answers !== 'object') return res.status(400).json({ error: 'nothing to keep' });
   try {
-    progressWrite({ at: nowIso(), rerun: isConfigured(), i: Math.max(0, Math.min(99, Number(b.i) || 0)), max: Math.max(0, Math.min(99, Number(b.max) || 0)), answers: dropSignInPasswords(b.answers), added: Array.isArray(b.added) ? b.added.slice(0, 50) : [], focus: b.focus || null, ui: b.ui && typeof b.ui === 'object' ? b.ui : {}, draft: { ha: draft.ha, hue: draft.hue, ring: draft.ring } });
+    progressWrite({ at: nowIso(), rerun: isConfigured(), i: Math.max(0, Math.min(99, Number(b.i) || 0)), max: Math.max(0, Math.min(99, Number(b.max) || 0)), answers: dropTypedSecrets(dropSignInPasswords(b.answers)), added: Array.isArray(b.added) ? b.added.slice(0, 50) : [], focus: b.focus || null, ui: b.ui && typeof b.ui === 'object' ? b.ui : {}, draft: { ha: draft.ha, hue: draft.hue, ring: draft.ring } });
     res.json({ ok: true });
   } catch (err) { res.status(507).json({ error: `Couldn't keep your answers: ${err.code === 'ENOSPC' ? 'the disk is full' : err.message}` }); }
 });
@@ -404,6 +404,7 @@ async function setupFinish(req, res) {
   if (typeof hhFromSetup === 'function') hhFromSetup(a.reminders?.binDay);   // trash day, if answered (78h-household.js)
   if (typeof nudgesFromSetup === 'function') nudgesFromSetup((a.reminders?.list || []).filter((r) => r?.title).map((r) => ({ title: r.title, days: Array.isArray(r.days) ? r.days.map(Number) : null, time: r.time || null, icon: r.icon, sound: r.sound })));
   if (!isDemo()) authSetOwner({ username: acct.username, passwordHash: keepPw ? null : hashSecret(acct.password), acceptedTerms: acct.terms === true });
+  if (!isDemo() && typeof setup2faAttach === 'function') setup2faAttach();   // two-step sign-in from "Protect your CasaTorch" (08t-setup-2fa.js)
   let pair = null;
   if (!isDemo() && ['new', 'owner'].includes(a.phone?.how)) {
     const who = ph ? authAddUser({ username: ph.username, passwordHash: hashSecret(ph.password), name: ph.name || `${String(ph.username)}`, role: 'admin', acceptedTerms: acct.terms === true }) : users.list.find((x) => x.role === 'owner');

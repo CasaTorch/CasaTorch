@@ -63,15 +63,16 @@ function applyLook(node, t) {
 }
 
 let gridOff = null;   // the last grid's listeners (only one Home grid is on the page at a time)
-function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize }) {
+function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize, auto = false }) {
   const grid = el('div', { class: 'grid', role: 'list' });
   host.append(grid);
   let cols = gridCols(grid);
   const live = new Map();   // tile element -> { t, body, widget }
   const editing = () => grid.classList.contains('editing');
   const spanOf = (t) => (cols === 4 && wOf(t)?.phoneFull ? 4 : toSpan(t.w, cols));   // phoneFull: a page tile that takes the whole row on a phone (06-pagegrid.js)
-  function sizeOf(t) { const span = spanOf(t); return { w: cols === 4 ? (span <= 2 ? 2 : 4) : t.w, h: t.h, narrow: cols === 4, span, cols }; }
-  function place(node, t) { const span = spanOf(t); node.style.gridColumn = `span ${span}`; node.style.gridRow = `span ${t.h}`; node.style.setProperty('--h', t.h); const tag = node.querySelector('.size-tag'); if (tag) tag.textContent = `${span} × ${t.h}`; }
+  /* tier: how much the widget shows at this size (sizeTier, 06-pagegrid.js) - S the key number, XL the details */
+  function sizeOf(t) { const span = spanOf(t), narrow = cols === 4; return { w: narrow ? (span <= 2 ? 2 : 4) : t.w, h: t.h, narrow, span, cols, tier: sizeTier({ w: t.w, h: t.h, auto, narrow, span }) }; }
+  function place(node, t) { const span = spanOf(t); node.style.gridColumn = `span ${span}`; node.style.gridRow = `span ${t.h}`; node.style.setProperty('--h', t.h); const tier = sizeOf(t).tier; node.dataset.tier = tier; const tag = node.querySelector('.size-tag'); if (tag) tag.textContent = `${tier.toUpperCase()} · ${span} × ${t.h}`; }
   async function paint(node, force) {
     const L = live.get(node); if (!L) return;
     if (typeof famShowWhen === 'function' && L.t.showWhen) {   // "Show only when..." (38-family.js): hidden tiles collapse; nothing runs inside one
@@ -88,7 +89,7 @@ function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize }) {
   function remove(node, t) { const i = tiles.indexOf(t); if (i >= 0) tiles.splice(i, 1); live.delete(node); node.remove(); save(); }
   function tileEl(t) {
     const w = wOf(t); if (!w) return null;
-    const body = el('div', { class: 'tile-b' });
+    const body = el('div', { class: 'tile-b' }, pgSkel());   // a soft skeleton until it has drawn
     body._t = t; body._saved = () => { save(); paint(node, true); };
     const head = w.bare ? null : el('div', { class: 'tile-h' }, icon(w.icon), el('span', { class: 'ttl' }, t.title || T(w.title)), w.pro && !isPro() ? el('span', { class: 'pill pro' }, 'PRO') : null, el('span', { class: 'grow' }), w.headerExtra ? w.headerExtra(ctx, t, () => { save(); paint(node, true); }) : null);
     const node = el('section', { class: tileClass(t), 'data-id': t.id, role: 'listitem', 'aria-label': t.title || T(w.title) },
@@ -109,7 +110,7 @@ function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize }) {
     let timer = null, x0 = 0, y0 = 0;
     const cancel = () => { clearTimeout(timer); timer = null; };
     node.addEventListener('pointerdown', (e) => {
-      if (editing() || e.button > 0 || e.target.closest('button, a, input, select, textarea, .tools')) return;
+      if (editing() || e.button > 0 || e.target.closest('button, a, input, select, textarea, .tools, .dev, .dev-wrap')) return;   // a device holds for its own details
       x0 = e.clientX; y0 = e.clientY;
       timer = setTimeout(() => { timer = null; try { navigator.vibrate?.(12); } catch { /* not on this device */ } window.CasaNative?.haptic?.('medium'); onEdit(true); node.classList.add('wiggle-pop'); setTimeout(() => node.classList.remove('wiggle-pop'), 300); }, 550);
     });
@@ -223,7 +224,7 @@ function previewBox(t, w, ctx) {
   const stage = el('div', { class: 'wprev' }, node);
   const fit = () => { const avail = Math.max(200, stage.clientWidth - 8), s = Math.min(1, avail / pw, 340 / ph); node.style.transform = `scale(${s})`; stage.style.height = `${Math.round(ph * s) + 8}px`; };
   requestAnimationFrame(fit);
-  const p = w.noPreview ? Promise.resolve(body.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon(w.icon), el('div', { class: 'small muted', style: 'margin-top:6px' }, w.blurb ? T(w.blurb) : ''))))) : Promise.resolve(w.render(body, ctx, { w: t.w, h: t.h, narrow: false, span: t.w, cols: 12, preview: true })).catch((err) => body.replaceChildren(el('div', { class: 'muted small' }, err.message)));
+  const p = w.noPreview ? Promise.resolve(body.replaceChildren(el('div', { class: 'allclear' }, el('div', {}, icon(w.icon), el('div', { class: 'small muted', style: 'margin-top:6px' }, w.blurb ? T(w.blurb) : ''))))) : Promise.resolve(w.render(body, ctx, { w: t.w, h: t.h, narrow: false, span: t.w, cols: 12, preview: true, tier: sizeTier({ w: t.w, h: t.h, auto: w.max?.[1] === 1 }) })).catch((err) => body.replaceChildren(el('div', { class: 'muted small' }, err.message)));
   return { stage, ready: p, fit };
 }
 function customizeTile(t, ctx, done) {
@@ -322,7 +323,7 @@ function optField(f, t, ctx, changed) {
       draw(); return box;
     }
     case 'devices': case 'device': {
-      const all = (ctx.data.devices?.devices || []).filter(f.filter || (() => true));
+      const all = (Array.isArray(ctx.data.devices) ? ctx.data.devices : ctx.data.devices?.devices || []).filter(f.filter || (() => true));   // Home keeps the whole /api/devices answer, pages the list
       if (f.type === 'device') return all.length ? el('select', { onchange: (e) => set(e.target.value || undefined) }, el('option', { value: '' }, f.none || T('Pick one…')), all.map((d) => el('option', { value: d.id, selected: val === d.id || null }, `${d.name}${d.area ? ` · ${d.area}` : ''}`))) : el('div', { class: 'tiny muted' }, f.empty || T('Nothing to pick yet.'));
       const cur = new Set(Array.isArray(val) ? val : []);
       if (!all.length) return el('div', { class: 'tiny muted' }, f.empty || T('Nothing to pick yet.'));

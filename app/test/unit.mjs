@@ -1011,7 +1011,11 @@ await (await import('./support-unit.mjs')).default(t);
 await (await import('./ask-unit.mjs')).default(t);   // Home AI Agent: charts, no HTML from answers, safety rule, sources, tools, the loop end to end (ask-unit.mjs)
 await (await import('./camlive-unit.mjs')).default(t);
 await (await import('./pagegrid-unit.mjs')).default(t);   // page grids: suggested layouts, saving per page and screen; the Energy page's data (pagegrid-unit.mjs)   // live camera video: stream choice, HLS file allow-list, MSE tunnel and HLS proxy (camlive-unit.mjs)   // support: the support file's masking, activity log, getting-started checklist (support-unit.mjs)
+await (await import('./alert-rules-unit.mjs')).default(t);   // alert rules: the one decision per alert and phone, quiet hours, presence, overrides, safety floor, flap damping (alert-rules-unit.mjs)
 await (await import('./net-unit.mjs')).default(t);   // slow and flaky networks: time limits, retries, one request for many, last answers, the browser's copy; content-named files (net-unit.mjs)
+await (await import('./network-unit.mjs')).default(t);   // the Network page: polite Meraki client (pages, 429, retries), the model, the map, network tests (network-unit.mjs)
+await (await import('./themes-unit.mjs')).default(t);   // themes and backgrounds: WCAG contrast of every theme, safe accents, our own art, photo uploads checked and stripped of metadata (themes-unit.mjs)
+await (await import('./docs-links-unit.mjs')).default(t);   // every "Learn more" link points at a real docs page and section (docs-links-unit.mjs)
 t('3D Home: a plan damaged at start comes back from the newest restore point (with a Health note), never over a plan that is there', () => {
   const PB = globalThis.__casatorchPlan, was = fsMod.existsSync(PB.FP_FILE) ? fsMod.readFileSync(PB.FP_FILE) : null;
   try {
@@ -1024,5 +1028,6 @@ t('3D Home: a plan damaged at start comes back from the newest restore point (wi
     fsMod.rmSync(aside, { force: true });
   } finally { if (was) fsMod.writeFileSync(PB.FP_FILE, was); }
 });
+await (await import('./sealed-unit.mjs')).default(t);   // sealed entry: passwords and keys sealed in the browser, opened only in the request; secrets kept sealed in memory (sealed-unit.mjs)
 console.log(`\n${n} passed`);
 process.exit(0);

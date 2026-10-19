@@ -35,7 +35,7 @@ app.post('/api/license/claim/finish', requireRole('admin'), express.json(), asyn
     const chk = checkLicenseKey(j.key);
     if (!chk.valid) throw new Error('the key that came back is not valid - contact support@casatorch.com');   // scrub-ok: public support address
     if (isConfigured() && !isDemo()) saveConfig({ ...config, license: j.key });   // during first setup, setup saves it
-    res.json({ ok: true, key: j.key, plan: chk.payload.plan, expires: chk.payload.expires || null, pro: proStatus() });
+    res.json({ ok: true, key: keptSecret('answers.account.license', j.key), plan: chk.payload.plan, expires: chk.payload.expires || null, pro: proStatus() });
   } catch (err) { res.status(err.status === 400 || err.status === 404 ? 400 : err.status === 409 ? 409 : err.status === 429 ? 429 : 502).json({ error: err.message }); }   // 409: the key is already on as many homes as it covers
 });
 async function renewLicense() {

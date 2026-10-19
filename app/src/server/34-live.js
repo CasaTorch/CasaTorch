@@ -14,11 +14,13 @@
  * ====================================================================== */
 const LIVE = { ws: null, url: '', token: '', states: null, ok: false, retry: 2000, clients: new Set(), fast: null, slow: null, slowAt: 0 };
 const LIVE_FAST = /^(light|switch|fan|cover|lock|alarm_control_panel|binary_sensor|media_player|climate|vacuum|valve|siren|input_boolean|person|device_tracker|camera|event|button|scene)\./;
+/* Which token the live link signed in with: a keyed hash only, so no copy of the token is kept here. */
+const liveTokenTag = (t) => crypto.createHmac('sha256', keyOf()).update(`live:${t || ''}`).digest('base64url');
 function haLiveStart() {
   const h = config.homeAssistant;
   if (!h?.url || !h.token || isDemo() || typeof WebSocket !== 'function' || LIVE.ws) return;
   let ws; try { ws = new WebSocket(`${h.url.replace(/^http/i, 'ws')}/api/websocket`); } catch { return haLiveLater(); }
-  LIVE.ws = ws; LIVE.url = h.url; LIVE.token = h.token; LIVE.heard = Date.now(); LIVE.pingId = 10;
+  LIVE.ws = ws; LIVE.url = h.url; LIVE.token = liveTokenTag(h.token); LIVE.heard = Date.now(); LIVE.pingId = 10;
   ws.addEventListener('message', (m) => {
     LIVE.heard = Date.now();
     let msg; try { msg = JSON.parse(String(m.data)); } catch { return; }
@@ -84,6 +86,6 @@ setInterval(() => {
 setTimeout(haLiveStart, 2000).unref?.();
 setInterval(() => {
   const h = config.homeAssistant;
-  if (LIVE.ws && (!h?.url || h.url !== LIVE.url || h.token !== LIVE.token)) { const ws = LIVE.ws; LIVE.ws = null; LIVE.ok = false; LIVE.states = null; try { ws.close(); } catch { /* gone */ } }
+  if (LIVE.ws && (!h?.url || h.url !== LIVE.url || liveTokenTag(h.token) !== LIVE.token)) { const ws = LIVE.ws; LIVE.ws = null; LIVE.ok = false; LIVE.states = null; try { ws.close(); } catch { /* gone */ } }
   if (!LIVE.ws) haLiveStart();
 }, 30_000).unref?.();

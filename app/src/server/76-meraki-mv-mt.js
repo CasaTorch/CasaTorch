@@ -8,12 +8,12 @@
  * feed the usual alerts (water, low battery, freezing or very hot).
  * ====================================================================== */
 const merakiSrc = () => netSources().find((s) => s.kind === 'meraki');
-const merakiBase = (s) => process.env.CASATORCH_MERAKI_BASE || MERAKI_BASES[s.region] || MERAKI_BASES.us;
-const merakiH = (s) => ({ Authorization: `Bearer ${secretOf(s.secret)}` });
+/* Both go through the polite Meraki client (74m-meraki-api.js): the organization's rate, 429s waited out, answers cached. */
+const merakiLane = (s) => { const org = netState[s.id]?.summary?.orgId; return org ? `org:${org}` : `key:${s.id}`; };
 const merakiDevs = (type) => { const s = merakiSrc(); return (s && netState[s.id]?.devices || []).filter((d) => d.type === type && d.serial); };
 async function merakiReadings(s) {
   const org = netState[s.id]?.summary?.orgId; if (!org) return [];
-  return (await cached(`meraki:mt:${org}`, 60_000, async () => ({ list: await netRequest(`${merakiBase(s)}/organizations/${encodeURIComponent(org)}/sensor/readings/latest`, { headers: merakiH(s) }).catch(() => []) }))).list || [];
+  return (await mkGet(s, secretOf(s.secret), `/organizations/${encodeURIComponent(org)}/sensor/readings/latest?perPage=100`, { ttl: 60_000, pages: 3, lane: `org:${org}`, optional: true }).catch(() => null)) || [];
 }
 function mtDevice(r, names) {
   const d = { id: `meraki:${r.serial}`, provider: 'meraki', kind: 'sensor', name: names.get(r.serial) || r.serial, online: true, source: 'Cisco Meraki' };
@@ -42,7 +42,7 @@ integration({
     known: (serial) => merakiDevs('camera').some((c) => c.serial === serial),
     async snapshot(serial) {
       const s = merakiSrc(); if (!s) throw new Error('Meraki is not connected');
-      const g = await netRequest(`${merakiBase(s)}/devices/${encodeURIComponent(serial)}/camera/generateSnapshot`, { method: 'POST', headers: merakiH(s), body: {} });
+      const g = await mkPost(s, secretOf(s.secret), `/devices/${encodeURIComponent(serial)}/camera/generateSnapshot`, {}, merakiLane(s));
       if (!g?.url) throw new Error('Meraki did not return a picture');
       for (let i = 0; i < 10; i++) {   // the picture takes a few seconds to appear at its address
         await new Promise((ok) => setTimeout(ok, i ? 1000 : 1500));

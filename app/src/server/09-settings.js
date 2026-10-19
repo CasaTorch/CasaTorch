@@ -43,6 +43,10 @@ app.put('/api/settings', express.json(), (req, res) => {
   if ('houseName' in b) next.house = { ...(next.house || {}), name: String(b.houseName || '').trim().slice(0, 60) || 'My House' };
   if ('lang' in b) { if (!LANGS.includes(b.lang)) return res.status(400).json({ error: 'that language isn\'t available yet' }); next.house = { ...(next.house || {}), lang: b.lang }; }
   if ('note' in b) next.note = String(b.note || '').slice(0, 280) || null;
+  // asked in setup's "Your home" step, changed here too (Settings › General › Language & region)
+  if ('timezone' in b) { const z = String(b.timezone || ''); try { if (!/^[A-Za-z_+\-/0-9]{1,64}$/.test(z)) throw new Error(); new Intl.DateTimeFormat('en-US', { timeZone: z }); } catch { return res.status(400).json({ error: 'that time zone isn\'t known' }); } next.house = { ...(next.house || {}), timezone: z }; }
+  if ('units' in b) { if (!['F', 'C'].includes(b.units)) return res.status(400).json({ error: 'pick °F or °C' }); next.house = { ...(next.house || {}), units: b.units }; }
+  if ('currency' in b) { if (!/^[A-Z]{3}$/.test(String(b.currency || ''))) return res.status(400).json({ error: 'pick a currency' }); next.house = { ...(next.house || {}), currency: b.currency }; }
   if ('allowedHosts' in b) {   // extra names CasaTorch answers to (01-security.js), like a reverse proxy's
     const list = String(b.allowedHosts || '').split(/[\s,]+/).map((h) => h.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[:/].*$/, '')).filter(Boolean);
     if (list.some((h) => !/^(?!-)[a-z0-9.-]{1,253}$/.test(h))) return res.status(400).json({ error: 'Enter names only, like dash.example.com.' });

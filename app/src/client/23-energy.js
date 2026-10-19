@@ -20,7 +20,7 @@ const enPut = (b, ...k) => b.replaceChildren(...k.flat().filter((x) => x != null
 const enData = (ctx) => ctx.data?.en || {};
 /* A stat: small label, a big number, a line under it. */
 const enStat = (label, value, sub, cls = '') => el('div', { class: `en-stat ${cls}` }, el('div', { class: 'en-lbl' }, label), el('div', { class: 'en-val' }, value), sub ? el('div', { class: 'en-sub' }, sub) : null);
-const enEmpty = (text, link, label) => el('div', { class: 'en-empty' }, el('div', { class: 'small muted' }, text), link ? el('a', { class: 'btn small', href: link }, label) : null);
+const enEmpty = (text, link, label) => el('div', { class: 'en-empty' }, el('div', { class: 'small muted' }, text), link ? el('a', { class: 'btn small', href: link }, label) : null, link && typeof docLink === 'function' ? docLink(`empty.${current}`) : null);   // docLink: how to connect it (39d-docs-links.js)
 const enDelta = (pct, goodWhenDown = true) => { if (pct == null) return null; const up = pct > 0, good = goodWhenDown ? !up : up; return el('span', { class: `en-delta ${pct === 0 ? '' : good ? 'good' : 'bad'}` }, `${up ? '▲' : pct < 0 ? '▼' : '•'} ${Math.abs(pct)}%`); };
 const enTitleOf = (d) => d?.name || '';
 

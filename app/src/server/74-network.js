@@ -6,6 +6,9 @@
  *   UniFi Network (local Integration API)   - every UniFi device online/offline, clients
  *   Cisco Meraki (Dashboard API)            - every device's status, clients
  *
+ * With Meraki or UniFi, the Network page also gets the whole picture - map, uplinks, Wi-Fi, ports, clients,
+ * events, firmware (74n-net-model.js, read through the rate-limited Meraki client in 74m-meraki-api.js).
+ *
  * An admin adds a source in the Network tab with the address and a key or
  * password; the secret is sealed on disk like every other one and never goes
  * back to the browser. CasaTorch reads each source every 2 minutes (Meraki
@@ -106,11 +109,11 @@ const NET = {
     return { summary: { site: site.name || null, devices: devices.length, offline: devices.filter((d) => !d.online).length, clients }, devices };
   },
   async meraki(s, secret) {
-    const b = process.env.CASATORCH_MERAKI_BASE || MERAKI_BASES[s.region] || MERAKI_BASES.us, H = { Authorization: `Bearer ${secret || ''}` };
-    const orgs = await netRequest(`${b}/organizations`, { headers: H });
+    // through the polite Meraki client (74m-meraki-api.js): rate-limited per organization, 429-aware, paged, cached
+    const orgs = await mkGet(s, secret, '/organizations', { ttl: 3600_000 });
     const org = (Array.isArray(orgs) ? orgs : []).find((o) => o.id === s.org) || (Array.isArray(orgs) ? orgs[0] : null);
     if (!org) throw new Error('no Meraki organizations were found for this key');
-    const st = await netRequest(`${b}/organizations/${encodeURIComponent(org.id)}/devices/statuses?perPage=1000`, { headers: H });
+    const st = await mkGet(s, secret, `/organizations/${encodeURIComponent(org.id)}/devices/statuses?perPage=500`, { ttl: 110_000, pages: 4, lane: `org:${org.id}` });
     const devices = (Array.isArray(st) ? st : []).slice(0, 500).map((d) => ({ name: d.name || d.model || d.serial || 'Meraki device', model: d.model || null, ip: d.lanIp || d.publicIp || null, online: d.status === 'online' || d.status === 'alerting', state: d.status || null, alerting: d.status === 'alerting', serial: d.serial || null, type: d.productType || null }));
     return { summary: { orgId: org.id, org: org.name || null, devices: devices.length, offline: devices.filter((d) => d.state === 'offline').length, alerting: devices.filter((d) => d.alerting).length }, devices };
   },
@@ -123,6 +126,7 @@ async function readNetSource(s) {
     if (!Object.hasOwn(NET, s.kind)) throw new Error('unknown kind of source');
     const r = await NET[s.kind](s, secretOf(s.secret));
     Object.assign(st, { ok: true, error: null, fails: 0, at: nowIso(), summary: r.summary, devices: r.devices });
+    if (proStatus().pro) netDeepRead(s).catch(() => {});   // the rest - map, clients, Wi-Fi, ports, events (74n-net-model.js) - without holding up the alerts
   } catch (e) {
     Object.assign(st, { ok: false, error: String(e.message || e).slice(0, 140), fails: st.fails + 1, at: nowIso() });
   }
@@ -154,17 +158,15 @@ function networkAlerts() {
     if (st.ok && st.summary?.protection === false) out.push({ id: `dnsoff:${s.id}`, severity: 'notice', title: `${s.name}: ad and tracker blocking is off`, source: 'network' });
     if (st.ok) for (const d of (st.devices || []).filter((x) => !x.online && x.state !== 'dormant').slice(0, 10)) out.push({ id: `netdev:${s.id}:${d.name}`, severity: 'warning', title: `${d.name} (${NET_KINDS[s.kind]}) is offline`, source: 'network' });
   }
-  return out;
+  return [...out, ...netModelAlerts()];
 }
 const netView = (s) => {
   const st = netState[s.id] || {};
   return { id: s.id, kind: s.kind, kindName: NET_KINDS[s.kind], name: s.name, url: s.url || null, region: s.region || null, user: s.user || null, ok: st.ok ?? null, error: st.error || null, at: st.at || null, summary: st.summary || null, devices: (st.devices || []).slice(0, 200) };
 };
-const DEMO_NET = [
-  { id: 'demo-unifi', kind: 'unifi', kindName: 'UniFi', name: 'UniFi', url: 'https://192.168.1.1', ok: true, error: null, summary: { site: 'Default', devices: 6, offline: 1, clients: 58 },
-    devices: [['Dream Machine Pro', 'UDM-Pro', true], ['Switch 24 PoE', 'USW-24-PoE', true], ['Living Room AP', 'U7-Pro', true], ['Upstairs AP', 'U7-Pro', true], ['Garage AP', 'U6-Mesh', false], ['Office Switch', 'USW-Flex-Mini', true]].map(([name, model, online], i) => ({ name, model, ip: `192.168.1.${2 + i}`, online, state: online ? 'ONLINE' : 'OFFLINE' })) },
-  { id: 'demo-pihole', kind: 'pihole', kindName: 'Pi-hole', name: 'Pi-hole', url: 'http://192.168.1.5', ok: true, error: null, summary: { queries: 41820, blocked: 9204, percentBlocked: 22, clients: 31, blocklist: 168420, protection: true }, devices: [] },
-];
+/* The demo's sources: its made-up Meraki organization (filled in by 74o-net-demo.js) and a Pi-hole. */
+const DEMO_PIHOLE = { id: 'demo-pihole', kind: 'pihole', kindName: 'Pi-hole', name: 'Pi-hole', url: 'http://192.168.1.5', ok: true, error: null, summary: { queries: 41820, blocked: 9204, percentBlocked: 22, clients: 31, blocklist: 168420, protection: true }, devices: [] };
+const DEMO_NET = [];
 
 app.get('/api/network', (_req, res) => {
   if (isDemo()) return res.json({ pro: true, kinds: NET_KINDS, sources: DEMO_NET.map((x) => ({ ...x, at: nowIso() })) });
@@ -186,12 +188,12 @@ app.post('/api/network', requireRole('admin'), requirePro, express.json({ limit:
   const secret = String(b.secret || '');
   if (!secret && kind !== 'pihole') return res.status(400).json({ error: kind === 'adguard' ? 'Enter the AdGuard Home password.' : 'Paste the API key.' });
   // Check it works before saving, so a typo shows up now rather than as an alert later.
-  try { const r = await NET[kind](s, secret); s.secret = secret ? seal(secret) : null; saveConfig({ ...config, network: { ...(config.network || {}), sources: [...netSources(), s] } }); netState[s.id] = { ok: true, fails: 0, at: nowIso(), summary: r.summary, devices: r.devices }; res.json({ ok: true, source: netView(s) }); }
+  try { const r = await NET[kind](s, secret); s.secret = secret ? seal(secret) : null; saveConfig({ ...config, network: { ...(config.network || {}), sources: [...netSources(), s] } }); netState[s.id] = { ok: true, fails: 0, at: nowIso(), summary: r.summary, devices: r.devices }; netDeepRead(s).catch(() => {}); res.json({ ok: true, source: netView(s) }); }
   catch (e) { res.status(400).json({ error: `${NET_KINDS[kind]}: ${String(e.message || e)}` }); }
 });
 app.delete('/api/network/:id', requireRole('admin'), (req, res) => {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
-  saveConfig({ ...config, network: { ...(config.network || {}), sources: netSources().filter((s) => s.id !== req.params.id) } }); delete netState[req.params.id];
+  saveConfig({ ...config, network: { ...(config.network || {}), sources: netSources().filter((s) => s.id !== req.params.id) } }); delete netState[req.params.id]; mkForget(req.params.id);
   res.json({ ok: true });
 });
 app.post('/api/network/refresh', requireRole('member'), async (_req, res) => {
@@ -199,7 +201,7 @@ app.post('/api/network/refresh', requireRole('member'), async (_req, res) => {
   await runNetwork(true).catch(() => {}); res.json({ ok: true });
 });
 /* On the Connect page: connected here, in the Network tab. */
-const netHas = (kind) => () => (isDemo() ? ['unifi', 'pihole'].includes(kind) : netSources().some((s) => s.kind === kind));   // the demo house has UniFi and Pi-hole
+const netHas = (kind) => () => (isDemo() ? ['meraki', 'pihole'].includes(kind) : netSources().some((s) => s.kind === kind));   // the demo house has Meraki and Pi-hole
 integration({ id: 'net-unifi', label: 'UniFi', group: 'network', how: 'pro', href: '#network', replaces: ['net-unifi'], desc: 'Every UniFi access point, switch and gateway online or offline, and how many devices are connected.', connected: netHas('unifi') });
 integration({ id: 'net-meraki', label: 'Cisco Meraki', group: 'network', how: 'pro', href: '#network', replaces: ['net-meraki'], desc: 'Every Meraki device\'s status, with alerts. Also brings in Meraki cameras and sensors.', connected: netHas('meraki') });
 integration({ id: 'pihole', label: 'Pi-hole', group: 'network', how: 'pro', href: '#network', replaces: ['pihole'], desc: 'Queries, how much is blocked, and an alert if blocking is switched off.', connected: netHas('pihole') });

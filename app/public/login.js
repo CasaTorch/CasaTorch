@@ -50,7 +50,7 @@ function stepCode(ticket) {
   let recovery = false;
   const c = el('input', { type: 'text', class: 'code', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: 6, pattern: '[0-9]*', 'aria-label': T('Code') });
   const err = errBox(), go = el('button', { class: 'btn', type: 'submit' }, T('Verify'));
-  const toggle = el('button', { type: 'button', class: 'link', onclick: () => { recovery = !recovery; c.value = ''; c.className = recovery ? '' : 'code'; c.maxLength = recovery ? 11 : 6; c.inputMode = recovery ? 'text' : 'numeric'; c.placeholder = recovery ? 'xxxxx-xxxxx' : ''; toggle.textContent = recovery ? T('Use the code from my app') : T('Lost your phone? Use a recovery code'); c.focus(); } }, T('Lost your phone? Use a recovery code'));
+  const toggle = el('button', { type: 'button', class: 'link', onclick: () => { recovery = !recovery; c.value = ''; if (recovery) c.removeAttribute('pattern'); else c.setAttribute('pattern', '[0-9]*'); c.className = recovery ? '' : 'code'; c.maxLength = recovery ? 11 : 6; c.inputMode = recovery ? 'text' : 'numeric'; c.placeholder = recovery ? 'xxxxx-xxxxx' : ''; toggle.textContent = recovery ? T('Use the code from my app') : T('Lost your phone? Use a recovery code'); c.focus(); } }, T('Lost your phone? Use a recovery code'));
   const submit = async (e) => {
     e?.preventDefault(); err.textContent = ''; busy(go, true, T('Verify'));
     try { after(await call('/api/auth/mfa', { ticket, code: c.value })); }
