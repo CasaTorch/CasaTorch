@@ -8,7 +8,7 @@ FROM ${BUILD_FROM}
 # signed file list - the build says so and carries on unless CASATORCH_REQUIRE_SIGNED=1. A tag from 0.8.0 on is always
 # signed, so for those a missing signature (a download that failed or was blocked) stops the build too. A branch name
 # (for development) builds without the check.
-ARG CASATORCH_REF=v0.9.1
+ARG CASATORCH_REF=v0.9.2
 ARG CASATORCH_REQUIRE_SIGNED=0
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends traceroute iputils-tracepath mtr-tiny && rm -rf /var/lib/apt/lists/*
