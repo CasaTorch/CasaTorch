@@ -225,10 +225,19 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             HomeStore.shared.learn(id, hello: found.1)
             HomeStore.shared.touch(id, workingAddress: found.0)
             if let token = self.tokenCache[id] { await self.setSessionCookie(token: token, for: HomeStore.shared.home(id) ?? home, at: found.0) }
-            let c = URLComponents(url: now, resolvingAgainstBaseURL: false)
-            let tail = (c?.percentEncodedPath.isEmpty == false ? c?.percentEncodedPath ?? "/" : "/") + (c?.percentEncodedQuery.map { "?\($0)" } ?? "") + (c?.percentEncodedFragment.map { "#\($0)" } ?? "")
-            self.web.load(URLRequest(url: URL(string: base + tail) ?? found.0))
+            let tail: String = Self.pathTail(of: now)
+            let target: URL = URL(string: base + tail) ?? found.0
+            self.web.load(URLRequest(url: target))
         }
+    }
+    /// The path, query and fragment of a page's address ("/" when there's none), to carry it over to another address
+    /// of the same home. Spelled out step by step: the one-line version was too much for the Swift type checker.
+    private static func pathTail(of url: URL) -> String {
+        guard let c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return "/" }
+        var s: String = c.percentEncodedPath.isEmpty ? "/" : c.percentEncodedPath
+        if let q = c.percentEncodedQuery { s += "?" + q }
+        if let f = c.percentEncodedFragment { s += "#" + f }
+        return s
     }
 
     @objc private func pullToRefresh() {
