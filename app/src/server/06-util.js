@@ -6,8 +6,17 @@
 const UA = `CasaTorch/${VERSION} (+https://casatorch.com)`;
 /* CasaTorch always says who it is. If a source turns that away, the request fails and the
    widget shows a plain "not available right now" - it never pretends to be a browser. */
+/* One exception, owner-approved and switchable: ESPN's public scoreboard refuses any request that names an app (403).
+   While Settings › General › Scores › "Use ESPN's public scoreboard" is on (the default until a licensed scores source
+   ships), requests to ESPN's own API hosts - and only those - go out with a plain browser User-Agent. Every other
+   source always sees CasaTorch's own name, and nothing is ever retried under another name. */
+const SCORES_COMPAT_HOSTS = /^(site|site\.web|sports\.core)\.api\.espn\.com$/i, SCORES_COMPAT_UA = 'Mozilla/5.0';
+function uaFor(url, sports = typeof config !== 'undefined' ? config?.sports : null) {
+  if (sports?.espnCompat === false) return UA;
+  try { return SCORES_COMPAT_HOSTS.test(new URL(url).hostname) ? SCORES_COMPAT_UA : UA; } catch { return UA; }
+}
 async function getText(url, { headers = {}, timeout = 12000, method = 'GET', body, publicOnly = false } = {}) {
-  const r = await fetch(url, { method, body, headers: { ...headers, 'User-Agent': UA }, signal: AbortSignal.timeout(timeout), publicOnly });
+  const r = await fetch(url, { method, body, headers: { ...headers, 'User-Agent': uaFor(url) }, signal: AbortSignal.timeout(timeout), publicOnly });
   // Never read an endless or huge answer into memory (a calendar or feed link pointing at something else).
   const max = 32 * 1024 * 1024, len = Number(r.headers.get('content-length') || 0);
   if (len > max) { r.body?.cancel?.(); throw Object.assign(new Error('that answer is too big'), { status: 413 }); }
@@ -17,7 +26,7 @@ async function getText(url, { headers = {}, timeout = 12000, method = 'GET', bod
   if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status, body: t.slice(0, 200) });
   return { text: t, headers: r.headers };
 }
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchUtil = { getText, UA };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchUtil = { getText, UA, uaFor };
 async function getJSON(url, opts) { const { text } = await getText(url, { ...opts, headers: { Accept: 'application/json', ...(opts?.headers || {}) } }); return JSON.parse(text); }
 
 /** cached(key, ttlMs, fn): reuse a fresh answer; on failure, serve the last good one (marked stale). */

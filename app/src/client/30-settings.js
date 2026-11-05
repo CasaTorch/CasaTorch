@@ -166,7 +166,10 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
   /* Scores and quotes: public sources for personal use; team logos only when the household turns them on (22-sports.js). */
   const logoTog = el('input', { type: 'checkbox', checked: s.sports?.showLogos === true, style: 'width:auto;margin-top:3px' });
   logoTog.onchange = async () => { try { await post('/api/settings', { showLogos: logoTog.checked }, 'PUT'); toast(T('Saved')); } catch (err) { logoTog.checked = !logoTog.checked; toast(err.message); } };
+  const espnTog = el('input', { type: 'checkbox', checked: s.sports?.espnCompat !== false, style: 'width:auto;margin-top:3px' });
+  espnTog.onchange = async () => { try { await post('/api/settings', { espnCompat: espnTog.checked }, 'PUT'); toast(T('Saved')); } catch (err) { espnTog.checked = !espnTog.checked; toast(err.message); } };
   const scoresCard = el('div', { class: 'card' }, el('h2', {}, T('Scores & stock quotes')),
+    el('label', { class: 'row', style: 'gap:10px;align-items:flex-start' }, espnTog, el('span', {}, el('b', {}, T('Use ESPN\'s public scoreboard')), el('div', { class: 'small muted' }, T('ESPN only answers requests that look like a web browser, so CasaTorch asks it that way. Off: no scores.')))),
     el('label', { class: 'row', style: 'gap:10px;align-items:flex-start' }, logoTog, el('span', {}, el('b', {}, T('Show team logos from the scores service')), el('div', { class: 'small muted' }, T('Off: each team shows as its abbreviation in its team colors.')))),
     el('p', { class: 'small muted' }, T('Sports scores and stock quotes come from public sources for personal use and may be delayed. Team names and logos belong to their teams and leagues.')));
   const homeCard = el('div', { class: 'card' }, el('h2', {}, T('Home screen')), el('p', { class: 'small muted', style: 'margin-top:0' }, T('Add widgets, drag them around and resize them right on the Home screen (Edit layout). The layout is saved on this CasaTorch, so every screen in the house matches.')),

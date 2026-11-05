@@ -1,0 +1,1 @@
+Scores work again in setup and on the Home screen. Small fixes.

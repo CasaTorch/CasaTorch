@@ -4,6 +4,15 @@ What changed in each CasaTorch version. The illustrated version, with links into
 [What's new](https://casatorch.com/docs/help/whats-new.html); after an update CasaTorch also shows a short
 "What's new" sheet (find it again in Settings › Help). Items marked **Coming** are not available yet.
 
+## 0.9.1
+
+The first public release: the free download is open.
+
+- **Scores work again.** ESPN's public scoreboard stopped answering requests that name an app, so the team list in
+  setup came back empty. CasaTorch now asks ESPN the way a web browser does - only ESPN, and you can turn it off in
+  **Settings › General › Scores**. Every other source still sees CasaTorch's own name.
+- Test fix: the docs-link check knows about the Voice assistants page.
+
 ## 0.9.0
 
 Every page is now yours to arrange - tap any tile for the whole story - plus a full Network dashboard, a rich Energy

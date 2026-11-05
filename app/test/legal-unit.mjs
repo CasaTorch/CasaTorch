@@ -25,8 +25,12 @@ export default async function legalTests(t) {
       for (const ua of seen) { assert.equal(ua, U.UA); assert.match(ua, /^CasaTorch\/\S+ \(\+https:\/\/casatorch\.com\)$/); }
     } finally { srv.close(); }
     const src = fs.readFileSync(path.join(APP, 'server.js'), 'utf8');
-    assert.doesNotMatch(src, /Mozilla\/5\.0/, 'no browser User-Agent anywhere in the server');
+    assert.equal((src.match(/Mozilla\/5\.0/g) || []).length, 1, 'one browser User-Agent in the server: the ESPN scoreboard exception');
     assert.doesNotMatch(src, /BROWSER_UA|PICKY_HOSTS/);
+    // The exception covers ESPN's API hosts only, and turns off with the setting.
+    assert.equal(U.uaFor('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams'), 'Mozilla/5.0');
+    for (const u of ['https://espn.com.evil.example/x', 'https://api.weather.gov/x', 'https://news.google.com/rss', 'http://127.0.0.1/x', 'not a url']) assert.equal(U.uaFor(u), U.UA, u);
+    assert.equal(U.uaFor('https://site.api.espn.com/apis/x', { espnCompat: false }), U.UA, 'off: CasaTorch names itself to ESPN too');
   });
 
   await t('legal: a scores service that refuses says so plainly; teams show abbreviation and color, logos only when turned on', () => {
