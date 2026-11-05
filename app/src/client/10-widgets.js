@@ -390,13 +390,13 @@ const snapSized = (d, px) => { const u = snapUrl(d); return d.source === 'frigat
 /* Live in the grid: Frigate cameras play their small stream while the tile is on screen - up to 4 at once on a
    computer, 2 on a phone (none with Data Saver on); the rest keep a new picture every second. */
 const camLiveCap = () => (navigator.connection?.saveData ? 0 : (window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth < 760 || (navigator.hardwareConcurrency || 4) <= 2 ? 2 : 4));
-const camLiveTile = (d) => !!d.stream && d.provider === 'camera';
+const camLiveTile = (d) => (!!d.stream && d.provider === 'camera') || d.liveVia === 'frigate';   // Frigate's cameras, and Home Assistant's that Frigate's go2rtc also has (29h-camauto.js)
 function camLive(c, on) {
   if (!camLiveTile(c.d)) return;
   if (on && !c.live) {
     if ([...CAMS.values()].filter((x) => x.live).length >= (c.boost ? camLiveCap() * 2 + 1 : camLiveCap())) return;   // the Security wall with Live video on: more at once (small streams over one socket each - no MJPEG pile-up)
     c.live = true;
-    c.player = camPlay(c.d, { role: 'tile', video: c.video, img: c.mjpeg, onState: (st) => {
+    c.player = camPlay(c.d, { role: c.role || 'tile', video: c.video, img: c.mjpeg, onState: (st) => {   // a camera wall in full screen plays the main streams (24w-camwalls.js)
       if (!c.live) return;
       if (st.state === 'playing') { if (!c.playing) { c.playing = st.kind; c.wrap.classList.add('cam-live'); c.wrap.classList.toggle('cam-live-img', st.kind === 'mjpeg'); c.wrap.classList.remove('cam-wait', 'cam-err'); c.age.textContent = ''; } }
       else if (st.state === 'none') { camLive(c, false); c.liveFailed = Date.now(); camFetch(c, true); }

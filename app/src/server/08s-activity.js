@@ -17,6 +17,7 @@ const ACT_RULES = [
   ['PUT', /^\/api\/settings$/, 'settings-changed', (b) => ({ fields: actFields(b) })],
   ['POST', /^\/api\/settings\/rerun-setup$/, 'setup-reopened'],
   ['PUT', /^\/api\/settings\/ai$/, 'ai-settings-changed', (b) => ({ fields: actFields(b) })],
+  ['PUT', /^\/api\/settings\/cameras$/, 'settings-changed', (b) => ({ fields: actFields(b) })],   // Settings › Cameras (29h-camauto.js)
   ['POST', /^\/api\/license$/, 'license-added'],
   ['DELETE', /^\/api\/license$/, 'license-removed'],
   ['PUT', /^\/api\/safety\/[^/]+$/, 'safety-exception-changed', (b) => ({ allowed: b?.allow === true })],

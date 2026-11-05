@@ -82,30 +82,38 @@ async function houseDevices() {
    connections are the same camera when they share a name (spelling, accents and "camera"/"cam" ignored), a Frigate
    camera name (Home Assistant's Frigate entities are named after it), or the address they are reached at.
    The best way in stays: Frigate (live video) first, then other direct cameras, then cloud ones, Home Assistant last.
-   You can remove any camera, and add any back ("Detected cameras" on the Cameras and Security pages). */
-const camKey = (d) => String(d.originalName || d.name || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/\b(camera|cam|doorbell cam|ipcam)\b/g, '').replace(/[^a-z0-9]+/g, '');
+   You can remove any camera, and add any back ("Detected cameras" on the Cameras and Security pages).
+   Ring arrives in Home Assistant up to three ways for one camera - the Ring integration (camera.<name>_live_view),
+   ring-mqtt (camera.<name>_snapshot) and Frigate (<name>) - so the endings _live_view, _snapshot, _live and _h264
+   don't count either (CAM_TAIL, camBaseName: 29h-camauto.js). */
+const camKey = (d) => { const s = String(d.originalName || d.name || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, ''), cut = s.replace(CAM_TAIL, ''); return (cut.trim() ? cut : s).replace(/\b(camera|cam|doorbell cam|ipcam)\b/g, '').replace(/[^a-z0-9]+/g, ''); };
 const camSlug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 /** The ways two cameras can be recognized as one: name, Frigate camera name, address. */
 function camKeys(d) {
   const k = [], n = camKey(d);
   if (n.length >= 3) k.push(`n:${n}`);
-  if (d.frigateCam) k.push(`f:${camSlug(d.frigateCam)}`);
-  if (d.provider === 'ha' && /^ha:camera\./.test(d.id)) { const e = camSlug(d.id.slice(10)); if (e.length >= 3) k.push(`f:${e}`); }
+  if (d.frigateCam) { k.push(`f:${camSlug(d.frigateCam)}`); const b = camBaseName(d.frigateCam); if (b.length >= 3 && b !== camSlug(d.frigateCam)) k.push(`f:${b}`); }
+  if (d.provider === 'ha' && /^ha:camera\./.test(d.id)) {
+    const e = camSlug(d.id.slice(10)), b = camBaseName(d.id.slice(10));
+    if (e.length >= 3) k.push(`f:${e}`);
+    if (b.length >= 3) { if (b !== e) k.push(`f:${b}`); k.push(`r:${b}`); }   // r: the same camera through two Home Assistant integrations (Ring and ring-mqtt)
+  }
   if (d.camHost) k.push(`h:${String(d.camHost).toLowerCase()}`);
   if (d.mac) k.push(`m:${String(d.mac).toLowerCase().replace(/[^0-9a-f]/g, '')}`);
   return k;
 }
 /** Lower is better: Frigate, other cameras on your network, integrations (Meraki, Reolink...), Ring, Home Assistant. */
-const camRank = (d) => (d.provider === 'camera' ? (d.source === 'frigate' ? 0 : 1) : d.provider === 'ring' ? 3 : d.provider === 'ha' ? 4 : 2);
-/** Pure: which cameras show and which are hidden (removed by you, or the same camera as one shown). */
+const camRank = (d) => (d.provider === 'camera' ? (d.source === 'frigate' ? 0 : 1) : d.provider === 'ring' ? 3 : d.provider === 'ha' ? (d.liveVia === 'frigate' ? 3.5 : /_snapshot$/.test(d.id) ? 4.5 : 4) : 2);   // in Home Assistant: live through Frigate, then live view, then snapshots
+/** Pure: which cameras show and which are hidden (removed by you, the same camera as one shown, or new and waiting
+    for you to add it - prefs.pending, when Settings › Cameras › Show new cameras automatically is off). */
 function camDedupe(cams, prefs = {}) {
-  const removed = new Set(prefs.hidden || []), kept = new Set(prefs.shown || []);
+  const removed = new Set(prefs.hidden || []), kept = new Set(prefs.shown || []), pending = new Set(prefs.pending || []);
   const up = cams.map((_, i) => i), find = (i) => (up[i] === i ? i : (up[i] = find(up[i])));
   const byKey = new Map();
   cams.forEach((d, i) => { for (const k of camKeys(d)) { if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(i); } });
   for (const [k, list] of byKey) for (const j of list.slice(1)) {
     const a = cams[list[0]], b = cams[j];
-    if (a.provider !== b.provider || /^[hm]:/.test(k)) up[find(j)] = find(list[0]);   // one connection doesn't list a camera twice by name - but the same address twice is one camera
+    if (a.provider !== b.provider || /^[hmr]:/.test(k)) up[find(j)] = find(list[0]);   // one connection doesn't list a camera twice by name - but the same address twice is one camera
   }
   const groups = new Map();
   cams.forEach((d, i) => { const g = find(i); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(d); });
@@ -115,6 +123,7 @@ function camDedupe(cams, prefs = {}) {
     for (const d of g) {
       const source = d.source || d.provider;
       if (removed.has(d.id)) hidden.push({ id: d.id, name: d.name, source, why: 'removed' });
+      else if (pending.has(d.id) && !kept.has(d.id)) hidden.push({ id: d.id, name: d.name, source, why: 'new' });
       else if (d !== best && !kept.has(d.id) && !removed.has(best.id)) hidden.push({ id: d.id, name: d.name, source, why: 'duplicate', of: best.name, ofId: best.id });
       else show.add(d.id);
     }
@@ -123,7 +132,7 @@ function camDedupe(cams, prefs = {}) {
 }
 function cameraSort(devices) {   // the address stays here: it is matched on, never sent to the page
   const hosts = new Map((config.cameras || []).map((c) => [`camera:${c.id}`, camHostOf(c)]));
-  return camDedupe(devices.filter((d) => d.kind === 'camera').map((d) => (hosts.get(d.id) ? { ...d, camHost: hosts.get(d.id) } : d)), config.cameraHide || {});
+  return camDedupe(devices.filter((d) => d.kind === 'camera').map((d) => (hosts.get(d.id) ? { ...d, camHost: hosts.get(d.id) } : d)), { ...(config.cameraHide || {}), pending: camAutoPending() });
 }
 app.put('/api/cameras/:id/visible', requireRole('admin'), express.json({ limit: '1kb' }), (req, res) => {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
@@ -131,6 +140,7 @@ app.put('/api/cameras/:id/visible', requireRole('admin'), express.json({ limit: 
   const hidden = new Set(p.hidden || []), shown = new Set(p.shown || []);
   if (on) { hidden.delete(id); shown.add(id); } else { hidden.add(id); shown.delete(id); }
   saveConfig({ ...config, cameraHide: { hidden: [...hidden].slice(-300), shown: [...shown].slice(-300) } });
+  if (on) camAutoAccept(id);   // a new camera waiting in Detected cameras: added now (29h-camauto.js)
   res.json({ ok: true });
 });
 /* ---- What the whole house is using right now, without counting anything twice. ----

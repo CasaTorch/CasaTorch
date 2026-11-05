@@ -157,6 +157,7 @@ function suggestPageTiles(page, f = {}, form = 'desktop') {
   if (page === 'cameras') {
     if (!f.cameras) { add('cam-start', 12, 1); if (f.hidden) add('cam-hidden', 12, 1); return out; }
     add('cam-wall', 12, 1);
+    if (f.fresh) add('cam-new', 12, 1);   // new cameras, and ones that could go into Frigate (29h-camauto.js)
     if (f.frigate) add('cam-det', 12, 1);
     if (f.hidden) add('cam-hidden', 12, 1);
     return out;
@@ -214,7 +215,7 @@ async function pageFacts(page) {
   if (page === 'reminders' || page === 'family') return {};
   if (page === 'household') { const v = hhView(); return { configured: !!v.configured, bins: v.bins.length, mail: !!v.mail, plants: v.plants.length, laundry: v.laundry.length }; }   // 78h-household.js
   const r = await houseDevices(), devices = r.devices, n = (f) => devices.filter(f).length;
-  if (page === 'cameras') return { cameras: n((d) => d.kind === 'camera'), hidden: (r.hiddenCameras || []).length, frigate: frigateServers().length > 0 };
+  if (page === 'cameras') return { cameras: n((d) => d.kind === 'camera'), hidden: (r.hiddenCameras || []).length, frigate: frigateServers().length > 0, fresh: camAutoFacts() };
   if (page === 'security') return { cameras: n((d) => d.kind === 'camera'), hidden: (r.hiddenCameras || []).length };
   if (page === 'controls') return ctlFacts(devices);
   if (page === 'home') {

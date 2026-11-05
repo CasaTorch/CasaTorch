@@ -195,6 +195,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     ['health', T('Health|settings'), 'checkc', T('Is everything working? Checks, one-tap fixes and saved copies of your settings'), async () => [...await healthCards(s, me), await supportHelpCard(s)], admin],   // supportHelpCard: 39s-support.js
     ['appearance', T('Look & main bar'), 'palette', T('Themes, backgrounds, colors, the main bar and the Home screen'), async () => [lookThemesCard(), lookCard(), barCard(), await famChipsCard(), homeCard]],   // famChipsCard: 38-family.js
     ['people', T('People & sign-in'), 'user', T('Your account, two-step sign-in, people in the house and the activity log'), async () => [...await securityCards(), await activityCard()]],   // activityCard: 39s-support.js
+    ['cameras', T('Cameras'), 'camera', T('New cameras, live video and Frigate'), async () => camerasSettingsCards(me)],   // 24w-camwalls.js
     ['safety', T('Safety'), 'shield', T('What CasaTorch will never switch, and your exceptions'), async () => [await safetyCard()], admin],
     ['connections', T('Connections & AI'), 'link', T('Home Assistant and your brands, Home AI Agent, secure access'), async () => [conn, aiCard(s), aiPrivacyCard(s), await remoteCard(), await localHttpsCard()]],
     ['voice', T('Voice assistants'), 'mic', T('Alexa, Google Home, Apple Home and Siri'), async () => voiceCards(), admin],   // 39v-voice.js

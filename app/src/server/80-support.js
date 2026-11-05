@@ -421,10 +421,10 @@ const ACT_KINDS = {
   account: ['password-changed', '2fa-on', '2fa-off', '2fa-skipped', 'recovery-codes-new', 'recovery-code-used', 'session-ended', 'other-sessions-ended', 'owner-reset-asked', 'owner-reset'],
   people: ['user-added', 'user-removed', 'user-reset', 'role-changed', 'owner-saved', 'policy-changed', 'google-on', 'google-off', 'panel-link-made', 'panel-link-revoked'],
   pairing: ['phone-paired', 'pairing-code-made', 'alerts-device-on', 'alerts-device-off', 'alerts-phone-on', 'alerts-phone-off'],
-  settings: ['settings-changed', 'setup-reopened', 'ai-settings-changed', 'alert-settings-changed', 'security-settings-changed', 'update-settings-changed', 'find-setting-changed', 'safety-exception-changed', 'license-added', 'license-removed', 'connection-removed', 'settings-put-back', 'floorplan-imported'],
+  settings: ['settings-changed', 'setup-reopened', 'ai-settings-changed', 'alert-settings-changed', 'security-settings-changed', 'update-settings-changed', 'find-setting-changed', 'safety-exception-changed', 'license-added', 'license-removed', 'connection-removed', 'settings-put-back', 'floorplan-imported', 'camera-walls-changed', 'frigate-camera-added', 'frigate-change-undone', 'frigate-restarted'],
   remote: ['secure-access-on', 'secure-access-off', 'secure-access-repaired', 'home-https-on', 'home-https-off'],
   exports: ['backup-made', 'backup-restored', 'floorplan-exported', 'diagnostics-downloaded', 'support-file-made', 'support-summary-copied'],
-  system: ['restarted', 'updated', 'alert-acknowledged'],
+  system: ['restarted', 'updated', 'alert-acknowledged', 'camera-found'],
 };
 const ACT_KIND_OF = Object.fromEntries(Object.entries(ACT_KINDS).flatMap(([k, list]) => list.map((e) => [e, k])));
 const ACT_BAD = new Set(ACT_KINDS.failed);

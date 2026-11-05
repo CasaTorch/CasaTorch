@@ -177,16 +177,19 @@ async function camVisible(ctx, id, visible) {
 const camRemoveBtn = (ctx, d) => el('button', { class: 'cam-x', title: T('Remove this camera'), 'aria-label': T('Remove {name}', { name: d.name }), onclick: (e) => { e.stopPropagation(); camVisible(ctx, d.id, false); } }, icon('x', 14));
 /* The wall: as many across as the tile's size suits (Small one, Medium two, Large three, Extra large four). */
 const camCols = (n, size) => Math.max(1, Math.min(n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4, { s: 1, m: 2, l: 3, xl: 4 }[size.tier || 'xl']));
+/* "All cameras": every camera, or the ones picked for this tile. The household's own walls are chips above it (24w-camwalls.js). */
+function camAllWall(b, ctx, size) {
+  const pick = optsOf(b._t || {}).only, all = (ctx.data.devices || []).filter((d) => d.kind === 'camera'), cams = Array.isArray(pick) && pick.length ? all.filter((d) => pick.includes(d.id)) : all;
+  const key = `${cams.map((d) => d.id).join('|')}#${size.tier}`;
+  if (b._key === key && b.firstChild) return;   // each picture keeps itself fresh: the wall is only rebuilt when cameras come or go
+  b._key = key;
+  if (!cams.length) return pgPut(b, pgEmpty(all.length ? T('None of the cameras picked for this tile are here.') : T('All your cameras are hidden.'), null, null));
+  pgPut(b, el('div', { class: 'cams', style: `--cam-cols:${camCols(cams.length, size)}` }, cams.map((d) => { const t = camView(d); if (camCanEdit() && !t.querySelector('.cam-x')) t.append(camRemoveBtn(ctx, d)); return t; })));
+}
 pageTile({ id: 'cam-wall', page: 'cameras', auto: true, title: 'Cameras', icon: 'camera', blurb: 'Every camera, live - or just the ones you pick', size: [12, 1],
   options: [{ key: 'only', type: 'devices', label: 'Which cameras', filter: (d) => d.kind === 'camera', help: 'None picked: every camera.' }],
-  render(b, ctx, size) {
-    const pick = optsOf(b._t || {}).only, all = (ctx.data.devices || []).filter((d) => d.kind === 'camera'), cams = Array.isArray(pick) && pick.length ? all.filter((d) => pick.includes(d.id)) : all;
-    const key = `${cams.map((d) => d.id).join('|')}#${size.tier}`;
-    if (b._key === key && b.firstChild) return;   // each picture keeps itself fresh: the wall is only rebuilt when cameras come or go
-    b._key = key;
-    if (!cams.length) return pgPut(b, pgEmpty(all.length ? T('None of the cameras picked for this tile are here.') : T('All your cameras are hidden.'), null, null));
-    pgPut(b, el('div', { class: 'cams', style: `--cam-cols:${camCols(cams.length, size)}` }, cams.map((d) => { const t = camView(d); if (camCanEdit() && !t.querySelector('.cam-x')) t.append(camRemoveBtn(ctx, d)); return t; })));
-  } });
+  render: (b, ctx, size) => camWallsBody(b, ctx, size, 'cameras', camAllWall) });
+pageTile({ id: 'cam-new', page: 'cameras', auto: true, title: 'New cameras', icon: 'spark', blurb: 'Cameras that just showed up, and ones to add to Frigate', size: [12, 1], render: (b, ctx) => pgPut(b, camNewCard(ctx)) });
 pageTile({ id: 'cam-one', page: 'cameras', auto: true, multi: true, askFirst: true, title: 'One camera', icon: 'camera', blurb: 'A single camera, as big as you like', size: [6, 1],
   options: [{ key: 'device', type: 'device', label: 'Which camera', filter: (d) => d.kind === 'camera' }], render(b, ctx) {
     const id = b._t?.device || optsOf(b._t || {}).device, d = (ctx.data.devices || []).find((x) => x.id === id);
@@ -203,7 +206,7 @@ function hiddenCamList(ctx) {
   const hidden = ctx.data.hiddenCameras || [];
   if (!hidden.length) return el('p', { class: 'muted small' }, T('Every camera is shown.'));
   return el('div', {}, el('p', { class: 'small muted', style: 'margin-top:0' }, T('Removed ones, and the same camera reached a second way (Frigate, Home Assistant, Meraki, Ring...) - CasaTorch shows each camera once, the fastest way. Add any back if you want both.')),
-    el('div', { class: 'list' }, hidden.map((h) => el('div', { class: 'row between', style: 'padding:6px 0;gap:10px' }, el('div', { style: 'min-width:0' }, el('b', {}, h.name), el('div', { class: 'tiny muted' }, `${srcName(h.source)} · ${h.why === 'duplicate' ? T('same camera as "{name}"', { name: h.of }) : T('removed')}`)),
+    el('div', { class: 'list' }, hidden.map((h) => el('div', { class: 'row between', style: 'padding:6px 0;gap:10px' }, el('div', { style: 'min-width:0' }, el('b', {}, h.name), el('div', { class: 'tiny muted' }, `${srcName(h.source)} · ${h.why === 'duplicate' ? T('same camera as "{name}"', { name: h.of }) : h.why === 'new' ? T('new - waiting for you to add it') : T('removed')}`)),
       camCanEdit() ? el('button', { class: 'btn small', onclick: () => camVisible(ctx, h.id, true) }, icon('plus', 14), T('Add back')) : null))));
 }
 pageTile({ id: 'cam-hidden', page: 'cameras', auto: true, title: 'Detected cameras', icon: 'camera', blurb: 'Cameras you removed, and the same camera seen twice', size: [12, 1], render(b, ctx) { pgPut(b, hiddenCamList(ctx)); } });
@@ -212,6 +215,6 @@ pageTile({ id: 'cam-start', page: 'cameras', auto: true, title: 'Add cameras', i
 } });
 async function camerasPage(main) {
   S.me ||= await api('/api/auth/me').catch(() => ({}));
-  const load = async () => { const r = await api('/api/devices'); return { devices: r.devices || [], hiddenCameras: r.hiddenCameras || [] }; };
+  const load = async () => { const [r, walls, auto] = await Promise.all([api('/api/devices'), cwLoad(), api('/api/camera-auto').catch(() => ({}))]); return { devices: r.devices || [], hiddenCameras: r.hiddenCameras || [], walls, auto }; };
   return pageGrid(main, { page: 'cameras', auto: true, title: tabLabel({ id: 'cameras', label: T('Cameras') }), load });
 }

@@ -26,11 +26,11 @@ function peekCertificate(base) {
 }
 
 /** One request to Frigate. https to Frigate's own certificate is allowed only with the fingerprint pinned (c.fingerprint + c.ca). */
-function frigateRequest(c, path, { method = 'GET', body, headers = {}, timeout = 10000, signal } = {}) {
+function frigateRequest(c, path, { method = 'GET', body, raw, headers = {}, timeout = 10000, signal } = {}) {   // raw: a text body sent as it is (Frigate's config file)
   const u = new URL(frigateBase(c) + path);
   if (blockedUrl(u.href)) return Promise.reject(new TypeError('That address is not allowed.'));
   return new Promise((ok, fail) => {
-    const opts = { method, headers: { Accept: '*/*', ...headers, ...(body ? { 'Content-Type': 'application/json' } : {}) }, timeout, signal };
+    const opts = { method, headers: { Accept: '*/*', ...headers, ...(raw != null ? { 'Content-Type': 'text/plain; charset=utf-8' } : body ? { 'Content-Type': 'application/json' } : {}) }, timeout, signal };
     if (u.protocol === 'https:' && c.fingerprint && c.ca) {
       // Trust exactly that certificate: it is the only authority, the name on it is not checked (it's an address on
       // your network), and the fingerprint must match before anything - a password included - is sent.
@@ -38,7 +38,7 @@ function frigateRequest(c, path, { method = 'GET', body, headers = {}, timeout =
     }
     const rq = (u.protocol === 'https:' ? https : http).request(u, opts, ok);
     rq.on('timeout', () => rq.destroy(new Error('timed out'))); rq.on('error', fail);
-    rq.end(body ? JSON.stringify(body) : undefined);
+    rq.end(raw != null ? String(raw) : body ? JSON.stringify(body) : undefined);
   });
 }
 const readAll = async (r, max = 8 * 1024 * 1024) => { const parts = []; let n = 0; for await (const p of r) { n += p.length; if (n > max) { r.destroy(); throw new Error('the answer was too big'); } parts.push(p); } return Buffer.concat(parts); };

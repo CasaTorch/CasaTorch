@@ -27,11 +27,12 @@ function haLiveStart() {
     if (msg.type === 'auth_required') ws.send(JSON.stringify({ type: 'auth', access_token: h.token }));
     else if (msg.type === 'auth_ok') { ws.send(JSON.stringify({ id: 1, type: 'get_states' })); ws.send(JSON.stringify({ id: 2, type: 'subscribe_events', event_type: 'state_changed' })); }
     else if (msg.type === 'auth_invalid') { try { ws.close(); } catch { /* closing anyway */ } }
-    else if (msg.type === 'result' && msg.id === 1 && msg.success && Array.isArray(msg.result)) { LIVE.states = new Map(msg.result.map((s) => [s.entity_id, s])); LIVE.ok = true; LIVE.retry = 2000; liveChanged('light.'); }
+    else if (msg.type === 'result' && msg.id === 1 && msg.success && Array.isArray(msg.result)) { LIVE.states = new Map(msg.result.map((s) => [s.entity_id, s])); LIVE.ok = true; LIVE.retry = 2000; liveChanged('light.'); camAutoSoon(); }
     else if (msg.type === 'event' && msg.event?.event_type === 'state_changed' && LIVE.states) {
       const d = msg.event.data || {}; if (!d.entity_id) return;
       if (d.new_state) LIVE.states.set(d.entity_id, d.new_state); else LIVE.states.delete(d.entity_id);
       liveChanged(d.entity_id);
+      if (d.new_state && !d.old_state && d.entity_id.startsWith('camera.')) camAutoSoon(d.entity_id);   // a camera Home Assistant just got: it shows up here too (29h-camauto.js)
     }
   });
   const down = () => { if (LIVE.ws !== ws) return; LIVE.ws = null; LIVE.ok = false; LIVE.states = null; haLiveLater(); };

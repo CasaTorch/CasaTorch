@@ -72,6 +72,8 @@
     'page.alerts': 'use/phone-app.html#alerts',
     'page.controls': 'connect/lights-plugs.html',
     'page.cameras': 'connect/cameras.html',
+    'settings.cameras': 'connect/cameras.html#live',
+    'cameras.frigate': 'connect/cameras.html#frigate',
     'page.security': 'use/security.html',
     'page.calendar': 'connect/everyday.html#calendars',
     'page.photos': 'connect/everyday.html#photos',

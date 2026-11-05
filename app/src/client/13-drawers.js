@@ -324,18 +324,21 @@ tileDrawer(['lights', 'entities', 'room', 'media', 'batteries', 'secure', 'sec-d
 });
 
 /* ---- Cameras: live, with what they saw ---- */
+/** Whose live video a camera plays, in plain words (the plan says: 29g-camlive.js). */
+const camViaText = (plan, d) => (plan?.via === 'frigate' ? T('Live via Frigate') : plan?.via === 'ha' ? T('Live via Home Assistant (a few seconds behind)') : d.stream ? T('Yes') : T('Pictures every second'));
 function camDrawer(d, onClose, { fromHash = false, route = null } = {}) {
   let stage = null;
   return openDrawer({
     route: route || ['cam', d.id], fromHash, title: d.name, icon: 'camera', wide: true, doc: 'page.cameras',
     sub: () => [srcName(d.source || d.provider), d.stream ? T('live') : T('a new picture every second')].filter(Boolean).join(' · '),
     async load() {
-      const [ev, alerts, all] = await Promise.all([d.frigateCam ? api(`/api/frigate/events?hours=24&camera=${encodeURIComponent(d.frigateCam)}`).catch(() => null) : null, api('/api/alerts').catch(() => null), drDevices()]);
-      return { ev, alerts, cams: all.filter((x) => x.kind === 'camera') };
+      const [ev, alerts, all, auto, plan] = await Promise.all([d.frigateCam ? api(`/api/frigate/events?hours=24&camera=${encodeURIComponent(d.frigateCam)}`).catch(() => null) : null, api('/api/alerts').catch(() => null), drDevices(),
+        api('/api/camera-auto').catch(() => null), camPlanOf(d, 'full').catch(() => null)]);
+      return { ev, alerts, cams: all.filter((x) => x.kind === 'camera'), auto, plan };
     },
-    render(b, { ev, alerts, cams }) {
+    render(b, { ev, alerts, cams, auto, plan }) {
       stage?.stop(); stage = camStage(d);
-      const name = String(d.name || '').toLowerCase();
+      const name = String(d.name || '').toLowerCase(), offer = auto?.owner && auto.frigate && (auto.offers || []).some((o) => o.dev === d.id);
       const acts = [...(alerts?.now || []), ...(alerts?.recent || [])].filter((x) => name && String(x.title || '').toLowerCase().includes(name)).sort((x, y) => String(y.at || y.since).localeCompare(String(x.at || x.since))).slice(0, 12);
       const det = ev?.frigate && ev.recent?.length ? el('div', { class: 'detlist' }, ev.recent.slice(0, 20).map((e) => { const [sid, id] = e.id.split(':');
         return el('div', { class: 'detrow' }, el('img', { loading: 'lazy', alt: '', src: `/api/frigate/events/${sid}/${encodeURIComponent(id)}/thumbnail` }), el('div', { class: 'grow', style: 'min-width:0' }, el('b', {}, `${typeof DET_ICON !== 'undefined' && DET_ICON[e.label] || '•'} ${typeof detName === 'function' ? detName(e.label) : e.label}`), el('div', { class: 'tiny muted' }, `${fmtWhen(e.start)}${e.score ? ` · ${e.score}%` : ''}`))); })) : null;
@@ -345,7 +348,10 @@ function camDrawer(d, onClose, { fromHash = false, route = null } = {}) {
         det ? drSection(T('What it saw (24 h)'), hours, det) : null,
         !det && acts.length ? drSection(T('Activity'), el('div', { class: 'dr-list' }, acts.map((x) => el('div', { class: 'dr-row' }, el('span', { class: `dot ${alSevDot(x.severity)}` }), el('span', { class: 'grow' }, alertTitle(x)), el('span', { class: 'tiny muted' }, fmtWhen(x.at || x.since)))))) : null,
         !det && !acts.length ? drSection(T('Activity'), el('p', { class: 'small muted', style: 'margin:0' }, ev?.frigate ? T('Nothing detected in this time.') : T('With Frigate, what this camera saw - people, cars, animals - shows here, hour by hour.'))) : null,
-        drSection(T('Details'), drFacts([[T('From'), srcName(d.source || d.provider) || pretty(d.provider)], [T('Room'), d.area], [T('Live video'), d.stream ? T('Yes') : T('Pictures every second')], [T('Doorbell'), d.doorbell ? T('Yes') : null]])));
+        drSection(T('Details'), drFacts([[T('From'), srcName(d.source || d.provider) || pretty(d.provider)], [T('Room'), d.area], [T('Live video'), camViaText(plan, d)], [T('Doorbell'), d.doorbell ? T('Yes') : null]]),
+          plan?.how ? el('p', { class: 'tiny muted', style: 'margin:6px 0 0' }, plan.how === 'ring' ? T('Matched to Frigate by its Ring stream - nothing to set up.') : T('Matched to Frigate by its name - nothing to set up.')) : null),
+        offer ? drSection(T('Frigate'), el('p', { class: 'small muted', style: 'margin:0 0 8px' }, T('Frigate doesn\'t have this camera yet. Add it, and Frigate records it and spots people, cars and animals.')),
+          el('button', { class: 'btn small', onclick: () => camFrigateAdd(d) }, icon('plus', 14), T('Add to Frigate (detection and recording)'))) : null);
     },
     onClose: () => { stage?.stop(); stage = null; onClose?.(); onClose = null; },
   });

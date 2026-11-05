@@ -157,7 +157,7 @@ function eventsCard(events, size = { tier: 'l' }) {
 
 /* ---- the page ---- */
 const secData = (ctx) => ctx.data.sec || { devices: [], checklist: [], events: [], wall: {} };
-pageTile({ id: 'sec-wall', page: 'security', auto: true, title: 'Video wall', icon: 'camera', blurb: 'Every camera at once, live where it can be', size: [12, 1], render: (b, ctx, size) => wallBody(b, ctx, size) });
+pageTile({ id: 'sec-wall', page: 'security', auto: true, title: 'Video wall', icon: 'camera', blurb: 'Every camera at once, live where it can be', size: [12, 1], render: (b, ctx, size) => camWallsBody(b, ctx, size, 'security', wallBody) });   // the household's camera walls as chips above it (24w-camwalls.js)
 pageTile({ id: 'sec-doors', page: 'security', auto: true, title: 'Doors & locks', icon: 'lock', blurb: 'Locks, doors and the garage - and Lock all', size: [4, 1], render: (b, ctx, size) => pgPut(b, doorsCard(ctx.data.devices || [], () => ctx.refresh?.(), size)) });
 pageTile({ id: 'sec-alarm', page: 'security', auto: true, title: 'Alarm & safety', icon: 'shield', blurb: 'The alarm, smoke and leak sensors, cameras online', size: [4, 1], render: (b, ctx, size) => pgPut(b, alarmCard(ctx.data.devices || [], () => ctx.refresh?.(), size)) });
 pageTile({ id: 'sec-check', page: 'security', auto: true, title: 'Checklist', icon: 'checkc', blurb: 'What would make your home safer, step by step', size: [4, 1], render: (b, ctx, size) => pgPut(b, checklistCard(secData(ctx).checklist || [], size)) });
@@ -168,7 +168,7 @@ pageTile({ id: 'sec-start', page: 'security', auto: true, title: 'Add cameras', 
 tab({ id: 'security', label: 'Security', icon: 'shield', after: 'cameras', async render(main) {
   SEC.wallEdit = false;
   S.me ||= await api('/api/auth/me').catch(() => ({}));
-  const load = async () => { const [r, sec] = await Promise.all([api('/api/devices'), api('/api/security')]); return { devices: r.devices || [], hiddenCameras: r.hiddenCameras || [], sec }; };
+  const load = async () => { const [r, sec, walls] = await Promise.all([api('/api/devices'), api('/api/security'), cwLoad()]); return { devices: r.devices || [], hiddenCameras: r.hiddenCameras || [], sec, walls }; };
   const sub = (ctx) => { const devices = ctx.data.devices, s = secData(ctx);
     const issues = devices.filter((d) => d.water || d.smoke || d.triggered).length + devices.filter((d) => d.kind === 'lock' && d.locked === false).length + s.devices.filter((d) => !d.known).length + s.devices.filter((d) => d.ports.some((p) => !p.expected && p.level === 'warning')).length;
     return issues ? T(issues === 1 ? '{n} thing to look at' : '{n} things to look at', { n: issues }) : T('All clear'); };

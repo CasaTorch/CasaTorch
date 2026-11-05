@@ -514,6 +514,7 @@ function liveStart() {
     LIVE_C.heard = Date.now(); LIVE_C.wait = 2000;
     let m; try { m = JSON.parse(ev.data); } catch { return; }
     if (m.type === 'tick' && !document.hidden && typeof nudgeCheck === 'function') { clearTimeout(liveNudgeT); liveNudgeT = setTimeout(nudgeCheck, 300); }   // a nudge going off shows at once
+    if (m.type === 'tick' && !document.hidden && typeof camNoticeCheck === 'function') camNoticeCheck();   // a new camera (24w-camwalls.js; at most every 20 seconds)
     if (m.type !== 'tick' || document.hidden || document.body.classList.contains('editing-on') || !refresher) return;
     if (document.activeElement?.closest?.('#view') && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;   // someone is typing: the next change (or the 30-second refresh) catches up
     clearTimeout(liveTimer); liveTimer = setTimeout(() => { liveLast = Date.now(); runRefresh(); }, Math.max(0, 1000 - (Date.now() - liveLast)));

@@ -107,7 +107,10 @@ async function camSource(dev) {
     const ent = dev.slice(3), h = config.homeAssistant;
     if (!h?.url || !/^camera\.\w{1,120}$/.test(ent)) return null;
     const st = (await haStates().catch(() => [])).find((x) => x.entity_id === ent);
-    return st ? { kind: 'ha', ent, stream: !!((Number(st.attributes?.supported_features) || 0) & 2) } : null;
+    if (!st) return null;
+    // the same camera in Frigate's go2rtc (by name, or ring-mqtt's stream): its fast video, through Frigate (29h-camauto.js)
+    const fast = await camFastFor(ent).catch(() => null);
+    return { kind: 'ha', ent, stream: !!((Number(st.attributes?.supported_features) || 0) & 2), ...(fast ? { fast } : {}) };
   }
   const [integ, ...rest] = dev.split(':'), id = rest.join(':'), def = INTEGRATIONS.get(integ);
   if (!def?.camera || !id || (def.pro && !proStatus().pro)) return null;
@@ -115,26 +118,32 @@ async function camSource(dev) {
   return { kind: 'integration', def, id };
 }
 
-/** The plan: the ways this camera can play, best first. */
+/** go2rtc for a camera: { c: the Frigate it is reached through, pick: { main, sub } } - a Frigate camera's own streams, or
+    the stream a Home Assistant camera was matched to (29h-camauto.js). Null when it has none. */
+async function go2rtcOf(src) {
+  if (src?.kind === 'frigate') { const pick = await frigateStreams(src.c).catch(() => null); return pick ? { c: src.c, pick } : null; }
+  if (src?.kind === 'ha' && src.fast) return { c: src.fast.c, pick: { main: src.fast.main, sub: src.fast.sub } };
+  return null;
+}
+/** The plan: the ways this camera can play, best first. via: whose video it is (frigate | ha), for the camera's details. */
 async function camPlan(dev, role = 'full') {
   const src = await camSource(dev); if (!src) return null;
-  const enc = encodeURIComponent(dev), ways = [];
+  const enc = encodeURIComponent(dev), ways = [], s = role === 'tile' ? 'sub' : 'main', go = (sub) => [{ kind: 'mse', url: `/api/camlive/${enc}/mse?s=${sub}` }, { kind: 'hls', url: `/api/camlive/${enc}/hls/stream.m3u8?s=${sub}` }];
   const mjpegH = role === 'tile' ? 480 : 1080, mjpegFps = role === 'tile' ? 8 : 12;
-  let why = null;
+  let why = null, via = null, how = null;
   if (src.kind === 'frigate') {
-    const pick = await frigateStreams(src.c).catch(() => null);
-    if (pick) {
-      const s = role === 'tile' ? 'sub' : 'main';
-      ways.push({ kind: 'mse', url: `/api/camlive/${enc}/mse?s=${s}` }, { kind: 'hls', url: `/api/camlive/${enc}/hls/stream.m3u8?s=${s}` });
-    } else why = 'nogo2rtc';
+    const g = await go2rtcOf(src);
+    if (g) { ways.push(...go(s)); via = 'frigate'; } else why = 'nogo2rtc';
     ways.push({ kind: 'mjpeg', url: `/api/cameras/${encodeURIComponent(src.c.id)}/live?h=${mjpegH}&fps=${mjpegFps}` });
   } else if (src.kind === 'ha') {
+    if (src.fast) { ways.push(...go(s)); via = 'frigate'; how = src.fast.how || null; }
     if (src.stream && role !== 'tile') ways.push({ kind: 'hls', url: `/api/camlive/${enc}/hls/master_playlist.m3u8` });
-    else if (!src.stream) why = 'nostream';
+    else if (!src.stream && !src.fast) why = 'nostream';
     if (role !== 'tile') ways.push({ kind: 'mjpeg', url: `/api/ha/camera/${encodeURIComponent(src.ent)}/live` });
+    via ||= src.stream ? 'ha' : null;
   } else if (src.kind === 'integration' && src.def.camera.live && role !== 'tile') ways.push({ kind: 'mjpeg', url: `/api/cam/${src.def.id}/${encodeURIComponent(src.id)}/live` });
   if (!ways.length) why = 'pictures';
-  return { ways, why };
+  return { ways, why, via, ...(how ? { how } : {}) };
 }
 app.get('/api/camlive/:dev/plan', async (req, res) => {
   if (isDemo()) return res.json({ ways: [], why: 'demo' });
@@ -149,11 +158,11 @@ app.get(/^\/api\/camlive\/([^/]+)\/hls\/(.+)$/, async (req, res) => {
   const dev = String(req.params[0]), file = String(req.params[1]);   // (Express has decoded them)
   const src = await camSource(dev).catch(() => null); if (!src) return res.status(404).end();
   try {
-    if (src.kind === 'frigate') {
-      const pick = await frigateStreams(src.c); if (!pick) return res.status(404).end();
-      const p = hlsUpstream('go2rtc', file, req.query, { src: req.query.s === 'sub' ? pick.sub : pick.main }); if (!p) return res.status(404).end();
+    if (src.kind === 'frigate' || (src.fast && GO2RTC_FILE.test(file))) {
+      const g = await go2rtcOf(src); if (!g) return res.status(404).end();
+      const p = hlsUpstream('go2rtc', file, req.query, { src: req.query.s === 'sub' ? g.pick.sub : g.pick.main }); if (!p) return res.status(404).end();
       const ac = new AbortController(); res.on('close', () => ac.abort());
-      const r = await frigateGet(src.c, p, { signal: ac.signal, timeout: 20000 });
+      const r = await frigateGet(g.c, p, { signal: ac.signal, timeout: 20000 });
       return hlsPass(r.statusCode, r.headers['content-type'], r, res);
     }
     if (src.kind === 'ha' && src.stream) {
@@ -200,15 +209,15 @@ app.get('/api/camlive/:dev/mse', async (req, res) => {
   if (!same) return res.status(403).json({ error: 'refused' });
   if (!/^[A-Za-z0-9+/]{22}==$/.test(String(req.headers['sec-websocket-key'] || ''))) return res.status(400).end();
   const dev = String(req.params.dev), src = await camSource(dev).catch(() => null);
-  if (!src || src.kind !== 'frigate') return res.status(404).end();
-  const pick = await frigateStreams(src.c).catch(() => null); if (!pick) return res.status(404).end();
+  const g = await go2rtcOf(src).catch(() => null); if (!g) return res.status(404).end();
+  const pick = g.pick;
   const n = CL_TUNNELS.get(dev) || 0;
   if (n >= 8 || [...CL_TUNNELS.values()].reduce((a, b) => a + b, 0) >= 48) return res.status(429).json({ error: 'too many screens are watching live' });
   req.camTunnel = true;
   CL_TUNNELS.set(dev, n + 1);
   let counted = true; const uncount = () => { if (counted) { counted = false; CL_TUNNELS.set(dev, Math.max(0, (CL_TUNNELS.get(dev) || 1) - 1)); } };
   socket.on('close', uncount);
-  try { await go2rtcTunnel(src.c, req.query.s === 'sub' ? pick.sub : pick.main, req, socket); }
+  try { await go2rtcTunnel(g.c, req.query.s === 'sub' ? pick.sub : pick.main, req, socket); }
   catch { uncount(); if (!socket.destroyed) socket.end('HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'); }
 });
 /** Open go2rtc's MSE socket (Frigate's /live/mse/api/ws) and join it to the page's. Frigate's sign-in and pinned certificate apply. */

@@ -140,7 +140,8 @@ PROVIDERS.ha = {
   async list() {
     const [states, areas, devs] = await Promise.all([haStates(), haAreas(), haDevIds()]);
     const list = haPairPlugs(states.map(haDevice).filter(Boolean));
-    for (const d of list) { const a = areas[d.id.slice(3)]; if (a) d.area = a; const g = devs[d.id.slice(3)]; if (g) d.dev = g; }
+    const fast = camMapNow();   // cameras Frigate's go2rtc also has: live video through it (29h-camauto.js)
+    for (const d of list) { const a = areas[d.id.slice(3)]; if (a) d.area = a; const g = devs[d.id.slice(3)]; if (g) d.dev = g; if (d.kind === 'camera' && fast[d.id.slice(3)]?.via === 'frigate') d.liveVia = 'frigate'; }
     return list;
   },
   async act(d, action, value) {
