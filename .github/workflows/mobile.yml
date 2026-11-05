@@ -9,7 +9,7 @@ permissions: { contents: read }
 concurrency: { group: "mobile-${{ github.ref }}", cancel-in-progress: true }
 jobs:
   android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -42,4 +42,5 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project CasaTorch.xcodeproj -scheme CasaTorch -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build | tail -40
+            -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 || { grep -E "error:" build.log | sort -u | head -20 | sed 's/^/::error::/'; tail -20 build.log; exit 65; }
+          tail -5 build.log

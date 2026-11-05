@@ -13,7 +13,7 @@ env:
 jobs:
   test:
     name: Build, unit and security (Node ${{ matrix.node }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy: { fail-fast: false, matrix: { node: [22, 24] } }
     defaults: { run: { working-directory: app } }
@@ -33,7 +33,7 @@ jobs:
 
   e2e:
     name: Setup wizard end to end
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults: { run: { working-directory: app } }
     env:
@@ -60,7 +60,7 @@ jobs:
 
   hygiene:
     name: Personal-data scrub and dependency audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -82,7 +82,7 @@ jobs:
         run: npm audit --omit=dev --audit-level=critical
 
   docker:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

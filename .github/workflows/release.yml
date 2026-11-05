@@ -16,7 +16,7 @@ env:
   CASATORCH_VERSION: ${{ startsWith(github.ref_name, 'v') && github.ref_name || 'v0.0.0' }}
 jobs:
   image:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,7 +42,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   bundle:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -55,7 +55,7 @@ jobs:
 
   linux:
     needs: bundle
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy: { matrix: { arch: [amd64, arm64] } }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,7 +71,7 @@ jobs:
 
   raspberry-pi:
     needs: linux
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -180,7 +180,7 @@ jobs:
   publish:
     needs: [image, linux, raspberry-pi, windows, macos]
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions: { contents: write, actions: read }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
