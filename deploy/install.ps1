@@ -119,6 +119,8 @@ process.stdout.write(`verified ${want.size} files against the signed release\n`)
   if ($rc -eq 1) { Remove-Item -Recurse -Force $tmp, $rel -ErrorAction SilentlyContinue; throw "The download doesn't match CasaTorch's signed release, so nothing was installed or changed. Try again later, or ask at support@casatorch.com." }
   if ($rc -ne 0) {
     if ($env:CASATORCH_REQUIRE_SIGNED -eq '1') { throw "$Ref has no signed file list to check (CASATORCH_REQUIRE_SIGNED=1)." }
+    # every release from 0.8.0 on has a signed file list: one that doesn't is not trusted (it could have been taken away)
+    if ($rc -eq 2 -and $Ref -match '^v(0\.([89]|[1-9][0-9]+)|[1-9][0-9]*)\.') { Remove-Item -Recurse -Force $tmp, $rel -ErrorAction SilentlyContinue; throw "$Ref should be signed, but its signed file list couldn't be checked, so nothing was installed or changed. Try again later." }
     if ($rc -eq 2) { Say "Note: $Ref was released before signed file lists - installing it without that check" } else { Say "Note: $Ref is not a release - installing it without the signature check" }
   }
   robocopy $top.FullName $App /E /XD node_modules data /NFL /NDL /NJH /NJS | Out-Null

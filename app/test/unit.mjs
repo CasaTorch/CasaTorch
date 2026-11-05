@@ -831,6 +831,24 @@ await t('secure access: Basic, away from home - JSON for the app, a page for bro
     assert.equal((await get('/api/app/hello', '203.0.113.50', { 'x-casatorch-check': 'q1w2e3r4t5y6u7i8' })).status, 403, 'nor an old one');
   } finally { H.remote.nonce = null; H.remote.homeIps = H0; srv.close(); restore(); }
 });
+await t('secure access: Pro away from home is refused while sign-in is off (never open on the internet); at home it still works', async () => {
+  const restore = RM.patchConfig({ remote: { on: true, hostname: 'home-test.casatorch.test' }, setupAt: '2020-01-01T00:00:00.000Z', license: undefined });
+  const H0 = { ...H.remote.homeIps }; H.remote.homeIps = { v4: '198.51.100.7', v6: null, at: Date.now() };
+  const pd = process.env.CASATORCH_PRO_DEV; process.env.CASATORCH_PRO_DEV = '1';   // Pro, and (in the unit tests) no accounts: sign-in is off
+  const srv = H.app.listen(0, '127.0.0.1'); await new Promise((ok) => srv.once('listening', ok));
+  const get = (p, ip, headers = {}) => new Promise((ok, bad) => { const rq = http.get({ host: '127.0.0.1', port: srv.address().port, path: p, headers: { host: 'home-test.casatorch.test', 'cf-connecting-ip': ip, ...headers } }, (r) => { let b = ''; r.on('data', (c) => { b += c; }); r.on('end', () => ok({ status: r.statusCode, type: r.headers['content-type'] || '', body: b })); }); rq.on('error', bad); });
+  try {
+    for (const p of ['/api/app/hello', '/api/status', '/api/settings']) {
+      const a = await get(p, '203.0.113.50');
+      assert.equal(a.status, 403, p); assert.match(a.type, /json/); const j = JSON.parse(a.body);
+      assert.equal(j.needsSignIn, true, p); assert.equal(j.away, true); assert.ok(!j.needsPro, 'it is not a Pro question');
+    }
+    const pg = await get('/', '203.0.113.50', { accept: 'text/html' }); assert.equal(pg.status, 403); assert.match(pg.body, /Sign-in is off/);
+    assert.equal((await get('/api/app/hello', '198.51.100.7')).status, 200, 'from home: as on the home network');
+    H.remote.nonce = 'q1w2e3r4t5y6u7i8';
+    assert.equal((await get('/api/app/hello', '203.0.113.50', { 'x-casatorch-check': 'q1w2e3r4t5y6u7i8' })).status, 200, 'the self-test still checks the tunnel');
+  } finally { H.remote.nonce = null; H.remote.homeIps = H0; if (pd === undefined) delete process.env.CASATORCH_PRO_DEV; else process.env.CASATORCH_PRO_DEV = pd; srv.close(); restore(); }
+});
 
 /* Household (78h-household.js): bin schedules in the house's own time zone, holidays, waste sensors, the mailbox, appliances. */
 {

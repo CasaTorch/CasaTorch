@@ -124,6 +124,28 @@ try {
   await until('working after Health repair', status('working'));
   ok('key turned down: "Repair" (also in Health) gets a fresh one, same address');
   assert.equal((await view()).hostname, host, 'the address stayed the same');
+  /* casatorch.com can't reach into the home through the tunnel */
+  const conf = fs.readFileSync(path.join(BIN, 'cloudflared.yml'), 'utf8'), args = fs.readFileSync(path.join(BIN, 'FAKE_ARGS'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).at(-1);
+  assert.ok(args.includes('--config') && args.includes('--no-autoupdate'), JSON.stringify(args));
+  assert.match(conf, new RegExp(`- hostname: ${host.replace(/\./g, '\\.')}\\n    service: http://127\\.0\\.0\\.1:${PORT}\\n  - service: http_status:404\\nwarp-routing:\\n  enabled: false`));
+  ok('the tunnel\'s own rules: this CasaTorch only, everything else "not found", no private-network routing, no self-updates');
+  mode('hostrewrite'); await api('/api/remote/repair', {}); await until('connected (host rewritten)', async () => (await view()).state === 'connected');   // (its self-test says "not as this CasaTorch" - rightly)
+  const sneaky = await fetch(`http://127.0.0.1:${EDGE}/api/app/hello`, { headers: { 'X-Fake-Ip': '198.51.100.7' } });
+  assert.equal(sneaky.status, 403, 'a visitor from outside stays outside, whatever Host the tunnel gives the request');
+  ok('a Host header that looks like home (set on Cloudflare\'s side) doesn\'t let a visitor from outside in');
+  mode('pushok'); await api('/api/remote/repair', {}); await until('working (good rules pushed)', status('working'));
+  await sleep(800); assert.equal((await view()).view.status, 'working', 'rules that reach only this CasaTorch are fine');
+  for (const bad of ['pushlan', 'warp']) {
+    mode(bad); const b3 = runs().length; await api('/api/remote/repair', {});
+    v = await until(`stopped (${bad})`, async () => { const x = await view(); return x.view.code === 'config' ? x : null; }, 15000);
+    assert.equal(v.view.status, 'problem'); assert.equal(v.view.fix.action, 'repair');
+    await sleep(2500); assert.equal(runs().length, b3 + 1, 'not started again by itself');
+    assert.equal(await fetch(`http://127.0.0.1:${EDGE}/`).then(() => true, () => false), false, 'the helper is gone');
+    const audit = fs.readFileSync(path.join(DIR, 'audit.log'), 'utf8');
+    assert.match(audit, /secure-access-stopped/);
+  }
+  mode('ok'); await api('/api/remote/repair', {}); await until('working after the stop', status('working'));
+  ok('rules from Cloudflare\'s side that reach past this CasaTorch (the router, private-network routing) stop secure access at once, logged, not restarted');
   /* casatorch.com failing */
   fail = true; r = await api('/api/remote/repair', {}); fail = false;
   assert.equal(r.status, 502); assert.match(r.j.error, /busy/); assert.equal(r.j.view.code, 'service');
@@ -141,7 +163,8 @@ try {
   ok('a failed download is tried 3 times, then "Couldn\'t download the secure-access helper"');
   console.log(`\n${n} passed`);
 } finally {
-  child.kill(); fake.close();
-  fs.rmSync(DIR, { recursive: true, force: true });
+  const gone = new Promise((ok) => { if (child.exitCode != null) ok(); else { child.once('exit', ok); setTimeout(ok, 5000); } });
+  child.kill(); fake.close(); await gone;   // the server's last writes are done before its folder goes
+  try { fs.rmSync(DIR, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { /* the temp folder is cleaned up later */ }
 }
 process.exit(0);

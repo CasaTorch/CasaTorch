@@ -136,10 +136,42 @@ async function haDevIds() {
     });
   } catch { return {}; }
 }
+/* Ring Chime and Chime Pro are plug-in speakers that ring when someone presses the doorbell - not cameras. Some setups
+   still give one a camera entity (ring-mqtt, a camera made from the Ring account, a name Home Assistant reused), and
+   then it must never count or show as a camera: not in camera counts, the Cameras and Security pages, camera walls,
+   the 3D home's camera views or "New camera" notices. It shows as a chime instead. Known by its Home Assistant device
+   model ("Chime", "Chime Pro"), the kind of device the integration names, or - for a camera entity with no video, or
+   one from Ring - "chime" in its name. Pure. */
+const CHIME_WORD = /(?:^|[\s_.-])chime(?:[\s_-]*pro)?(?:[\s_-]*v?\d)?(?:$|[\s_.-])/i;
+function haIsChime(s, model = '') {
+  const a = s?.attributes || {};
+  if (/\bchime\b/i.test(String(model || ''))) return true;
+  if (/\bchime/i.test(String(a.device_type || a.model || ''))) return true;
+  if (!CHIME_WORD.test(`${s?.entity_id || ''} ${a.friendly_name || ''}`)) return false;
+  const ring = /\bring\b/i.test(String(a.attribution || '')) || /^camera\.ring_/i.test(String(s?.entity_id || ''));
+  return ring || !((Number(a.supported_features) || 0) & 2);
+}
+/* The Home Assistant device model of each camera entity (for haIsChime), asked once every five minutes. */
+const HA_CAM_MODEL_TEMPLATE = `{% for s in states.camera %}{{ s.entity_id }}={{ (device_attr(s.entity_id, 'model') or '') | replace(';', ' ') | replace('=', ' ') }};{% endfor %}`;
+async function haCamModels() {
+  const h = config.homeAssistant; if (!h?.url) return {};
+  try {
+    return await cached('ha:cammodels', 300_000, async () => {
+      const r = await fetch(`${h.url}/api/template`, { method: 'POST', headers: { Authorization: `Bearer ${h.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ template: HA_CAM_MODEL_TEMPLATE }), signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const map = {};
+      for (const pair of (await r.text()).split(';')) { const i = pair.indexOf('='), e = pair.slice(0, i).trim(); if (i > 0 && /^camera\.\w{1,120}$/.test(e)) map[e] = pair.slice(i + 1).trim().slice(0, 80); }
+      return map;
+    });
+  } catch { return {}; }
+}
+/** A camera entity that is really a chime becomes one (the snapshot and stream addresses go). Pure. */
+function haChimeOf(d) { const { snapshot: _s, stream: _l, every: _e, liveVia: _v, ...rest } = d; return { ...rest, kind: 'chime', chime: true }; }
 PROVIDERS.ha = {
   async list() {
-    const [states, areas, devs] = await Promise.all([haStates(), haAreas(), haDevIds()]);
-    const list = haPairPlugs(states.map(haDevice).filter(Boolean));
+    const [states, areas, devs, models] = await Promise.all([haStates(), haAreas(), haDevIds(), haCamModels()]);
+    const byEnt = new Map(states.map((s) => [s.entity_id, s]));
+    const list = haPairPlugs(states.map(haDevice).filter(Boolean)).map((d) => (d.kind === 'camera' && haIsChime(byEnt.get(d.id.slice(3)), models[d.id.slice(3)]) ? haChimeOf(d) : d));
     const fast = camMapNow();   // cameras Frigate's go2rtc also has: live video through it (29h-camauto.js)
     for (const d of list) { const a = areas[d.id.slice(3)]; if (a) d.area = a; const g = devs[d.id.slice(3)]; if (g) d.dev = g; if (d.kind === 'camera' && fast[d.id.slice(3)]?.via === 'frigate') d.liveVia = 'frigate'; }
     return list;
@@ -164,7 +196,7 @@ app.get('/api/ha/camera/:entity/live', async (req, res) => {
 /* Ready pictures for Home Assistant's cameras soon after start-up, so the first look is never blank. */
 setTimeout(async () => {
   const h = config.homeAssistant; if (isDemo() || !h?.url) return;
-  for (const st of (await haStates().catch(() => [])).filter((x) => /^camera\./.test(x.entity_id)).slice(0, 24)) snapRefresh(snapEntry(`ha:${st.entity_id}`, () => haCameraPicture(st.entity_id), 'ha'));
+  for (const st of (await haStates().catch(() => [])).filter((x) => /^camera\./.test(x.entity_id) && !haIsChime(x)).slice(0, 24)) snapRefresh(snapEntry(`ha:${st.entity_id}`, () => haCameraPicture(st.entity_id), 'ha'));
 }, 4000).unref?.();
 async function haCameraPicture(ent) {
   const h = config.homeAssistant;

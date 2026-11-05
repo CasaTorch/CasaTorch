@@ -18,7 +18,8 @@
  * On by default: it starts by itself the first time CasaTorch runs - before setup, so even setup's
  * password page is encrypted for anyone setting up from another device. An owner can turn it off.
  * Stored in DATA_DIR/tls: state.json (the name, its secret, on/off), account.pem (Let's Encrypt account),
- * key.pem, cert.pem. Not in config.json, so it can start before setup without making CasaTorch look set up.
+ * key.pem, cert.pem. Both private keys (account.pem, key.pem) are sealed with the box's key like every other secret
+ * (AES-256-GCM): a copy of the data folder without secret.key can't pose as this box. Not in config.json, so it can start before setup without making CasaTorch look set up.
  * ====================================================================== */
 const acmeLib = async () => (await import('acme-client')).default;   // loaded the first time a certificate is made, not at every start
 const LOCAL_URL = process.env.CASATORCH_LOCAL_URL || 'https://casatorch.com/api/local';
@@ -41,7 +42,17 @@ async function ltCall(method, body) {
   if (!r.ok) throw new Error(j.error || `casatorch.com answered ${r.status}`);
   return j;
 }
-function ltFiles() { try { return { key: fs.readFileSync(path.join(TLS_DIR, 'key.pem')), cert: fs.readFileSync(path.join(TLS_DIR, 'cert.pem')) }; } catch { return null; } }
+/** A private key from the tls folder: sealed on disk (an older plain one is read and sealed on the spot). Throws when
+    it's sealed with another box's key (a backup restored elsewhere): then a new one is made. */
+function ltReadKey(file, field) {
+  const raw = fs.readFileSync(file, 'utf8'), t = raw.trim();
+  if (SEALED.test(t)) { const k = unseal(t, field); if (k == null) throw new Error('the saved key does not open on this box'); return k; }
+  if (!/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(raw)) throw new Error('not a private key');
+  writeFileSafe(file, seal(raw, field), 0o600);
+  return raw;
+}
+const ltWriteKey = (file, pem, field) => writeFileSafe(file, seal(String(pem), field), 0o600);
+function ltFiles() { try { return { key: ltReadKey(path.join(TLS_DIR, 'key.pem'), 'tls.key'), cert: fs.readFileSync(path.join(TLS_DIR, 'cert.pem')) }; } catch { return null; } }
 const certInfo = (pem) => { try { const x = new crypto.X509Certificate(pem); return { until: new Date(x.validTo), names: String(x.subjectAltName || '') }; } catch { return null; } };
 
 /* Get (or renew) the certificate. Let's Encrypt asks for a value in DNS; casatorch.com puts it there for us. */
@@ -53,9 +64,9 @@ async function ltIssue({ now = false } = {}) {
   try {
     fs.mkdirSync(TLS_DIR, { recursive: true, mode: 0o700 });
     const accPath = path.join(TLS_DIR, 'account.pem');
-    let accountKey = fs.existsSync(accPath) ? fs.readFileSync(accPath) : null;
+    let accountKey = null; try { accountKey = fs.existsSync(accPath) ? Buffer.from(ltReadKey(accPath, 'tls.account')) : null; } catch { accountKey = null; }   // one that doesn't open here: a new account
     const acme = await acmeLib();
-    if (!accountKey) { accountKey = await acme.crypto.createPrivateKey(); writeFileSafe(accPath, accountKey, 0o600); }
+    if (!accountKey) { accountKey = await acme.crypto.createPrivateKey(); ltWriteKey(accPath, accountKey, 'tls.account'); }
     const client = new acme.Client({ directoryUrl: ACME_URL, accountKey });
     const [key, csr] = await acme.crypto.createCsr({ commonName: c.hostname, altNames: [c.hostname] });
     const cert = await client.auto({
@@ -63,7 +74,7 @@ async function ltIssue({ now = false } = {}) {
       challengeCreateFn: async (_authz, _challenge, value) => { await ltCall('PATCH', { id: c.id, secret: c.secret, txt: value }); await new Promise((ok) => setTimeout(ok, 20_000)); },   // give DNS a moment
       challengeRemoveFn: async () => { await ltCall('PATCH', { id: c.id, secret: c.secret, txt: null }).catch(() => {}); },
     });
-    writeFileSafe(path.join(TLS_DIR, 'key.pem'), key, 0o600); writeFileSafe(path.join(TLS_DIR, 'cert.pem'), cert, 0o600);
+    ltWriteKey(path.join(TLS_DIR, 'key.pem'), key, 'tls.key'); writeFileSafe(path.join(TLS_DIR, 'cert.pem'), cert, 0o600);
     lt.fails = 0; lt.nextTry = 0;
     ltServe();
   } catch (err) {
@@ -161,3 +172,4 @@ if (process.env.CASATORCH_TEST !== '1') {
   setInterval(ltAuto, 3600_000).unref?.();
   setInterval(ltCheck, 12 * 3600_000).unref?.();
 }
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchTls = { ltReadKey, ltWriteKey, ltFiles, TLS_DIR };

@@ -253,6 +253,7 @@ widget({ id: 'entities', title: 'Pinned devices', icon: 'sliders', multi: true, 
    Home Assistant entity automatically - anything new in Home Assistant shows up there on its own. */
 function devHeadline(d) {
   if (d.kind === 'camera') return null;
+  if (d.kind === 'chime') return d.online === false ? T('Offline') : T('Chime|device');   // a Ring Chime: rings with the doorbell, no video
   if (d.tempC != null && d.kind !== 'climate') return tempOf(d.tempC);
   if (d.kind === 'climate') return d.tempC != null ? tempOf(d.tempC) : pretty(d.mode || d.state);
   if (d.powerW != null && d.kind === 'sensor') return `${Math.round(d.powerW)} W`;
@@ -404,7 +405,9 @@ function camLive(c, on) {
   } else if (!on && c.live) { c.live = false; c.playing = null; c.player?.stop(); c.player = null; c.wrap.classList.remove('cam-live', 'cam-live-img'); }
 }
 const camLiveOk = (c) => !c.held && c.visible && !document.hidden && c.wrap.isConnected && !(c.liveFailed && Date.now() - c.liveFailed < 60_000);
-const camSeen = 'IntersectionObserver' in window ? new IntersectionObserver((es) => { for (const e of es) { const c = e.target.__cam; if (c) { c.visible = e.isIntersecting; camLive(c, camLiveOk(c)); if (c.visible) camFetch(c); } } }) : null;
+/* A page redraw takes a tile out and puts the same one back a moment later: its live video keeps playing through that
+   (one player per camera, no reconnect, no flash). Only a tile that stays out (its page closed) stops - see the tick below. */
+const camSeen = 'IntersectionObserver' in window ? new IntersectionObserver((es) => { for (const e of es) { const c = e.target.__cam; if (c) { c.visible = e.isIntersecting; camLive(c, camLiveOk(c) || (c.live && !c.wrap.isConnected)); if (c.visible) camFetch(c); } } }) : null;
 document.addEventListener('visibilitychange', () => { for (const c of CAMS.values()) camLive(c, camLiveOk(c)); });
 async function camFetch(c, force = false) {
   if (c.playing) return;   // playing live: no pictures needed
@@ -437,8 +440,8 @@ async function camFetch(c, force = false) {
 setInterval(() => {
   const now = Date.now();
   for (const [id, c] of CAMS) {
-    if (c.wrap.isConnected) { c.gone = 0; if (now - c.last >= camEvery(c.d)) camFetch(c); if (!c.live && camLiveOk(c)) camLive(c, true); continue; }
-    if (c.live) camLive(c, false);   // its page closed: stop the stream now
+    if (c.wrap.isConnected) { c.gone = 0; c.out = 0; if (now - c.last >= camEvery(c.d)) camFetch(c); if (!c.live && camLiveOk(c)) camLive(c, true); continue; }
+    if (c.live && ++c.out >= 3) camLive(c, false);   // out for over a second: its page closed - stop the stream now (a redraw is back sooner)
     // a camera no page shows any more (another tab, or it was removed): after a minute, let its picture go
     if (!c.gone) c.gone = now; else if (now - c.gone > 60_000 && !c.busy) { camSeen?.unobserve(c.wrap); if (c.url) URL.revokeObjectURL(c.url); CAMS.delete(id); }
   }

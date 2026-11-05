@@ -11,9 +11,9 @@ export default async function camAutoTests(t) {
   const cam = (id, provider, name, x = {}) => ({ id, provider, name, kind: 'camera', ...x });
 
   t('camauto: names without _live_view, _snapshot, _live, _h264, case, spaces or underscores', () => {
-    assert.equal(A.camBaseName('camera.mail_boxes_live_view'), 'mailboxes');
-    assert.equal(A.camBaseName('camera.Mail_Boxes_snapshot'), 'mailboxes');
-    assert.equal(A.camBaseName('Mail Boxes Live view'), 'mailboxes');
+    assert.equal(A.camBaseName('camera.garden_gate_live_view'), 'gardengate');
+    assert.equal(A.camBaseName('camera.Garden_Gate_snapshot'), 'gardengate');
+    assert.equal(A.camBaseName('Garden Gate Live view'), 'gardengate');
     assert.equal(A.camBaseName('front_door_h264'), 'frontdoor');
     assert.equal(A.camBaseName('back_yard_live'), 'backyard');
     assert.equal(A.camBaseName('live'), 'live', 'a name that is only an ending stays');
@@ -21,15 +21,15 @@ export default async function camAutoTests(t) {
   });
 
   t('camauto: Ring live view, ring-mqtt snapshot and the Frigate camera of the same name are one tile (Frigate kept)', () => {
-    const cams = [cam('ha:camera.mail_boxes_live_view', 'ha', 'Mail Boxes Live view'), cam('ha:camera.mail_boxes_snapshot', 'ha', 'Mail Boxes Snapshot'),
-      cam('camera:frigate-mail_boxes', 'camera', 'Mail boxes', { source: 'frigate', frigateCam: 'mail_boxes' }), cam('ha:camera.side_gate_snapshot', 'ha', 'Side gate snapshot'), cam('ha:camera.side_gate_live_view', 'ha', 'Side gate Live view')];
+    const cams = [cam('ha:camera.garden_gate_live_view', 'ha', 'Garden Gate Live view'), cam('ha:camera.garden_gate_snapshot', 'ha', 'Garden Gate Snapshot'),
+      cam('camera:frigate-garden_gate', 'camera', 'Garden gate', { source: 'frigate', frigateCam: 'garden_gate' }), cam('ha:camera.side_gate_snapshot', 'ha', 'Side gate snapshot'), cam('ha:camera.side_gate_live_view', 'ha', 'Side gate Live view')];
     const { show, hidden } = A.camDedupe(cams, {});
-    assert.deepEqual([...show].sort(), ['camera:frigate-mail_boxes', 'ha:camera.side_gate_live_view']);
-    assert.equal(hidden.find((h) => h.id === 'ha:camera.mail_boxes_snapshot').ofId, 'camera:frigate-mail_boxes');
+    assert.deepEqual([...show].sort(), ['camera:frigate-garden_gate', 'ha:camera.side_gate_live_view']);
+    assert.equal(hidden.find((h) => h.id === 'ha:camera.garden_gate_snapshot').ofId, 'camera:frigate-garden_gate');
     assert.equal(hidden.find((h) => h.id === 'ha:camera.side_gate_snapshot').ofId, 'ha:camera.side_gate_live_view', 'live view over snapshot');
     // discovered duplicates can still be added back
-    const r = A.camDedupe(cams, { shown: ['ha:camera.mail_boxes_snapshot'] });
-    assert.ok(r.show.has('ha:camera.mail_boxes_snapshot') && r.show.has('camera:frigate-mail_boxes'));
+    const r = A.camDedupe(cams, { shown: ['ha:camera.garden_gate_snapshot'] });
+    assert.ok(r.show.has('ha:camera.garden_gate_snapshot') && r.show.has('camera:frigate-garden_gate'));
     // new and waiting (Show new cameras automatically off): under Detected cameras, until added
     const p = A.camDedupe(cams, { pending: ['ha:camera.side_gate_live_view'] });
     assert.equal(p.hidden.find((h) => h.id === 'ha:camera.side_gate_live_view').why, 'new');
@@ -43,10 +43,10 @@ export default async function camAutoTests(t) {
     const c1 = [cam('ha:camera.porch', 'ha', 'Porch'), cam('camera:frigate-yard', 'camera', 'Yard')];
     let r = A.camAutoDiff({ known: null, pending: [], notices: [] }, c1, new Set(c1.map((d) => d.id)), { now });
     assert.deepEqual(r.found, []); assert.deepEqual(r.state.known.sort(), ['camera:frigate-yard', 'ha:camera.porch']);
-    const c2 = [...c1, cam('ha:camera.mail_boxes_live_view', 'ha', 'Mail boxes'), cam('ha:camera.mail_boxes_snapshot', 'ha', 'Mail boxes snapshot')];
-    r = A.camAutoDiff(r.state, c2, new Set([...c1.map((d) => d.id), 'ha:camera.mail_boxes_live_view']), { now });
-    assert.deepEqual(r.found.map((f) => f.id), ['ha:camera.mail_boxes_live_view'], 'the snapshot is the same camera: no second notice');
-    assert.equal(r.state.notices.length, 1); assert.equal(r.state.notices[0].name, 'Mail boxes'); assert.equal(r.state.notices[0].dev, 'ha:camera.mail_boxes_live_view');
+    const c2 = [...c1, cam('ha:camera.garden_gate_live_view', 'ha', 'Garden gate'), cam('ha:camera.garden_gate_snapshot', 'ha', 'Garden gate snapshot')];
+    r = A.camAutoDiff(r.state, c2, new Set([...c1.map((d) => d.id), 'ha:camera.garden_gate_live_view']), { now });
+    assert.deepEqual(r.found.map((f) => f.id), ['ha:camera.garden_gate_live_view'], 'the snapshot is the same camera: no second notice');
+    assert.equal(r.state.notices.length, 1); assert.equal(r.state.notices[0].name, 'Garden gate'); assert.equal(r.state.notices[0].dev, 'ha:camera.garden_gate_live_view');
     assert.equal(r.state.known.length, 4);
     const again = A.camAutoDiff(r.state, c2, new Set(c2.map((d) => d.id)), { now: now + 1000 });
     assert.deepEqual(again.found, [], 'known now'); assert.equal(again.state.notices.length, 1);
@@ -59,26 +59,63 @@ export default async function camAutoTests(t) {
 
   t('camauto: Home Assistant cameras matched to Frigate\'s go2rtc - by ring-mqtt\'s stream, by name, or not at all', () => {
     const states = [
-      { entity_id: 'camera.mail_boxes_snapshot', attributes: { friendly_name: 'Mail boxes snapshot' } },
-      { entity_id: 'sensor.mail_boxes_info', attributes: { stream_Source: 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live' } },
-      { entity_id: 'camera.mail_boxes_live_view', attributes: { friendly_name: 'Mail Boxes Live view', attribution: 'Data provided by Ring.com' } },
+      { entity_id: 'camera.garden_gate_snapshot', attributes: { friendly_name: 'Garden gate snapshot' } },
+      { entity_id: 'sensor.garden_gate_info', attributes: { stream_Source: 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live' } },
+      { entity_id: 'camera.garden_gate_live_view', attributes: { friendly_name: 'Garden Gate Live view', attribution: 'Data provided by Ring.com' } },
       { entity_id: 'camera.porch', attributes: { friendly_name: 'Porch' } },
       { entity_id: 'camera.attic', attributes: { friendly_name: 'Attic' } },
     ];
     const src = A.camSources(states);
-    assert.equal(src.byBase.mailboxes, 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live');
-    const frigates = [{ i: 0, streams: { ring_box: { producers: [{ url: 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live' }] }, porch: { producers: [] }, porch_sub: { producers: [] } },
+    assert.equal(src.byBase.gardengate, 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live');
+    const frigates = [{ i: 0, streams: { ring_gate: { producers: [{ url: 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live' }] }, porch: { producers: [] }, porch_sub: { producers: [] } },
       conf: { cameras: { porch: { ffmpeg: { inputs: [{ path: 'rtsp://127.0.0.1:8554/porch', roles: ['record'] }, { path: 'rtsp://127.0.0.1:8554/porch_sub', roles: ['detect'] }] } } } } }];
     const m = A.camMatch(states.filter((s) => s.entity_id.startsWith('camera.')), src, frigates);
-    assert.deepEqual([m['camera.mail_boxes_snapshot'].via, m['camera.mail_boxes_snapshot'].main, m['camera.mail_boxes_snapshot'].how], ['frigate', 'ring_box', 'ring']);
-    assert.equal(m['camera.mail_boxes_live_view'].main, 'ring_box', 'the live view finds ring-mqtt\'s stream by its name');
-    assert.equal(m['camera.mail_boxes_live_view'].ring, true);
+    assert.deepEqual([m['camera.garden_gate_snapshot'].via, m['camera.garden_gate_snapshot'].main, m['camera.garden_gate_snapshot'].how], ['frigate', 'ring_gate', 'ring']);
+    assert.equal(m['camera.garden_gate_live_view'].main, 'ring_gate', 'the live view finds ring-mqtt\'s stream by its name');
+    assert.equal(m['camera.garden_gate_live_view'].ring, true);
     assert.deepEqual([m['camera.porch'].via, m['camera.porch'].main, m['camera.porch'].sub, m['camera.porch'].how, m['camera.porch'].frigateCam], ['frigate', 'porch', 'porch_sub', 'name', 'porch']);
     assert.deepEqual([m['camera.attic'].via, m['camera.attic'].frigateCam, m['camera.attic'].rtsp], ['ha', null, null]);
   });
 
+  t('camauto: go2rtc streams found with or without ring_, by the _2 Home Assistant adds, and by ring-mqtt\'s id', () => {
+    assert.deepEqual(A.camMatchKeys('camera.ring_driveway_live_view_2'), { key: 'driveway2', stem: 'driveway' });
+    assert.deepEqual(A.camMatchKeys('ring_driveway'), { key: 'driveway', stem: null });
+    assert.deepEqual(A.camMatchKeys('Garden Gate'), { key: 'gardengate', stem: null });
+    assert.equal(A.camMatchKeys('ringo_cam').key, 'ringocam', 'only a whole "ring_" word goes');
+    const S = (entity_id, friendly_name, x = {}) => ({ entity_id, attributes: { friendly_name, attribution: 'Data provided by Ring.com', ...x } });
+    // two Ring devices called "Driveway": camera.driveway and camera.driveway_2, each to its own stream - never both to one
+    const two = [S('camera.driveway', 'Driveway'), S('camera.driveway_2', 'Driveway')];
+    const f2 = [{ i: 0, streams: { ring_driveway: { producers: [] }, ring_driveway_2: { producers: [] } }, conf: {} }];
+    let m = A.camMatch(two, A.camSources(two), f2);
+    assert.deepEqual([m['camera.driveway'].main, m['camera.driveway_2'].main], ['ring_driveway', 'ring_driveway_2']);
+    // the first "Driveway" was a chime (no camera here): camera.driveway_2 is the only one, so plain ring_driveway is its stream
+    const one = [S('camera.driveway_2', 'Driveway')];
+    m = A.camMatch(one, A.camSources(one), [{ i: 0, streams: { ring_driveway: { producers: [] } }, conf: {} }]);
+    assert.deepEqual([m['camera.driveway_2'].via, m['camera.driveway_2'].main], ['frigate', 'ring_driveway']);
+    // ...but not while another camera is called that
+    m = A.camMatch([S('camera.driveway', 'Front'), S('camera.driveway_2', 'Driveway')], {}, [{ i: 0, streams: { driveway: { producers: [] } }, conf: {} }]);
+    assert.equal(m['camera.driveway'].main, 'driveway'); assert.equal(m['camera.driveway_2'].via, 'ha');
+    // a go2rtc stream named after ring-mqtt's camera id
+    const id = [S('camera.side_gate_2', 'Side gate'), { entity_id: 'sensor.side_gate_info_2', attributes: { stream_Source: 'rtsp://ring-mqtt.example.com:8554/0a1b2c3d4e5f_live' } }];
+    m = A.camMatch([id[0]], A.camSources(id), [{ i: 0, streams: { '0a1b2c3d4e5f': { producers: [] } }, conf: {} }]);
+    assert.deepEqual([m['camera.side_gate_2'].main, m['camera.side_gate_2'].how], ['0a1b2c3d4e5f', 'ring'], 'sensor.side_gate_info_2 is camera.side_gate_2\'s');
+  });
+
+  t('camauto: a Ring Chime is never a camera - not counted, not on walls, not announced, shown as a chime', () => {
+    const chime = { entity_id: 'camera.hallway_chime', attributes: { friendly_name: 'Hallway Chime', attribution: 'Data provided by Ring.com' } };
+    assert.equal(A.haIsChime(chime), true);
+    assert.equal(A.haIsChime({ entity_id: 'camera.driveway', attributes: { friendly_name: 'Driveway' } }, 'Chime Pro (v2)'), true, 'by its Home Assistant device model');
+    assert.equal(A.haIsChime({ entity_id: 'camera.kitchen', attributes: { friendly_name: 'Kitchen', device_type: 'chime_pro' } }), true);
+    assert.equal(A.haIsChime({ entity_id: 'camera.front_door', attributes: { friendly_name: 'Front door', attribution: 'Data provided by Ring.com', supported_features: 2 } }, 'Video Doorbell 4'), false);
+    assert.equal(A.haIsChime({ entity_id: 'camera.chimney_cam', attributes: { friendly_name: 'Chimney cam' } }), false, 'a word that only starts with "chime" is no chime');
+    const d = A.haChimeOf({ id: 'ha:camera.hallway_chime', kind: 'camera', name: 'Hallway Chime', snapshot: '/x', stream: '/y', every: 3000 });
+    assert.deepEqual([d.kind, d.chime, d.snapshot, d.stream], ['chime', true, undefined, undefined]);
+    // chimes never reach the camera tiles: dedupe and the walls only ever see kind 'camera'
+    assert.equal(A.camDedupe([d].filter((x) => x.kind === 'camera'), {}).show.size, 0);
+  });
+
   t('camauto: Frigate camera names - the Home Assistant name, never one Frigate has (ring_ first for Ring)', () => {
-    assert.equal(A.frigateCamName('Mail Boxes Live view', []), 'mail_boxes');
+    assert.equal(A.frigateCamName('Garden Gate Live view', []), 'garden_gate');
     assert.equal(A.frigateCamName('Driveway A', ['driveway_a'], { ring: true }), 'ring_driveway_a');
     assert.equal(A.frigateCamName('Driveway A', ['driveway_a', 'ring_driveway_a'], { ring: true }), 'ring_driveway_a_2');
     assert.equal(A.frigateCamName('Driveway A', ['Driveway_A']), 'driveway_a_cam');
@@ -125,19 +162,19 @@ export default async function camAutoTests(t) {
   ].join('\n');
 
   t('camauto: Frigate\'s file - the stream under go2rtc.streams and the camera under cameras, everything else exactly as it was', () => {
-    const r = A.frigateYamlAdd(FILE, { name: 'mail_boxes', source: 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live', ring: true });
+    const r = A.frigateYamlAdd(FILE, { name: 'garden_gate', source: 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live', ring: true });
     assert.equal(r.ok, true);
     const L = r.text.split('\n');
-    assert.equal(L[L.indexOf('    porch_sub:') + 2], '    mail_boxes:', 'after the last stream');
-    assert.equal(L[L.indexOf('    mail_boxes:') + 1], '      - "rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live"');
-    assert.equal(L[L.indexOf('    mail_boxes:') + 2], '  webrtc:');
-    const c = L.indexOf('  mail_boxes:');
+    assert.equal(L[L.indexOf('    porch_sub:') + 2], '    garden_gate:', 'after the last stream');
+    assert.equal(L[L.indexOf('    garden_gate:') + 1], '      - "rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live"');
+    assert.equal(L[L.indexOf('    garden_gate:') + 2], '  webrtc:');
+    const c = L.indexOf('  garden_gate:');
     assert.ok(c > L.indexOf('cameras:') && c < L.indexOf('detect:'));
-    assert.deepEqual(L.slice(c, c + 10), ['  mail_boxes:', '    ffmpeg:', '      hwaccel_args: []', '      inputs:', '        - path: rtsp://127.0.0.1:8554/mail_boxes', '          input_args: preset-rtsp-restream', '          roles:', '            - detect', '            - record', '']);
-    const goPart = '    mail_boxes:\n      - "rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live"\n', camPart = `${L.slice(c, c + 9).join('\n')}\n`;
+    assert.deepEqual(L.slice(c, c + 10), ['  garden_gate:', '    ffmpeg:', '      hwaccel_args: []', '      inputs:', '        - path: rtsp://127.0.0.1:8554/garden_gate', '          input_args: preset-rtsp-restream', '          roles:', '            - detect', '            - record', '']);
+    const goPart = '    garden_gate:\n      - "rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live"\n', camPart = `${L.slice(c, c + 9).join('\n')}\n`;
     assert.equal(r.text.replace(goPart, '').replace(camPart, ''), FILE, 'nothing else changed');
     // Windows line endings stay Windows line endings
-    const w = A.frigateYamlAdd(FILE.replace(/\n/g, '\r\n'), { name: 'mail_boxes', source: 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live' });
+    const w = A.frigateYamlAdd(FILE.replace(/\n/g, '\r\n'), { name: 'garden_gate', source: 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live' });
     assert.ok(!/[^\r]\n/.test(w.text), 'every line ends with CR LF');
     // a stream go2rtc already has: only the camera is added, pointing at it
     const s = A.frigateYamlAdd(FILE, { name: 'porch2', stream: 'porch_sub' });
@@ -185,14 +222,14 @@ export default async function camAutoTests(t) {
      Frigate's own check decides. */
   await t('camauto: add to Frigate - ring-mqtt stream found, the name already taken gets ring_, Frigate checks and keeps the file', async () => {
     const RING = 'rtsp://ring-mqtt.example.com:8554/a1b2c3d4e5f6_live';
-    let file = 'cameras:\n  mail_boxes:\n    ffmpeg:\n      inputs:\n        - path: rtsp://127.0.0.1:8554/mail_boxes\n          roles: [record]\ngo2rtc:\n  streams:\n    mail_boxes:\n      - rtsp://192.0.2.50/other\n';
+    let file = 'cameras:\n  garden_gate:\n    ffmpeg:\n      inputs:\n        - path: rtsp://127.0.0.1:8554/garden_gate\n          roles: [record]\ngo2rtc:\n  streams:\n    garden_gate:\n      - rtsp://192.0.2.50/other\n';
     const saved = [];
     const srv = http.createServer((req, res) => {
       const send = (code, j) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(j)); };
-      if (req.url === '/api/states') return send(200, [{ entity_id: 'camera.mail_boxes_live_view', state: 'idle', attributes: { friendly_name: 'Mail Boxes Live view', attribution: 'Data provided by Ring.com' } }, { entity_id: 'sensor.mail_boxes_info', state: 'ok', attributes: { stream_Source: RING } }]);
+      if (req.url === '/api/states') return send(200, [{ entity_id: 'camera.garden_gate_live_view', state: 'idle', attributes: { friendly_name: 'Garden Gate Live view', attribution: 'Data provided by Ring.com' } }, { entity_id: 'sensor.garden_gate_info', state: 'ok', attributes: { stream_Source: RING } }]);
       if (req.url === '/api/template') return send(404, {});
-      if (req.url === '/api/go2rtc/streams') return send(200, { mail_boxes: { producers: [{ url: 'rtsp://192.0.2.50/other' }] } });
-      if (req.url === '/api/config') return send(200, { cameras: { mail_boxes: { ffmpeg: { inputs: [{ path: 'rtsp://127.0.0.1:8554/mail_boxes', roles: ['record'] }] } } }, go2rtc: { streams: { mail_boxes: ['rtsp://192.0.2.50/other'] } } });
+      if (req.url === '/api/go2rtc/streams') return send(200, { garden_gate: { producers: [{ url: 'rtsp://192.0.2.50/other' }] } });
+      if (req.url === '/api/config') return send(200, { cameras: { garden_gate: { ffmpeg: { inputs: [{ path: 'rtsp://127.0.0.1:8554/garden_gate', roles: ['record'] }] } } }, go2rtc: { streams: { garden_gate: ['rtsp://192.0.2.50/other'] } } });
       if (req.url === '/api/config/raw') return send(200, file);
       if (req.url.startsWith('/api/config/save?save_option=saveonly') && req.method === 'POST') {
         let b = ''; req.on('data', (d) => { b += d; }); req.on('end', () => {
@@ -206,21 +243,48 @@ export default async function camAutoTests(t) {
     await new Promise((ok) => srv.listen(0, '127.0.0.1', ok));
     const base = `http://127.0.0.1:${srv.address().port}`, cfg = A.cfg(), was = { ha: cfg.homeAssistant, cams: cfg.cameras };
     const clear = () => { for (const k of [...A.CACHE.keys()]) if (/^(ha:|camauto|go2rtc|dev:)/.test(k)) A.CACHE.delete(k); };
-    cfg.homeAssistant = { url: base, token: 'test-token' }; cfg.cameras = [{ id: 'frigate-x', name: 'X', type: 'frigate', url: base, camera: 'mail_boxes' }]; clear();
+    cfg.homeAssistant = { url: base, token: 'test-token' }; cfg.cameras = [{ id: 'frigate-x', name: 'X', type: 'frigate', url: base, camera: 'garden_gate' }]; clear();
     try {
-      const p = await A.caAddPlan('ha:camera.mail_boxes_live_view');
-      assert.deepEqual([p.name, p.source, p.ring, p.stream, p.display], ['ring_mail_boxes', RING, true, null, 'Mail Boxes']);
+      const p = await A.caAddPlan('ha:camera.garden_gate_live_view');
+      assert.deepEqual([p.name, p.source, p.ring, p.stream, p.display], ['ring_garden_gate', RING, true, null, 'Garden Gate']);
       const r = A.frigateYamlAdd(p.raw, p); assert.equal(r.ok, true);
       const sub = (big, small) => { let i = 0; for (const l of big) if (l === small[i]) i++; return i === small.length; };
       assert.ok(sub(r.text.split('\n'), file.split('\n')), 'every line of the old file is still there, in order');
-      assert.ok(r.text.includes(`    ring_mail_boxes:\n      - "${RING}"`) && r.text.includes('        - path: rtsp://127.0.0.1:8554/ring_mail_boxes') && r.text.includes('      hwaccel_args: []'));
+      assert.ok(r.text.includes(`    ring_garden_gate:\n      - "${RING}"`) && r.text.includes('        - path: rtsp://127.0.0.1:8554/ring_garden_gate') && r.text.includes('      hwaccel_args: []'));
       const sv = await A.frigateSave(A.frigateServers()[0], r.text, 'saveonly');
       assert.deepEqual([sv.ok, file], [true, r.text]); assert.match(saved[0].type, /^text\/plain/); assert.equal(saved[0].csrf, '1');
       const no = await A.frigateSave(A.frigateServers()[0], 'BROKEN', 'saveonly');
       assert.deepEqual([no.ok, no.message], [false, 'Your configuration is invalid: cameras.x.ffmpeg']); assert.equal(file, r.text, 'a refused file changes nothing');
       await assert.rejects(() => A.caAddPlan('ha:camera.nope'), /isn't one Home Assistant has/);
-      await assert.rejects(() => A.caAddPlan('ha:camera.mail_boxes_live_view\n'), /isn't one Home Assistant has/);
+      await assert.rejects(() => A.caAddPlan('ha:camera.garden_gate_live_view\n'), /isn't one Home Assistant has/);
     } finally { cfg.homeAssistant = was.ha; cfg.cameras = was.cams; clear(); srv.close(); }
+  });
+
+  t('camauto: a Ring camera that go2rtc has plays only through it - never Home Assistant\'s slow video; a chime has no plan', async () => {
+    const L = globalThis.__casatorchCamLive;
+    const srv = http.createServer((req, res) => {
+      const send = (code, j) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(j)); };
+      if (req.url === '/api/states') return send(200, [
+        { entity_id: 'camera.front_door', state: 'idle', attributes: { friendly_name: 'Front door', attribution: 'Data provided by Ring.com', supported_features: 2 } },
+        { entity_id: 'camera.porch', state: 'idle', attributes: { friendly_name: 'Porch', supported_features: 2 } },
+        { entity_id: 'camera.hallway_chime', state: 'idle', attributes: { friendly_name: 'Hallway Chime', attribution: 'Data provided by Ring.com' } }]);
+      if (req.url === '/api/template') return send(404, {});
+      if (req.url === '/api/go2rtc/streams') return send(200, { ring_front_door: { producers: [] }, porch: { producers: [] } });
+      if (req.url === '/api/config') return send(200, { cameras: {} });
+      send(404, {});
+    });
+    await new Promise((ok) => srv.listen(0, '127.0.0.1', ok));
+    const base = `http://127.0.0.1:${srv.address().port}`, cfg = A.cfg(), was = { ha: cfg.homeAssistant, cams: cfg.cameras, map: A.CA.map, at: A.CA.mapAt };
+    const clear = () => { for (const k of [...A.CACHE.keys()]) if (/^(ha:|camauto|go2rtc|dev:)/.test(k)) A.CACHE.delete(k); };
+    cfg.homeAssistant = { url: base, token: 'test-token' }; cfg.cameras = [{ id: 'frigate-x', name: 'X', type: 'frigate', url: base, camera: 'porch' }]; A.CA.map = {}; A.CA.mapAt = 0; clear();
+    try {
+      const ring = await L.camPlan('ha:camera.front_door', 'full');
+      assert.equal(ring.via, 'frigate');
+      assert.ok(ring.ways.length >= 2 && ring.ways.every((w) => w.url.startsWith('/api/camlive/') && !/master_playlist/.test(w.url)), JSON.stringify(ring.ways));
+      const plain = await L.camPlan('ha:camera.porch', 'full');
+      assert.ok(plain.ways.some((w) => /master_playlist/.test(w.url)), 'a camera that isn\'t Ring keeps Home Assistant as a fallback');
+      assert.equal(await L.camPlan('ha:camera.hallway_chime', 'full'), null, 'a chime has no video plan');
+    } finally { cfg.homeAssistant = was.ha; cfg.cameras = was.cams; A.CA.map = was.map; A.CA.mapAt = was.at; clear(); srv.close(); }
   });
 
 }

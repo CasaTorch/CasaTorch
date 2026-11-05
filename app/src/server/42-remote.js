@@ -23,6 +23,18 @@
  * Cloudflare's fast (QUIC/UDP) connection gets the plain one (HTTP/2 over TCP),
  * a tunnel that stopped answering is restarted, a key casatorch.com no longer
  * accepts is renewed (Repair).
+ *
+ * What casatorch.com can't do through it: reach anything in your home but this
+ * CasaTorch. The tunnel's rules are written here (cloudflared.yml in the data
+ * folder: this CasaTorch's own address, everything else "not found", no private
+ * network routing) and every rule Cloudflare's side sends is checked as cloudflared
+ * reports it: one that points anywhere else (your router, Home Assistant, another
+ * computer, a proxy, SSH...) or turns on private-network routing stops secure
+ * access at once, writes it to the security log and raises an alert - it doesn't
+ * restart by itself. And whatever the tunnel says a request's address is, a
+ * request that came through it is always treated as one from outside
+ * (viaTunnel, 02-remote-gate.js). There is no command channel: casatorch.com only
+ * answers the box's own requests.
  * ====================================================================== */
 import { spawn, execFile } from 'node:child_process';
 
@@ -57,6 +69,7 @@ const REMOTE_WHY = {
   blocked: ['Your network blocks the connection secure access needs.', 'CasaTorch tried both ways Cloudflare offers. Allow outgoing connections on port 7844 (TCP and UDP) in your router or firewall, then check again.', 'check'],
   edgedns: ['This network can\'t look up Cloudflare\'s servers.', 'Check the DNS settings in your router (or Pi-hole / AdGuard Home), then check again.', 'check'],
   token: ['casatorch.com no longer accepts this CasaTorch\'s secure-access key.', 'Repair gets a fresh key. The address stays the same.', 'repair'],
+  config: ['Secure access was stopped: the tunnel was told to send visitors somewhere other than this CasaTorch.', 'Nothing in your home was opened. Repair tries again with CasaTorch\'s own rules; if it stops again, contact support.', 'repair'],
   dns: ['The address is still being published.', 'This usually takes a minute or two after turning it on. CasaTorch checks again by itself.', 'check'],
   tunnel: ['Cloudflare can\'t reach this CasaTorch.', 'The connection dropped. CasaTorch reconnects by itself; Repair starts it fresh.', 'repair'],
   unreachable: ['The secure address didn\'t answer when CasaTorch tried it.', 'CasaTorch tries again by itself. If it stays like this, use Repair.', 'repair'],
@@ -69,7 +82,7 @@ function remoteView({ on, state, code, check, anywhere, why }) {
   if (!on) return { status: 'off', title: 'Off', detail: null, fix: null };
   if (code && REMOTE_WHY[code]) {
     const [title, detail, fix] = REMOTE_WHY[code];
-    return { status: code === 'dns' ? 'checking' : 'problem', code, title, detail: code === 'service' && why ? `${why}. ${detail}` : detail, fix: fix ? { action: fix, label: FIX_LABEL[fix] } : null };
+    return { status: code === 'dns' ? 'checking' : 'problem', code, title, detail: code === 'service' && why ? `${String(why).replace(/\.+$/, '')}. ${detail}` : detail, fix: fix ? { action: fix, label: FIX_LABEL[fix] } : null };
   }
   if (state === 'error') return { status: 'problem', code: 'other', title: why || 'Not working', detail: 'Repair sets it up again. The address stays the same.', fix: { action: 'repair', label: FIX_LABEL.repair } };
   if (state === 'downloading') return { status: 'starting', title: 'Getting ready…', detail: 'Downloading the secure-access helper (once, about 20 MB).', fix: null };
@@ -93,6 +106,7 @@ function remoteCheckResult({ error, status, json, nonce, homeId }) {
 }
 /** One line from cloudflared: what it says about the connection (no I/O, for the unit tests). */
 function remoteLineKind(t) {
+  if (/Updated to new configuration/i.test(t)) return 'config';
   if (/Unauthorized|invalid token|tunnel not found|Invalid tunnel secret|token is not valid|tunnel credentials.*(invalid|not)/i.test(t)) return 'token';
   if (/Unregistered tunnel connection|Connection terminated|connection.*(lost|closed).*connIndex/i.test(t)) return 'dropped';   // before "registered": it's in "Unregistered"
   if (/\bRegistered tunnel connection|Connection [\w-]+ registered/i.test(t)) return 'registered';
@@ -101,6 +115,34 @@ function remoteLineKind(t) {
   if (/7844|Unable to establish connection|dial tcp|i\/o timeout|connection refused/i.test(t) && /(ERR|error|fail|timeout|refused)/i.test(t)) return 'dial';
   return null;
 }
+/** The rules Cloudflare's side sent the tunnel ("Updated to new configuration config=..."): null when they only reach this
+    CasaTorch, else what's wrong (a plain phrase). Anything that can't be read counts as wrong. No I/O, for the unit tests. */
+const TUNNEL_BAD_ORIGIN = ['httpHostHeader', 'proxyAddress', 'proxyPort', 'proxyType', 'bastionMode', 'ipRules'];
+function remoteConfigProblem(t, { port } = {}) {
+  const m = /\bconfig="((?:[^"\\]|\\.)*)"/.exec(String(t));
+  let cfg = null; try { cfg = m ? JSON.parse(JSON.parse(`"${m[1]}"`)) : null; } catch { cfg = null; }
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return 'rules that could not be read';
+  if (cfg['warp-routing'] && cfg['warp-routing'].enabled === true) return 'private network routing';
+  const own = new Set(['127.0.0.1', 'localhost', '[::1]'].flatMap((h) => [`http://${h}:${port}`, `https://${h}:${port}`]));
+  for (const r of [].concat(cfg.ingress || [])) {
+    if (!r || typeof r !== 'object') return 'rules that could not be read';
+    const svc = String(r.service || '').trim().toLowerCase().replace(/\/+$/, '');
+    if (!own.has(svc) && !/^http_status:\d{3}$/.test(svc)) return `visitors sent to ${svc.replace(/\/\/[^@/]*@/, '//').slice(0, 80) || 'nowhere'}`;
+    const o = { ...(cfg.originRequest || {}), ...(r.originRequest || {}) };
+    // casatorch.com's tunnels made before 0.9.2 set httpHostHeader to the home's own public name (harmless: same name,
+    // same CasaTorch). Only that exact value is allowed; any other Host rewrite still stops secure access.
+    const ownHost = String(r.hostname || '').trim().toLowerCase();
+    if (ownHost && typeof o.httpHostHeader === 'string' && o.httpHostHeader.trim().toLowerCase() === ownHost) delete o.httpHostHeader;
+    for (const k of TUNNEL_BAD_ORIGIN) if (o[k] != null && o[k] !== '' && o[k] !== false && !(Array.isArray(o[k]) && !o[k].length)) return `the origin setting ${k}`;
+  }
+  return null;
+}
+/** The tunnel's own rules, written next to cloudflared before every start: this CasaTorch only. */
+function tunnelConfigText(hostname, port) {
+  if (!/^[a-z0-9_](?:[a-z0-9_.-]{0,251}[a-z0-9_])?$/i.test(String(hostname || '')) || !Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535) return null;
+  return ['# Written by CasaTorch each time secure access starts: visitors reach this CasaTorch and nothing else.', 'ingress:', `  - hostname: ${String(hostname).toLowerCase()}`, `    service: http://127.0.0.1:${Number(port)}`, '  - service: http_status:404', 'warp-routing:', '  enabled: false', ''].join('\n');
+}
+const TUNNEL_CONF = path.join(BIN_DIR, 'cloudflared.yml');
 const connIndexOf = (t) => (t.match(/connIndex=(\d+)/) || [])[1] ?? '0';
 const remoteMask = (t) => { const tok = config.remote?.token; let s = String(t); if (tok) s = s.split(tok).join('***'); return logMask(s).replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, 'x.x.x.x').slice(0, 300); };
 function remoteProblem(code, raw) {
@@ -143,10 +185,13 @@ async function ensureCloudflared() {
 function startTunnel() {
   const token = config.remote?.token; if (!token || remote.proc) return;
   const proto = config.remote?.protocol === 'http2' ? 'http2' : null;
+  const rules = tunnelConfigText(config.remote?.hostname, Number(PORT) || 8090);
+  if (!rules) { remoteProblem('service', 'casatorch.com gave an address CasaTorch can\'t use'); remote.state = 'error'; return; }
+  try { fs.mkdirSync(BIN_DIR, { recursive: true, mode: 0o700 }); writeFileSafe(TUNNEL_CONF, rules, 0o600); } catch (e) { remoteProblem('helper', e.message); remote.state = 'error'; return; }
   remote.state = 'connecting'; remote.conns.clear(); remote.protocol = proto || 'auto';
   const seen = { quic: 0, dial: 0, edgedns: 0 };
   let p;
-  try { p = spawn(BIN, ['tunnel', '--no-autoupdate', ...(proto ? ['--protocol', proto] : []), 'run'], { env: { ...process.env, TUNNEL_TOKEN: token }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }); }
+  try { p = spawn(BIN, ['tunnel', '--no-autoupdate', '--config', TUNNEL_CONF, ...(proto ? ['--protocol', proto] : []), 'run'], { env: { ...process.env, TUNNEL_TOKEN: token }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }); }
   catch (e) { remoteProblem('helper', e.message); remote.state = 'error'; return; }
   remote.proc = p;
   let buf = '';
@@ -154,6 +199,17 @@ function startTunnel() {
     if (!t.trim()) return;
     remote.log.push(`${nowIso().slice(11, 19)} ${remoteMask(t)}`); if (remote.log.length > 40) remote.log.splice(0, remote.log.length - 40);
     const k = remoteLineKind(t);
+    if (k === 'config') {
+      const why = remoteConfigProblem(t, { port: Number(PORT) || 8090 });
+      if (why) {   // never let the tunnel reach past this CasaTorch: stop now, say so, don't restart by itself
+        p.stopped = true; try { p.kill('SIGKILL'); } catch { /* gone */ }
+        remoteProblem('config', why); remote.state = 'error'; remote.conns.clear();
+        if (typeof audit === 'function') audit(null, 'secure-access-stopped', { why: remoteMask(why) });
+        if (typeof alertRaise === 'function') alertRaise({ id: `remote:config:${Date.now()}`, severity: 'critical', title: 'Secure access was stopped to keep your home private', source: 'casatorch' });
+        console.warn(`Secure access: stopped - the tunnel was told about ${remoteMask(why)}.`);
+      }
+      return;
+    }
     if (k === 'registered') {
       const first = !remote.conns.size; remote.conns.add(connIndexOf(t));
       remote.state = 'connected'; remote.since ||= nowIso(); remote.restarts = 0;
@@ -260,7 +316,7 @@ if (process.env.CASATORCH_TEST !== '1') {
     const now = Date.now(), slept = now - remoteTick > 60_000; remoteTick = now;
     if (!slept || !config.remote?.on || isDemo()) return;
     console.log('Secure access: back from sleep - checking the connection.');
-    if (!remote.proc && remote.code !== 'token') { later('restart', 500, () => { if (config.remote?.on && !remote.proc) startTunnel(); }); return; }
+    if (!remote.proc && !['token', 'config'].includes(remote.code)) { later('restart', 500, () => { if (config.remote?.on && !remote.proc) startTunnel(); }); return; }
     later('wake', 20_000, async () => { if (!remote.conns.size) remoteKick(); else await remoteCheck('wake').catch(() => {}); });
   }, 10_000).unref?.();
 }
@@ -340,7 +396,7 @@ app.post('/api/remote/repair', requireRole('admin'), async (req, res) => {
 });
 app.post('/api/remote/check', requireRole('admin'), async (req, res) => {
   if (!config.remote?.on) return res.status(409).json({ error: 'Secure access is off.' });
-  if (!remote.proc && remote.code !== 'token' && !isDemo()) { try { await ensureCloudflared(); startTunnel(); } catch (e) { remoteFailed(e); } }
+  if (!remote.proc && !['token', 'config'].includes(remote.code) && !isDemo()) { try { await ensureCloudflared(); startTunnel(); } catch (e) { remoteFailed(e); } }
   else if (remote.state === 'connected') await remoteCheck('by you').catch(() => {});
   res.json({ ok: true, ...(await remoteInfo(req)) });
 });
@@ -362,4 +418,4 @@ function remoteBoot(n = 0) {
 }
 setTimeout(() => remoteBoot(), RT.boot).unref?.();
 process.on('exit', () => { try { remote.proc?.kill(); } catch { /* gone */ } });
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchRemote = { remoteRequestBody, remoteView, remoteCheckResult, remoteLineKind, remoteMask, remoteNonceOk, remote, REMOTE_WHY, patchConfig: (p) => { const was = config; config = { ...config, ...p }; return () => { config = was; }; } };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchRemote = { viaTunnel, clientIp, remoteConfigProblem, tunnelConfigText, remoteRequestBody, remoteView, remoteCheckResult, remoteLineKind, remoteMask, remoteNonceOk, remote, REMOTE_WHY, patchConfig: (p) => { const was = config; config = { ...config, ...p }; return () => { config = was; }; } };

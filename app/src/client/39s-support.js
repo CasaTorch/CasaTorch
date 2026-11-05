@@ -225,7 +225,7 @@ const SUP_EVENT = {
   'settings-changed': 'Changed settings', 'setup-reopened': 'Opened setup again', 'ai-settings-changed': 'Changed the Home AI Agent', 'alert-settings-changed': 'Changed alert settings', 'security-settings-changed': 'Changed security settings', 'update-settings-changed': 'Changed update settings',
   'find-setting-changed': 'Changed casatorch.com/home', 'safety-exception-changed': 'Changed a safety exception', 'license-added': 'Added a license key', 'license-removed': 'Removed the license key', 'connection-removed': 'Removed a connection', 'settings-put-back': 'Put back saved settings', 'floorplan-imported': 'Imported a floor plan', 'camera-found': 'Found a new camera', 'camera-walls-changed': 'Changed the camera walls', 'frigate-camera-added': 'Added a camera to Frigate', 'frigate-change-undone': 'Undid a change to Frigate', 'frigate-restarted': 'Restarted Frigate',
   'secure-access-on': 'Turned on secure access', 'secure-access-off': 'Turned off secure access', 'secure-access-repaired': 'Set up secure access again', 'home-https-on': 'Turned on the secure address at home', 'home-https-off': 'Turned off the secure address at home',
-  'backup-made': 'Made a backup', 'backup-restored': 'Restored a backup', 'floorplan-exported': 'Exported the floor plan', 'diagnostics-downloaded': 'Downloaded diagnostics', 'support-file-made': 'Made a support file', 'support-summary-copied': 'Copied a support summary',
+  'activity-exported': 'Exported the activity log', 'backup-checked': 'Checked a backup file', 'backup-made': 'Made a backup', 'backup-restored': 'Restored a backup', 'floorplan-exported': 'Exported the floor plan', 'diagnostics-downloaded': 'Downloaded diagnostics', 'support-file-made': 'Made a support file', 'support-summary-copied': 'Copied a support summary',
   restarted: 'Restarted CasaTorch', updated: 'Updated CasaTorch', 'alert-acknowledged': 'Acknowledged an alert',
 };
 const SUP_KINDS = [['all', 'Everything'], ['signin', 'Sign-ins'], ['failed', 'Failed attempts'], ['account', 'Accounts'], ['people', 'People'], ['pairing', 'Phones & pairing'], ['settings', 'Settings'], ['remote', 'Secure access'], ['exports', 'Exports'], ['system', 'System']];
@@ -250,7 +250,7 @@ async function activityCard() {
     list.append(...r.events.map(line));
     if (!list.children.length) list.append(el('p', { class: 'small muted' }, T('Nothing matches.')));
     const last = r.events[r.events.length - 1];
-    foot.replaceChildren(...[el('span', { class: 'tiny muted' }, T('Kept for a year, at most {n} events.', { n: r.keepMax.toLocaleString() })), r.more && last ? el('button', { class: 'btn small', onclick: () => load(last.at) }, T('Show more')) : null].filter(Boolean));
+    foot.replaceChildren(...[el('span', { class: 'tiny muted' }, T('Kept for a year, at most {n} events.', { n: r.keepMax.toLocaleString() })), r.more && last ? el('button', { class: 'btn small', onclick: () => load(last.at) }, T('Show more')) : null, el('span', { class: 'row', style: 'gap:6px' }, ...['csv', 'json'].map((fm) => el('a', { class: 'btn small', href: `/api/support/activity/export?${new URLSearchParams({ kind: f.kind, q: f.q, days: String(f.days), format: fm })}`, download: '', title: T('Download what is shown here, for a spreadsheet or your records') }, icon('download', 14), fm === 'csv' ? T('Export CSV') : T('Export JSON'))))].filter(Boolean));
   };
   q.oninput = () => { clearTimeout(tq); tq = setTimeout(() => { f.q = q.value.trim(); load(); }, 250); };
   days.onchange = () => { f.days = Number(days.value); load(); };

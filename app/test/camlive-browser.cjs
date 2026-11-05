@@ -77,7 +77,8 @@ const { check, finish } = L.runner('live camera video');
     await p2.screenshot({ path: path.join(SHOTS, 'camlive-modal-hls.png') });
 
     // 4. no MediaSource and no WebSocket (an old phone): MJPEG
-    const p3 = await open(() => { window.WebSocket = undefined; window.MediaSource = undefined; window.ManagedMediaSource = undefined; });
+    // (newer Chromium plays HLS natively, as Safari does: the old phone has that switched off too, or it would rightly pick HLS)
+    const p3 = await open(() => { window.WebSocket = undefined; window.MediaSource = undefined; window.ManagedMediaSource = undefined; const can = HTMLMediaElement.prototype.canPlayType; HTMLMediaElement.prototype.canPlayType = function (t) { return /mpegurl/i.test(String(t)) ? '' : can.call(this, t); }; });
     await p3.$eval('.cams .cam', (e) => e.click());
     await p3.waitForSelector('#drawer .camv.is-live.is-img', { timeout: 20000 }).catch(() => null);
     check('with neither, the MJPEG picture plays', !!(await p3.$('#drawer .camv.is-live.is-img')));

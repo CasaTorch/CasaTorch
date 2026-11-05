@@ -34,7 +34,7 @@ const newId = () => crypto.randomBytes(9).toString('base64url');
 const clientIp = (req) => {
   const sock = String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
   // Secure access (42-remote.js) arrives from cloudflared on this box: the visitor's address is in CF-Connecting-IP.
-  if (/^(127\.|::1$)/.test(sock) && config.remote?.hostname && String(req.headers.host || '').toLowerCase().startsWith(String(config.remote.hostname).toLowerCase())) return String(req.headers['cf-connecting-ip'] || sock).slice(0, 64);
+  if (/^(127\.|::1$)/.test(sock) && (viaTunnel(req) || (config.remote?.hostname && String(req.headers.host || '').toLowerCase().startsWith(String(config.remote.hostname).toLowerCase())))) return String(req.headers['cf-connecting-ip'] || sock).slice(0, 64);   // (whatever Host it has: 02-remote-gate.js)
   return sock;
 };
 

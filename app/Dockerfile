@@ -1,6 +1,8 @@
 # CasaTorch container. Built from the repo root (deploy/docker-compose.yml sets the context).
 # Multi-arch (amd64 + arm64): .github/workflows/release.yml builds and publishes it.
-FROM node:22-bookworm-slim
+# Pinned to an exact Node.js 22 patch release on Debian 13 (trixie): move it with each Node.js security release,
+# together with ha-addon/ and deploy/packaging/fetch-node.sh (Dependabot proposes the bump).
+FROM node:22.23.4-trixie-slim
 WORKDIR /app
 # traceroute, tracepath, mtr: the hop-by-hop path in Network > App tests (no special rights needed).
 RUN apt-get update && apt-get install -y --no-install-recommends traceroute iputils-tracepath mtr-tiny && rm -rf /var/lib/apt/lists/*

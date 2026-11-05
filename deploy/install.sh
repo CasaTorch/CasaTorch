@@ -114,6 +114,8 @@ if [ "$fetched" = 1 ]; then
     die "The download doesn't match CasaTorch's signed release, so nothing was installed or changed. Try again later, or ask at support@casatorch.com."
   elif [ "$vrc" != 0 ]; then
     [ "${CASATORCH_REQUIRE_SIGNED:-0}" = 1 ] && { if [ "$fresh" = 1 ]; then rm -rf "$APP_DIR"; elif [ -n "$prev" ]; then git -C "$APP_DIR" reset -q --hard "$prev" || true; fi; die "$REF has no signed file list to check (CASATORCH_REQUIRE_SIGNED=1)"; }
+    # every release from 0.8.0 on has a signed file list: one that doesn't is not trusted (it could have been taken away)
+    if [ "$vrc" = 2 ] && printf '%s' "$REF" | grep -Eq '^v(0\.([89]|[1-9][0-9]+)|[1-9][0-9]*)\.'; then if [ "$fresh" = 1 ]; then rm -rf "$APP_DIR"; elif [ -n "$prev" ]; then git -C "$APP_DIR" reset -q --hard "$prev" || true; fi; die "$REF should be signed, but its signed file list couldn't be checked, so nothing was installed or changed. Try again later."; fi
     if [ "$vrc" = 2 ]; then say "Note: $REF was released before signed file lists - installing it from GitHub over HTTPS without that check"
     else say "Note: $REF is not a release - installing it without the signature check"; fi
   fi

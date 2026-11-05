@@ -87,6 +87,18 @@ export default async function supportTests(t) {
     assert.equal(JSON.parse(kept[kept.length - 1]).n, 5002, 'the newest are kept');
   });
 
+  t('support: activity export - CSV a spreadsheet reads as text only (no formulas), every cell quoted', () => {
+    const csv = S.activityCsv([{ at: '2026-11-04T10:00:00.000Z', event: 'login-failed', user: '=HYPERLINK("http://evil.example","x")', ip: '192.0.2.7', bad: true },
+      { at: '2026-11-04T11:00:00.000Z', event: 'settings-changed', user: '@SUM(A1)', fields: ['lang', 'units'] }, { at: '2026-11-04T12:00:00.000Z', event: 'signed-in', user: '-2+3', ip: '\t=1' }]);
+    const lines = csv.replace(/^\ufeff/, '').trim().split('\r\n');
+    assert.equal(lines[0], '"at","event","kind","user","ip","details"');
+    assert.equal(lines.length, 4);
+    for (const l of lines.slice(1)) for (const cell of l.match(/"(?:[^"]|"")*"/g)) assert.ok(!/^"[=+\-@\t\r]/.test(cell), `a cell a spreadsheet would run: ${cell}`);
+    assert.match(lines[1], /"'=HYPERLINK\(""http:\/\/evil\.example"",""x""\)"/); assert.match(lines[1], /"failed"/);
+    assert.match(lines[2], /"\{""fields"":\[""lang"",""units""\]\}"/, 'details as JSON'); assert.ok(!lines[1].includes('bad'));
+    assert.equal(S.csvCell('a\u0000b'), '"ab"');
+  });
+
   t('support: the getting-started checklist ticks itself off and hides when it should', () => {
     const base = { configured: true, demo: false, admin: true };
     const none = S.checklistState(base);

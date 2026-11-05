@@ -152,6 +152,20 @@ export default async function securityUnit(t) {
     await t('releases: installers and the add-on build check the source against the signed release (verify-release.js)', async () => {
       const fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path'), crypto = await import('node:crypto'), { spawnSync } = await import('node:child_process');
       const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..'), canon = fs.readFileSync(path.join(root, 'deploy/packaging/verify-release.js'), 'utf8');
+      // Updates install only signed releases, never fail open, and never go backwards.
+      const rdx = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+      const upd = rdx('deploy/packaging/linux/casatorch-update');
+      assert.match(upd, /\[ -s "\$KEY" \] \|\| \{[^\n]*exit 1; \}/, 'the updater refuses to run without its release key');
+      assert.ok(!/if \[ -f "\$KEY" \]/.test(upd), 'the signature check is not optional');
+      assert.match(upd, /dpkg-deb -f "\$tmp\/\$file" Version/); assert.match(upd, /dpkg --compare-versions "\$pkgver" gt "\$cur"/);
+      assert.ok(upd.indexOf('dpkg --compare-versions') < upd.indexOf('apt-get install'), 'versions are checked before anything is installed');
+      for (const f of ['deploy/install.sh', 'deploy/install.ps1']) assert.match(rdx(f), /should be signed, but its signed file list couldn't be checked/, `${f}: a 0.8+ release without its signed list is refused`);
+      const unit = rdx('deploy/packaging/linux/casatorch.service');
+      for (const k of ['NoNewPrivileges=true', 'CapabilityBoundingSet=', 'ProtectSystem=strict', 'ProtectKernelTunables=true', 'RestrictSUIDSGID=true', 'UMask=0077']) assert.ok(unit.includes(k), `casatorch.service: ${k}`);
+      // Supply chain: no package's install scripts run - not on a developer's computer, in CI, or in any installer.
+      assert.match(rdx('app/.npmrc'), /^ignore-scripts=true$/m);
+      for (const f of ['app/Dockerfile', 'ha-addon/Dockerfile', 'deploy/packaging/bundle.sh', 'deploy/install.sh', 'deploy/install.ps1', '.github/workflows/ci.yml'])
+        for (const l of rdx(f).split('\n').filter((x) => /\bnpm (ci|install)\b/.test(x) && !/playwright@/.test(x))) assert.match(l, /--ignore-scripts/, `${f}: ${l.trim()}`);
       // One verifier everywhere: the add-on's copy, the one inside install.sh and the one inside install.ps1.
       assert.equal(fs.readFileSync(path.join(root, 'ha-addon/verify-release.js'), 'utf8'), canon);
       assert.ok(fs.readFileSync(path.join(root, 'deploy/install.sh'), 'utf8').includes(`<<'VERIFY_JS'\n${canon}VERIFY_JS\n`), 'install.sh carries the same verifier');
@@ -163,6 +177,12 @@ export default async function securityUnit(t) {
       assert.match(rd('deploy/install.ps1'), /elseif \(\$env:CASATORCH_BRANCH\) \{ \$env:CASATORCH_BRANCH \} else \{ '' \}/, 'install.ps1: the newest release unless asked');
       assert.match(rd('ha-addon/build.yaml'), new RegExp(`CASATORCH_REF: v${addonVer.replace(/\./g, '\\.')}\\b`), 'the add-on builds the release tag of its own version');
       assert.match(rd('ha-addon/Dockerfile'), /ARG CASATORCH_REF=v\d/); assert.ok(!/refs\/heads\//.test(rd('ha-addon/Dockerfile') + rd('deploy/install.ps1')));
+      // A tag from 0.8.0 on is always signed: the add-on build stops when its signed file list can't be checked (never builds it unchecked).
+      const strict = rd('ha-addon/Dockerfile').match(/if \[ "\$rc" = 2 \] && echo "\$CASATORCH_REF" \| grep -Eq '([^']+)'; then [^\n]*exit 1; fi/);
+      assert.ok(strict, 'the add-on refuses an unsigned 0.8.0+ tag');
+      const signedEra = new RegExp(strict[1]);
+      for (const r of ['v0.8.0', 'v0.9.1', 'v0.10.0', 'v1.0.0', 'v12.3.4']) assert.ok(signedEra.test(r), r);
+      for (const r of ['v0.7.9', 'v0.1.0', 'main', 'v0.8']) assert.ok(!signedEra.test(r), r);
       // A made-up release signed with a throwaway key.
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-rel-')), src = path.join(tmp, 'src'), rel = path.join(tmp, 'rel');
       try {
@@ -187,6 +207,60 @@ export default async function securityUnit(t) {
         sign(`${sh('deb')}  casatorch_amd64.deb\n`); assert.equal(run(), 2, 'a release from before signed file lists');
         fs.rmSync(path.join(rel, 'SHA256SUMS.sig')); assert.equal(run(), 2, 'no signature at all');
       } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    });
+
+    t('secure access: only rules that reach this CasaTorch are accepted from Cloudflare\'s side of the tunnel', () => {
+      const R = globalThis.__casatorchRemote, line = (c) => `2026-11-04T00:00:00Z INF Updated to new configuration config=${JSON.stringify(JSON.stringify(c))} version=2`;
+      const okRules = { ingress: [{ hostname: 'home-a.casatorch.com', service: 'http://localhost:8090' }, { service: 'http_status:404' }], 'warp-routing': { enabled: false } };
+      assert.equal(R.remoteConfigProblem(line(okRules), { port: 8090 }), null);
+      assert.equal(R.remoteConfigProblem(line({ ingress: [{ service: 'http://127.0.0.1:8090/' }] }), { port: 8090 }), null);
+      // The exact rules casatorch.com pushes to tunnels made before 0.9.2: the home's own name as the Host header is fine.
+      assert.equal(R.remoteConfigProblem(line({ ingress: [{ hostname: 'home-a.casatorch.com', service: 'http://localhost:8090', originRequest: { httpHostHeader: 'home-a.casatorch.com' } }, { service: 'http_status:404' }] }), { port: 8090 }), null, 'existing tunnels keep working');
+      assert.match(String(R.remoteConfigProblem(line({ ingress: [{ hostname: 'home-a.casatorch.com', service: 'http://localhost:8090', originRequest: { httpHostHeader: 'home-b.casatorch.com' } }] }), { port: 8090 })), /httpHostHeader/, 'another name is still refused');
+      for (const [bad, why] of [
+        [{ ingress: [{ hostname: 'home-a.casatorch.com', service: 'http://192.0.2.1:80' }, { service: 'http_status:404' }] }, /visitors sent to http:\/\/192\.0\.2\.1:80/],
+        [{ ingress: [{ service: 'http://localhost:8123' }] }, /visitors sent/],   // Home Assistant on this computer
+        [{ ingress: [{ service: 'ssh://localhost:22' }] }, /visitors sent/],
+        [{ ingress: [{ service: 'tcp://192.0.2.9:445' }] }, /visitors sent/],
+        [{ ingress: [{ service: 'http://localhost:8090', originRequest: { proxyType: 'socks' } }] }, /proxyType/],
+        [{ ingress: [{ service: 'http://localhost:8090' }], originRequest: { httpHostHeader: '127.0.0.1' } }, /httpHostHeader/],
+        [{ ...okRules, 'warp-routing': { enabled: true } }, /private network/],
+      ]) assert.match(String(R.remoteConfigProblem(line(bad), { port: 8090 })), why, JSON.stringify(bad));
+      assert.match(R.remoteConfigProblem('INF Updated to new configuration config="{not json" version=3', { port: 8090 }), /could not be read/, 'unreadable rules count as wrong');
+      assert.equal(R.remoteLineKind(line(okRules)), 'config');
+      assert.equal(R.tunnelConfigText('home-a.casatorch.com', 8090), '# Written by CasaTorch each time secure access starts: visitors reach this CasaTorch and nothing else.\ningress:\n  - hostname: home-a.casatorch.com\n    service: http://127.0.0.1:8090\n  - service: http_status:404\nwarp-routing:\n  enabled: false\n');
+      assert.ok(R.tunnelConfigText('home-ab_c-d.casatorch.com', 8090));
+      for (const h of ['a\nservice: ssh://x', 'a b', '', '-x.example.com', 'x:y', 'x'.repeat(260)]) assert.equal(R.tunnelConfigText(h, 8090), null, JSON.stringify(h));
+    });
+
+    t('encryption at rest: the secure address\'s private keys are sealed on disk (old plain ones sealed on first read)', async () => {
+      const fs = await import('node:fs'), path = await import('node:path'), T = globalThis.__casatorchTls;
+      const pem = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ type: 'pkcs8', format: 'pem' });
+      fs.mkdirSync(T.TLS_DIR, { recursive: true }); const f = path.join(T.TLS_DIR, 'test-key.pem');
+      try {
+        fs.writeFileSync(f, pem);
+        assert.equal(T.ltReadKey(f, 'tls.key'), pem, 'an older plain key still works');
+        const disk = fs.readFileSync(f, 'utf8');
+        assert.match(disk, /^v2\./); assert.ok(!disk.includes('PRIVATE KEY'), 'and is sealed now');
+        assert.equal(T.ltReadKey(f, 'tls.key'), pem);
+        assert.throws(() => T.ltReadKey(f, 'tls.account'), /does not open/, 'bound to its place');
+        T.ltWriteKey(f, pem, 'tls.account'); assert.ok(!fs.readFileSync(f, 'utf8').includes('PRIVATE KEY')); assert.equal(T.ltReadKey(f, 'tls.account'), pem);
+        fs.writeFileSync(f, 'hello'); assert.throws(() => T.ltReadKey(f, 'tls.key'), /not a private key/);
+      } finally { fs.rmSync(f, { force: true }); }
+    });
+
+    t('secure access: a request that came through the tunnel counts as from outside, whatever Host it carries', () => {
+      const R = globalThis.__casatorchRemote, U = globalThis.__casatorchSupport, undo = R.patchConfig({ remote: { on: true, hostname: 'home-a.casatorch.com' } });
+      try {
+        const rq = (addr, headers) => ({ socket: { remoteAddress: addr }, headers });
+        const sneaky = rq('127.0.0.1', { host: '127.0.0.1:8090', 'cf-connecting-ip': '198.51.100.7' });
+        assert.equal(R.viaTunnel(sneaky), true); assert.equal(R.clientIp(sneaky), '198.51.100.7', 'the visitor\'s own address, for limits and the log');
+        assert.equal(U.viaSecureAccess(sneaky), true, 'resetting the owner\'s password stays home-only');
+        assert.equal(R.viaTunnel(rq('::ffff:127.0.0.1', { host: 'localhost', 'cf-ray': 'x' })), true);
+        assert.equal(R.viaTunnel(rq('192.0.2.5', { host: '192.0.2.4:8090', 'cf-connecting-ip': '198.51.100.7' })), false, 'a device at home can\'t pass itself off as the tunnel');
+        assert.equal(R.viaTunnel(rq('127.0.0.1', { host: '127.0.0.1:8090' })), false, 'this computer itself');
+      } finally { undo(); }
+      assert.equal(R.viaTunnel({ socket: { remoteAddress: '127.0.0.1' }, headers: { 'cf-ray': 'x' } }), false, 'secure access off: no tunnel');
     });
   } finally { dnsP.lookup = realLookup; srv.close(); }
 }

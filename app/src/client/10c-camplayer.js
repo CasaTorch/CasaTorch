@@ -28,7 +28,7 @@ async function camPlanOf(d, role) {
   if (hit && Date.now() - hit.at < 30_000) return hit.plan;
   let plan;
   try { const r = await fetch(`/api/camlive/${encodeURIComponent(d.id)}/plan?for=${role}`, { cache: 'no-store' }); plan = r.ok ? await r.json() : null; } catch { plan = null; }
-  if (!plan) plan = { ways: d.stream && role !== 'tile' ? [{ kind: 'mjpeg', url: d.stream }] : [], why: 'error' };   // an older CasaTorch, or no answer: the old way
+  if (!plan) plan = { ways: d.stream && role !== 'tile' && d.liveVia !== 'frigate' ? [{ kind: 'mjpeg', url: d.stream }] : [], why: 'error' };   // an older CasaTorch, or no answer: the old way (never Home Assistant's slower video for a camera Frigate's go2rtc has)
   CL_PLANS.set(k, { at: Date.now(), plan });
   return plan;
 }

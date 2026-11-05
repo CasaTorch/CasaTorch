@@ -26,7 +26,7 @@ let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{
   if(newer&&f&&/^[0-9a-f]{64}$/.test(f.sha256||''))process.stdout.write(j.version+' '+f.sha256);
 }catch(e){}})" "$cur" "$file")
 [ -n "$plan" ] || { echo "CasaTorch $cur is up to date"; exit 0; }
-ver=${plan% *}; sha=${plan#* }
+ver=${plan% *}; ver=${ver#v}; sha=${plan#* }
 DATA=/var/lib/casatorch
 PORT=${CASATORCH_PORT:-8090}
 # Progress for Settings > Updates (and the "An update didn't work" troubleshooter).
@@ -42,16 +42,22 @@ curl -fsSL --max-time 900 -H "X-CasaTorch-Updater: 1" -o "$tmp/$file" "https://c
 got=$(sha256sum "$tmp/$file" | cut -d' ' -f1)
 [ "$got" = "$sha" ] || { status failed "The download didn't match the release - nothing was changed."; echo "checksum does not match the release - not installing" >&2; exit 1; }
 # The release's list of checksums must be signed with CasaTorch's offline release key (built into this package):
-# a download that only matches casatorch.com's own word is not enough.
+# a download that only matches casatorch.com's own word is not enough. No key, no update - never the other way round.
 KEY=/opt/casatorch/release-key.pem
-if [ -f "$KEY" ]; then
+[ -s "$KEY" ] || { status failed "This CasaTorch has no release key to check updates with - nothing was changed. Reinstall it from casatorch.com/download."; echo "no release key at $KEY - not installing" >&2; exit 1; }
+{
   curl -fsSL --max-time 60 -o "$tmp/SHA256SUMS" "https://casatorch.com/dl/SHA256SUMS" && curl -fsSL --max-time 60 -o "$tmp/SHA256SUMS.sig" "https://casatorch.com/dl/SHA256SUMS.sig" \
     || { status failed "The release's signature couldn't be checked - nothing was changed."; echo "the release isn't signed (or the signature couldn't be downloaded) - not installing" >&2; exit 1; }
   "$NODE" -e "const c=require('crypto'),f=require('fs');process.exit(c.verify(null,f.readFileSync(process.argv[1]),f.readFileSync(process.argv[3],'utf8'),f.readFileSync(process.argv[2]))?0:1)" "$tmp/SHA256SUMS" "$tmp/SHA256SUMS.sig" "$KEY" \
     || { status failed "The release isn't signed by CasaTorch - nothing was changed."; echo "the release's signature is not CasaTorch's - not installing" >&2; exit 1; }
   signed=$(awk -v f="$file" '$2==f || $2=="*"f {print $1}' "$tmp/SHA256SUMS")
   [ "$signed" = "$got" ] || { status failed "The download didn't match the signed release - nothing was changed."; echo "the download doesn't match the signed checksum - not installing" >&2; exit 1; }
-fi
+}
+# The package itself must be the version casatorch.com announced, and newer than this one: a signed but older
+# release can't be passed off as an update (no downgrades to a version with known problems).
+pkgver=$(dpkg-deb -f "$tmp/$file" Version 2>/dev/null || true)
+[ "$pkgver" = "$ver" ] || { status failed "The download is version ${pkgver:-unknown}, not $ver - nothing was changed."; echo "package version $pkgver is not the announced $ver - not installing" >&2; exit 1; }
+dpkg --compare-versions "$pkgver" gt "$cur" || { status failed "The download ($pkgver) isn't newer than this CasaTorch ($cur) - nothing was changed."; echo "$pkgver is not newer than $cur - not installing" >&2; exit 1; }
 # A copy of the settings first, in CasaTorch's settings history (Settings > Health can put it back).
 snap=""
 if [ -f "$DATA/config.json" ]; then

@@ -54,8 +54,10 @@ for (const f of files(process.argv.slice(2))) {
   const lines = fs.readFileSync(f, 'utf8').split('\n');
   lines.forEach((line, i) => {
     if (/scrub-ok/.test(line)) return;
+    // A GitHub Action pinned to its public commit (uses: owner/repo@<40 hex>) is not a token.
+    const actionPin = /^\s*(?:-\s*)?uses:\s*[\w.\/-]+@([a-f0-9]{40})(?:\s|$)/.exec(line)?.[1];
     for (const [kind, re, keep] of PATTERNS) {
-      for (const m of line.matchAll(re)) if (keep(m[0])) { hits++; console.log(`${rel}:${i + 1}  ${kind}: ${m[0]}`); }
+      for (const m of line.matchAll(re)) if (keep(m[0]) && m[0] !== actionPin) { hits++; console.log(`${rel}:${i + 1}  ${kind}: ${m[0]}`); }
     }
     const low = line.toLowerCase();
     for (const t of terms) if (low.includes(t.toLowerCase())) { hits++; console.log(`${rel}:${i + 1}  private term: ${t}`); }

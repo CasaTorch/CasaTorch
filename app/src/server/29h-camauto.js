@@ -22,11 +22,20 @@
  * Frigate's sign-in and the cameras' stream addresses never leave this box (the browser sees names only).
  * ====================================================================== */
 const CAM_TAIL = /(?:[\s_-]+(?:live[\s_-]*view|snapshot|live|h26[45]))+$/i;
-/** A camera's name or entity id without what tells its streams apart: "camera.Mail_Boxes_Live_View" -> "mailboxes". */
+/** A camera's name or entity id without what tells its streams apart: "camera.Garden_Gate_Live_View" -> "gardengate". */
 const camBaseName = (s) => {
   const raw = String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/^camera\./, '').trim(), cut = raw.replace(CAM_TAIL, '');
   return (cut.replace(/[^a-z0-9]+/g, '').length >= 2 ? cut : raw).replace(/[^a-z0-9]+/g, '');
 };
+/** What a camera is matched to a go2rtc stream by: its base name with or without "ring_" in front, and the number Home
+    Assistant adds when two devices share a name kept as its own part. { key, stem }: "camera.ring_driveway_live_view_2"
+    -> { key: "driveway2", stem: "driveway" }; stem is null without such a number. Pure. */
+function camMatchKeys(s) {
+  let raw = String(s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/^camera\./, '').trim().replace(/^ring[\s_-]+(?=[a-z0-9])/, '');
+  const n = /[\s_-]+(\d{1,3})$/.exec(raw); if (n) raw = raw.slice(0, n.index);
+  const b = camBaseName(raw);
+  return b ? { key: `${b}${n ? n[1] : ''}`, stem: n ? b : null } : { key: '', stem: null };
+}
 const CA_FILE = path.join(DATA_DIR, 'cameras-auto.json'), CA_BACKUPS = path.join(DATA_DIR, 'frigate-config-backups.json'), CW_FILE = path.join(DATA_DIR, 'camera-walls.json');
 const CA = { known: null, pending: [], notices: [], added: {}, map: {}, mapAt: 0, offers: 0 };
 try { const j = JSON.parse(fs.readFileSync(CA_FILE, 'utf8')); if (j && typeof j === 'object') Object.assign(CA, { known: Array.isArray(j.known) ? j.known.map(String) : null, pending: Array.isArray(j.pending) ? j.pending.map(String) : [], notices: Array.isArray(j.notices) ? j.notices : [], added: j.added && typeof j.added === 'object' ? j.added : {}, map: j.map && typeof j.map === 'object' ? j.map : {} }); } catch { /* first run */ }
@@ -92,6 +101,7 @@ async function camAutoCheck() {
     const hosts = new Map((config.cameras || []).map((c) => [`camera:${c.id}`, camHostOf(c)]));
     const { show } = camDedupe(cams.map((d) => (hosts.get(d.id) ? { ...d, camHost: hosts.get(d.id) } : d)), config.cameraHide || {});
     const { state, found } = camAutoDiff(CA, cams, show, { auto: camAutoOn() });
+    const camIds = new Set(cams.map((d) => d.id)); state.notices = state.notices.filter((n) => camIds.has(n.dev));   // a notice for something that turned out not to be a camera (a Ring Chime) goes
     const changed = state.known.length !== (CA.known || []).length || found.length || state.notices.length !== CA.notices.length;
     Object.assign(CA, state);
     for (const f of found) audit(null, 'camera-found', { device: f.name, ...(f.shown ? {} : { waiting: true }) });
@@ -121,7 +131,9 @@ function camSources(states, devIds = {}) {
     const src = srcOf(s.attributes); if (!src) continue;
     const [dom, obj] = String(s.entity_id).split('.');
     if (dom === 'camera') byEnt[s.entity_id] = src;
-    const b = camBaseName(dom === 'sensor' ? obj.replace(/_info$/, '') : obj); if (b) byBase[b] ||= src;
+    const o = dom === 'sensor' ? obj.replace(/_info(?=(?:_\d{1,3})?$)/, '') : obj, b = camBaseName(o), k = camMatchKeys(o).key;   // sensor.driveway_info_2 belongs to camera.driveway_2
+    if (b) byBase[b] ||= src;
+    if (k && k !== b) byBase[k] ||= src;
     const d = devIds[s.entity_id]; if (d) byDev[d] ||= src;
   }
   return { byEnt, byBase, byDev };
@@ -132,29 +144,41 @@ const RING_ID = /\/([0-9a-f]{12}_live)(?:[/?#]|$)/i;
     (rtsp - the camera's own address - stays on this box). */
 function camMatch(cams, sources, frigates, devIds = {}) {
   const out = {};
+  /* The names each camera may be matched by. Its entity id always; its friendly name only when no other camera has the
+     same one (two Ring devices called "Driveway" become camera.driveway and camera.driveway_2 - the name can't tell them
+     apart, the _2 can). And camera.driveway_2 may use plain "driveway" when no other camera here is called that (the
+     first "Driveway" was a chime, say, so go2rtc has only ring_driveway). */
+  const ek = new Map(cams.map((s) => [s.entity_id, camMatchKeys(s.entity_id)])), nk = new Map(cams.map((s) => [s.entity_id, camMatchKeys(s.attributes?.friendly_name || '')]));
+  const nameCount = new Map(); for (const k of nk.values()) if (k.key) nameCount.set(k.key, (nameCount.get(k.key) || 0) + 1);
+  const claimed = (k, me) => cams.some((o) => o.entity_id !== me && (ek.get(o.entity_id).key === k || (nk.get(o.entity_id).key === k && nameCount.get(k) === 1)));
   for (const s of cams) {
-    const ent = s.entity_id, a = s.attributes || {}, base = camBaseName(ent), nb = camBaseName(a.friendly_name || '');
-    const rtsp = sources.byEnt?.[ent] || sources.byDev?.[devIds[ent]] || sources.byBase?.[base] || null, ringId = RING_ID.exec(rtsp || '')?.[1] || null;
+    const ent = s.entity_id, a = s.attributes || {}, base = camBaseName(ent), e = ek.get(ent), nm = nk.get(ent);
+    const keys = [e.key, ...(nm.key && nameCount.get(nm.key) === 1 && !claimed(nm.key, ent) ? [nm.key] : [])].filter(Boolean);
+    const stemKeys = e.stem && !claimed(e.stem, ent) ? [e.stem] : [];
+    const rtsp = sources.byEnt?.[ent] || sources.byDev?.[devIds[ent]] || sources.byBase?.[base] || sources.byBase?.[e.key] || null, ringId = RING_ID.exec(rtsp || '')?.[1] || null;
     const ring = !!ringId || /\bring\b/i.test(String(a.attribution || ''));
-    let best = null;
-    for (const f of frigates) {
-      const conf = f.conf || {}, gs = conf.go2rtc?.streams && typeof conf.go2rtc.streams === 'object' ? conf.go2rtc.streams : {};
-      const names = [...new Set([...Object.keys(f.streams || {}), ...Object.keys(gs)])].filter((n) => /^[\w.-]{1,80}$/.test(n));
-      const urls = (n) => [...(Array.isArray(f.streams?.[n]?.producers) ? f.streams[n].producers.map((p) => p?.url) : []), ...[].concat(gs[n] || [])].filter((u) => typeof u === 'string');
-      const want = (n) => { const b = camBaseName(n); return b && (b === base || b === nb); };
-      // a Ring camera whose ring-mqtt stream is known is only ever matched to that stream - never to another camera that has its name
-      const ringOk = (n) => !ringId || !urls(n).length || urls(n).some((u) => u.includes(`/${ringId}`));
-      let hit = null, how = null;
-      if (ringId) { hit = names.find((n) => urls(n).some((u) => u.includes(`/${ringId}`))) || null; if (hit) how = 'ring'; }
-      if (!hit) { hit = names.filter((n) => want(n) && ringOk(n)).sort((x, y) => x.length - y.length)[0] || null; if (hit) how = 'name'; }
-      const fcams = Object.keys(conf.cameras && typeof conf.cameras === 'object' ? conf.cameras : {});
-      const reads = (n, st) => !!st && (conf.cameras[n]?.ffmpeg?.inputs || []).some((x) => String(x?.path || '').split('?')[0].replace(/\/+$/, '').endsWith(`:8554/${st}`));
-      const fcam = fcams.find((n) => want(n) && (!ringId || reads(n, hit))) || fcams.find((n) => reads(n, hit)) || null;
-      if (!hit && !fcam) continue;
-      const pick = hit ? (pickStreams(hit, names, (fcam && conf.cameras[fcam]) || {}) || { main: hit, sub: hit }) : null;
-      best = { ...(pick ? { via: 'frigate', srv: f.i, main: pick.main, sub: pick.sub, how } : { via: 'ha', srv: f.i }), frigateCam: fcam };
-      break;
-    }
+    const tryWith = (want) => {
+      for (const f of frigates) {
+        const conf = f.conf || {}, gs = conf.go2rtc?.streams && typeof conf.go2rtc.streams === 'object' ? conf.go2rtc.streams : {};
+        const names = [...new Set([...Object.keys(f.streams || {}), ...Object.keys(gs)])].filter((n) => /^[\w.-]{1,80}$/.test(n));
+        const urls = (n) => [...(Array.isArray(f.streams?.[n]?.producers) ? f.streams[n].producers.map((p) => p?.url) : []), ...[].concat(gs[n] || [])].filter((u) => typeof u === 'string');
+        // a Ring camera whose ring-mqtt stream is known is only ever matched to that stream - never to another camera that has its name
+        const ringOk = (n) => !ringId || !urls(n).length || urls(n).some((u) => u.includes(`/${ringId}`));
+        const isRing = (n) => urls(n).some((u) => u.includes(`/${ringId}`)) || [ringId.toLowerCase(), ringId.toLowerCase().replace(/_live$/, '')].includes(n.toLowerCase());
+        let hit = null, how = null;
+        if (ringId) { hit = names.find(isRing) || null; if (hit) how = 'ring'; }
+        if (!hit) { hit = names.filter((n) => want(n) && ringOk(n)).sort((x, y) => x.length - y.length)[0] || null; if (hit) how = 'name'; }
+        const fcams = Object.keys(conf.cameras && typeof conf.cameras === 'object' ? conf.cameras : {});
+        const reads = (n, st) => !!st && (conf.cameras[n]?.ffmpeg?.inputs || []).some((x) => String(x?.path || '').split('?')[0].replace(/\/+$/, '').endsWith(`:8554/${st}`));
+        const fcam = fcams.find((n) => want(n) && (!ringId || reads(n, hit))) || fcams.find((n) => reads(n, hit)) || null;
+        if (!hit && !fcam) continue;
+        const pick = hit ? (pickStreams(hit, names, (fcam && conf.cameras[fcam]) || {}) || { main: hit, sub: hit }) : null;
+        return { ...(pick ? { via: 'frigate', srv: f.i, main: pick.main, sub: pick.sub, how } : { via: 'ha', srv: f.i }), frigateCam: fcam };
+      }
+      return null;
+    };
+    const by = (list) => (n) => { const k = camMatchKeys(n).key; return !!k && list.includes(k); };
+    const best = tryWith(by(keys)) || (stemKeys.length ? tryWith(by(stemKeys)) : null);
     out[ent] = { via: 'ha', frigateCam: null, ...(best || {}), ring, rtsp };
   }
   return out;
@@ -165,8 +189,8 @@ async function camFastMap(fresh = false) {
   if (isDemo() || !config.homeAssistant?.url) return {};
   if (fresh) CACHE.delete('camauto:map');
   const r = await cached('camauto:map', 60_000, async () => {
-    const states = await haStates();
-    const cams = states.filter((s) => /^camera\.\w{1,120}$/.test(s.entity_id));
+    const states = await haStates(), models = await haCamModels().catch(() => ({}));
+    const cams = states.filter((s) => /^camera\.\w{1,120}$/.test(s.entity_id) && !haIsChime(s, models[s.entity_id]));   // a Ring Chime is no camera (32-ha.js)
     if (!cams.length) return { map: {} };
     const devIds = await haDevIds().catch(() => ({}));
     const frigates = await Promise.all(frigateServers().map(async (c, i) => {
@@ -192,7 +216,7 @@ async function camFastFor(ent) {
   if (!m && !CA.mapAt) m = (await Promise.race([camFastMap().then((x) => caSlim(x)[ent]), new Promise((ok) => setTimeout(ok, 4000))]).catch(() => null)) || null;
   if (m?.via !== 'frigate') return null;
   const c = frigateServers()[m.srv];
-  return c && m.main ? { c, main: m.main, sub: m.sub || m.main, how: m.how || null } : null;
+  return c && m.main ? { c, main: m.main, sub: m.sub || m.main, how: m.how || null, ring: !!m.ring } : null;
 }
 
 /* ---- Frigate's settings file, changed as text ---- */
@@ -469,4 +493,4 @@ app.put('/api/camera-walls', requireRole('admin'), express.json({ limit: '64kb' 
   res.json({ ok: true, walls });
 });
 
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchCamAuto = { camBaseName, camAutoDiff, camSources, camMatch, frigateCamName, rtspClean, rtspShown, frigateYamlAdd, frigateYamlShape, frigatePaste, cleanWalls, camDedupe, camKeys, CA, caAddPlan, frigateSave, frigateRaw, frigateServers, cfg: () => config, CACHE };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchCamAuto = { camBaseName, camMatchKeys, haIsChime, haChimeOf, camAutoDiff, camSources, camMatch, frigateCamName, rtspClean, rtspShown, frigateYamlAdd, frigateYamlShape, frigatePaste, cleanWalls, camDedupe, camKeys, CA, caAddPlan, frigateSave, frigateRaw, frigateServers, cfg: () => config, CACHE };

@@ -107,10 +107,11 @@ async function camSource(dev) {
     const ent = dev.slice(3), h = config.homeAssistant;
     if (!h?.url || !/^camera\.\w{1,120}$/.test(ent)) return null;
     const st = (await haStates().catch(() => [])).find((x) => x.entity_id === ent);
-    if (!st) return null;
+    if (!st || haIsChime(st, (await haCamModels().catch(() => ({})))[ent])) return null;   // a Ring Chime is no camera (32-ha.js)
     // the same camera in Frigate's go2rtc (by name, or ring-mqtt's stream): its fast video, through Frigate (29h-camauto.js)
     const fast = await camFastFor(ent).catch(() => null);
-    return { kind: 'ha', ent, stream: !!((Number(st.attributes?.supported_features) || 0) & 2), ...(fast ? { fast } : {}) };
+    const ring = !!fast?.ring || /\bring\b/i.test(String(st.attributes?.attribution || ''));
+    return { kind: 'ha', ent, ring, stream: !!((Number(st.attributes?.supported_features) || 0) & 2), ...(fast ? { fast } : {}) };
   }
   const [integ, ...rest] = dev.split(':'), id = rest.join(':'), def = INTEGRATIONS.get(integ);
   if (!def?.camera || !id || (def.pro && !proStatus().pro)) return null;
@@ -136,10 +137,13 @@ async function camPlan(dev, role = 'full') {
     if (g) { ways.push(...go(s)); via = 'frigate'; } else why = 'nogo2rtc';
     ways.push({ kind: 'mjpeg', url: `/api/cameras/${encodeURIComponent(src.c.id)}/live?h=${mjpegH}&fps=${mjpegFps}` });
   } else if (src.kind === 'ha') {
+    /* A Ring camera with a go2rtc stream plays only through it (about a second behind): Home Assistant's own video of a
+       Ring camera runs minutes behind, so it is never offered - not even when go2rtc fails (then pictures). */
+    const ringFast = !!(src.fast && src.ring);
     if (src.fast) { ways.push(...go(s)); via = 'frigate'; how = src.fast.how || null; }
-    if (src.stream && role !== 'tile') ways.push({ kind: 'hls', url: `/api/camlive/${enc}/hls/master_playlist.m3u8` });
+    if (src.stream && role !== 'tile' && !ringFast) ways.push({ kind: 'hls', url: `/api/camlive/${enc}/hls/master_playlist.m3u8` });
     else if (!src.stream && !src.fast) why = 'nostream';
-    if (role !== 'tile') ways.push({ kind: 'mjpeg', url: `/api/ha/camera/${encodeURIComponent(src.ent)}/live` });
+    if (role !== 'tile' && !ringFast) ways.push({ kind: 'mjpeg', url: `/api/ha/camera/${encodeURIComponent(src.ent)}/live` });
     via ||= src.stream ? 'ha' : null;
   } else if (src.kind === 'integration' && src.def.camera.live && role !== 'tile') ways.push({ kind: 'mjpeg', url: `/api/cam/${src.def.id}/${encodeURIComponent(src.id)}/live` });
   if (!ways.length) why = 'pictures';
@@ -165,7 +169,7 @@ app.get(/^\/api\/camlive\/([^/]+)\/hls\/(.+)$/, async (req, res) => {
       const r = await frigateGet(g.c, p, { signal: ac.signal, timeout: 20000 });
       return hlsPass(r.statusCode, r.headers['content-type'], r, res);
     }
-    if (src.kind === 'ha' && src.stream) {
+    if (src.kind === 'ha' && src.stream && !(src.fast && src.ring)) {   // never Home Assistant's (minutes-behind) video for a Ring camera go2rtc has
       const h = config.homeAssistant;
       let token = HA_HLS.get(src.ent)?.token || await haHlsStart(src.ent);
       if (/^master_playlist/.test(file)) token = await haHlsStart(src.ent);   // the start of a viewing: make sure HA's stream is running

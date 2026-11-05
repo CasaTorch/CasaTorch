@@ -33,15 +33,28 @@ when an update is available; please install it promptly.
 - **Your data stays at home.** Settings, history and sign-ins live on your CasaTorch, readable only by CasaTorch
   itself. There is no CasaTorch account and no cloud copy of your home.
 - **Secrets are encrypted at rest** with AES-256-GCM, using a key unique to each CasaTorch that never leaves it
-  (except inside a backup you make).
+  (except inside a backup you make) - saved passwords and keys, the secure address's private keys, voice pairings,
+  the Home AI Agent's chats and copies of your Frigate settings.
 - **Passwords are never stored**, only salted scrypt hashes. Recovery codes, invite links and sign-in tokens are
   stored only as hashes.
 - **Encrypted in transit.** At home, browsers reach CasaTorch over https (TLS) with a real certificate made on the
   box. Every connection to an online service is https with the certificate checked.
 - **Phone alerts are end-to-end encrypted** for each phone and signed by your CasaTorch; casatorch.com and the push
   services carry them but can't read them.
-- **Backups are encrypted** with AES-256-GCM using a key derived from your passphrase. We can't open them.
-- **Updates and Pro keys are signed** (Ed25519) and checked on the box before they are used.
+- **Backups are encrypted** with AES-256-GCM using a key derived from your passphrase. We can't open them. Each one is
+  opened again and checked before you download it, and **Check a backup file** tells you whether a file restores,
+  without changing anything.
+- **Updates and Pro keys are signed** (Ed25519) and checked on the box before they are used. An update is installed
+  only when its signature is CasaTorch's offline release key and it is newer than the version installed; without the
+  key, or for an older release, nothing is installed. Installers refuse a release whose signed file list is missing.
+- **casatorch.com can't reach into your home.** There is no remote command channel and no settings push: casatorch.com
+  only answers requests your CasaTorch makes. Secure access's tunnel reaches this CasaTorch and nothing else on your
+  network - its rules are written on the box, and if Cloudflare's side of the tunnel is ever told to send visitors
+  anywhere else (your router, Home Assistant, another computer) or to route into your network, CasaTorch stops secure
+  access at once, writes it to the security log and alerts you. A visitor through the tunnel is always treated as
+  someone away from home.
+- **No install scripts.** Packages CasaTorch uses never run their own scripts when installed - on the box, in the
+  installers or in CI.
 - **Sign-in is protected** with per-person accounts and roles, optional (or required) two-step sign-in, limits on
   guessing, and a security log.
 - **No open ports.** CasaTorch never asks you to open a port on your router.

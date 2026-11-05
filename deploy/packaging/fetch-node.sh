@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
-# Downloads the newest Node.js 22 (LTS) for one platform, checks it against Node's published
+# Downloads a pinned Node.js 22 (LTS) for one platform, checks it against Node's published
 # checksums, and leaves just the binary.
 #   deploy/packaging/fetch-node.sh <linux-x64|linux-arm64|darwin-arm64|darwin-x64|win-x64> <output dir>
+# The version is pinned (not "newest") so a release always ships the Node.js it was tested with. Move it with each
+# Node.js security release (https://nodejs.org/en/blog/vulnerability), together with the node:22.x image tags in
+# app/Dockerfile and ha-addon/. NODE_VERSION (vX.Y.Z) overrides it.
 set -euo pipefail
 PLAT=$1 OUT=$2
-VER=${NODE_VERSION:-$(curl -fsSL https://nodejs.org/dist/index.json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).find(r=>r.version.startsWith('v22.')).version))")}
+VER=${NODE_VERSION:-v22.23.4}   # 2026-10-21 security release
+[[ "$VER" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "fetch-node.sh: bad version $VER" >&2; exit 1; }
 case "$PLAT" in win-x64) FILE=win-x64/node.exe ;; *) FILE=node-$VER-$PLAT.tar.xz ;; esac
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 curl -fsSL "https://nodejs.org/dist/$VER/$FILE" -o "$TMP/dl"

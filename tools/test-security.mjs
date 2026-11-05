@@ -61,6 +61,28 @@ try {
   const list = await req('GET', '/api/push', null, mc);
   check('an odd push level is saved as "important"', push.s === 200 && list.j?.devices?.[0]?.level === 'important', `HTTP ${push.s}, level ${list.j?.devices?.[0]?.level}`);
 
+  // Backups: each one is checked before it's downloaded; "Check a backup file" opens one and changes nothing
+  const bk = await fetch(`${B}/api/backup`, { method: 'POST', headers: { ...H, Cookie: cookie }, body: JSON.stringify({ passphrase: 'backup-pass-12345', media: false }) });
+  const bkBuf = Buffer.from(await bk.arrayBuffer());
+  check('a backup is checked before it is downloaded', bk.status === 200 && Number(bk.headers.get('x-casatorch-backup-checked')) > 3 && bkBuf.subarray(0, 6).toString() === 'CTBK1\n', `HTTP ${bk.status} checked=${bk.headers.get('x-casatorch-backup-checked')}`);
+  const verify = async (buf, pass, c = cookie) => { const r = await fetch(`${B}/api/backup/verify`, { method: 'POST', headers: { Origin: B, Cookie: c, 'Content-Type': 'application/octet-stream', 'X-Backup-Passphrase': encodeURIComponent(pass) }, body: buf }); return { s: r.status, j: await r.json().catch(() => null) }; };
+  const v1 = await verify(bkBuf, 'backup-pass-12345');
+  check('check a backup file: a good one opens and is complete', v1.s === 200 && v1.j?.ok === true && v1.j.settings && v1.j.key && v1.j.signIns && !!v1.j.madeAt, JSON.stringify(v1.j));
+  const v2 = await verify(bkBuf, 'not-the-passphrase');
+  const bad = Buffer.from(bkBuf); bad[Math.floor(bad.length / 2)] ^= 0xff;
+  const v3 = await verify(bad, 'backup-pass-12345');
+  check('check a backup file: a wrong passphrase or a changed byte is refused', v2.s === 400 && v2.j?.ok === false && v3.s === 400 && v3.j?.ok === false, `${v2.s} ${v3.s}`);
+  const v4 = mc ? await verify(bkBuf, 'backup-pass-12345', mc) : { s: 403 };
+  check('check a backup file: owner only', v4.s === 403, `HTTP ${v4.s}`);
+  const users2 = await req('GET', '/api/auth/me');
+  check('checking a backup changes nothing (still signed in, same owner)', users2.s === 200 && users2.j?.user?.username === 'owner1');
+
+  // Activity export: admins only, CSV and JSON, and the export itself is recorded
+  const ex = await fetch(`${B}/api/support/activity/export?format=csv&days=0`, { headers: { Cookie: cookie } }), exText = await ex.text();
+  const exJ = await fetch(`${B}/api/support/activity/export?format=json`, { headers: { Cookie: cookie } }).then((r) => r.json()).catch(() => null);
+  const exM = mc ? (await fetch(`${B}/api/support/activity/export?format=csv`, { headers: { Cookie: mc } })).status : 403;
+  check('activity export: CSV and JSON for admins (with sign-ins in it), refused for members', ex.status === 200 && /text\/csv/.test(ex.headers.get('content-type')) && /attachment/.test(ex.headers.get('content-disposition')) && /"signed-in"/.test(exText) && Array.isArray(exJ?.events) && exJ.events.some((e) => e.event === 'activity-exported') && exM === 403, `HTTP ${ex.status} member ${exM}`);
+
   // Encryption at rest and in transit (docs: Security and encryption)
   const flags = (lg.sc || '').split(';').slice(1).map((x) => x.trim().toLowerCase());
   check('session cookie is HttpOnly and SameSite=Lax', flags.includes('httponly') && flags.includes('samesite=lax'), flags.join('; '));

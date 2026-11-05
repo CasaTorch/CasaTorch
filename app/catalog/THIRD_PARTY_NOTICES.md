@@ -22,7 +22,7 @@ CasaTorch comes with **no warranty**, to the extent the law allows (AGPL-3.0 sec
 | Package | License | Notes |
 | --- | --- | --- |
 | express 4 | MIT | Web server |
-| three (three.js) 0.185 | MIT | 3D Home rendering (copyright the three.js authors) |
+| three (three.js) 0.186 | MIT | 3D Home rendering (copyright the three.js authors) |
 | web-push 3.6 | MPL-2.0 | Web push for phone alerts. Shipped unmodified; source is in `node_modules/web-push` and at github.com/web-push-libs/web-push |
 | ring-client-api 14 | MIT | Ring (Pro, Labs). See section 3 - Ring's own terms |
 | acme-client 5.4 | MIT | Let's Encrypt certificates for the secure address at home |

@@ -60,21 +60,25 @@ async function makeBackup(pass, withMedia, out) {
   await pipeline(Readable.from(bkEntries(bkList(withMedia))), zlib.createGzip({ level: 6 }), c, fs.createWriteStream(out, { flags: 'a' }));
   fs.appendFileSync(out, c.getAuthTag());
 }
-/* Unpacks into `dir`. Throws (and the caller removes `dir`) on a wrong passphrase or a damaged file. */
-async function openBackup(file, pass, dir) {
+/* Unpacks into `dir`. Throws (and the caller removes `dir`) on a wrong passphrase or a damaged file.
+   dry: nothing is written - the whole file is still decrypted and checked (its authentication tag, every entry, the
+   end marker); `seen` collects { p, s } of each entry, and the tail of its activity log (for when it was made). */
+async function openBackup(file, pass, dir, { dry = false, seen = null } = {}) {
   const size = fs.statSync(file).size; if (size < 50) throw new Error('that isn\'t a CasaTorch backup');
   const fd = fs.openSync(file, 'r'), head = Buffer.alloc(34), tag = Buffer.alloc(16);
   try { fs.readSync(fd, head, 0, 34, 0); fs.readSync(fd, tag, 0, 16, size - 16); } finally { fs.closeSync(fd); }
   if (!head.subarray(0, 6).equals(BK_MAGIC)) throw new Error('that isn\'t a CasaTorch backup');
   const key = await bkKey(pass, head.subarray(6, 22)), d = crypto.createDecipheriv('aes-256-gcm', key, head.subarray(22, 34)); d.setAuthTag(tag);
-  let buf = Buffer.alloc(0), cur = null, fdOut = null, left = 0, files = 0, done = false;
+  let buf = Buffer.alloc(0), cur = null, fdOut = null, left = 0, files = 0, done = false, hasConfig = false, tail = null;
   const sink = new Writable({
     write(chunk, _enc, cb) {
       try {
         buf = Buffer.concat([buf, chunk]);
         for (;;) {
           if (cur) {
-            const n = Math.min(left, buf.length); if (n) { if (fdOut !== null) fs.writeSync(fdOut, buf, 0, n); buf = buf.subarray(n); left -= n; }
+            const n = Math.min(left, buf.length); if (n) { if (fdOut !== null) fs.writeSync(fdOut, buf, 0, n); if (tail) tail.push(buf.subarray(0, n)); buf = buf.subarray(n); left -= n; }
+            if (tail && left <= 0 && seen) { const t = Buffer.concat(tail); seen.auditTail = t.subarray(Math.max(0, t.length - 65536)).toString('utf8'); tail = null; }
+            else if (tail && tail.length > 64) { const t = Buffer.concat(tail); tail = [t.subarray(Math.max(0, t.length - 65536))]; }
             if (left > 0) break;
             if (fdOut !== null) fs.closeSync(fdOut); fdOut = null; cur = null; continue;
           }
@@ -86,6 +90,9 @@ async function openBackup(file, pass, dir) {
           if (!Number.isSafeInteger(h.s) || h.s < 0 || typeof h.p !== 'string') throw new Error('damaged backup');
           // A file this version doesn't know (a backup from a newer CasaTorch): skipped, not refused - so going back a version still restores.
           if (!bkAllowed(h.p)) { if (h.p.includes('\0') || path.isAbsolute(h.p) || h.p.split(/[\\/]/).includes('..')) throw new Error('damaged backup'); cur = h; left = h.s; fdOut = null; continue; }
+          if (h.p === 'config.json') hasConfig = true;
+          if (seen && seen.length < 100_000) seen.push({ p: h.p, s: h.s });
+          if (dry) { cur = h; left = h.s; fdOut = null; files++; tail = h.p === 'audit.log' && seen ? [] : null; if (!h.s && tail) { seen.auditTail = ''; tail = null; } if (!h.s) cur = null; continue; }
           const to = path.join(dir, h.p); fs.mkdirSync(path.dirname(to), { recursive: true, mode: 0o700 });
           fdOut = fs.openSync(to, 'w', 0o600); cur = h; left = h.s; files++;
         }
@@ -96,7 +103,7 @@ async function openBackup(file, pass, dir) {
   });
   try { await pipeline(fs.createReadStream(file, { start: 34, end: size - 17 }), d, zlib.createGunzip(), sink); }
   catch (e) { if (fdOut) try { fs.closeSync(fdOut); } catch { /* closed */ } throw new Error(/auth|unable to authenticate/i.test(String(e.message)) ? 'wrong passphrase, or the file is damaged' : /damaged|incorrect header|unexpected end/i.test(String(e.message)) ? 'the backup file is damaged' : String(e.message)); }
-  if (!fs.existsSync(path.join(dir, 'config.json'))) throw new Error('that backup is missing its settings');
+  if (dry ? !hasConfig : !fs.existsSync(path.join(dir, 'config.json'))) throw new Error('that backup is missing its settings');
   return files;
 }
 function swapIn(staged) {
@@ -108,6 +115,17 @@ function swapIn(staged) {
   return keep;
 }
 
+/** The last time recorded in an activity log's text (its last lines). */
+function bkLastIn(text) {
+  const lines = String(text || '').trim().split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) { try { const at = JSON.parse(lines[i]).at; if (at && Number.isFinite(Date.parse(at))) return at; } catch { /* a cut line */ } }
+  return null;
+}
+/** What a checked backup holds, in a few numbers (no names, nothing private). Pure. */
+function bkSummary(seen, files, bytes) {
+  const n = (re) => seen.filter((e) => re.test(e.p)).length, has = (p) => seen.some((e) => e.p === p);
+  return { files, bytes, settings: has('config.json'), key: has('secret.key'), signIns: has('users.json'), history: has('history.json'), photos: n(/^photos\//), plans: n(/^floorplan\//), secureAddress: n(/^tls\//) > 0, madeAt: bkLastIn(seen.auditTail) };
+}
 function bkLastActivity() {
   try {
     const st = fs.statSync(AUDIT_FILE), len = Math.min(st.size, 64 * 1024), buf = Buffer.alloc(len), fd = fs.openSync(AUDIT_FILE, 'r');
@@ -123,16 +141,21 @@ app.post('/api/backup', requireRole('owner'), express.json({ limit: '2kb' }), as
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
   const pass = bkPass(req.body?.passphrase); if (!pass) return res.status(400).json({ error: 'Pick a passphrase of at least 10 characters.' });
   if (bkBusy) return res.status(409).json({ error: 'A backup or restore is already running.' });
-  bkBusy = true; const out = path.join(DATA_DIR, `.backup-${crypto.randomBytes(6).toString('hex')}.ctbk`);
+  const mine = {}; bkBusy = mine; const out = path.join(DATA_DIR, `.backup-${crypto.randomBytes(6).toString('hex')}.ctbk`);
   try {
     await makeBackup(pass, req.body?.media !== false, out);
-    audit(req, 'backup-made', { media: req.body?.media !== false });
+    /* Checked before it's handed over: the file is opened again with the passphrase, every entry read and its
+       authentication tag verified - a backup that couldn't be restored is never downloaded as if it could. */
+    const checked = await openBackup(out, pass, null, { dry: true }).catch((e) => { throw new Error(`it didn't pass its check (${e.message})`); });
+    audit(req, 'backup-made', { media: req.body?.media !== false, checked });
+    res.setHeader('X-CasaTorch-Backup-Checked', String(checked));
+    if (bkBusy === mine) bkBusy = false;   // made and checked: sending it on doesn't hold up the next backup or restore (its own file)
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="casatorch-backup-${dayOf(Date.now())}.ctbk"`);
     res.setHeader('Content-Length', fs.statSync(out).size);
     await pipeline(fs.createReadStream(out), res);
   } catch (e) { if (!res.headersSent) res.status(500).json({ error: `The backup couldn't be made: ${e.message}` }); }
-  finally { fs.rmSync(out, { force: true }); bkBusy = false; }
+  finally { fs.rmSync(out, { force: true }); if (bkBusy === mine) bkBusy = false; }
 });
 async function restoreHandler(req, res) {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
@@ -159,6 +182,25 @@ async function restoreHandler(req, res) {
   } finally { fs.rmSync(file, { force: true }); bkBusy = false; }
 }
 app.post('/api/restore', requireRole('owner'), restoreHandler);
+/* "Check a backup file": is this file a whole CasaTorch backup that opens with this passphrase? Nothing is changed
+   or kept - the file is read once, decrypted and checked entry by entry, and only a summary comes back. */
+app.post('/api/backup/verify', requireRole('owner'), async (req, res) => {
+  if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
+  try { openSealedHeader(req, 'x-backup-passphrase'); } catch (e) { res.setHeader('X-CasaTorch-Seal', e.seal === 'retry' ? 'retry' : 'bad'); return res.status(e.seal === 'retry' ? 409 : 400).json({ error: e.seal === 'retry' ? SEAL_RETRY : 'Enter the backup\'s passphrase again.' }); }
+  const pass = bkPass(req.headers['x-backup-passphrase'] ? decodeURIComponent(String(req.headers['x-backup-passphrase'])) : '');
+  if (!pass) return res.status(400).json({ error: 'Enter the backup\'s passphrase.' });
+  if (bkBusy) return res.status(409).json({ error: 'A backup or restore is already running.' });
+  bkBusy = true; const file = path.join(DATA_DIR, `.restore-${crypto.randomBytes(6).toString('hex')}.ctbk`);
+  try {
+    let got = 0; const MAX = 4 * 1024 ** 3;
+    await pipeline(req, new Transform({ transform(c, _e, cb) { got += c.length; cb(got > MAX ? new Error('too big') : null, c); } }), fs.createWriteStream(file, { mode: 0o600 }));
+    const seen = [], files = await openBackup(file, pass, null, { dry: true, seen });
+    const sum = bkSummary(seen, files, fs.statSync(file).size);
+    audit(req, 'backup-checked', { ok: true, files });
+    res.json({ ok: true, ...sum });
+  } catch (e) { audit(req, 'backup-checked', { ok: false }); res.status(400).json({ ok: false, error: `This backup can't be restored: ${e.message}` }); }
+  finally { fs.rmSync(file, { force: true }); bkBusy = false; }
+});
 app.post('/api/setup/restore', (req, res) => (isConfigured() ? res.status(403).json({ error: 'This CasaTorch is already set up - restore from Settings › Updates & backup › Backup instead.' }) : restoreHandler(req, res)));
 /* Leftovers from an interrupted backup or restore. */
 try { for (const f of fs.readdirSync(DATA_DIR)) if (/^\.(backup|restore)-[0-9a-f]+(\.ctbk)?$/.test(f)) fs.rmSync(path.join(DATA_DIR, f), { recursive: true, force: true }); } catch { /* fine */ }

@@ -18,6 +18,16 @@ updates:
       - dependency-name: express
         update-types: ["version-update:semver-major"]
 
+  # The Node.js base image (pinned to an exact patch release). Stays on Node.js 22: a new major is a deliberate move.
+  - package-ecosystem: docker
+    directories: [/app, /ha-addon]
+    schedule: { interval: weekly, day: monday, time: "06:00" }
+    open-pull-requests-limit: 2
+    commit-message: { prefix: "docker" }
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly, day: monday, time: "06:00" }

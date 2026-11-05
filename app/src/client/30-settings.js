@@ -275,16 +275,42 @@ async function backupCard(s) {
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'The backup couldn\'t be made.');
       const blob = await r.blob(), a = el('a', { href: URL.createObjectURL(blob), download: (r.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || 'casatorch-backup.ctbk' });
       document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
-      pass.value = pass2.value = ''; msg.textContent = T('Backup saved ({n} MB). Keep the passphrase somewhere safe - without it the file can\'t be opened.', { n: (blob.size / 1048576).toFixed(1) });
+      pass.value = pass2.value = ''; msg.style.color = 'var(--good)';
+      msg.textContent = r.headers.get('X-CasaTorch-Backup-Checked') ? T('Backup saved and checked: it opens with your passphrase ({n} MB). Keep the passphrase somewhere safe - without it the file can\'t be opened.', { n: (blob.size / 1048576).toFixed(1) }) : T('Backup saved ({n} MB). Keep the passphrase somewhere safe - without it the file can\'t be opened.', { n: (blob.size / 1048576).toFixed(1) });
     } catch (e) { msg.style.color = 'var(--bad)'; msg.textContent = e.message; }
     make.disabled = false;
   } }, T('Download backup'));
   const restore = el('button', { class: 'btn', onclick: () => restoreModal('/api/restore') }, T('Restore from a backup'));
+  const check = el('button', { class: 'btn', onclick: () => backupCheckModal() }, icon('shield', 14), T('Check a backup file'));
   return el('div', { class: 'card' }, el('h2', {}, T('Backup')),
     el('p', { class: 'small muted' }, T('One file with your settings and connections, sign-ins, calendar, floor plans, history and photos - to keep safe, or to move CasaTorch to new hardware. It\'s encrypted with a passphrase you pick; CasaTorch doesn\'t keep the passphrase.')),
     el('label', { class: 'field' }, el('span', {}, T('Passphrase')), pass), el('label', { class: 'field' }, el('span', {}, T('Passphrase again')), pass2),
     el('label', { class: 'row small', style: 'gap:8px;margin:6px 0 10px' }, media, T('Include photos and 3D scans (larger file)')),
-    msg, el('div', { class: 'row wrap' }, make, restore));
+    msg, el('div', { class: 'row wrap' }, make, restore, check));
+}
+/* Check a backup file: does it open with this passphrase, and is all of it there? Nothing on this CasaTorch changes. */
+function backupCheckModal() {
+  const file = el('input', { type: 'file', accept: '.ctbk,application/octet-stream' }), pass = el('input', { type: 'password', autocomplete: 'off' });
+  const msg = el('p', { class: 'small', role: 'status', 'aria-live': 'polite', style: 'min-height:1.2em' }), out = el('div');
+  const go = el('button', { class: 'btn primary', onclick: async () => {
+    const f = file.files?.[0]; msg.style.color = 'var(--bad)'; out.replaceChildren();
+    if (!f) { msg.textContent = T('Choose the backup file.'); return; }
+    if (!pass.value) { msg.textContent = T('Enter the passphrase.'); return; }
+    go.disabled = true; msg.style.color = ''; msg.textContent = T('Checking the backup...');
+    try {
+      const r = await fetch('/api/backup/verify', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Backup-Passphrase': encodeURIComponent(pass.value) }, body: f });
+      const j = await r.json().catch(() => ({})); if (!r.ok || !j.ok) throw new Error(j.error || T('This backup can\'t be restored.'));
+      msg.style.color = 'var(--good)'; msg.textContent = T('This backup is complete and opens with this passphrase.');
+      const yes = (v) => (v ? T('Yes') : T('No'));
+      const rows = [[T('Made'), j.madeAt ? new Date(j.madeAt).toLocaleString() : null], [T('Size'), T('{n} files, {mb} MB', { n: j.files, mb: (j.bytes / 1048576).toFixed(1) })],
+        [T('Settings and connections'), yes(j.settings && j.key)], [T('Sign-ins'), yes(j.signIns)], [T('History'), yes(j.history)], [T('Photos'), String(j.photos)], [T('Floor plans and 3D scans'), String(j.plans)], [T('Secure address at home'), yes(j.secureAddress)]];
+      out.replaceChildren(el('dl', { class: 'kv small' }, rows.filter(([, v]) => v != null).flatMap(([k, v]) => [el('dt', {}, k), el('dd', {}, v)])));
+    } catch (e) { msg.style.color = 'var(--bad)'; msg.textContent = e.message; }
+    go.disabled = false;
+  } }, T('Check'));
+  modal(el('div', {}, el('p', { class: 'small muted' }, T('Opens the backup with its passphrase and reads all of it, to be sure it can be restored. Nothing on this CasaTorch changes, and the file isn\'t kept.')),
+    el('label', { class: 'field' }, el('span', {}, T('Backup file (.ctbk)')), file), el('label', { class: 'field' }, el('span', {}, T('Passphrase')), pass), msg, out,
+    el('div', { class: 'row', style: 'justify-content:flex-end' }, go)), { title: T('Check a backup file') });
 }
 /* Used by Settings (owner) and by setup on a fresh install. */
 function restoreModal(url) {

@@ -4,6 +4,45 @@ What changed in each CasaTorch version. The illustrated version, with links into
 [What's new](https://casatorch.com/docs/help/whats-new.html); after an update CasaTorch also shows a short
 "What's new" sheet (find it again in Settings › Help). Items marked **Coming** are not available yet.
 
+## Unreleased
+
+Security, privacy and cameras: what casatorch.com can and can't do with your CasaTorch is now enforced on the box, every
+private key is encrypted, updates only ever go forward, and Ring cameras and chimes behave.
+
+### Security
+- **The secure-access tunnel reaches your CasaTorch and nothing else.** Its rules are written on the box (this
+  CasaTorch only, private-network routing off), and rules sent from Cloudflare's side that point anywhere else - your
+  router, Home Assistant, another computer, a proxy - or that turn on routing into your network stop secure access at
+  once, with an alert and a line in the security log. Repair tries again.
+- **Visitors through the tunnel stay outside.** A request that came through secure access is treated as one from away
+  from home whatever address it claims, so the "Basic works only at home" and "sign-in required away" rules, and the
+  home-only owner password reset, can't be got round.
+- **Updates only go forward, and only when signed.** The Linux and Raspberry Pi updater installs nothing without its
+  release key (it used to skip the check), and refuses a package that isn't the announced version or isn't newer. The
+  install scripts refuse a 0.8+ release whose signed file list is missing.
+- **The secure address's private keys are encrypted** on the box like every other secret (older ones are encrypted the
+  first time they're read).
+- **No install scripts**: no package runs its own scripts when installed, including on developers' computers and in CI.
+- The Linux service runs with no special powers and with the kernel, clock and other system settings off limits.
+
+### Backups
+- **Every backup is checked before you download it**: opened again with its passphrase and read in full.
+- **Check a backup file** (Settings › Updates & backup › Backup): tells you whether a file restores and what it holds,
+  without changing anything.
+
+### Activity
+- **Export the activity log** as CSV or JSON (Settings › People & sign-in › Activity), for what the filters show. The
+  CSV is safe to open in a spreadsheet: nothing in it runs as a formula.
+
+### Cameras
+- **Ring Chime and Chime Pro are chimes, not cameras**: they no longer count or show as cameras anywhere - camera
+  counts, the Cameras and Security pages, camera walls, the 3D home and "New camera" notices.
+- **Ring cameras play only through Frigate's go2rtc** when it has their stream (about a second behind), never through
+  Home Assistant's video, which runs minutes behind.
+- **Better matching to go2rtc streams**: names with or without "ring_", the "_2" Home Assistant adds when two devices
+  share a name (each camera gets its own stream), and streams named after ring-mqtt's camera id.
+- **Steadier live tiles**: a page redraw no longer restarts a live camera (no flash, no reconnect).
+
 ## 0.9.1
 
 The first public release: the free download is open.

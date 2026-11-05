@@ -354,7 +354,7 @@ function recoverAskLimit(ip, { local = false, renew = true } = {}) {
   return null;
 }
 const recoverWhere = () => (process.env.SUPERVISOR_TOKEN ? 'addon' : INSTALL === 'docker' || fs.existsSync('/.dockerenv') ? 'docker' : ['deb', 'pi-image', 'script'].includes(INSTALL) ? 'linux' : INSTALL === 'windows' ? 'windows' : INSTALL === 'macos' ? 'macos' : 'computer');
-const viaSecureAccess = (req) => !!(config.remote?.hostname && String(req.headers.host || '').toLowerCase().startsWith(String(config.remote.hostname).toLowerCase()));
+const viaSecureAccess = (req) => viaTunnel(req) || !!(config.remote?.hostname && String(req.headers.host || '').toLowerCase().startsWith(String(config.remote.hostname).toLowerCase()));   // through the tunnel whatever its Host (02-remote-gate.js)
 function recoverOwners() { return (users?.list || []).filter((u) => u.role === 'owner' && !u.panel); }
 app.get('/api/auth/recover/state', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -423,7 +423,7 @@ const ACT_KINDS = {
   pairing: ['phone-paired', 'pairing-code-made', 'alerts-device-on', 'alerts-device-off', 'alerts-phone-on', 'alerts-phone-off'],
   settings: ['settings-changed', 'setup-reopened', 'ai-settings-changed', 'alert-settings-changed', 'security-settings-changed', 'update-settings-changed', 'find-setting-changed', 'safety-exception-changed', 'license-added', 'license-removed', 'connection-removed', 'settings-put-back', 'floorplan-imported', 'camera-walls-changed', 'frigate-camera-added', 'frigate-change-undone', 'frigate-restarted'],
   remote: ['secure-access-on', 'secure-access-off', 'secure-access-repaired', 'home-https-on', 'home-https-off'],
-  exports: ['backup-made', 'backup-restored', 'floorplan-exported', 'diagnostics-downloaded', 'support-file-made', 'support-summary-copied'],
+  exports: ['activity-exported', 'backup-checked', 'backup-made', 'backup-restored', 'floorplan-exported', 'diagnostics-downloaded', 'support-file-made', 'support-summary-copied'],
   system: ['restarted', 'updated', 'alert-acknowledged', 'camera-found'],
 };
 const ACT_KIND_OF = Object.fromEntries(Object.entries(ACT_KINDS).flatMap(([k, list]) => list.map((e) => [e, k])));
@@ -465,6 +465,25 @@ app.get('/api/support/activity', requireRole('admin'), (req, res) => {
   const all = supAuditRead(), list = activityFilter(all, { kind, q: String(req.query.q || '').slice(0, 80), days, before, limit: 101 });
   res.setHeader('Cache-Control', 'no-store');
   res.json({ events: list.slice(0, 100), more: list.length > 100, total: all.length, oldest: all[0]?.at || null, keepDays: ACT_KEEP_DAYS, keepMax: ACT_KEEP_N, kinds: Object.keys(ACT_KINDS) });
+});
+
+/** Activity as CSV, for a spreadsheet or a compliance file. Every cell is quoted, and one a spreadsheet would run as a
+    formula (= + - @, a tab or a return first) starts with ' instead. Pure (unit-tested). */
+const ACT_CSV_COLS = ['at', 'event', 'kind', 'user', 'ip'];
+function csvCell(v) { let t = v == null ? '' : typeof v === 'string' ? v : JSON.stringify(v); t = t.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ''); if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`; return `"${t.replace(/"/g, '""')}"`; }
+function activityCsv(events) {
+  const rows = [[...ACT_CSV_COLS, 'details']];
+  for (const e of events) { const { at, event, kind, user, ip, bad: _b, ...rest } = e; rows.push([at, event, kind || ACT_KIND_OF[event] || 'system', user, ip, Object.keys(rest).length ? rest : '']); }
+  return `\ufeff${rows.map((r) => r.map(csvCell).join(',')).join('\r\n')}\r\n`;
+}
+app.get('/api/support/activity/export', requireRole('admin'), (req, res) => {
+  const kind = Object.hasOwn(ACT_KINDS, String(req.query.kind)) ? String(req.query.kind) : 'all', days = Math.min(400, Math.max(0, Number(req.query.days) || 0));
+  const list = activityFilter(supAuditRead(), { kind, q: String(req.query.q || '').slice(0, 80), days, limit: ACT_KEEP_N }).reverse();   // oldest first, as a log reads
+  const json = req.query.format === 'json', name = `casatorch-activity-${new Date().toISOString().slice(0, 10)}.${json ? 'json' : 'csv'}`;
+  audit(req, 'activity-exported', { format: json ? 'json' : 'csv', n: list.length });
+  res.setHeader('Cache-Control', 'no-store'); res.setHeader('Content-Disposition', `attachment; filename="${name}"`); res.setHeader('X-Content-Type-Options', 'nosniff');
+  if (json) return res.type('application/json').send(JSON.stringify({ exported: nowIso(), version: VERSION, filter: { kind, days }, events: list.map(({ bad: _b, ...e }) => e) }, null, 1));
+  res.type('text/csv; charset=utf-8').send(activityCsv(list));
 });
 
 /* ---------------------------------------------------------------- getting started */
@@ -532,4 +551,4 @@ app.get('/api/support/update-status', (_req, res) => {
   res.json({ version: VERSION, install: INSTALL, previous: supVersions.prev || null, since: supVersions.since || null, last: st, rollback: ['deb', 'pi-image', 'script'].includes(INSTALL), backupFirst: settingsHistory().some((id) => /before/.test(id)) });
 });
 
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchSupport = { supShape, supPrivateStrings, supMaskText, supportBundle, supportSummary, activityFor, activityFilter, activityTrim, checklistState, GUIDES, ACT_KINDS, recoverAskLimit, activityTrimFile };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchSupport = { viaSecureAccess, activityCsv, csvCell, supShape, supPrivateStrings, supMaskText, supportBundle, supportSummary, activityFor, activityFilter, activityTrim, checklistState, GUIDES, ACT_KINDS, recoverAskLimit, activityTrimFile };
