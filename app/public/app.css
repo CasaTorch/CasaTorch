@@ -825,6 +825,7 @@ body.nav-left .nav.more-below, body.nav-right .nav.more-below { -webkit-mask-ima
 .more-item { position: relative; } .more-item .newdot { position: absolute; top: 8px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
 /* What's new sheet */
 .wn { max-width: 520px; } .wn-list { display: grid; gap: 10px; margin: 6px 0 14px; padding: 0; list-style: none; }
+.wn-h { margin: 12px 0 0; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); } .wn-h:first-of-type { margin-top: 4px; }
 .wn-item { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); text-decoration: none; color: inherit; }
 .wn-item:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .wn-item > span:first-child { flex: none; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
