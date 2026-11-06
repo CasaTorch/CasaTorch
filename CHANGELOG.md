@@ -17,6 +17,18 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Add by address.** Type an address and CasaTorch asks it what it is.
 - Only addresses on your home network are ever looked at or kept, names from the network are cleaned, and looks are
   limited (one full look a minute, 12 address checks a minute).
+- **Removing a brand cleans up after it.** Connect › Remove now also takes that brand's tiles off every page (for
+  everyone, every kind of screen, each person and each screen), its cameras off camera walls, and its per-device alert
+  rules.
+
+### Removing CasaTorch
+- **Remove CasaTorch** (Settings › Updates & backup, owner only): offers an encrypted backup first, then in one tap
+  ends every phone's and browser's pass for away from home, deletes Secure access, its address and the secure address
+  at home (with their DNS names) at casatorch.com, takes the box off "Find my CasaTorch", signs every phone and browser
+  out and, if you choose, erases everything CasaTorch keeps on the computer. Each step says how it went. Then it shows
+  how to uninstall the program for the way it was installed.
+- The installers can uninstall: `curl -fsSL https://casatorch.com/install.sh | sudo bash -s -- --uninstall`
+  (`--keep-data` keeps the settings) and, on Windows, `$env:CASATORCH_UNINSTALL='1'` before running install.ps1.
 
 ### Pro
 - **When Pro ends, CasaTorch says so plainly.** "Pro ended on <date> - Renew" in the banner and in Settings ›

@@ -208,7 +208,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     ['family', T('Family board'), 'star', T('The family, chores and stars, lists and meals'), async () => familyCards()],   // 38-family.js
     ['alerts', T('Alerts'), 'bell', T('What each kind of alert does: in the app, on phones, sounds, repeats, quiet hours, per device'), async () => alertRulesCards()],   // 37a-alert-rules.js
     ['phones', T('Phones & alerts'), 'phone', T('The CasaTorch app, alerts on your phones, quiet hours'), async () => [...(await appCards()), await phoneCard()]],
-    ['updates', T('Updates & backup'), 'download', T('Versions, automatic updates and an encrypted backup'), async () => [await updatesCard(), await updateStatusCard(), await backupCard(s)]],   // updateStatusCard: 39s-support.js
+    ['updates', T('Updates & backup'), 'download', T('Versions, automatic updates, an encrypted backup and removing CasaTorch'), async () => [await updatesCard(), await updateStatusCard(), await backupCard(s), await removeCard(s)]],   // updateStatusCard: 39s-support.js; removeCard: 30r-remove.js
     ['pro', T('CasaTorch Pro'), 'spark', T('Your plan and license key'), async () => [pro]],
     ['help', T('Help'), 'help', T('Guides, the tour and getting help'), async () => [helpCard(), await supportStartAgainCard()]],
     ['advanced', T('Advanced'), 'log', T('How it\'s running, its log, diagnostics and maintenance'), async () => [await systemCard(), await logCard(), maintCard(s, me)], admin],

@@ -10,6 +10,10 @@
 # checksums signed with CasaTorch's offline release key before anything is built or run. Releases made before 0.8.0
 # have no signed file list: it says so and carries on ($env:CASATORCH_REQUIRE_SIGNED = '1' stops instead).
 # Developers: $env:CASATORCH_REF = 'main' installs a branch, without the check.
+#
+# Uninstall:  $env:CASATORCH_UNINSTALL = '1'; irm https://casatorch.com/install.ps1 | iex
+#   stops CasaTorch, removes its startup task, firewall rule and C:\ProgramData\CasaTorch ($env:CASATORCH_KEEP_DATA = '1'
+#   keeps the data folder). Node.js stays.
 $ErrorActionPreference = 'Stop'
 $Repo   = if ($env:CASATORCH_REPO) { $env:CASATORCH_REPO } else { 'https://github.com/casatorch/casatorch' }
 $Ref    = if ($env:CASATORCH_REF) { $env:CASATORCH_REF } elseif ($env:CASATORCH_BRANCH) { $env:CASATORCH_BRANCH } else { '' }
@@ -23,6 +27,17 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
   throw 'Open PowerShell with "Run as administrator" and try again.'
 }
 
+if ($env:CASATORCH_UNINSTALL -eq '1') {
+  Say 'Removing CasaTorch'
+  Stop-ScheduledTask -TaskName 'CasaTorch' -ErrorAction SilentlyContinue
+  Unregister-ScheduledTask -TaskName 'CasaTorch' -Confirm:$false -ErrorAction SilentlyContinue
+  Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -like "*$App\app\server.js*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+  Get-NetFirewallRule -DisplayName 'CasaTorch' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+  if (Test-Path $App) { Remove-Item -Recurse -Force $App }
+  if ($env:CASATORCH_KEEP_DATA -eq '1') { Say "Settings kept in $Data" } elseif (Test-Path $Root) { Remove-Item -Recurse -Force $Root }
+  Say 'CasaTorch is removed. Node.js stays (other programs may use it).'
+  return
+}
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node -or [int]((& node -p "process.versions.node.split('.')[0]")) -lt 20) {
   Say 'Installing Node.js LTS'

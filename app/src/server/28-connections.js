@@ -38,7 +38,10 @@ const REMOVABLE = {
 app.delete('/api/connections/:id', requireRole('admin'), (req, res) => {
   const fn = Object.hasOwn(REMOVABLE, req.params.id) ? REMOVABLE[req.params.id] : null; if (!fn) return res.status(404).json({ error: 'That one is removed somewhere else (Home Assistant, or its own Remove button).' });
   if (isDemo()) return res.json({ ok: true, demo: true });
-  const next = JSON.parse(JSON.stringify(config)); fn(next); saveConfig(next);
-  if (typeof audit === 'function') audit(req, 'connection-removed', { id: req.params.id });
-  res.json({ ok: true });
+  const gone = devicesOfConnection(req.params.id, config);   // its tiles, camera walls and alert rules go with it (60c-cleanup.js)
+  const next = JSON.parse(JSON.stringify(config)); fn(next);
+  const cleaned = purgeDevices(gone, next);
+  saveConfig(next);
+  if (typeof audit === 'function') audit(req, 'connection-removed', { id: req.params.id, ...cleaned });
+  res.json({ ok: true, cleaned });
 });

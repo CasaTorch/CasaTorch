@@ -100,3 +100,60 @@ export default async function discoverTests(t) {
     } finally { srv.close(); }
   });
 }
+
+export async function cleanupTests(t) {
+  const C = globalThis.__casatorchCleanup;
+  t('removing a brand: its tiles go, tiles showing several devices keep the others, other brands are untouched', () => {
+    const gone = C.devicesOfConnection('hue-local');
+    const r = C.tilesWithout([{ id: 'device:a', device: 'hue:light1' }, { id: 'device:b', device: 'shelly:x:switch0' }, { id: 'lights', ids: ['hue:light1', 'ha:light.porch'] }, { id: 'lights:2', ids: ['hue:light2'] }, { id: 'clock' }], gone);
+    assert.equal(r.n, 3);
+    assert.deepEqual(r.tiles, [{ id: 'device:b', device: 'shelly:x:switch0' }, { id: 'lights', ids: ['ha:light.porch'] }, { id: 'clock' }]);
+  });
+  t('removing a brand: cameras by their own ids, Frigate cameras found by themselves too', () => {
+    const cfg = { cameras: [{ id: 'yard', type: 'snapshot' }, { id: 'f1', type: 'frigate' }] };
+    const snap = C.devicesOfConnection('snapshot', cfg), fr = C.devicesOfConnection('frigate', cfg);
+    assert.ok(snap('camera:yard') && !snap('camera:f1'));
+    assert.ok(fr('camera:f1') && fr('camera:frigate-porch') && !fr('camera:yard'));
+    assert.ok(!C.devicesOfConnection('unknown')('hue:1'));
+  });
+  t('removing a brand: per-device alert rules for it go, the rest stay', () => {
+    const cfg = { alerts: { rules: { devices: { 'hue:1': { push: false }, 'ha:light.x': { push: true } } }, users: { u1: { devices: { 'hue:2': {} } } } } };
+    const n = C.purgeDevices((d) => d.startsWith('hue:'), cfg);
+    assert.deepEqual(Object.keys(cfg.alerts.rules.devices), ['ha:light.x']);
+    assert.deepEqual(cfg.alerts.users.u1.devices, {});
+    assert.equal(n.rules, 2);
+  });
+}
+
+export async function removeTests(t) {
+  const R = globalThis.__casatorchRemove, fs = await import('node:fs'), os = await import('node:os'), path = await import('node:path');
+  await t('remove CasaTorch: every step runs and reports, one that fails or is not needed does not stop the rest', async () => {
+    const ran = [];
+    const out = await R.removeSteps([
+      ['passes', () => { ran.push('passes'); return { skipped: true }; }],
+      ['secure-access', async () => { ran.push('secure-access'); throw new Error('casatorch.com did not answer'); }],
+      ['home-address', async () => { ran.push('home-address'); return { ok: false }; }],
+      ['sign-out', () => { ran.push('sign-out'); return { ok: true }; }],
+    ]);
+    assert.deepEqual(ran, ['passes', 'secure-access', 'home-address', 'sign-out'], 'in order, all of them');
+    assert.deepEqual(out.map((s) => [s.id, s.ok]), [['passes', true], ['secure-access', false], ['home-address', false], ['sign-out', true]]);
+    assert.equal(out[0].skipped, true); assert.match(out[1].error, /did not answer/);
+  });
+  t('remove CasaTorch: only its own data folder can be erased - never the root, a home folder or a folder without its files', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-erase-'));
+    assert.equal(R.eraseableDir(d), false, 'no config.json or secret.key: not ours');
+    fs.writeFileSync(path.join(d, 'config.json'), '{}');
+    assert.equal(R.eraseableDir(d), true);
+    for (const bad of ['/', os.homedir(), '/tmp']) assert.equal(R.eraseableDir(bad), false, bad);
+    fs.rmSync(d, { recursive: true, force: true });
+    assert.ok(['docker', 'deb', 'script', 'macos', 'windows', 'ha-addon', 'manual'].includes(R.installKind()));
+  });
+  await t('remove CasaTorch: refused without the right password, and never in the demo', async () => {
+    const H = globalThis.__casatorch, srv = H.app.listen(0, '127.0.0.1'); await new Promise((ok) => srv.once('listening', ok));
+    const B = `http://127.0.0.1:${srv.address().port}`;
+    try {
+      const r = await fetch(`${B}/api/remove-casatorch`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: B }, body: JSON.stringify({ erase: true }) });
+      assert.ok([400, 401, 403, 409].includes(r.status), `status ${r.status}`);
+    } finally { srv.close(); }
+  });
+}

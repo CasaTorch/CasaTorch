@@ -195,14 +195,17 @@ app.post('/api/local-https/ip', requireRole('admin'), express.json(), async (req
   try { await ltCall('PUT', { id: c.id, secret: c.secret, ip }); ltSaveConf({ ...c, ip, ipAuto: false }); res.json({ ok: true }); }
   catch (err) { res.status(502).json({ error: String(err.message) }); }
 });
-app.post('/api/local-https/off', requireRole('admin'), async (_req, res) => {
+/** The secure address at home off: its name (and CAA record) deleted at casatorch.com, the certificate deleted here. */
+async function ltOffNow() {
   const c = ltConf() || {};
   ltStop(); lt.expires = null; lt.why = null;
-  if (c.secret) await ltCall('DELETE', { id: c.id, secret: c.secret }).catch(() => {});
+  let gone = false;
+  if (c.secret) gone = await ltCall('DELETE', { id: c.id, secret: c.secret }).then(() => true, () => false);
   for (const f of ['key.pem', 'cert.pem']) fs.rmSync(path.join(TLS_DIR, f), { force: true });
   ltSaveConf({ on: false, optOut: true, id: c.id });   // stays off until turned on again
-  res.json({ ok: true });
-});
+  return { had: !!c.secret, gone };
+}
+app.post('/api/local-https/off', requireRole('admin'), async (_req, res) => { await ltOffNow(); res.json({ ok: true }); });
 if (process.env.CASATORCH_TEST !== '1') {
   setTimeout(ltAuto, 3000).unref?.();
   setInterval(ltAuto, 3600_000).unref?.();

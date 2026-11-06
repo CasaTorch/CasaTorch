@@ -172,8 +172,8 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
   const removeBtn = (it, conn, redraw) => {
     const id = it.ids.find((x) => REMOVE_IDS.includes(x) && conn.direct.includes(x)); if (!id) return null;
     const wrap = el('span', { class: 'rm' });
-    const ask = () => wrap.replaceChildren(el('span', { class: 'small' }, T('Remove {label}? Its settings and keys are deleted from CasaTorch.', { label: it.label })),
-      el('button', { class: 'btn small danger', onclick: async () => { try { await api(`/api/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }); conn.direct = conn.direct.filter((x) => x !== id); toast(`${it.label} removed`); redraw(); } catch (e) { toast(e.message, 4000); } } }, T('Remove')),
+    const ask = () => wrap.replaceChildren(el('span', { class: 'small' }, T('Remove {label}? Its settings, keys and tiles are deleted from CasaTorch.', { label: it.label })),
+      el('button', { class: 'btn small danger', onclick: async () => { try { const r = await api(`/api/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }); conn.direct = conn.direct.filter((x) => x !== id); const c = r.cleaned || {}; toast(c.tiles || c.walls ? T('{label} removed, with its {n} tiles.', { label: it.label, n: (c.tiles || 0) + (c.walls || 0) }) : T('{label} removed', { label: it.label }), 4000); redraw(); } catch (e) { toast(e.message, 4000); } } }, T('Remove')),
       el('button', { class: 'btn small ghost', onclick: () => wrap.replaceChildren(btn) }, T('Keep')));
     const btn = el('button', { class: 'btn small ghost', onclick: ask }, T('Remove'));
     wrap.append(btn); return wrap;

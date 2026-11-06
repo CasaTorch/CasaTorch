@@ -420,15 +420,19 @@ app.post('/api/remote/check', requireRole('admin'), async (req, res) => {
   else if (remote.state === 'connected') await remoteCheck('by you').catch(() => {});
   res.json({ ok: true, ...(await remoteInfo(req)) });
 });
-app.post('/api/remote/off', requireRole('admin'), async (_req, res) => {
+/** Secure access off: the tunnel stopped, and the tunnel, its address and the gate's record deleted at casatorch.com.
+    Answers whether casatorch.com confirmed it (false: it was off already, or casatorch.com couldn't be reached). */
+async function remoteOffNow() {
   const r = config.remote || {};
   stopTunnel();
-  if (r.secret) await fetch(REMOTE_URL, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: installId(), secret: r.secret }), signal: AbortSignal.timeout(20_000) }).catch(() => {});
+  let gone = false;
+  if (r.secret) gone = await fetch(REMOTE_URL, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: installId(), secret: r.secret }), signal: AbortSignal.timeout(20_000) }).then((x) => x.ok, () => false);
   const { remote: _gone, ...rest } = config; saveConfig(rest);
   gateState().registered = null; gate.probe = null; gateSave();   // casatorch.com removed the gate's record with the address
   remote.code = null; remote.why = null; remote.check = { ok: null, at: null, code: null, ms: null }; remote.lastError = null; remote.log = [];
-  res.json({ ok: true });
-});
+  return { had: !!r.secret, gone };
+}
+app.post('/api/remote/off', requireRole('admin'), async (_req, res) => { await remoteOffNow(); res.json({ ok: true }); });
 /* At start: the helper (downloaded again if it went missing), then the tunnel; a failed download is tried again after 1, 2, 5, 10, then every 30 minutes. */
 function remoteBoot(n = 0) {
   if (!config.remote?.on || isDemo() || remote.proc) return;

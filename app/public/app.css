@@ -347,6 +347,10 @@ input[type=checkbox]:focus-visible, input[type=radio]:focus-visible, input[type=
 @media (prefers-reduced-motion: reduce) { .cam.cam-wait { animation: none; } }
 /* Home Assistant: found on your network, add any integration */
 .ha-found { margin-top: 14px; }
+/* Remove CasaTorch (30r-remove.js) */
+.rm-list { margin: 6px 0 10px; padding-left: 20px; display: grid; gap: 4px; }
+.rm-list li.good { color: var(--text); } .rm-list li.bad { color: var(--bad); }
+.rm-cmd { margin: 6px 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--card-2, rgba(255,255,255,.05)); overflow-x: auto; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
 /* New devices found (28d-discover.js) */
 .disc-card { margin-top: 14px; }
 .disc-list { display: grid; gap: 8px; }

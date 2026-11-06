@@ -14,6 +14,10 @@
 # so and carries on (CASATORCH_REQUIRE_SIGNED=1 stops instead). Developers: CASATORCH_REF=main (or any branch/tag)
 # installs that instead, without the check.
 # Everything is inside main(), so a download cut off halfway runs nothing.
+#
+# Uninstall:  curl -fsSL https://casatorch.com/install.sh | sudo bash -s -- --uninstall [--keep-data]
+#   stops and removes the service, /opt/casatorch and CasaTorch's own user; the settings in /var/lib/casatorch go too
+#   unless --keep-data. (Settings › Updates & backup › Remove CasaTorch signs phones out at casatorch.com first.)
 set -euo pipefail
 
 main() {
@@ -27,6 +31,20 @@ say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
 [ "$(id -u)" -eq 0 ] || die "run it with sudo"
+uninstall=0 keep=0
+for a in "$@"; do case "$a" in --uninstall) uninstall=1 ;; --keep-data) keep=1 ;; *) die "unknown option: $a (use --uninstall, --keep-data)" ;; esac; done
+if [ "$uninstall" = 1 ]; then
+  say "Removing CasaTorch"
+  systemctl disable --now -q casatorch 2>/dev/null || true
+  rm -f /etc/systemd/system/casatorch.service
+  rm -rf /etc/systemd/system/casatorch.service.d
+  systemctl daemon-reload 2>/dev/null || true
+  case "$APP_DIR" in /opt/casatorch) rm -rf "$APP_DIR" ;; esac
+  if [ "$keep" = 1 ]; then say "Settings kept in $DATA_DIR"; else case "$DATA_DIR" in /var/lib/casatorch) rm -rf "$DATA_DIR" ;; esac; fi
+  id casatorch >/dev/null 2>&1 && userdel casatorch 2>/dev/null || true
+  say "CasaTorch is removed. Node.js stays (other programs may use it)."
+  exit 0
+fi
 command -v systemctl >/dev/null || die "this installer needs systemd (use Docker instead: see docs/HARDWARE.md)"
 . /etc/os-release 2>/dev/null || true
 case "${ID:-}${ID_LIKE:-}" in *debian*|*ubuntu*|*raspbian*) ;; *) die "this installer is for Debian, Ubuntu and Raspberry Pi OS - use Docker on other systems";; esac
