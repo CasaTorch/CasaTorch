@@ -56,6 +56,13 @@ export default async function supplyChainUnit(t) {
     assert.match(r, /sed "s#image: ghcr.io\/casatorch\/casatorch:latest#image: \$IMAGE:\$V@\$DIGEST#"/, 'the compose file people download names the image by digest');
     assert.match(r, /cosign verify/, 'the release notes say how to check the image');
   });
+  await t('releases: only a version tag publishes - the image (and its :latest) is never pushed or signed from a branch run by hand', () => {
+    const r = rd('.github/workflows/release.yml'), jobs = r.split(/^jobs:\n/m)[1].split(/^(?=  [a-z][\w-]*:\n)/m);
+    for (const j of jobs) {
+      if (!/packages: write|contents: write|push: true|cosign sign|action-gh-release/.test(j)) continue;   // a job that publishes something
+      assert.match(j, /^    if: startsWith\(github\.ref, 'refs\/tags\/v'\)$/m, `${j.split('\n')[0].trim()} publishes only for a version tag`);
+    }
+  });
 
   await t('container: unprivileged user, base image pinned by digest (the same everywhere), no setuid programs or npm, a health check', () => {
     const d = rd('app/Dockerfile'), froms = [...d.matchAll(/^FROM (\S+)/gm)].map((m) => m[1]);

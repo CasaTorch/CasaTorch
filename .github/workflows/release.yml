@@ -16,6 +16,9 @@ env:
   CASATORCH_VERSION: ${{ startsWith(github.ref_name, 'v') && github.ref_name || 'v0.0.0' }}
 jobs:
   image:
+    # Only a version tag pushes and signs the image (and moves :latest): a run started by hand from a branch builds the
+    # installers to try, never an image people pull.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     # packages: push to ghcr.io; id-token: sign the image with cosign (keyless, this workflow's GitHub OIDC identity,
     # logged in the public Rekor transparency log); attestations: attach the SLSA build provenance.

@@ -54,6 +54,7 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - Secure access: a CasaTorch restored on new hardware no longer lets devices that were signed out of away access back in.
 - A new secret key can no longer lose a saved value when a file can't be written during the change: the old key stays.
 - Activity log: an event removed from just before a restart of CasaTorch now shows up in Health too.
+- Releases: the container image is published and signed only for a version tag.
 
 ## 0.9.3
 
