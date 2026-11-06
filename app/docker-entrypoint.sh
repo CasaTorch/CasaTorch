@@ -9,6 +9,11 @@ DATA="${CASATORCH_DATA_DIR:-/data}"
 if [ "$(id -u)" = 0 ]; then
   mkdir -p "$DATA"
   chown -R node:node "$DATA" 2>/dev/null || echo "note: could not change the owner of $DATA"
+  # A Docker secret with the key store's wrapping key (casatorch_key): handed to the app user in memory (/tmp is a
+  # tmpfs in the compose files), so the secret file itself can stay readable by root only.
+  if [ -f /run/secrets/casatorch_key ] && [ -z "${CASATORCH_KEK_FILE:-}" ] && install -m 400 -o node -g node /run/secrets/casatorch_key /tmp/casatorch-kek 2>/dev/null; then
+    export CASATORCH_KEK_FILE=/tmp/casatorch-kek
+  fi
   exec setpriv --reuid=node --regid=node --init-groups --inh-caps=-all "$@"
 fi
 [ -d "$DATA" ] || mkdir -p "$DATA" 2>/dev/null || true

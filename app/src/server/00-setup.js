@@ -59,7 +59,7 @@ function loadKeyFile(file, tries = 0) {
   }
   if (tries > 2) throw new Error(`CasaTorch couldn't make its key file (${file}).`);
   const k = crypto.randomBytes(32), tmp = `${file}.${process.pid}.tmp`;
-  let text; try { text = ksText(k); } catch { text = k.toString('base64'); }
+  let text; try { text = ksText(k); if (!ksOpen(text).key?.equals(k)) text = k.toString('base64'); } catch { text = k.toString('base64'); }   // wrapped only if it opens again
   KS.kind = KS_WRAPPED.exec(text)?.[1] || 'file';
   const fd = fs.openSync(tmp, 'w', 0o600);
   try { fs.writeFileSync(fd, text); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }

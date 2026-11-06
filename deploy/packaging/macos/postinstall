@@ -1,6 +1,26 @@
 #!/bin/sh
 DATA="/Library/Application Support/CasaTorch"
-mkdir -p "$DATA" && chown -R nobody:nobody "$DATA" && chmod 700 "$DATA"
+# CasaTorch's own hidden system account (_casatorch), so its data isn't shared with everything else that runs as
+# "nobody". If it can't be made, CasaTorch keeps running as nobody, as before.
+U=_casatorch
+if ! dscl . -read "/Users/$U" UniqueID >/dev/null 2>&1; then
+  ID=
+  for i in $(seq 299 -1 200); do
+    dscl . -search /Users UniqueID "$i" 2>/dev/null | grep -q . && continue
+    dscl . -search /Groups PrimaryGroupID "$i" 2>/dev/null | grep -q . && continue
+    ID=$i; break
+  done
+  if [ -n "$ID" ] && dscl . -create "/Groups/$U" && dscl . -create "/Groups/$U" PrimaryGroupID "$ID" && dscl . -create "/Groups/$U" RealName CasaTorch \
+     && dscl . -create "/Users/$U" && dscl . -create "/Users/$U" UniqueID "$ID" && dscl . -create "/Users/$U" PrimaryGroupID "$ID" \
+     && dscl . -create "/Users/$U" UserShell /usr/bin/false && dscl . -create "/Users/$U" NFSHomeDirectory /var/empty \
+     && dscl . -create "/Users/$U" RealName CasaTorch && dscl . -create "/Users/$U" Password '*' && dscl . -create "/Users/$U" IsHidden 1; then :; else
+    dscl . -delete "/Users/$U" >/dev/null 2>&1; dscl . -delete "/Groups/$U" >/dev/null 2>&1
+  fi
+fi
+id -u "$U" >/dev/null 2>&1 || U=nobody
+G=$(id -gn "$U" 2>/dev/null || echo nobody)
+printf '%s\n' "$U" > /Library/CasaTorch/run-as && chown root:wheel /Library/CasaTorch/run-as && chmod 644 /Library/CasaTorch/run-as
+mkdir -p "$DATA" && chown -R "$U:$G" "$DATA" && chmod 700 "$DATA"
 launchctl bootstrap system /Library/LaunchDaemons/com.casatorch.server.plist 2>/dev/null || launchctl kickstart -k system/com.casatorch.server
 # Wait for it to answer, then open setup for whoever is at the screen.
 # If another copy already answers on 8090 (one started from Terminal, say), this one can't start: say so

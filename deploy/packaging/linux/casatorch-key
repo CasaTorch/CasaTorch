@@ -1,0 +1,45 @@
+#!/bin/sh
+# casatorch-key - CasaTorch's key store on Linux: systemd credentials, sealed with this computer's TPM2 chip when it
+# has one (and with its own host key either way). Run as root by casatorch.service before each start
+# (ExecStartPre=+), never by CasaTorch itself:
+#   casatorch-key unseal   make the wrapping key the first time (/etc/casatorch/kek.cred, encrypted), then open it
+#                          into /run/casatorch-key/kek (memory only, readable by the casatorch user alone) for this
+#                          start, and say how in /run/casatorch-key/status ("ok tpm2", "ok host", "failed ...",
+#                          "unsupported"). Always exits 0: a key store that doesn't work never stops CasaTorch - it
+#                          keeps its key file and says so in Health.
+#   casatorch-key status   print what it would use
+# The wrapping key isn't bound to the boot state (no PCRs): firmware and kernel updates don't lock it. With a TPM2
+# chip it is bound to that chip: moving the disk to another computer needs a CasaTorch backup to bring the secrets.
+set -u
+CRED=${CASATORCH_KEK_CRED:-/etc/casatorch/kek.cred}
+RUN=${CASATORCH_KEK_RUN:-/run/casatorch-key}
+USR=${CASATORCH_USER:-casatorch}
+NAME=casatorch-kek
+status() { printf '%s\n' "$1" > "$RUN/status.tmp" 2>/dev/null && mv "$RUN/status.tmp" "$RUN/status" 2>/dev/null; chmod 644 "$RUN/status" 2>/dev/null; }
+supported() { command -v systemd-creds >/dev/null 2>&1 && systemd-creds --help 2>/dev/null | grep -q -- '--with-key'; }
+case "${1:-}" in
+  unseal)
+    mkdir -p "$RUN" && chmod 700 "$RUN" && chown "$USR:$USR" "$RUN" 2>/dev/null
+    rm -f "$RUN/kek" "$RUN/kek.tmp"
+    if ! supported; then status "unsupported"; exit 0; fi
+    if [ ! -s "$CRED" ]; then
+      # The first start with a key store: a new random wrapping key, encrypted for this computer.
+      ( umask 077; mkdir -p "$(dirname "$CRED")" && chmod 700 "$(dirname "$CRED")" \
+        && head -c 32 /dev/urandom | systemd-creds encrypt --name="$NAME" --with-key=auto --tpm2-pcrs= - "$CRED.tmp" >/dev/null 2>"$RUN/err" \
+        && systemd-creds decrypt --name="$NAME" "$CRED.tmp" - >/dev/null 2>>"$RUN/err" \
+        && mv "$CRED.tmp" "$CRED" ) || { rm -f "$CRED.tmp"; status "failed: could not make the wrapping key ($(head -c 120 "$RUN/err" 2>/dev/null | tr '\n' ' '))"; rm -f "$RUN/err"; exit 0; }
+    fi
+    if ( umask 077; systemd-creds decrypt --name="$NAME" "$CRED" "$RUN/kek.tmp" >/dev/null 2>"$RUN/err" ) && [ -s "$RUN/kek.tmp" ]; then
+      chown "$USR:$USR" "$RUN/kek.tmp" && chmod 400 "$RUN/kek.tmp" && mv "$RUN/kek.tmp" "$RUN/kek"
+      if systemd-creds has-tpm2 >/dev/null 2>&1; then status "ok tpm2"; else status "ok host"; fi
+    else
+      rm -f "$RUN/kek.tmp"; status "failed: $(head -c 160 "$RUN/err" 2>/dev/null | tr '\n' ' ')"
+    fi
+    rm -f "$RUN/err"; exit 0 ;;
+  status)
+    if ! supported; then echo "unsupported (systemd 250 or newer has systemd-creds)"; exit 0; fi
+    [ -s "$CRED" ] && echo "wrapping key: $CRED" || echo "no wrapping key yet (made at the next start)"
+    systemd-creds has-tpm2 >/dev/null 2>&1 && echo "TPM2: yes" || echo "TPM2: no (this computer's host key only)"
+    [ -f "$RUN/status" ] && echo "this start: $(cat "$RUN/status")"; exit 0 ;;
+  *) echo "usage: casatorch-key unseal|status" >&2; exit 2 ;;
+esac

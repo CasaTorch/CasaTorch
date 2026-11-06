@@ -22,6 +22,10 @@ services:
     mem_limit: 2g
     cpus: 2
     logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }
+    # Recommended: keep CasaTorch's secret key sealed by a key that isn't in ./data, so a copy of that folder alone
+    # opens nothing. Make one once, next to this file:   openssl rand -base64 32 > casatorch.key && chmod 600 casatorch.key
+    # then remove the # from the next line and from the two "secrets" lines at the end of this file.
+    # secrets: [casatorch_key]
     # "host" lets CasaTorch find Hue bridges and other gear on your network. If your system does not
     # allow it (Docker Desktop on Mac or Windows), delete this line and use the "ports" line below.
     network_mode: host
@@ -30,3 +34,5 @@ services:
     #   so the secure address at home points at the right place.
     volumes:
       - ./data:/data        # your settings; on TrueNAS use a full path, e.g. /mnt/tank/apps/casatorch:/data
+# secrets:
+#   casatorch_key: { file: ./casatorch.key }

@@ -111,11 +111,9 @@ function ksStore() {
     return (ksMemo = kek ? ksAes(kind, kek) : { kind, error: 'the key in it is too short (32 characters or more)' });
   }
   if (KS_PRE) return (ksMemo = KS_PRE.kek ? ksAes('keychain', KS_PRE.kek) : { kind: 'keychain', error: KS_PRE.error });
-  if (process.platform === 'win32' && process.env.CASATORCH_TEST !== '1') {
-    const st = ksDpapi();
-    try { const probe = crypto.randomBytes(32), w = st.wrap(probe); return (ksMemo = st.unwrap(KS_WRAPPED.exec(w)[2])?.equals(probe) ? st : { kind: 'dpapi', error: 'it did not open what it sealed' }); }
-    catch (e) { return (ksMemo = { kind: 'dpapi', error: e.message }); }
-  }
+  // Windows: no test run here (each call starts PowerShell, about a second): wrapping is always checked by opening it
+  // again before it's saved (ksMigrate, loadKeyFile), so a DPAPI that doesn't work only leaves the key file as it is.
+  if (process.platform === 'win32' && process.env.CASATORCH_TEST !== '1') return (ksMemo = ksDpapi());
   return (ksMemo = null);
 }
 const ksUsable = () => { const s = ksStore(); return s && !s.error ? s : null; };

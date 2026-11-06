@@ -33,7 +33,9 @@ when an update is available; please install it promptly.
 - **Your data stays at home.** Settings, history and sign-ins live on your CasaTorch, readable only by CasaTorch
   itself. There is no CasaTorch account and no cloud copy of your home.
 - **Secrets are encrypted at rest** with AES-256-GCM, using a key unique to each CasaTorch that never leaves it
-  (except inside a backup you make) - saved passwords and keys, the secure address's private keys, voice pairings,
+  (except inside a backup you make). Where the system has a key store - the macOS Keychain, Windows data protection,
+  systemd credentials (with the TPM2 chip when there is one), a Docker secret - that key is sealed by it too, so a copy
+  of the data folder alone opens nothing. The owner can replace the key at any time (Settings › Health) - saved passwords and keys, the secure address's private keys, voice pairings,
   the Home AI Agent's chats, the event timeline and the pictures it keeps, each person's inbox, and copies of your Frigate settings.
 - **Passwords are never stored**, only salted scrypt hashes. Recovery codes, invite links and sign-in tokens are
   stored only as hashes.

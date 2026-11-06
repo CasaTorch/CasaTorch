@@ -20,6 +20,10 @@ services:
     mem_limit: 2g
     cpus: 2
     logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }
+    # Recommended: keep CasaTorch's secret key sealed by a key that isn't in ./data, so a copy of that folder alone
+    # opens nothing. Make one once, next to this file:   openssl rand -base64 32 > casatorch.key && chmod 600 casatorch.key
+    # then remove the # from the next line and from the two "secrets" lines at the end of this file.
+    # secrets: [casatorch_key]
     # Linux hosts: "host" networking lets CasaTorch see your whole network (device count, Hue/Shelly on the LAN).
     # Docker Desktop (Mac/Windows): remove network_mode and use the ports mapping below instead.
     network_mode: host
@@ -30,3 +34,5 @@ services:
       - TZ=America/New_York   # your time zone
     volumes:
       - ./data:/data
+# secrets:
+#   casatorch_key: { file: ./casatorch.key }

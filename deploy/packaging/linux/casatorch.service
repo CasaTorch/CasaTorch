@@ -11,6 +11,14 @@ User=casatorch
 Group=casatorch
 Environment=CASATORCH_DATA_DIR=/var/lib/casatorch PORT=8090 NODE_ENV=production CASATORCH_INSTALL=deb
 WorkingDirectory=/opt/casatorch/app
+# The key store: before each start, casatorch-key (as root: "+") opens the wrapping key for CasaTorch's secret key
+# from systemd credentials - sealed with the TPM2 chip when there is one - into memory (/run/casatorch-key, gone when
+# CasaTorch stops). "-": it never stops CasaTorch from starting; without it CasaTorch keeps its key file and Health
+# says so.
+RuntimeDirectory=casatorch-key
+RuntimeDirectoryMode=0700
+Environment=CASATORCH_KEK_FILE=/run/casatorch-key/kek
+ExecStartPre=-+/opt/casatorch/casatorch-key unseal
 ExecStart=/opt/casatorch/node/node /opt/casatorch/app/server.js
 Restart=always
 RestartSec=5

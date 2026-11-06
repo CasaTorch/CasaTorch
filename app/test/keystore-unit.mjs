@@ -147,6 +147,41 @@ export default async function keystoreUnit(t) {
       for (const x of texts) { const r = rows.get(x); assert.ok(r, `not in i18n-strings.tsv: ${x}`); assert.equal(r.length, 14, x); assert.ok(r.every(Boolean), x); }
     });
 
+    await t('installers: Linux opens the wrapping key before each start (never blocking it), macOS reads the Keychain then drops to its own user, Docker hands a secret over in memory', async () => {
+      const rd = (f) => fs.readFileSync(path.join(APP, '..', f), 'utf8');
+      const unit = rd('deploy/packaging/linux/casatorch.service').split('\n');
+      for (const k of ['RuntimeDirectory=casatorch-key', 'RuntimeDirectoryMode=0700', 'Environment=CASATORCH_KEK_FILE=/run/casatorch-key/kek', 'ExecStartPre=-+/opt/casatorch/casatorch-key unseal']) assert.ok(unit.includes(k), k);
+      assert.match(rd('deploy/packaging/linux/build-deb.sh'), /cp "\$HERE\/casatorch-key" "\$PKG\/opt\/casatorch\/casatorch-key"/);
+      const helper = rd('deploy/packaging/linux/casatorch-key');
+      assert.match(helper, /--tpm2-pcrs= /, 'not bound to the boot state (updates never lock it)');
+      assert.ok(!/exit [1-9]/.test(helper.split('unseal)')[1].split(';;')[0]), 'unseal never fails the start');
+      const plist = rd('deploy/packaging/macos/com.casatorch.server.plist');
+      assert.ok(!/<key>UserName<\/key>/.test(plist), 'started as root (to read the Keychain)...');
+      assert.match(rd('deploy/packaging/macos/casatorch-run.sh'), /CASATORCH_RUN_AS="\$RUN_AS"/, '...and told which user to drop to');
+      const ks = fs.readFileSync(path.join(APP, 'src', 'server', '00-keystore.js'), 'utf8');
+      assert.match(ks, /process\.initgroups\(runAs, gid\); process\.setgid\(gid\); process\.setuid\(uid\);/);
+      assert.match(ks, /if \(process\.getuid\(\) === 0 \|\| process\.geteuid\(\) === 0\) throw/, 'never carries on as root');
+      assert.match(ks, /ksRun\('\/usr\/bin\/security', \['-i'\], `add-generic-password/, 'the new Keychain item goes in on stdin');
+      assert.match(rd('app/docker-entrypoint.sh'), /install -m 400 -o node -g node \/run\/secrets\/casatorch_key \/tmp\/casatorch-kek/);
+      for (const f of ['deploy/docker-compose.yml', 'deploy/downloads/casatorch-compose.yml']) assert.match(rd(f), /# secrets: \[casatorch_key\][\s\S]*#   casatorch_key: \{ file: \.\/casatorch\.key \}/, f);
+      /* The helper itself, with the real systemd-creds when this computer has it (as root). */
+      const { spawnSync } = await import('node:child_process');
+      if (process.getuid?.() !== 0 || spawnSync('systemd-creds', ['--help']).status !== 0) { console.log('  (casatorch-key: no systemd-creds or not root here - checked by reading only)'); return; }
+      const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-kek-')), env = { ...process.env, CASATORCH_KEK_CRED: path.join(d, 'etc', 'kek.cred'), CASATORCH_KEK_RUN: path.join(d, 'run'), CASATORCH_USER: 'root' };
+      try {
+        const h = path.join(APP, '..', 'deploy/packaging/linux/casatorch-key');
+        assert.equal(spawnSync('sh', [h, 'unseal'], { env }).status, 0);
+        assert.match(fs.readFileSync(path.join(d, 'run', 'status'), 'utf8'), /^ok (tpm2|host)/);
+        const k1 = fs.readFileSync(path.join(d, 'run', 'kek')); assert.equal(k1.length, 32);
+        assert.ok(!fs.readFileSync(env.CASATORCH_KEK_CRED).includes(k1), 'the wrapping key is stored encrypted');
+        assert.equal(spawnSync('sh', [h, 'unseal'], { env }).status, 0);
+        assert.ok(fs.readFileSync(path.join(d, 'run', 'kek')).equals(k1), 'the same key at every start');
+        fs.writeFileSync(env.CASATORCH_KEK_CRED, 'damaged');
+        assert.equal(spawnSync('sh', [h, 'unseal'], { env }).status, 0, 'a damaged credential never stops the start');
+        assert.match(fs.readFileSync(path.join(d, 'run', 'status'), 'utf8'), /^failed/); assert.ok(!fs.existsSync(path.join(d, 'run', 'kek')));
+      } finally { fs.rmSync(d, { recursive: true, force: true }); }
+    });
+
     await t('end to end: a real start wraps the key with the key store; a rotation staged in Settings finishes at the next start and every secret still opens', async () => {
       const data = path.join(tmp, 'e2e'), kekFile = path.join(tmp, 'e2e.kek'), kek = crypto.randomBytes(32);
       fs.mkdirSync(data, { recursive: true }); fs.writeFileSync(kekFile, kek);
