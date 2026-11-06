@@ -93,9 +93,9 @@ function makeNet(o = {}) {
     const raw = sget(P + url); if (!raw) return null;
     try { const v = JSON.parse(raw); if (typeof v?.t !== 'string') return null; const e = { text: v.t, at: v.at || 0, fresh: 0 }; mem.set(url, e); return e; } catch { return null; }
   }
-  function remember(url, text) {
+  function remember(url, text, etag = null) {
     const old = mem.get(url), at = now();
-    mem.set(url, { text, at, fresh: at });
+    mem.set(url, { text, at, fresh: at, etag });
     if (mem.size > 300) mem.delete(mem.keys().next().value);
     if (!old || old.text !== text || at - (old.at || 0) > 60_000) persist(url, text, at);
     return old;
@@ -104,7 +104,7 @@ function makeNet(o = {}) {
   function attempt(url, init, ms, f) {
     const ctl = new AbortController(); f.ctl = ctl;
     const timer = ms ? setTimeout(() => ctl.abort(err('TimeoutError', 'The CasaTorch took too long to answer.', { retry: true })), ms) : null;
-    return Promise.resolve().then(() => fetchFn(url, { ...init, signal: ctl.signal })).then(async (r) => ({ status: r.status, ok: r.ok, text: await r.text() }))
+    return Promise.resolve().then(() => fetchFn(url, { ...init, signal: ctl.signal })).then(async (r) => ({ status: r.status, ok: r.ok, text: await r.text(), etag: r.headers?.get?.('ETag') || null }))
       .catch((e) => { throw (ctl.signal.aborted && ctl.signal.reason?.name ? ctl.signal.reason : err('NetworkError', 'Can\'t reach the CasaTorch right now.', { retry: true, cause: e })); })
       .finally(() => clearTimeout(timer));
   }
@@ -156,9 +156,12 @@ function makeNet(o = {}) {
     if (!swrOk(url)) return request(url, init, { signal, timeout });
     const hit = mem.get(url) || load(url);
     if (hit && hit.fresh && now() - hit.fresh < FRESH_MS) return { status: 200, ok: true, text: hit.text, at: hit.at };   // just asked: the same answer
-    const p = request(url, init, { signal, timeout }).then((r) => {
+    /* Asked before in this tab: the box answers 304 (nothing sent) when nothing changed, and the last answer is used. */
+    const tag = hit?.etag, ask = tag ? { ...init, headers: { ...(init.headers || {}), 'If-None-Match': tag } } : init;
+    const p = request(url, ask, { signal, timeout }).then((r0) => {
+      const r = r0.status === 304 && tag ? { status: 200, ok: true, text: hit.text, etag: tag, notModified: true } : r0;
       if (r.status === 200) {
-        const old = remember(url, r.text);
+        const old = remember(url, r.text, r.etag);
         if (st.served.has(url)) { st.served.delete(url); if (old && old.text !== r.text) emit('fresh', url); emit('state'); }
       }
       return r;

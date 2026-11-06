@@ -23,7 +23,7 @@ function fakeFetch(answer) {
     init.signal?.addEventListener('abort', fail, { once: true });
     if (a === 'hang') return;
     if (a instanceof Error) return setTimeout(() => no(a), a.delay || 0);
-    setTimeout(() => ok({ status: a.status ?? 200, ok: (a.status ?? 200) < 400, text: async () => (typeof a.body === 'string' ? a.body : JSON.stringify(a.body ?? {})) }), a.delay || 0);
+    setTimeout(() => ok({ status: a.status ?? 200, ok: (a.status ?? 200) < 400, headers: { get: (h) => (/^etag$/i.test(h) ? a.etag || null : null) }, text: async () => (a.status === 304 ? '' : typeof a.body === 'string' ? a.body : JSON.stringify(a.body ?? {})) }), a.delay || 0);
   });
   f.calls = calls;
   return f;
@@ -31,6 +31,29 @@ function fakeFetch(answer) {
 const mapStore = () => { const m = new Map(); return { m, get: (k) => (m.has(k) ? m.get(k) : null), set: (k, v) => { m.set(k, String(v)); }, del: (k) => { m.delete(k); }, keys: () => [...m.keys()] }; };
 
 export default async function netTests(t) {
+  await t('net: the box answers 304 for a JSON answer the page already has (before compressing it), per encoding', async () => {
+    const H = globalThis.__casatorch, srv = H.app.listen(0, '127.0.0.1'); await new Promise((ok) => srv.once('listening', ok));
+    const B = `http://127.0.0.1:${srv.address().port}`;
+    try {
+      const get = (h) => fetch(`${B}/api/catalog`, { headers: { 'Accept-Encoding': 'br', ...h } });
+      const r1 = await get({}); const tag = r1.headers.get('etag'); await r1.arrayBuffer();
+      if (r1.status !== 200) return;   // the catalog isn't open here (sign-in): nothing to check
+      assert.match(tag, /^W\/"[\w-]{22}-br"$/);
+      const r2 = await get({ 'If-None-Match': tag }); assert.equal(r2.status, 304); assert.equal((await r2.arrayBuffer()).byteLength, 0);
+      const r3 = await fetch(`${B}/api/catalog`, { headers: { 'Accept-Encoding': 'gzip', 'If-None-Match': tag } }); assert.equal(r3.status, 200, 'another encoding: another tag'); await r3.arrayBuffer();
+    } finally { srv.close(); }
+  });
+  await t('net: a read asked again sends the tag it got; "not changed" (304) gives the last answer, with nothing sent', async () => {
+    let n = 0; const f = fakeFetch((url, init) => { n++; return init.headers?.['If-None-Match'] === 'W/"a1"' ? { status: 304 } : { body: { v: n }, etag: 'W/"a1"' }; });
+    const net = makeNet({ fetch: f, freshMs: 0, sleep: () => sleep(1) });
+    const r1 = await net.get('/api/devices');
+    assert.equal(JSON.parse(r1.text).v, 1); assert.equal(f.calls[0].init.headers?.['If-None-Match'], undefined, 'the first time: no tag');
+    const r2 = await net.get('/api/devices', { patience: 5000 });
+    assert.equal(f.calls[1].init.headers['If-None-Match'], 'W/"a1"');
+    assert.equal(r2.status, 200); assert.equal(JSON.parse(r2.text).v, 1, 'the last answer');
+    const r3 = await net.get('/api/devices', { patience: 5000 });
+    assert.equal(JSON.parse(r3.text).v, 1); assert.equal(f.calls[2].init.headers['If-None-Match'], 'W/"a1"', 'the tag is kept after a 304');
+  });
   await t('net: a read that never answers stops at its time limit, after one more try', async () => {
     const f = fakeFetch(() => 'hang'), net = makeNet({ fetch: f, sleep: () => sleep(1) });
     const t0 = Date.now();

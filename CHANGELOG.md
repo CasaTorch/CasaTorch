@@ -28,6 +28,11 @@ What changed in each CasaTorch version. The illustrated version, with links into
   this CasaTorch doesn't have are left out; Undo puts the old layout back.
 - The edit bar fits on a phone: the help text, who sees the layout, and the buttons each get their own row.
 
+### Faster
+- **Nothing sent when nothing changed.** Pages now ask "has this changed?" when they refresh, and CasaTorch answers
+  "no" (304) before compressing anything, so a screen left on Home moves about a third less data and the box does less
+  work (in the demo house, 26 of 34 refreshes over two minutes came back as "not changed").
+
 ### Removing CasaTorch
 - **Remove CasaTorch** (Settings › Updates & backup, owner only): offers an encrypted backup first, then in one tap
   ends every phone's and browser's pass for away from home, deletes Secure access, its address and the secure address

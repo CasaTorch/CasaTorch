@@ -123,6 +123,12 @@ app.use('/api', (req, res, next) => {
   res.send = function packJson(body) {
     if ((typeof body === 'string' || Buffer.isBuffer(body)) && /json/.test(String(res.getHeader('Content-Type') || '')) && !res.getHeader('Content-Encoding') && Buffer.byteLength(body) >= 1400) {
       const raw = Buffer.isBuffer(body) ? body : Buffer.from(body);
+      // the page already has this answer (it sends the tag it got): 304 at once, nothing compressed or sent
+      if (res.statusCode === 200 && !res.getHeader('ETag')) {
+        const tag = `W/"${crypto.createHash('sha1').update(raw).digest('base64url').slice(0, 22)}-${enc}"`;
+        res.setHeader('ETag', tag); res.vary('Accept-Encoding');
+        if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(tag)) { res.removeHeader('Content-Type'); return res.status(304).end(); }
+      }
       const out = enc === 'br' ? zlib.brotliCompressSync(raw, { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 4, [zlib.constants.BROTLI_PARAM_SIZE_HINT]: raw.length } }) : zlib.gzipSync(raw, { level: 6 });
       res.setHeader('Content-Encoding', enc); res.vary('Accept-Encoding');
       return send.call(this, out);
