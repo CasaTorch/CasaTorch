@@ -28,7 +28,9 @@ mode('ok');
 fs.writeFileSync(path.join(DIR, 'config.json'), JSON.stringify({ house: { name: 'E2E home', timezone: 'UTC' }, setupAt: '2020-01-01T00:00:00.000Z' }));
 
 /* ---- the fake casatorch.com ---- */
-const homes = new Map(); let fail = false, downloads = 0, deleted = 0;
+/* Like casatorch.com: a box that says it writes its own rules (localIngress) gets a "local" tunnel; with `legacySite` it
+   plays an older casatorch.com that knows nothing of that (no ingress in the answer, rules pushed from Cloudflare's side). */
+const homes = new Map(); let fail = false, downloads = 0, deleted = 0, legacySite = false; const asked = [];
 const fake = http.createServer((req, res) => {
   let body = ''; req.on('data', (c) => { body += c; });
   req.on('end', () => {
@@ -39,10 +41,12 @@ const fake = http.createServer((req, res) => {
     const b = JSON.parse(body || '{}');
     if (req.method === 'DELETE') { if (homes.get(b.id)?.secret === b.secret) { homes.delete(b.id); deleted++; } return send(200, { ok: true }); }
     if (fail) return send(503, { error: 'casatorch.com is busy - try again in a minute' });
+    asked.push(b);
     let h = homes.get(b.id);
     if (h && b.secret !== h.secret) return send(403, { error: 'That home already has an address.' });
     if (!h) { h = { hostname: `home-${String(b.id).slice(0, 8).toLowerCase()}.casatorch.test`, secret: `s-${Math.random().toString(36).slice(2)}` }; homes.set(b.id, h); }
-    send(200, { hostname: h.hostname, secret: h.secret, token: Buffer.from(JSON.stringify({ h: h.hostname, p: b.port, n: Math.random() })).toString('base64url') });
+    const ingress = legacySite ? undefined : b.localIngress === true ? 'local' : 'cloudflare';
+    send(200, { hostname: h.hostname, secret: h.secret, ingress, token: Buffer.from(JSON.stringify({ h: h.hostname, p: b.port, n: Math.random() })).toString('base64url') });
   });
 });
 await new Promise((ok) => fake.listen(FAKE, '127.0.0.1', ok));
@@ -75,6 +79,9 @@ try {
   let v = await until('working', status('working'));
   assert.equal(v.check.ok, true); assert.equal(v.view.title, 'Working on your home Wi-Fi', 'Basic: works at home'); assert.ok(v.qr.startsWith('<svg'));
   ok('on: the tunnel connects, CasaTorch opens its own address from outside and says it works');
+  assert.equal(asked.at(-1).localIngress, true); assert.match(asked.at(-1).version, /^\d+\.\d+\.\d+/);
+  assert.equal(v.ingress, 'local'); assert.equal(JSON.parse(fs.readFileSync(path.join(DIR, 'config.json'), 'utf8')).remote.ingress, 'local');
+  ok('the box says it writes its own tunnel rules (localIngress, version) and gets a "local" tunnel');
   const hello = await (await fetch(`${B}/api/app/hello`)).json();
   assert.equal(hello.remote, `https://${host}`); assert.equal(hello.check, undefined, 'no self-test code for anyone else');
   ok('hello (at home) tells the app the address');
@@ -135,6 +142,13 @@ try {
   ok('a Host header that looks like home (set on Cloudflare\'s side) doesn\'t let a visitor from outside in');
   mode('pushok'); await api('/api/remote/repair', {}); await until('working (good rules pushed)', status('working'));
   await sleep(800); assert.equal((await view()).view.status, 'working', 'rules that reach only this CasaTorch are fine');
+  /* an existing tunnel from an older casatorch.com: rules from Cloudflare's side, its own name as the Host header */
+  legacySite = true; mode('pushlegacy'); await api('/api/remote/repair', {}); await until('working (older tunnel)', status('working'));
+  await sleep(800); v = await view(); assert.equal(v.view.status, 'working', 'the old httpHostHeader rule (its own name) is accepted');
+  assert.equal(v.ingress, 'cloudflare'); assert.equal(JSON.parse(fs.readFileSync(path.join(DIR, 'config.json'), 'utf8')).remote.ingress, undefined);
+  legacySite = false; mode('ok'); await api('/api/remote/repair', {}); v = await until('working (moved to local)', status('working'));
+  assert.equal(v.ingress, 'local', 'Repair with a newer casatorch.com moves it to a "local" tunnel');
+  ok('an existing tunnel with Cloudflare-side rules keeps working; Repair moves it to a "local" one');
   for (const bad of ['pushlan', 'warp']) {
     mode(bad); const b3 = runs().length; await api('/api/remote/repair', {});
     v = await until(`stopped (${bad})`, async () => { const x = await view(); return x.view.code === 'config' ? x : null; }, 15000);

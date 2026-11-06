@@ -114,6 +114,7 @@ export default async function securityUnit(t) {
       assert.equal(withKey.key, 'CT1.payload.sig'); assert.equal(withKey.secret, 's3'); assert.ok(withKey.id);
       const trial = RM.remoteRequestBody({ house: { name: 'Home' } });
       assert.ok(!('key' in trial) && !('secret' in trial));
+      assert.equal(trial.localIngress, true, 'tells casatorch.com it writes its own tunnel rules'); assert.match(trial.version, /^\d+\.\d+\.\d+/);
     });
     t('push relay: the home id sent to the relay is bound to the box key (nothing to squat)', () => {
       const k = Z.relayKey(), id = Z.relayHomeId(k.pub);

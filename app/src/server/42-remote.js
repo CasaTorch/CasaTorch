@@ -340,7 +340,7 @@ async function remoteInfo(req) {
   const r = config.remote || {}, anywhere = !!proStatus().pro;
   const admin = !signInOn() || rank(req?.user?.role) >= rank('admin');
   return {
-    on: !!r.on, hostname: r.hostname || null, url: r.hostname ? `https://${r.hostname}` : null, state: r.on ? remote.state : 'off', why: remote.why, since: remote.since,
+    on: !!r.on, hostname: r.hostname || null, ingress: r.on ? r.ingress || 'cloudflare' : null, url: r.hostname ? `https://${r.hostname}` : null, state: r.on ? remote.state : 'off', why: remote.why, since: remote.since,
     view: !r.on && remote.busy ? { status: 'starting', title: remote.state === 'downloading' ? 'Getting ready…' : 'Setting up…', detail: 'Getting this CasaTorch its own address. This takes up to a minute.', fix: null }
       : !r.on && remote.code ? { ...remoteView({ on: true, code: remote.code, why: remote.why }), fix: remoteSupported() ? { action: 'on', label: 'Try again' } : null }
       : remoteView({ on: !!r.on, state: remote.state, code: remote.code, check: remote.check, anywhere, why: remote.why }),
@@ -353,9 +353,11 @@ async function remoteInfo(req) {
 app.get('/api/remote', async (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json(await remoteInfo(req)); });
 /** What the box sends to casatorch.com to make (or re-make) its tunnel. The Pro key goes along when there is one, so
     casatorch.com can require Pro for new addresses (REMOTE_REQUIRE_KEY there); it already checks such keys when a
-    box renews. Without a key (the trial) nothing extra is sent. */
+    box renews. Without a key (the trial) nothing extra is sent. `localIngress: true` (and the version) tells casatorch.com
+    this box writes the tunnel's rules itself (cloudflared.yml), so its tunnel is made with config_src "local": no rules
+    on Cloudflare's side at all, nothing there that could point the tunnel anywhere else. Older casatorch.com ignores it. */
 function remoteRequestBody(cfg = config) {
-  return { id: installId(), name: cfg.house?.name || null, port: Number(PORT) || 8090, ...(cfg.remote?.secret ? { secret: cfg.remote.secret } : {}), ...(typeof cfg.license === 'string' && cfg.license.trim() ? { key: cfg.license.trim() } : {}) };
+  return { id: installId(), name: cfg.house?.name || null, port: Number(PORT) || 8090, version: VERSION, localIngress: true, ...(cfg.remote?.secret ? { secret: cfg.remote.secret } : {}), ...(typeof cfg.license === 'string' && cfg.license.trim() ? { key: cfg.license.trim() } : {}) };
 }
 /** Turn secure access on (or repair it): this home's address and tunnel key from casatorch.com, then the tunnel itself. */
 async function remoteOn() {
@@ -369,7 +371,10 @@ async function remoteOn() {
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.hostname || !j.token) throw Object.assign(new Error(j.error || `casatorch.com answered ${r.status}`), { code: 'service' });
     stopTunnel();
-    saveConfig({ ...config, remote: { on: true, hostname: j.hostname, token: j.token, secret: j.secret || config.remote?.secret, ...(config.remote?.protocol ? { protocol: config.remote.protocol } : {}) } });
+    // ingress: "local" when casatorch.com made the tunnel without Cloudflare-side rules; absent from an older casatorch.com
+    // (the box then still checks every rule pushed to it, and accepts the old httpHostHeader-to-its-own-name rule)
+    const ingress = ['local', 'cloudflare'].includes(j.ingress) ? j.ingress : null;
+    saveConfig({ ...config, remote: { on: true, hostname: j.hostname, token: j.token, secret: j.secret || config.remote?.secret, ...(ingress ? { ingress } : {}), ...(config.remote?.protocol ? { protocol: config.remote.protocol } : {}) } });
     remote.code = null; remote.why = null; remote.check = { ok: null, at: null, code: null, ms: null }; remote.dnsTries = 0; remote.restarts = 0;
     startTunnel();
     return j.hostname;

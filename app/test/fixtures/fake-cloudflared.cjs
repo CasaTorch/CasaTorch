@@ -13,6 +13,7 @@
      crash    connects, then stops after a second (CasaTorch restarts it)
    And what casatorch.com's side of the tunnel could try (CasaTorch must keep the tunnel to itself):
      pushok   Cloudflare's side sends rules that reach this CasaTorch only (fine)
+     pushlegacy  ...the one rule casatorch.com gives an older box's tunnel (its own name as httpHostHeader: fine)
      pushlan  ...rules that send visitors to a router on the home network
      warp     ...rules that turn on private-network routing
      hostrewrite  the edge sends a home-looking Host (127.0.0.1:<port>) instead of the secure address
@@ -43,6 +44,7 @@ else if (mode === 'blocked' || (mode === 'noquic' && proto !== 'http2')) {
   const listen = (n = 0) => edge.listen(Number(process.env.CASATORCH_FAKE_EDGE_PORT), '127.0.0.1', () => {
     for (const i of [0, 1, 2, 3]) log('INF', `Registered tunnel connection connIndex=${i} connection=fake-${i} event=0 ip=198.41.200.${i} location=test protocol=${proto}`);
     const pushed = { pushok: { ingress: [{ hostname: tok.h, service: `http://localhost:${tok.p}` }, { service: 'http_status:404' }], 'warp-routing': { enabled: false } },
+      pushlegacy: { ingress: [{ hostname: tok.h, service: `http://localhost:${tok.p}`, originRequest: { httpHostHeader: tok.h } }, { service: 'http_status:404' }] },
       pushlan: { ingress: [{ hostname: tok.h, service: 'http://192.0.2.1:80' }, { service: 'http_status:404' }] },
       warp: { ingress: [{ hostname: tok.h, service: `http://localhost:${tok.p}` }, { service: 'http_status:404' }], 'warp-routing': { enabled: true } } }[mode];
     if (pushed) setTimeout(() => log('INF', `Updated to new configuration config=${JSON.stringify(JSON.stringify(pushed))} version=1`), 300);

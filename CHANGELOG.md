@@ -4,6 +4,14 @@ What changed in each CasaTorch version. The illustrated version, with links into
 [What's new](https://casatorch.com/docs/help/whats-new.html); after an update CasaTorch also shows a short
 "What's new" sheet (find it again in Settings › Help). Items marked **Coming** are not available yet.
 
+## Unreleased
+
+### Security
+- **New secure-access tunnels have no rules on Cloudflare's side.** CasaTorch tells casatorch.com it writes its own
+  tunnel rules, and casatorch.com then makes the tunnel "locally managed": there's nothing on Cloudflare's side that
+  could point it anywhere else. casatorch.com also refuses every change to an existing tunnel's rules. Tunnels made
+  before keep working; Repair moves one to the new kind (same address).
+
 ## 0.9.2
 
 Security, privacy and cameras: what casatorch.com can and can't do with your CasaTorch is now enforced on the box, every
