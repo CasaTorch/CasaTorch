@@ -1070,5 +1070,6 @@ t('3D Home: a plan damaged at start comes back from the newest restore point (wi
 });
 await (await import('./sealed-unit.mjs')).default(t);   // sealed entry: passwords and keys sealed in the browser, opened only in the request; secrets kept sealed in memory (sealed-unit.mjs)
 await (await import('./voice-unit.mjs')).default(t);   // voice assistants: the safety rule, devices -> Matter, plain commands, voice tokens, the Matter bridge paired end to end (voice-unit.mjs)
+await (await import('./supply-chain-unit.mjs')).default(t);   // workflows pinned and least-privilege, code scanning, signed images, locked-down containers and services (supply-chain-unit.mjs)
 console.log(`\n${n} passed`);
 process.exit(0);

@@ -1,0 +1,88 @@
+# GitHub code scanning (CodeQL). Results land in the repository's Security tab (Code scanning alerts).
+#   - JavaScript/TypeScript (the server, the dashboard, the phone apps' shared screens) and the workflows themselves:
+#     every push to main, every pull request and weekly.
+#   - Kotlin (Android) and Swift (iPhone/iPad): weekly, and on changes to mobile/. Both need a real build, so they run
+#     on the free hosted runners (macOS for Swift) only when the apps change or once a week.
+# Least privilege: read-only, plus security-events: write so CodeQL can upload its results.
+name: CodeQL
+on:
+  push: { branches: [main] }
+  pull_request:
+  schedule: [{ cron: "23 4 * * 2" }]
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency: { group: "codeql-${{ github.ref }}", cancel-in-progress: true }
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs: { mobile: "${{ steps.f.outputs.mobile }}" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false, fetch-depth: 2 }
+      - id: f
+        env: { EVENT: "${{ github.event_name }}", BASE: "${{ github.event.pull_request.base.sha || github.event.before || '' }}" }
+        run: |
+          if [ "$EVENT" = schedule ] || [ "$EVENT" = workflow_dispatch ]; then echo "mobile=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+          git fetch --no-tags --depth=1 origin "$BASE" 2>/dev/null || true
+          if git diff --name-only "$BASE" HEAD 2>/dev/null | grep -q '^mobile/'; then echo "mobile=1"; else echo "mobile=0"; fi >> "$GITHUB_OUTPUT"
+
+  javascript:
+    name: JavaScript/TypeScript and workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions: { contents: read, security-events: write }
+    strategy: { fail-fast: false, matrix: { language: [javascript-typescript, actions] } }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+          config: |
+            paths-ignore: [app/node_modules, app/server.js, app/public/app.js, "app/public/app-*.js", dist, "**/*.min.js"]
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with: { category: "/language:${{ matrix.language }}" }
+
+  kotlin:
+    name: Kotlin (Android app)
+    needs: changes
+    if: needs.changes.outputs.mobile == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions: { contents: read, security-events: write }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with: { distribution: temurin, java-version: "17" }
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with: { gradle-version: "8.11.1", cache-provider: basic }
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with: { languages: java-kotlin, build-mode: manual, queries: security-extended }
+      - run: gradle -p mobile/android assembleDebug --no-daemon --no-build-cache
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with: { category: "/language:java-kotlin" }
+
+  swift:
+    name: Swift (iPhone and iPad app)
+    needs: changes
+    if: needs.changes.outputs.mobile == '1'
+    runs-on: macos-15
+    timeout-minutes: 60
+    permissions: { contents: read, security-events: write }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - run: brew install xcodegen
+      - working-directory: mobile/ios
+        run: xcodegen
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with: { languages: swift, build-mode: manual, queries: security-extended }
+      - working-directory: mobile/ios
+        run: |
+          xcodebuild -project CasaTorch.xcodeproj -scheme CasaTorch -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO build -quiet
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with: { category: "/language:swift" }
