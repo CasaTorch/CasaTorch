@@ -153,7 +153,7 @@ async function controlsPage(main) {
   let qt = null;
   search.oninput = () => { clearTimeout(qt); qt = setTimeout(() => { const ctx = pageCtx(main); if (!ctx) return; ctx.query = search.value.trim(); ctx.rebuild(); counted(); }, 120); };
   const counted = () => { const ctx = pageCtx(main), all = (ctx?.data.devices || []).filter((d) => d.kind !== 'camera'); count.textContent = T('{n} of {total}', { n: all.filter(ctlMatch(ctx || {})).length, total: all.length }); };
-  const renameBtn = el('button', { class: 'btn' }, icon('edit'), el('span', { class: 'hide-phone' }, T('Rename devices')));
+  const renameBtn = el('button', { class: 'btn', title: T('Rename devices'), 'aria-label': T('Rename devices') }, icon('list'), el('span', { class: 'hide-phone' }, T('Rename devices')));   // not the pencil: that one is Edit
   const hint = el('span', { class: 'tiny muted hide-phone' }, T('Tap to switch · press and hold for details'));
   const refresh = await pageGrid(main, { page: 'controls', auto: true, title: tabLabel({ id: 'controls', label: T('Controls') }), load, actions: [renameBtn], before: [el('div', { class: 'row wrap', style: 'margin-bottom:12px;gap:10px' }, search, count, hint)] });
   const ctx = pageCtx(main);
