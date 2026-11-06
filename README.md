@@ -80,7 +80,8 @@ Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
 - **Every page is tiles** - Home, Alerts, Controls, Cameras, Security, Energy, Network, Reminders, Household and
   the Family board: drag, resize, add and remove them (Edit). Until you arrange a page, CasaTorch builds it from
   what your home has. Tiles show more as they grow, and **tapping any tile opens a drawer** with the whole story
-  (the weather's 48 hours, standings and schedules, a device's last 24 hours...).
+  (the weather's 48 hours, standings and schedules, a device's last 24 hours...). **Undo** steps back through
+  the last 30 changes while you edit (Ctrl/Cmd+Z), and **Export / Import** saves a page's layout as a file.
 - **More than 30 widgets**: clock, weather, calendar, scores, headlines, internet, today, alerts, energy,
   quick switches, pinned devices (any devices or Home Assistant entities you pick), cameras, photo reel, 3D Home,
   rain radar, Household, the family's lists, chores, routines and meals, timers, countdowns and more -
@@ -92,6 +93,10 @@ Full guide: [docs/HOME-ASSISTANT.md](docs/HOME-ASSISTANT.md).
 - **Themes and backgrounds** - light or dark, gradients, the weather at home, the seasons, team colors or your own
   photo - and the **menu on any side** of the screen.
 - **Alerts your way** - Settings > Alerts: in the app, on phones, sound, repeats, quiet hours, per room and device.
+- **Your own inbox** - the bell at the top of every page counts what you haven't read; tap an alert to go where it
+  happened. Everyone in the house has their own.
+- **Timeline** (Cameras or Security > Timeline) - Frigate's detections, doorbell presses, motion, the alarm, locks
+  (and who) and Meraki people counts in one list, grouped by day, with clips. Basic: 24 hours, Pro: 30 days.
 - **Rename anything** - menu items, tiles, devices, the house - and hide what you don't use.
 - **A family calendar built in** (no Google account needed) and a **photo reel** you upload to from
   any phone or computer. Everything stays on your box.
@@ -115,6 +120,11 @@ The first time you open CasaTorch, a setup wizard walks through:
 Change any answer later from **Settings > General > Change your setup**; what you don't change is kept. To add one thing, open
 the **Connect** tab: every brand CasaTorch works with, what's already connected, and a **Connect** button that
 opens the guided setup right at that item - pick, answer a question or two, Test, Save. No command line.
+
+**New devices found:** CasaTorch keeps looking for gear on your home network (Home Assistant and new devices in it,
+Hue, Shelly, Frigate, cameras, Sonos, Chromecast, UniFi, Pi-hole, AdGuard Home, your router, Ring and Meraki gear)
+and offers each one at the top of Connect, added in one tap with the room filled in. Only home-network addresses are
+ever looked at. Removing a brand also takes its tiles, camera-wall spots and alert rules with it.
 
 ## What works without Home Assistant
 
@@ -150,7 +160,8 @@ screen and phone, the Security Center, Household, the Family board and the rain 
 | --- | --- |
 | **3D Home** - your home as a live 3D plan (LiDAR scan, or draw it in the app) | Asking the Home AI Agent through Alexa |
 | **Home AI Agent** - answers about your home, tap-to-do actions (AI usage billed by your AI provider, or free with Ollama) | Multi-home |
-| **Ring** doorbells and cameras (Labs) | |
+| **Ring** doorbells, cameras and chimes (Labs) | |
+| **Timeline** - 30 days (Basic: 24 hours) | |
 | **Weekly report** - every Monday: energy and cost, always-on load, alerts, internet and server downtime, with tips (written by your AI if connected) | |
 | **Server monitor** - your NAS, servers and self-hosted apps: up or down, response time, uptime, certificate expiry, alerts | |
 | **Energy history** - 2 years by day and by device (Basic shows 7 days), and a bill forecast | |
@@ -160,10 +171,11 @@ screen and phone, the Security Center, Household, the Family board and the rain 
 | **Cisco Meraki** MV cameras and MT sensors | |
 | **Network monitoring** - UniFi and Cisco Meraki (every device online/offline, clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), with alerts; with Meraki or UniFi, the full Network dashboard (map, Wi-Fi, ports, clients, events, firmware) | |
 | **Voice assistants** - Alexa, Google Home, Apple Home and SmartThings through Matter (never locks, garage doors, gates or alarms), and "Ask CasaTorch" with Siri | |
-| **Away from home** - Secure access: your CasaTorch from anywhere, encrypted, no port forwarding (Basic: the secure address on your home Wi-Fi) | |
+| **Away from home** - Secure access: your CasaTorch from anywhere, encrypted, no port forwarding, and only on your approved devices (Basic: the secure address on your home Wi-Fi) | |
 
-When a trial or subscription ends, nothing is deleted: Pro features pause (your 3D home stays viewable),
-CasaTorch keeps working as Basic, and everything comes back when a key is added. The key is checked on your box,
+When a trial or subscription ends, CasaTorch says so plainly ("Pro ended on <date> - Renew") and nothing is
+deleted: Pro features pause (your 3D home stays viewable), CasaTorch keeps working as Basic, and everything comes
+back when a key is added. The key is checked on your box,
 offline, and once a day with casatorch.com (so a cancellation or a refund reaches it); if casatorch.com can't be
 reached, Pro keeps working for 30 days after a key's end date.
 
@@ -237,8 +249,18 @@ Details: [docs/SUPPORT.md](docs/SUPPORT.md).
 - **Two-step sign-in** with any authenticator app, ten one-time recovery codes, and an option to require it
   for everyone. Optional **Sign in with Google** for people you added (needs an https address or localhost).
 - **Wall-panel links** sign a tablet in as a panel (not a person) for a year, and can be revoked.
-- Sessions you can see and end, a **security log**, limits on password guessing, encrypted secrets at rest,
-  and strong browser protections. More: [SECURITY.md](SECURITY.md).
+- **Secure access opens only on approved devices**: away from home, only your paired phones and the browsers you
+  approve get through, checked before a request reaches your CasaTorch. **Devices & sessions** (Settings) lists every
+  signed-in phone and browser; **sign-in alerts** for a new phone, a new device or a sign-in from away; **Lock remote
+  access** with one switch; optional **allowed countries**.
+- A **tamper-evident activity log** (each event sealed to the one before, a signed export), a **Security score** in
+  Health, the secret key in the **system's key store** where there is one (Keychain, Windows data protection,
+  systemd credentials with TPM2, Docker secrets), limits on password guessing, encrypted secrets at rest, and strict
+  browser protections (no inline scripts or styles, Trusted Types). More: [SECURITY.md](SECURITY.md).
+- **Signed releases**: signed installers and updates, and a signed container image with its build provenance and a
+  software bill of materials; the downloadable compose file names the exact image.
+- **Remove CasaTorch** (Settings > Updates & backup): a backup first, then secure addresses deleted at casatorch.com,
+  everyone signed out, an optional erase, and how to uninstall (`install.sh --uninstall` and the rest).
 - Locks, garage doors, gates and alarms are never opened or disarmed automatically or by the AI.
 - Accepting the [Terms of Use](app/public/terms.html) and [Privacy Notice](app/public/privacy.html) is part of setup.
 
