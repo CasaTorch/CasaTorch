@@ -86,10 +86,14 @@ function gateSync({ handoff = null, grace } = {}) {
     const r = config.remote, host = gateHost();
     if (!r?.on || !host || !r.secret || isDemo()) return { ok: false, skipped: true };
     const k = relayKey(), st = gateState();
+    /* Pro from anywhere is checked at the edge too: the Pro key (casatorch.com keeps only whether it is still good, never
+       the key) and this home's internet addresses, so without Pro the address still answers at home (Basic). */
+    const h = typeof homeIps === 'function' ? await homeIps().catch(() => null) : null;
+    const home = h ? { v4: h.v4 || null, v6: h.v6 || null } : null, lic = typeof config.license === 'string' && config.license.trim() ? config.license.trim() : null;
     for (let attempt = 0; attempt < 2; attempt++) {
       st.v = Math.max(Date.now(), (st.v || 0) + 1);
       const body = JSON.stringify({ id: installId(), secret: r.secret, hostname: host, pub: k.pub, ts: Date.now(), v: st.v, ...(grace != null ? { grace } : {}),
-        state: { epoch: st.epoch, revoked: gateRevokedIds(), countries: st.countries?.length ? st.countries : null, locked: !!st.locked }, ...(handoff ? { handoff } : {}) });
+        state: { epoch: st.epoch, revoked: gateRevokedIds(), countries: st.countries?.length ? st.countries : null, locked: !!st.locked }, ...(handoff ? { handoff } : {}), ...(lic ? { key: lic } : {}), ...(home ? { home } : {}) });
       const sig = crypto.sign(null, Buffer.from(body), k.priv).toString('base64');
       let res, j = {};
       try { res = await fetch(GATE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CT-Sig': sig }, body, signal: AbortSignal.timeout(15_000) }); j = await res.json().catch(() => ({})); }
@@ -98,7 +102,7 @@ function gateSync({ handoff = null, grace } = {}) {
         // casatorch.com never lowers the epoch (this box may have lost its own record of it: a backup restored on new
         // hardware, a key that no longer opens edge-gate.json): take on the one in place, so new tickets get through
         if (Number.isInteger(j.epoch) && j.epoch > st.epoch && j.epoch <= 2 ** 31) st.epoch = j.epoch;
-        st.registered = { host, pub: k.pub, at: st.registered?.host === host ? st.registered.at : nowIso() }; st.synced = st.v; st.graceUntil = j.graceUntil || null; gate.lastSync = { at: nowIso(), ok: true }; gateSave(); return { ok: true };
+        st.registered = { host, pub: k.pub, at: st.registered?.host === host ? st.registered.at : nowIso() }; st.synced = st.v; st.graceUntil = j.graceUntil || null; st.homeSent = home ? `${home.v4}|${home.v6}` : null; gate.lastSync = { at: nowIso(), ok: true, ...(j.pro && typeof j.pro === 'object' ? { anywhere: j.pro.anywhere !== false } : {}) }; gateSave(); return { ok: true };
       }
       if (res.status === 409 && j.stale && attempt === 0) continue;   // casatorch.com has a newer one (this box's clock went back): once more, newer
       gate.lastSync = { at: nowIso(), ok: false, error: String(j.error || `casatorch.com answered ${res.status}`).slice(0, 160) }; gateSave();
@@ -118,6 +122,14 @@ function gateRevoke(ids) { const until = Date.now() + GATE_REVOKE_KEEP_MS; retur
 /* At start, and after an update that brought the gate: register (or catch up) once the tunnel's settings are there. */
 setTimeout(() => { if (config.remote?.on && !isDemo() && (!gateActive() || gateState().synced !== gateState().v)) gateSync({ grace: true }).catch(() => {}); }, process.env.CASATORCH_REMOTE_FAST === '1' ? 500 : 8000).unref?.();
 if (process.env.CASATORCH_TEST !== '1') setInterval(() => { if (config.remote?.on && !isDemo() && gateState().synced !== gateState().v) gateSync().catch(() => {}); }, 60 * 60_000).unref?.();
+/* Without Pro the edge lets the address answer only from this home's internet address: when that changes (a new address
+   from the provider), casatorch.com is told, at most once every 20 minutes. */
+async function gateHomeWatch() {
+  if (!config.remote?.on || isDemo() || !gateActive() || proStatus().pro || typeof homeIps !== 'function') return;
+  const h = await homeIps().catch(() => null); if (!h || (!h.v4 && !h.v6)) return;
+  if (`${h.v4 || null}|${h.v6 || null}` !== gateState().homeSent) await gateSync();
+}
+if (process.env.CASATORCH_TEST !== '1') setInterval(() => { gateHomeWatch().catch(() => {}); }, 20 * 60_000).unref?.();
 
 /* ---- where a request comes from: at home, or the city and country Cloudflare saw ---- */
 function gateWhere(req) {

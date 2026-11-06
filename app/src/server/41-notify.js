@@ -82,7 +82,7 @@ async function notify(a) {
   const go = [], dec = new Map();
   for (const t of alertTargets()) { if (!alertForTarget(a, t)) continue; const d = decide(t); dec.set(t, d); if (d.push) go.push(t); else if (d.digest) digestAdd(t.id, a); }
   if (!go.length) return;
-  const msg = { title: a.title || 'CasaTorch', body: a.body || (sev === 'critical' ? 'Open CasaTorch to see what is happening.' : ''), tag: String(a.id || a.title || '').slice(0, 64), url: a.url || '/#alerts', sev };
+  const msg = { title: a.title || 'CasaTorch', body: a.body || (sev === 'critical' ? 'Open CasaTorch to see what is happening.' : ''), tag: String(a.id || a.title || '').slice(0, 64), url: a.url || '/#alerts', sev, ...(a.pro === true ? { pro: true } : {}) };
   await alertSendTo(go, msg, (t) => dec.get(t));
 }
 /** Send one message to these phones (each with the sound its decision picked). Resolves to how many it reached. */

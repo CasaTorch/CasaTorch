@@ -216,11 +216,14 @@ async function appPushSend(list, msg) {
   if (keep.length !== list.length) { const gone = new Set(list.filter((pd) => !live.has(pd.session)).map((pd) => pd.id)); push.apps = push.apps.filter((x) => !gone.has(x.id)); savePush(); }
   if (!keep.length) return { ok: false, error: 'This phone is signed out.' };
   const k = relayKey();
-  const body = JSON.stringify({ home: relayHomeId(k.pub), pub: k.pub, ts: Date.now(), msgs: keep.map((pd) => ({ p: pd.platform, t: pd.token, ...(pd.platform === 'apns' ? { e: apnsEnv(pd.env) } : {}), ...sealFor(pd, msg), crit: msg.sev === 'critical', tag: pushTagFor(pd, msg.tag) })) });
+  // a Pro alert (the weekly report) carries the Pro key: casatorch.com refuses one whose key was revoked or ran out
+  const proKey = msg.pro && typeof config.license === 'string' && config.license.trim() ? { pro: true, key: config.license.trim() } : {};
+  const body = JSON.stringify({ home: relayHomeId(k.pub), pub: k.pub, ts: Date.now(), ...proKey, msgs: keep.map((pd) => ({ p: pd.platform, t: pd.token, ...(pd.platform === 'apns' ? { e: apnsEnv(pd.env) } : {}), ...sealFor(pd, msg), crit: msg.sev === 'critical', tag: pushTagFor(pd, msg.tag) })) });
   const sig = crypto.sign(null, Buffer.from(body), k.priv).toString('base64');
   try {
     const r = await fetch(RELAY_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CT-Sig': sig }, body, signal: AbortSignal.timeout(15_000) });
     const j = await r.json().catch(() => ({}));
+    if (r.status === 402 && j.proEnded && typeof licenseCheck === 'function') licenseCheck({ force: true }).catch(() => {});   // Pro ended at casatorch.com: check now
     if (!r.ok) { for (const pd of keep) pd.lastError = `relay ${r.status}`; savePush(); return { ok: false, unavailable: r.status === 503 && j.unavailable === true, error: j.error || `casatorch.com answered ${r.status}` }; }
     const dead = new Set((j.unregistered || []).map(String));
     // Apple said this phone's token belongs to its other server (a build from Xcode vs. TestFlight): remember which

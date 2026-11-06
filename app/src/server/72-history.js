@@ -191,7 +191,7 @@ async function makeReport({ to, scheduled = false } = {}) {
     r.scheduled = scheduled;
     hist.reports = [r, ...(hist.reports || []).filter((x) => x.id !== r.id)].slice(0, 26);
     saveHist();
-    if (scheduled) notify({ id: `report:${r.id}`, kind: 'report', severity: 'event', title: 'Your weekly home report is ready', body: r.summary.split(/(?<=\.)\s/)[0].slice(0, 160), url: '/#energy' }).catch(() => {});
+    if (scheduled) notify({ id: `report:${r.id}`, kind: 'report', severity: 'event', pro: true, title: 'Your weekly home report is ready', body: r.summary.split(/(?<=\.)\s/)[0].slice(0, 160), url: '/#energy' }).catch(() => {});
     return r;
   } finally { reportBusy = false; }
 }
