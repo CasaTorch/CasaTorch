@@ -80,8 +80,9 @@ const FIX_LABEL = { repair: 'Repair', check: 'Check again' };
 /** Settings › Secure access, in plain words: { status, title, detail, fix } - from the state alone (no clock, no I/O), for the unit tests.
     Everything is the plain English; the screen shows it in the home's language (T() on title, detail and fix.label, all in
     tools/i18n-strings.tsv). A detail with a value in it also carries detailMsg + detailVars, for TM(). */
-function remoteView({ on, state, code, check, anywhere, why }) {
+function remoteView({ on, state, code, check, anywhere, why, locked }) {
   if (!on) return { status: 'off', title: 'Off', detail: null, fix: null };
+  if (locked) return { status: 'locked', title: 'Remote access is locked', detail: 'Nobody can reach this CasaTorch from outside until you unlock it, here at home or from the CasaTorch app.', fix: null };
   if (code && REMOTE_WHY[code]) {
     const [title, detail, fix] = REMOTE_WHY[code];
     const said = code === 'service' && why ? String(why).replace(/\.+$/, '') : null;   // casatorch.com's own words
@@ -287,12 +288,21 @@ async function remoteCheck(reason = 'scheduled') {
   if (remote.checking) return remote.checking;
   remote.checking = (async () => {
     const host = config.remote?.hostname; if (!config.remote?.on || !host || isDemo()) return null;
+    if (gateState().locked) return null;   // locked: nothing from outside gets in, this check included (remoteView says so)
     const nonce = crypto.randomBytes(12).toString('base64url'), base = process.env.CASATORCH_REMOTE_CHECK_BASE || `https://${host}`, t0 = Date.now();
     remote.nonce = nonce;
     let out;
+    const url = `${base}/api/app/hello?check=${nonce}`, headers = { 'X-CasaTorch-Check': nonce, Accept: 'application/json', 'Cache-Control': 'no-cache' };
     try {
-      const r = await fetch(`${base}/api/app/hello?check=${nonce}`, { headers: { 'X-CasaTorch-Check': nonce, Accept: 'application/json', 'Cache-Control': 'no-cache' }, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
+      // through the edge gate with this CasaTorch's own ticket (10 minutes, device "box")
+      const r = await fetch(url, { headers: { ...headers, ...(gateActive() ? { 'X-CT-Gate': gateSelfTicket() } : {}) }, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
       out = remoteCheckResult({ status: r.status, json: await r.json().catch(() => null), nonce, homeId: installId() });
+      // and without one: the gate must turn it away (it never reaches here, so the one-time code isn't seen)
+      if (out.ok && gateActive()) {
+        const r2 = await fetch(url, { headers, redirect: 'manual', signal: AbortSignal.timeout(15_000) }).catch(() => null);
+        const j2 = r2 ? await r2.json().catch(() => null) : null;
+        gate.probe = !r2 ? null : r2.status === 200 && j2?.check === nonce ? 'open' : r2.status === 403 && j2?.gate === true ? 'closed' : null;
+      } else if (!gateActive()) gate.probe = null;
     } catch (e) { out = remoteCheckResult({ error: e }); }
     finally { remote.nonce = null; }
     remote.check = { ok: out.ok, code: out.code, at: nowIso(), ms: Date.now() - t0, reason };
@@ -346,7 +356,8 @@ async function remoteInfo(req) {
     on: !!r.on, hostname: r.hostname || null, ingress: r.on ? r.ingress || 'cloudflare' : null, url: r.hostname ? `https://${r.hostname}` : null, state: r.on ? remote.state : 'off', why: remote.why, since: remote.since,
     view: !r.on && remote.busy ? { status: 'starting', title: remote.state === 'downloading' ? 'Getting ready…' : 'Setting up…', detail: 'Getting this CasaTorch its own address. This takes up to a minute.', fix: null }
       : !r.on && remote.code ? { ...remoteView({ on: true, code: remote.code, why: remote.why }), fix: remoteSupported() ? { action: 'on', label: 'Try again' } : null }
-      : remoteView({ on: !!r.on, state: remote.state, code: remote.code, check: remote.check, anywhere, why: remote.why }),
+      : remoteView({ on: !!r.on, state: remote.state, code: remote.code, check: remote.check, anywhere, why: remote.why, locked: !!r.on && gateState().locked }),
+    gate: r.on ? gateView() : null,
     busy: !!remote.busy,
     check: r.on ? { ok: remote.check.ok, at: remote.check.at, code: remote.check.code } : null, protocol: r.on ? remote.protocol : null,
     anywhere, qr: r.hostname ? await QRCode.toString(`https://${r.hostname}`, { type: 'svg', margin: 1 }) : null, supported: remoteSupported(), demo: isDemo(),
@@ -360,7 +371,7 @@ app.get('/api/remote', async (req, res) => { res.setHeader('Cache-Control', 'no-
     this box writes the tunnel's rules itself (cloudflared.yml), so its tunnel is made with config_src "local": no rules
     on Cloudflare's side at all, nothing there that could point the tunnel anywhere else. Older casatorch.com ignores it. */
 function remoteRequestBody(cfg = config) {
-  return { id: installId(), name: cfg.house?.name || null, port: Number(PORT) || 8090, version: VERSION, localIngress: true, ...(cfg.remote?.secret ? { secret: cfg.remote.secret } : {}), ...(typeof cfg.license === 'string' && cfg.license.trim() ? { key: cfg.license.trim() } : {}) };
+  return { id: installId(), name: cfg.house?.name || null, port: Number(PORT) || 8090, version: VERSION, localIngress: true, gate: true, ...(cfg.remote?.secret ? { secret: cfg.remote.secret } : {}), ...(typeof cfg.license === 'string' && cfg.license.trim() ? { key: cfg.license.trim() } : {}) };
 }
 /** Turn secure access on (or repair it): this home's address and tunnel key from casatorch.com, then the tunnel itself. */
 async function remoteOn() {
@@ -379,6 +390,7 @@ async function remoteOn() {
     const ingress = ['local', 'cloudflare'].includes(j.ingress) ? j.ingress : null;
     saveConfig({ ...config, remote: { on: true, hostname: j.hostname, token: j.token, secret: j.secret || config.remote?.secret, ...(ingress ? { ingress } : {}), ...(config.remote?.protocol ? { protocol: config.remote.protocol } : {}) } });
     remote.code = null; remote.why = null; remote.check = { ok: null, at: null, code: null, ms: null }; remote.dnsTries = 0; remote.restarts = 0;
+    await gateSync({ grace: true }).catch(() => {});   // the edge gate: this box's key for this address (42g-edge-gate.js), before the self-test
     startTunnel();
     return j.hostname;
   })().finally(() => { remote.busy = null; });
@@ -413,6 +425,7 @@ app.post('/api/remote/off', requireRole('admin'), async (_req, res) => {
   stopTunnel();
   if (r.secret) await fetch(REMOTE_URL, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: installId(), secret: r.secret }), signal: AbortSignal.timeout(20_000) }).catch(() => {});
   const { remote: _gone, ...rest } = config; saveConfig(rest);
+  gateState().registered = null; gate.probe = null; gateSave();   // casatorch.com removed the gate's record with the address
   remote.code = null; remote.why = null; remote.check = { ok: null, at: null, code: null, ms: null }; remote.lastError = null; remote.log = [];
   res.json({ ok: true });
 });

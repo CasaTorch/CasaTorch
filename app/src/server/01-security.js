@@ -77,7 +77,7 @@ app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'", `script-src 'self' 'wasm-unsafe-eval' ${inlineScriptHashes}`.trim(), "style-src 'self' 'unsafe-inline'", "font-src 'self' data:",
     "img-src 'self' data: blob: https:", "media-src 'self' blob: https:", `connect-src 'self' blob: data:${wsSelf(req)}`, "worker-src 'self' blob:", "frame-src 'self'",
-    "object-src 'none'", "base-uri 'self'", "form-action 'self' https://accounts.google.com", `frame-ancestors ${frameAncestors()}`,
+    "object-src 'none'", "base-uri 'self'", `form-action 'self' https://accounts.google.com${/^home-[a-z0-9]{8}\.casatorch\.com$/.test(String(config.remote?.hostname || '')) ? ` https://${config.remote.hostname}` : ''}`, `frame-ancestors ${frameAncestors()}`,
   ].join('; '));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'same-origin');

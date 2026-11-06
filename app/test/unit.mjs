@@ -1041,7 +1041,8 @@ await (await import('./inbox-unit.mjs')).default(t);   // each person's inbox (i
 await (await import('./polish-unit.mjs')).default(t);   // the polish pass: contrast, motion, error states (polish-unit.mjs)
 await (await import('./floorplan-compat-unit.mjs')).default(t);   // the 3D home on older browsers: no newer JS/CSS without a fallback (floorplan-compat-unit.mjs)   // 3D home outside and furniture: polygons, pools, slopes, fences, models, saved items (outdoor-unit.mjs)
 await (await import('./license-unit.mjs')).default(t);   // Pro keys, grace periods and the trial (license-unit.mjs)
-await (await import('./security-unit.mjs')).default(t);   // the pre-launch security review: outbound-request guard, member links, pre-setup gate (security-unit.mjs)
+await (await import('./security-unit.mjs')).default(t);
+await (await import('./gate-unit.mjs')).default(t);   // the edge gate on the box: tickets, revocation, lock and countries, sign-in alerts (gate-unit.mjs)   // the pre-launch security review: outbound-request guard, member links, pre-setup gate (security-unit.mjs)
 await (await import('./makers-unit.mjs')).default(t);   // Security Center "Who is it?": makers, likely kind, normal ports (makers-unit.mjs)
 await (await import('./support-unit.mjs')).default(t);
 await (await import('./ask-unit.mjs')).default(t);   // Home AI Agent: charts, no HTML from answers, safety rule, sources, tools, the loop end to end (ask-unit.mjs)

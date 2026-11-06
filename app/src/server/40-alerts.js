@@ -18,6 +18,10 @@ function alertRaise(a) {
   saveAlerts();
   if (!isDemo()) notify(a).catch(() => {});   // phones: web app alerts and/or the Home Assistant app
 }
+/* An alert about one person's sign-ins (42g-edge-gate.js: forUser) is for that person and the owners only - in the app,
+   in the inbox and on phones. Every other alert is for the whole household, as before. */
+const alertForReq = (a, req, signIn = signInOn()) => !a?.forUser || !signIn || req?.user?.id === a.forUser || req?.user?.role === 'owner';
+const alertForTarget = (a, t) => !a?.forUser || (!!t?.user && (t.user === a.forUser || userById(t.user)?.role === 'owner'));
 /* Safety is never paywalled: water (leak), smoke (smoke, gas and carbon monoxide sensors map to smoke), freezing/very
    hot (temp) alerts and their repeats work the same on Basic as on Pro. Only the comfort extras (repeats for other
    critical alerts, "only when nobody's home") are Pro. Tested in test/unit.mjs. */
@@ -109,7 +113,7 @@ setInterval(() => { if (isConfigured() && !isDemo()) alertConditions().catch(() 
 app.get('/api/alerts', (req, res, next) => {
   if (isDemo()) return next();
   const rank = { critical: 0, warning: 1, notice: 2, info: 3, ok: 4 }, ctx = { rules: alertRulesHouse(), user: alertRulesUser(alertUserKey(req)), pro: !!proStatus().pro, target: null };
-  const view = (a) => { const d = alertDecide(a, { ...ctx, device: alertDevCtx(a) }); return d.app && !(req.user?.panel && d.panel === 'off') ? { ...a, kind: a.kind || d.kind, alertKind: d.kind, device: d.device, safety: d.safety, panel: d.panel, sound: d.sound } : null; };
+  const view = (a) => { if (!alertForReq(a, req)) return null; const d = alertDecide(a, { ...ctx, device: alertDevCtx(a) }); return d.app && !(req.user?.panel && d.panel === 'off') ? { ...a, kind: a.kind || d.kind, alertKind: d.kind, device: d.device, safety: d.safety, panel: d.panel, sound: d.sound } : null; };
   const now = Object.values(alerts.open).sort((a, b) => rank[a.severity] - rank[b.severity]).map(({ pushes, lastPush, ...a }) => { const v = view(a); return v && { ...v, repeating: alertRepeats(a), ...(alertSnoozed(a) ? {} : { snoozed: undefined }) }; }).filter(Boolean);
   const all = alerts.events.slice(0, 160).map(view), recent = all.filter(Boolean).slice(0, 100);
   res.json({ now, recent, hidden: all.length - all.filter(Boolean).length });

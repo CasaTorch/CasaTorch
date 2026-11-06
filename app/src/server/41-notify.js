@@ -80,7 +80,7 @@ async function notify(a) {
   const m = await alertMoment(), open = alerts.open[base], snoozedUntil = open?.snoozed ? Date.parse(open.snoozed.until) : 0, device = alertDevCtx(a);
   const decide = (t) => alertDecide(a, { ...m, user: t.user ? alertRulesUser(t.user) : {}, target: t, isRepeat, snoozedUntil, device });
   const go = [], dec = new Map();
-  for (const t of alertTargets()) { const d = decide(t); dec.set(t, d); if (d.push) go.push(t); else if (d.digest) digestAdd(t.id, a); }
+  for (const t of alertTargets()) { if (!alertForTarget(a, t)) continue; const d = decide(t); dec.set(t, d); if (d.push) go.push(t); else if (d.digest) digestAdd(t.id, a); }
   if (!go.length) return;
   const msg = { title: a.title || 'CasaTorch', body: a.body || (sev === 'critical' ? 'Open CasaTorch to see what is happening.' : ''), tag: String(a.id || a.title || '').slice(0, 64), url: a.url || '/#alerts', sev };
   await alertSendTo(go, msg, (t) => dec.get(t));

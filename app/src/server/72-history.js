@@ -51,7 +51,7 @@ async function historySample(now = Date.now()) {
   const since = hist.seenAlertAt ? Date.parse(hist.seenAlertAt) : now - SAMPLE_MS;
   for (const a of alerts.events || []) {
     const at = Date.parse(a.at); if (!(at > since)) break;   // newest first
-    if (a.severity === 'ok') continue;
+    if (a.severity === 'ok' || a.forUser) continue;   // one person's sign-ins (42g-edge-gate.js) aren't household history
     const k = (hist.days[dayOf(at)] ||= blankDay()), sev = sevOf(a);
     k.alerts[sev] = (k.alerts[sev] || 0) + 1;
     const t = String(a.title || '').slice(0, 80);

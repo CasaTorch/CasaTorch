@@ -17,7 +17,11 @@
      pushlan  ...rules that send visitors to a router on the home network
      warp     ...rules that turn on private-network routing
      hostrewrite  the edge sends a home-looking Host (127.0.0.1:<port>) instead of the secure address
-   Its arguments go to FAKE_ARGS (one run per line). */
+   Its arguments go to FAKE_ARGS (one run per line).
+   The edge gate (casatorch.com's edge-gate/ Worker), played the same way when a GATE_STATE file is next to it (the fake
+   casatorch.com writes it from the box's signed calls): only requests with a valid ticket (cookie __Host-ct_gate or
+   header X-CT-Gate, checked strictly like edge-gate/src/ticket.js) get through; the lock and allowed countries
+   (X-Fake-Country, default US, passed on as CF-IPCountry); POST /__ct_gate/set turns a browser ticket into the cookie. */
 /* CommonJS on purpose: the copy has no file extension. */
 const http = require('node:http'), fs = require('node:fs'), path = require('node:path');
 const here = __dirname;
@@ -35,8 +39,10 @@ else if (mode === 'blocked' || (mode === 'noquic' && proto !== 'http2')) {
 } else {
   const edge = http.createServer((req, res) => {
     if (mode === 'stale') { res.writeHead(530, { 'Content-Type': 'text/html' }); return res.end('error code: 1033'); }
-    const headers = { ...req.headers, host: mode === 'hostrewrite' ? `127.0.0.1:${tok.p}` : tok.h, 'cf-connecting-ip': req.headers['x-fake-ip'] || '203.0.113.9', 'cf-ray': 'fake-0', 'x-forwarded-proto': 'https', 'x-forwarded-for': req.headers['x-fake-ip'] || '203.0.113.9' };
-    delete headers['x-fake-ip'];
+    if (gateRefused(req, res)) return;
+    const headers = { ...req.headers, host: mode === 'hostrewrite' ? `127.0.0.1:${tok.p}` : tok.h, 'cf-connecting-ip': req.headers['x-fake-ip'] || '203.0.113.9', 'cf-ray': 'fake-0', 'cf-ipcountry': req.headers['x-fake-country'] || 'US', 'x-forwarded-proto': 'https', 'x-forwarded-for': req.headers['x-fake-ip'] || '203.0.113.9' };
+    if (req.headers['x-fake-city']) headers['cf-ipcity'] = req.headers['x-fake-city'];
+    delete headers['x-fake-ip']; delete headers['x-fake-country']; delete headers['x-fake-city']; delete headers['x-ct-gate'];
     const up = http.request({ host: '127.0.0.1', port: tok.p, path: req.url, method: req.method, headers }, (r) => { res.writeHead(r.statusCode, r.headers); r.pipe(res); });
     up.on('error', () => { res.writeHead(502); res.end('bad gateway'); });
     req.pipe(up);
@@ -52,5 +58,32 @@ else if (mode === 'blocked' || (mode === 'noquic' && proto !== 'http2')) {
   });
   edge.on('error', (e) => { if (e.code === 'EADDRINUSE') setTimeout(() => listen(), 200); else throw e; });
   listen();
+}
+/* ---- the edge gate ---- */
+function gateTicket(t, host, rec) {
+  const crypto = require('node:crypto');
+  const m = /^ct1\.([A-Za-z0-9_-]{20,700})\.([A-Za-z0-9_-]{86})$/.exec(String(t || '')); if (!m || !rec.pub) return null;
+  const key = crypto.createPublicKey({ key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), Buffer.from(rec.pub, 'base64')]), format: 'der', type: 'spki' });
+  if (!crypto.verify(null, Buffer.from(`ct1.${m[1]}`), key, Buffer.from(m[2], 'base64url'))) return null;
+  let p; try { p = JSON.parse(Buffer.from(m[1], 'base64url').toString()); } catch { return null; }
+  const now = Math.floor(Date.now() / 1000);
+  if (p.h !== host || p.exp - p.nbf > 43200 || now < p.nbf - 60 || now >= p.exp + 60 || p.e < (rec.epoch || 0) || (rec.revoked || []).includes(p.d) || (p.k === 'self' && p.d !== 'box')) return null;
+  return p;
+}
+function gateRefused(req, res) {
+  let rec; try { rec = JSON.parse(fs.readFileSync(path.join(here, 'GATE_STATE'), 'utf8')); } catch { return false; }   // no gate: as before
+  const cookie = (String(req.headers.cookie || '').match(/(?:^|;\s*)__Host-ct_gate=([^;]+)/) || [])[1];
+  const p = gateTicket(cookie || req.headers['x-ct-gate'], tok.h, rec), country = String(req.headers['x-fake-country'] || 'US');
+  const no = (extra = {}) => { const api = req.url.startsWith('/api/') || /json/.test(req.headers.accept || ''); res.writeHead(403, { 'Content-Type': api ? 'application/json' : 'text/html', 'Cache-Control': 'no-store' }); res.end(api ? JSON.stringify({ error: 'This home only opens on approved devices.', gate: true, ...extra }) : '<!doctype html><h1>This home only opens on approved devices</h1>'); return true; };
+  if (rec.locked) { if (p && p.k === 'app' && req.method === 'POST' && req.url === '/api/gate/unlock') return false; return no(p ? { locked: true } : {}); }
+  if (Array.isArray(rec.countries) && rec.countries.length && !rec.countries.includes(country)) return no();
+  if (req.url === '/__ct_gate/set' && req.method === 'POST') {
+    let body = ''; req.on('data', (c) => { body += c; });
+    req.on('end', () => { const t = new URLSearchParams(body).get('t'), q = gateTicket(t, tok.h, rec); if (!q || q.k !== 'browser') { res.writeHead(403); return res.end('no'); } res.writeHead(303, { Location: '/', 'Set-Cookie': `__Host-ct_gate=${t}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${q.exp - Math.floor(Date.now() / 1000)}` }); res.end(); });
+    return true;
+  }
+  if (p) return false;
+  if ((rec.graceUntil || 0) > Date.now() / 1000 && (/^Bearer /.test(req.headers.authorization || '') || /casatorch_session=/.test(req.headers.cookie || ''))) return false;
+  return no();
 }
 process.on('SIGTERM', () => process.exit(0));

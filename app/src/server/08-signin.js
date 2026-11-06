@@ -125,14 +125,14 @@ function sessionOf(req) {
   if (!s || (!cookieOf(req) && s.kind !== 'app')) return null;
   const idle = idleDays(s.kind) * 86400_000;
   if (Date.now() - Date.parse(s.seen) > idle || Date.parse(s.expires) < Date.now()) { delete sessions[key]; sessDirty = true; return null; }
-  if (Date.now() - Date.parse(s.seen) > 5 * 60_000) { s.seen = nowIso(); s.ip = clientIp(req); sessDirty = true; }
+  if (Date.now() - Date.parse(s.seen) > 5 * 60_000) { s.seen = nowIso(); s.ip = clientIp(req); if (typeof gateWhere === 'function') s.where = gateWhere(req); sessDirty = true; }
   return { key, ...s };
 }
 /** A new session; returns its token (only its hash is kept). */
 function issueSession(req, u, { remember = false, kind = 'browser', mfa = false, device = null } = {}) {
   const tok = crypto.randomBytes(32).toString('base64url'), days = kind === 'panel' ? PANEL_DAYS : kind === 'app' ? 400 : remember ? 365 : IDLE_DAYS;
   for (const [k, v] of Object.entries(sessions)) if (Date.parse(v.expires) < Date.now() || Date.now() - Date.parse(v.seen) > idleDays(v.kind) * 86400_000) delete sessions[k];   // expired or unused too long
-  sessions[sha256(tok)] = { id: newId(), userId: u.id, kind, mfa, created: nowIso(), seen: nowIso(), expires: new Date(Date.now() + days * 86400_000).toISOString(), ip: clientIp(req), agent: String(device?.name ? `${device.name} (CasaTorch app, ${device.platform || 'phone'})` : req.headers['user-agent'] || '').slice(0, 160), ...(device ? { device } : {}) };
+  sessions[sha256(tok)] = { id: newId(), userId: u.id, kind, mfa, created: nowIso(), seen: nowIso(), expires: new Date(Date.now() + days * 86400_000).toISOString(), ip: clientIp(req), ...(typeof gateWhere === 'function' ? { where: gateWhere(req) } : {}), agent: String(device?.name ? `${device.name} (CasaTorch app, ${device.platform || 'phone'})` : req.headers['user-agent'] || '').slice(0, 160), ...(device ? { device } : {}) };
   saveSessions();
   if (!u.panel) { u.lastLogin = nowIso(); saveUsers(); }
   return { tok, days };
@@ -140,8 +140,14 @@ function issueSession(req, u, { remember = false, kind = 'browser', mfa = false,
 function startSession(req, res, u, opts = {}) {
   const { tok, days } = issueSession(req, u, opts);
   res.setHeader('Set-Cookie', `casatorch_session=${tok}; ${cookieFlags(req)}; Max-Age=${days * 86400}`);
+  if (typeof gateSignedIn === 'function') gateSignedIn(req, res, u, { kind: opts.kind || 'browser' });   // a new device, or from away: an alert (42g-edge-gate.js)
 }
-const endSessionsOf = (userId, exceptKey) => { for (const [k, v] of Object.entries(sessions)) if (v.userId === userId && k !== exceptKey) delete sessions[k]; saveSessions(); };
+const endSessionsOf = (userId, exceptKey) => {
+  const phones = [];
+  for (const [k, v] of Object.entries(sessions)) if (v.userId === userId && k !== exceptKey) { if (v.kind === 'app') phones.push(v.id); delete sessions[k]; }
+  saveSessions();
+  if (phones.length && typeof gateRevoke === 'function') gateRevoke(phones).catch(() => {});   // their edge tickets stop working too
+};
 
 /* ---- brute-force limits ---- */
 const tries = new Map();
@@ -426,6 +432,7 @@ app.delete('/api/auth/sessions/:id', (req, res) => {
   const hit = Object.entries(sessions).find(([, s]) => s.id === req.params.id && (s.userId === req.user.id || admin));
   if (!hit) return res.status(404).json({ error: 'no such session' });
   delete sessions[hit[0]]; saveSessions(); audit(req, 'session-ended', { of: userById(hit[1].userId)?.username });
+  if (hit[1].kind === 'app' && typeof gateRevoke === 'function') gateRevoke(hit[1].id).catch(() => {});
   res.json({ ok: true });
 });
 app.post('/api/auth/sessions/others', (req, res) => { const u = me(req, res); if (!u) return; endSessionsOf(u.id, req.session.key); audit(req, 'other-sessions-ended'); res.json({ ok: true }); });
@@ -486,6 +493,7 @@ app.delete('/api/users/:id', requireRole('admin'), (req, res) => {
   if (u.role === 'owner') return res.status(400).json({ error: 'Make someone else the owner first.' });
   if (u.id === req.user?.id) return res.status(400).json({ error: "You can't remove yourself." });
   users.list = users.list.filter((x) => x !== u); saveUsers(); endSessionsOf(u.id); audit(req, 'user-removed', { removed: u.username });
+  if (typeof gateState === 'function') { const gone = (gateState().browsers || []).filter((b) => b.user === u.id).map((b) => b.id); if (gone.length) { gateState().browsers = gateState().browsers.filter((b) => b.user !== u.id); gateRevoke(gone).catch(() => {}); } }
   res.json({ ok: true });
 });
 app.put('/api/auth/admin/policy', express.json({ limit: '4kb' }), requireRole('admin'), (req, res) => {

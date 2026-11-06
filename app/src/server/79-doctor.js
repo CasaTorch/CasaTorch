@@ -180,7 +180,7 @@ async function docRemote() {
   if (!config.remote?.on || isDemo()) return null;
   const age = () => (remote.check.at ? Math.round((Date.now() - Date.parse(remote.check.at)) / 60_000) : null);
   if (remote.state === 'connected' && (age() == null || age() > 20)) await remoteCheck('health').catch(() => {});
-  const v = remoteView({ on: true, state: remote.state, code: remote.code, check: remote.check, anywhere: !!proStatus().pro, why: remote.why });
+  const v = remoteView({ on: true, state: remote.state, code: remote.code, check: remote.check, anywhere: !!proStatus().pro, why: remote.why, locked: gateState().locked });
   const fix = v.fix ? { action: v.fix.action === 'repair' ? 'remote-repair' : 'remote-check', label: v.fix.label } : { action: 'remote-check', label: 'Check again' };
   // the title is a phrase of its own ("Working from anywhere"): TM() on the screen translates it inside the sentence
   const m = age(), vt = { title: v.title }, detail = m == null ? ['{title}.', vt] : m < 1 ? ['{title}. Checked from outside just now.', vt] : [m === 1 ? '{title}. Checked from outside a minute ago.' : '{title}. Checked from outside {n} minutes ago.', { ...vt, n: m }];
@@ -188,6 +188,18 @@ async function docRemote() {
   if (v.status === 'working') return chk('remote', 'connections', 'Secure access', 'ok', detail, why);
   if (v.status === 'problem') return chk('remote', 'connections', 'Secure access', 'bad', v.title, { ...why, fix });
   return chk('remote', 'connections', 'Secure access', 'warn', v.title, { ...why, fix });
+}
+
+/* The edge gate (42g-edge-gate.js): is this home's address closed to devices that aren't approved? */
+async function docEdgeGate() {
+  if (!config.remote?.on || isDemo()) return null;
+  if (remote.checking) await remote.checking.catch(() => {});
+  const g = gateView(), fix = { action: 'gate-sync', label: 'Try again' };
+  if (!g.active) return chk('edgegate', 'connections', 'Edge gate', 'warn', g.lastSync && !g.lastSync.ok ? ['Edge gate not active yet: {why}', { why: String(g.lastSync.error || '').replace(/\.+$/, '') }] : 'Edge gate not active yet. Secure access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.', { fix });
+  if (g.locked) return chk('edgegate', 'connections', 'Edge gate', 'ok', 'On. Remote access is locked.');
+  if (g.probe === 'open') return chk('edgegate', 'connections', 'Edge gate', 'warn', 'Edge gate not active yet: this CasaTorch\'s key is registered, but its address still answers devices without a ticket.', { fix });
+  if (g.probe === 'closed') return chk('edgegate', 'connections', 'Edge gate', 'ok', 'On: only approved devices reach this CasaTorch from outside.');
+  return chk('edgegate', 'connections', 'Edge gate', 'ok', 'On. The next self-test checks the address is closed to other devices.');
 }
 
 /* ---- keeping safe ---- */
@@ -269,7 +281,7 @@ async function doctorRun() {
     const one = (id, fn) => timed(Promise.resolve().then(fn), 15000, id).catch((err) => chk(id, 'connections', id, 'bad', errDetail(err)));
     const conn = isDemo() ? DOC_DEMO.map(([id, t, d]) => chk(id, 'connections', t, 'ok', d)) : await Promise.all(Object.entries(DOC_CONN).map(([id, fn]) => one(id, fn)));
     await storageUse().catch(() => {});
-    const sys = await Promise.all([docStorage, docMemory, docClock, docDataFolder, docSettings, docSignIns, docInternet, docRemote, docCerts, docBackup, docUpdates, docDevSwitches].map((fn) => one(fn.name.replace(/^doc/, '').toLowerCase(), fn)));
+    const sys = await Promise.all([docStorage, docMemory, docClock, docDataFolder, docSettings, docSignIns, docInternet, docRemote, docEdgeGate, docCerts, docBackup, docUpdates, docDevSwitches].map((fn) => one(fn.name.replace(/^doc/, '').toLowerCase(), fn)));
     const checks = [...sys, ...conn].filter(Boolean);
     DOC.checks = checks; DOC.at = nowIso();
     if (!isDemo()) doctorAlerts(checks);
@@ -367,6 +379,14 @@ const FIXES = {
     const r = await remoteCheck('by you'), c = await docRemote();
     if (c) DOC.checks = [...DOC.checks.filter((x) => x.id !== 'remote'), c];
     return { check: c, message: r?.ok ? 'Secure access works from outside.' : 'Not working yet - see what it says above.' };
+  },
+  async 'gate-sync'() {
+    if (!config.remote?.on) throw new Error('Secure access is off.');
+    const r = await gateSync({ grace: true });
+    if (!r.ok) throw new Error(r.error || 'casatorch.com couldn\'t be reached. Try again in a few minutes.');
+    if (remote.state === 'connected') await remoteCheck('by you').catch(() => {});
+    const c = await docEdgeGate(); if (c) DOC.checks = [...DOC.checks.filter((x) => x.id !== 'edgegate'), c];
+    return { check: c, message: 'The edge gate is on.' };
   },
   async 'check-updates'() { await checkUpdates(); return updateView().available ? { message: `CasaTorch ${updateView().latest} is available.`, msg: 'CasaTorch {latest} is available.', vars: { latest: updateView().latest } } : { message: 'Up to date.' }; },
 };

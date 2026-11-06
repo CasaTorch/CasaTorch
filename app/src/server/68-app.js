@@ -44,6 +44,12 @@ app.get('/api/app/hello', (req, res) => res.json({ casatorch: true, appMin: APP_
   ...(remoteNonceOk(req) && String(req.headers.host || '').toLowerCase() === String(config.remote?.hostname || '').toLowerCase() ? { check: remote.nonce } : {}) }));   // CasaTorch checking itself from outside (42-remote.js)
 app.post('/api/app/hello', (req, res) => res.json({ casatorch: true }));
 
+/* The phone's edge tickets for this home's secure address (42g-edge-gate.js), for the session just made with `tok`. */
+function appGate(tok) {
+  if (!gateActive()) return {};
+  const s = sessions[sha256(tok)];
+  return s ? { gate: { host: gateHost(), tickets: gateAppTickets(s.id) } } : {};
+}
 /* ---- signing in on the phone ---- */
 function appProceed(req, res, t) {
   const u = userById(t.userId); if (!u) return res.status(401).json({ error: 'Sign in again.' });
@@ -52,7 +58,8 @@ function appProceed(req, res, t) {
   tickets.delete(t.id);
   const { tok } = issueSession(req, u, { kind: 'app', mfa: t.passed.has('mfa') || t.passed.has('enroll'), device: t.device });
   audit(req, 'signed-in', { user: u.username, via: 'app', device: t.device?.name });
-  res.json({ ok: true, token: tok, user: safeUser(u), home: appHome(req), ...(t.recovery ? { recovery: t.recovery } : {}) });
+  gateSignedIn(req, null, u, { kind: 'app', device: t.device });
+  res.json({ ok: true, token: tok, user: safeUser(u), home: appHome(req), ...appGate(tok), ...(t.recovery ? { recovery: t.recovery } : {}) });
 }
 app.post('/api/app/login', express.json({ limit: '4kb' }), asyncRoute(async (req, res) => {
   if (!signInOn()) return res.status(409).json({ error: isDemo() ? 'This is the demo - it has no accounts. Pair with a real CasaTorch.' : 'Set up sign-in on this CasaTorch first (it is set up during setup).' });
@@ -124,7 +131,8 @@ app.post('/api/app/claim', express.json({ limit: '4kb' }), (req, res) => {
   const device = cleanDevice(req.body?.device);
   const { tok } = issueSession(req, u, { kind: 'app', mfa: true, device });
   audit(req, 'phone-paired', { user: u.username, device: device.name });
-  res.json({ ok: true, token: tok, user: safeUser(u), home: appHome(req) });
+  gateNotice('paired', req, u, device);
+  res.json({ ok: true, token: tok, user: safeUser(u), home: appHome(req), ...appGate(tok) });
 });
 
 /* ---- the app, signed in ---- */
@@ -175,6 +183,7 @@ app.post('/api/app/push/test', async (req, res) => {
 app.post('/api/app/signout', (req, res) => {
   const s = appSession(req, res); if (!s) return;
   delete sessions[s.key]; saveSessions(); push.apps = (push.apps || []).filter((x) => x.session !== s.id); savePush();
+  if (gateActive()) gateRevoke(s.id).catch(() => {});   // its edge tickets go too
   audit(req, 'signed-out', { user: req.user.username, via: 'app' }); res.json({ ok: true });
 });
 /* A session that ends (signed out elsewhere, removed) takes its phone's alerts with it, on the next send. */
