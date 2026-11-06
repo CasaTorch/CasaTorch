@@ -52,9 +52,11 @@ const haCheck = async (c) => (await c.req('GET', '/api/doctor?fresh=1', null, 60
 const alive = (child) => child.exitCode == null && !child.signalCode;
 
 /* A CasaTorch on a data folder we choose (so it can be stopped and started again on the same one). */
-async function startOn(data, port, env = {}) {
+/* logDir: where the server's output goes - never the small RAM disk itself: once that is full, the log can't be written,
+   the pipe stops being read, and the server blocks writing its own output (a test artifact, not a CasaTorch bug). */
+async function startOn(data, port, env = {}, logDir = path.dirname(data)) {
   const child = spawn(process.execPath, ['server.js'], { cwd: L.APP, env: { ...process.env, CASATORCH_DATA_DIR: data, PORT: String(port), CASATORCH_DEMO: '', NODE_ENV: 'test', CASATORCH_HA_QUIET_SECONDS: '12', ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
-  const log = path.join(path.dirname(data), `${path.basename(data)}-${port}.log`), out = fs.createWriteStream(log, { flags: 'a' });
+  const log = path.join(logDir, `${path.basename(data)}-${port}.log`), out = fs.createWriteStream(log, { flags: 'a' });
   child.stdout.pipe(out); child.stderr.pipe(out); child.logFile = log;
   process.on('exit', () => { try { child.kill('SIGKILL'); } catch { /* gone */ } });
   await L.waitFor(`http://127.0.0.1:${port}/api/health`, 60000, Object.assign(child, { label: 'CasaTorch' }));
@@ -143,7 +145,8 @@ try {
     try {
       const d = path.join(tiny, 'data'), p2 = await L.freePort(), B2 = `http://127.0.0.1:${p2}`;
       fs.mkdirSync(d, { mode: 0o700 });
-      s2 = await startOn(d, p2);
+      const logs2 = L.tmpDir('chaos-tmpfs-logs');
+      s2 = await startOn(d, p2, {}, logs2);
       const k = client(B2);
       check('disk full: set up on the small disk', await setUp(k, null));
       await k.req('POST', '/api/mycal', { title: 'Before full', date: '2026-11-02' });
@@ -171,7 +174,7 @@ try {
       const e2 = await k.req('POST', '/api/mycal', { title: 'After freeing', date: '2026-11-04' });
       check('disk full: saving works again once there is space', e2.s === 200, `HTTP ${e2.s}`);
       await stopSoft(s2);
-      s2 = await startOn(d, p2);
+      s2 = await startOn(d, p2, {}, logs2);
       const k2 = client(B2); await k2.login();
       const all = await k2.req('GET', '/api/mycal');
       check('disk full: after a restart everything saved is there', ['Before full', 'After freeing'].every((t) => JSON.stringify(all.j).includes(t)));
