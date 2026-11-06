@@ -18,7 +18,9 @@ updates:
       - dependency-name: express
         update-types: ["version-update:semver-major"]
 
-  # The Node.js base image (pinned to an exact patch release). Stays on Node.js 22: a new major is a deliberate move.
+  # The Node.js base image, pinned to an exact patch release and its digest (tag@sha256:...). Dependabot moves both in
+  # app/Dockerfile; ha-addon/build.yaml and the add-on's ARG BUILD_FROM follow by hand in the same pull request - a unit
+  # test (supply-chain-unit.mjs) fails until all three name the same image. Stays on Node.js 22: a new major is deliberate.
   - package-ecosystem: docker
     directories: [/app, /ha-addon]
     schedule: { interval: weekly, day: monday, time: "06:00" }

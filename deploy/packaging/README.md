@@ -43,3 +43,27 @@ builds unsigned, as before:
 Build one locally: `deploy/packaging/bundle.sh` (all platforms need it first),
 then `linux/build-deb.sh amd64`, `macos/build-pkg.sh` (on a Mac), `iscc windows/casatorch.iss`
 (on Windows), or `sudo pi/build-image.sh` (Linux, with qemu-user-static).
+
+## How each install is locked down (and what is left open, on purpose)
+
+| Install | Runs as | Sandbox | Secret key kept in |
+|---|---|---|---|
+| Linux .deb / Raspberry Pi | `casatorch` system user | systemd: `ProtectSystem=strict`, no capabilities, `SystemCallFilter=@system-service` minus privileged/resources, private /tmp and devices, hidden processes, task and memory limits (`systemd-analyze security casatorch.service`: 1.3) | systemd credentials (TPM2 when there is one), opened by `casatorch-key` before each start |
+| macOS .pkg | `_casatorch` (hidden system user; `nobody` if it can't be made) | launchd starts it as root only to read the Keychain; CasaTorch drops to its user before anything else and refuses to go on as root; data folder 0700 | the System keychain |
+| Windows | Network Service (not an administrator) | data folder ACL: SYSTEM, Administrators and Network Service only | Windows data protection (DPAPI) for Network Service |
+| Docker / NAS / Unraid | uid 1000 (`node`) | read-only root, tmpfs /tmp (noexec), `cap_drop: ALL`, no-new-privileges, pids/memory/CPU limits, no setuid programs or npm in the image | a `casatorch_key` Docker secret if given, else the key file |
+| Home Assistant add-on | root inside the container only to give /data to `node`, then `node` | Home Assistant's AppArmor, no Supervisor/Docker/hardware access | the key file (the add-on has no key store) |
+
+Left open, and why:
+- **MemoryDenyWriteExecute** (systemd): Node.js's JIT needs memory that is written and then run.
+- **Network**: CasaTorch talks to devices on the home network, so no `PrivateNetwork`/`IPAddressDeny`; `host_network` /
+  `network_mode: host` let it find them. `AF_NETLINK` is how Node.js lists network interfaces.
+- **PrivateUsers / ProcSubset** (systemd): some Raspberry Pi and NAS kernels lack user namespaces; Health reads
+  /proc for processor and memory figures.
+- **COEP** (browser): camera pictures, news and map images come from other sites that send no CORP header.
+- **mtr** is not in the Docker image: it needs raw sockets, which the container never gets (traceroute and tracepath
+  work without them).
+- The container's one-time owner fix (`user: "0"` with `CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID`) is only for a
+  settings folder a NAS made as root; once it belongs to 1000:1000 both lines can go.
+- **Without a TPM2 chip** (most Raspberry Pis), systemd's host key sits on the same disk: the key store then protects a
+  copy of the data folder, not a stolen disk. Use disk encryption for that.
