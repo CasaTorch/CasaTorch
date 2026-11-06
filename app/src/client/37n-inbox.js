@@ -33,7 +33,7 @@ function inboxOpen() {
       d.unread ? el('button', { class: 'btn small', onclick: () => act('readAll') }, icon('check', 16), T('Mark all read')) : null,
       d.items.length ? el('button', { class: 'btn small ghost', onclick: () => act('clearAll') }, T('Clear all')) : null);
     box.replaceChildren(head, d.items.length ? el('ul', { class: 'inbox-list' }, d.items.map((x) => inboxRow(x, act)))
-      : el('div', { class: 'inbox-empty' }, icon('checkc', 28), el('b', {}, T('You\'re all caught up.')), el('span', { class: 'small muted' }, T('What your alert settings show you in the app lands here.')), el('a', { class: 'small', href: '#settings/alerts', onclick: () => m?.remove() }, T('Alert settings'))));
+      : el('div', { class: 'inbox-empty' }, icon('checkc', 28), el('b', {}, T('You\'re all caught up.')), el('span', { class: 'small muted' }, T('What your alert settings show you in the app lands here.')), el('a', { class: 'small', href: '#settings/alerts', onclick: () => m?.remove() }, T('Alert settings')), typeof docLink === 'function' ? docLink('inbox') : null));
   };
   const fail = (err) => box.replaceChildren(el('div', { class: 'inbox-empty', role: 'alert' }, icon('info', 24), el('b', {}, T('The inbox didn\'t load')), el('span', { class: 'small muted' }, err?.message || ''), el('button', { class: 'btn small', onclick: () => load() }, icon('reset', 16), T('Try again'))));
   const load = async () => { try { draw(await api('/api/inbox')); } catch (err) { fail(err); } };

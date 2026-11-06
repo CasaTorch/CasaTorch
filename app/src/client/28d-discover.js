@@ -87,7 +87,7 @@ function discPanel({ compact = false } = {}) {
     foot.textContent = r.busy ? T('Looking around your network… about 30 seconds.') : r.at ? T('Last look: {when}', { when: fmt(r.at, { hour: 'numeric', minute: '2-digit', weekday: 'short' }) }) : '';
     if (r.busy) setTimeout(() => { if (box.isConnected) load(); }, 8000);
   };
-  box.append(el('div', { class: 'row wrap', style: 'gap:10px;align-items:center;margin-bottom:8px' }, icon('search', 18), el('b', { class: 'grow' }, T('New devices found')), again), list,
+  box.append(el('div', { class: 'row wrap', style: 'gap:10px;align-items:center;margin-bottom:8px' }, icon('search', 18), el('b', { class: 'grow' }, T('New devices found')), docLink('connect.discover', { icon: true, topic: T('New devices found') }), again), list,
     el('details', { class: 'disc-by-addr' }, el('summary', { class: 'small' }, T('Add by address')),
       el('p', { class: 'tiny muted' }, T('Know a device\'s address? CasaTorch asks it what it is. Only addresses on your home network work.')),
       el('div', { class: 'row', style: 'gap:8px' }, el('div', { class: 'grow' }, addr), el('button', { class: 'btn small', onclick: identify }, T('Find it'))), idMsg),

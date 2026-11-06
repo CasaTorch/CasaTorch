@@ -66,6 +66,13 @@
   "sources",
   "speed"
  ],
+ "connect/new-devices.html": [
+  "add",
+  "address",
+  "privacy",
+  "remove",
+  "what"
+ ],
  "connect/overview.html": [
   "change",
   "local",
@@ -107,6 +114,7 @@
  ],
  "help/remote-access.html": [
   "app",
+  "approved",
   "basic",
   "diagram",
   "faq",
@@ -119,6 +127,11 @@
   "who",
   "working"
  ],
+ "help/remove.html": [
+  "after",
+  "app",
+  "uninstall"
+ ],
  "help/security.html": [
   "alerts",
   "backups",
@@ -128,9 +141,11 @@
   "entry",
   "key",
   "limits",
+  "log",
   "logs",
   "map",
   "phone",
+  "releases",
   "report",
   "sealed",
   "signin",
@@ -165,6 +180,12 @@
   "safe"
  ],
  "help/whats-new.html": [
+  "next",
+  "next-discovery",
+  "next-more",
+  "next-pages",
+  "next-pro",
+  "next-security",
   "v040",
   "v041",
   "v0410",
@@ -211,7 +232,14 @@
   "v090-pages",
   "v090-setup",
   "v090-trust",
-  "v090-voice"
+  "v090-voice",
+  "v091",
+  "v092",
+  "v093",
+  "v093-chimes",
+  "v093-inbox",
+  "v093-more",
+  "v093-timeline"
  ],
  "index.html": [
   "basic-pro",
@@ -245,6 +273,8 @@
  "pro/about.html": [
   "add",
   "buy",
+  "check",
+  "ended",
   "renew",
   "trial",
   "what"
@@ -271,6 +301,7 @@
   "what"
  ],
  "pro/ring.html": [
+  "chimes",
   "connect",
   "disconnect",
   "speed",
@@ -368,6 +399,14 @@
   "size",
   "tablet"
  ],
+ "use/devices.html": [
+  "alerts",
+  "approved",
+  "countries",
+  "everyone",
+  "list",
+  "lock"
+ ],
  "use/family-board.html": [
   "chores",
   "family",
@@ -391,10 +430,12 @@
   "history",
   "open",
   "privacy",
+  "score",
   "self-repair"
  ],
  "use/home-screen.html": [
   "control",
+  "export",
   "look",
   "more",
   "own-weather",
@@ -406,6 +447,7 @@
   "sizes",
   "themes",
   "tiles",
+  "undo",
   "whose"
  ],
  "use/household.html": [
@@ -418,6 +460,13 @@
   "reminder",
   "who",
   "widget"
+ ],
+ "use/inbox.html": [
+  "phones",
+  "privacy",
+  "use",
+  "what",
+  "whose"
  ],
  "use/mobile-app.html": [
   "accounts",
@@ -457,6 +506,13 @@
   "network",
   "wall",
   "who"
+ ],
+ "use/timeline.html": [
+  "filter",
+  "open",
+  "plans",
+  "privacy",
+  "what"
  ],
  "use/voice.html": [
   "alexa",

@@ -23,7 +23,7 @@ async function removeCard(s) {
   const me = await api('/api/auth/me').catch(() => null);
   if (me && me.signIn !== false && me.user?.role !== 'owner') return null;
   return el('div', { class: 'card rm-card' }, el('h2', {}, T('Remove CasaTorch')),
-    el('p', { class: 'small muted' }, T('Signs every phone and browser out, deletes your secure address and its names at casatorch.com, and can erase everything CasaTorch keeps on this computer. Then it shows how to uninstall the program.')),
+    el('p', { class: 'small muted' }, T('Signs every phone and browser out, deletes your secure address and its names at casatorch.com, and can erase everything CasaTorch keeps on this computer. Then it shows how to uninstall the program.'), ' ', docLink('settings.remove')),
     el('button', { class: 'btn danger', onclick: () => removeFlow(me) }, icon('trash', 14), T('Remove CasaTorch…')));
 }
 function removeFlow(me) {
