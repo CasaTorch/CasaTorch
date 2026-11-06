@@ -60,11 +60,11 @@ const asyncRoute = (fn) => (req, res, next) => { Promise.resolve(fn(req, res, ne
 
 /* ---- the audit log: one JSON line per event, trimmed to the last 5,000 ---- */
 function audit(req, event, detail = {}) {
-  const line = JSON.stringify({ at: nowIso(), event, user: req?.user?.username || detail.user || null, ip: req ? clientIp(req) : null, ...detail });
+  const line = auditChainLine({ at: nowIso(), event, user: req?.user?.username || detail.user || null, ip: req ? clientIp(req) : null, ...detail });   // chained: tamper-evident (07z-audit-chain.js)
   try {
     fs.appendFileSync(AUDIT_FILE, `${line}\n`, { mode: 0o600 });
     if (fs.statSync(AUDIT_FILE).size > 2_000_000) { const keep = fs.readFileSync(AUDIT_FILE, 'utf8').trim().split('\n').slice(-5000); writeFileSafe(AUDIT_FILE, `${keep.join('\n')}\n`, 0o600); }   // swapped in whole: a power cut mid-trim can't empty the log
-  } catch { /* never let logging break sign-in */ }
+  } catch { auditHead = undefined; /* never let logging break sign-in (and the chain goes on from what is really in the file) */ }
 }
 
 /* ---- people ---- */
@@ -532,7 +532,7 @@ app.get('/api/auth/panel', (req, res) => {
   res.redirect('/?panel=1');
 });
 app.get('/api/auth/admin/audit', requireRole('admin'), (_req, res) => {
-  let lines = []; try { lines = fs.readFileSync(AUDIT_FILE, 'utf8').trim().split('\n').slice(-300).reverse().map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch { /* none yet */ }
+  let lines = []; try { lines = fs.readFileSync(AUDIT_FILE, 'utf8').trim().split('\n').slice(-300).reverse().map((l) => { try { const { ch: _c, ...e } = JSON.parse(l); return e; } catch { return null; } }).filter(Boolean); } catch { /* none yet */ }
   res.json({ events: lines });
 });
 app.get('/api/auth/admin/sessions', requireRole('admin'), (_req, res) => res.json({ sessions: Object.values(sessions).map((s) => ({ id: s.id, user: userById(s.userId)?.name || '?', kind: s.kind, seen: s.seen, created: s.created, ip: s.ip, agent: s.agent })) }));

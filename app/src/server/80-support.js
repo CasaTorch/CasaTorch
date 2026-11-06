@@ -430,7 +430,7 @@ const ACT_KIND_OF = Object.fromEntries(Object.entries(ACT_KINDS).flatMap(([k, li
 const ACT_BAD = new Set([...ACT_KINDS.failed, 'secure-access-stopped', 'dev-switches-on']);   // shown in red
 const ACT_KEEP_DAYS = 365, ACT_KEEP_N = 5000;
 function supAuditRead() {
-  try { return fs.readFileSync(AUDIT_FILE, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter((e) => e && e.at && e.event); } catch { return []; }
+  try { return fs.readFileSync(AUDIT_FILE, 'utf8').split('\n').filter(Boolean).map((l) => { try { const { ch: _c, ...e } = JSON.parse(l); return e; } catch { return null; } }).filter((e) => e && e.at && e.event); } catch { return []; }
 }
 /** Filter activity: kind (a group above, or 'all'), q (words), days, before (an ISO time, for "show more"). Pure (unit-tested). */
 function activityFilter(events, { kind = 'all', q = '', days = 0, before = null, limit = 100 } = {}) {
@@ -482,7 +482,8 @@ app.get('/api/support/activity/export', requireRole('admin'), (req, res) => {
   const json = req.query.format === 'json', name = `casatorch-activity-${new Date().toISOString().slice(0, 10)}.${json ? 'json' : 'csv'}`;
   audit(req, 'activity-exported', { format: json ? 'json' : 'csv', n: list.length });
   res.setHeader('Cache-Control', 'no-store'); res.setHeader('Content-Disposition', `attachment; filename="${name}"`); res.setHeader('X-Content-Type-Options', 'nosniff');
-  if (json) return res.type('application/json').send(JSON.stringify({ exported: nowIso(), version: VERSION, filter: { kind, days }, events: list.map(({ bad: _b, ...e }) => e) }, null, 1));
+  // signed (Ed25519) with the chain's check in it: anyone can tell later whether the file was edited (07z-audit-chain.js)
+  if (json) return res.type('application/json').send(JSON.stringify(auditSignedExport(list.map(({ bad: _b, ...e }) => e), { exported: nowIso(), version: VERSION, filter: { kind, days } }), null, 1));
   res.type('text/csv; charset=utf-8').send(activityCsv(list));
 });
 

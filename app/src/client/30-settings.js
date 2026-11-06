@@ -402,7 +402,7 @@ async function healthCards(s, me, fresh = false) {
         el('div', { class: 'grow' }, el('div', { class: 'small' }, fmtWhen(h.at)), el('div', { class: 'tiny muted' }, T(SNAP_REASON(h.reason)), k === 0 ? ` · ${T('newest')}` : '')),
         owner && k > 0 && !d.demo ? fixBtn({ status: 'warn', fix: { action: 'restore', id: h.id, label: T('Put back') } }) : null)) : [el('p', { class: 'small muted' }, T('No copies yet.'))]),
       el('div', { class: 'row wrap', style: 'margin-top:10px' }, d.demo ? null : save));
-    wrap.replaceChildren(...[summary, ...cards, healed, hist].filter(Boolean));
+    wrap.replaceChildren(...[summary, securityScoreCard(d.security), ...cards, healed, hist].filter(Boolean));   // 31k-keys.js
   };
   await draw(fresh);
   return [wrap];

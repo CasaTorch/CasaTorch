@@ -64,7 +64,8 @@ when an update is available; please install it promptly.
 - **No install scripts.** Packages CasaTorch uses never run their own scripts when installed - on the box, in the
   installers or in CI.
 - **Sign-in is protected** with per-person accounts and roles, optional (or required) two-step sign-in, limits on
-  guessing, and a security log.
+  guessing, and a tamper-evident activity log (each event sealed to the one before; its JSON download is signed).
+  Settings › Health shows a security score: which protections are on, and how to turn on the rest.
 - **No open ports.** CasaTorch never asks you to open a port on your router.
 - **Strict browser rules.** CasaTorch's pages load scripts and styles only from your CasaTorch, use Trusted Types, and
   are isolated from other sites; other sites can't frame them, read them or use their windows.

@@ -40,3 +40,16 @@ function newKeyModal(me, k) {
     msg, el('div', { class: 'row wrap' }, go, el('button', { class: 'btn ghost', onclick: () => $('#modal')?.remove() }, T('Cancel')))), { title: T('New secret key') });
   setTimeout(() => pw.focus(), 50);
 }
+/* Health › Security score: which protections are on, each with where to turn it on (79k-score.js). */
+function securityScoreCard(sc) {
+  if (!sc?.items?.length) return null;
+  const pct = Math.round((sc.on / sc.of) * 100), col = sc.on === sc.of ? 'var(--good)' : pct >= 60 ? 'var(--warn)' : 'var(--bad)';
+  return el('div', { class: 'card', style: 'grid-column:1/-1' },
+    el('div', { class: 'row between wrap', style: 'gap:10px' }, el('h2', { style: 'margin:0' }, icon('lock', 15), T('Security score')),
+      el('b', { style: `color:${col}` }, T('{n} of {total} protections on', { n: sc.on, total: sc.of }))),
+    el('div', { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(sc.of), 'aria-valuenow': String(sc.on), 'aria-label': T('Security score'), style: 'height:6px;border-radius:99px;background:var(--line);margin:10px 0 4px;overflow:hidden' },
+      el('div', { style: `height:100%;width:${pct}%;background:${col}` })),
+    ...sc.items.map((i) => el('div', { class: 'row between', style: 'gap:10px;padding:8px 0;border-top:1px solid var(--line)' },
+      el('div', { class: 'row', style: 'gap:10px' }, el('span', { role: 'img', 'aria-label': i.on ? T('On') : T('Off'), style: `width:10px;height:10px;border-radius:50%;flex:none;background:${i.on ? 'var(--good)' : 'var(--warn)'}` }), el('span', { class: 'small' }, T(i.title))),
+      !i.on && i.fix ? el('a', { class: 'btn small', href: i.fix }, T('Turn on')) : el('span', { class: 'tiny muted' }, i.on ? T('On') : T('Off')))));
+}

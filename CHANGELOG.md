@@ -45,6 +45,12 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Stricter browser protections.** CasaTorch's pages now run with no inline scripts or styles at all, Trusted Types
   (a piece of text can never turn into a script on the page), full isolation from other sites' windows and pages, no
   referrer sent anywhere, only the browser features it uses, and a year of HTTPS-only once you use the secure address.
+- **A tamper-evident activity log.** Every event in the activity log is sealed to the one before it, so an event
+  changed, removed or slipped in by anything other than CasaTorch shows up in Health. The JSON download is signed, so
+  anyone can check later that it wasn't edited.
+- **Security score** (Settings › Health): which protections are on - sign-in, two-step sign-in, the secure address,
+  the key store, updates, backups, access from away, the activity log and CasaTorch's own files - each with a button to
+  turn it on.
 
 ## 0.9.3
 

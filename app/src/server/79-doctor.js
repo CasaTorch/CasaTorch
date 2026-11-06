@@ -281,7 +281,7 @@ async function doctorRun() {
     const one = (id, fn) => timed(Promise.resolve().then(fn), 15000, id).catch((err) => chk(id, 'connections', id, 'bad', errDetail(err)));
     const conn = isDemo() ? DOC_DEMO.map(([id, t, d]) => chk(id, 'connections', t, 'ok', d)) : await Promise.all(Object.entries(DOC_CONN).map(([id, fn]) => one(id, fn)));
     await storageUse().catch(() => {});
-    const sys = await Promise.all([docStorage, docMemory, docClock, docDataFolder, docSettings, docSignIns, docInternet, docRemote, docEdgeGate, docCerts, docKeyStore, docBackup, docUpdates, docDevSwitches].map((fn) => one(fn.name.replace(/^doc/, '').toLowerCase(), fn)));
+    const sys = await Promise.all([docStorage, docMemory, docClock, docDataFolder, docSettings, docSignIns, docInternet, docRemote, docEdgeGate, docCerts, docKeyStore, docAuditLog, docBackup, docUpdates, docDevSwitches].map((fn) => one(fn.name.replace(/^doc/, '').toLowerCase(), fn)));
     const checks = [...sys, ...conn].filter(Boolean);
     DOC.checks = checks; DOC.at = nowIso();
     if (!isDemo()) doctorAlerts(checks);
@@ -398,7 +398,7 @@ app.get('/api/doctor', requireRole('admin'), async (req, res) => {
     at: DOC.at, checks: [...DOC.checks].sort((a, b) => order[a.status] - order[b.status]),
     healed: HEAL.slice(-8).reverse(),
     history: settingsHistory().slice(0, 12).map((id) => ({ id, at: new Date(shTime(id)).toISOString(), reason: id.replace(/^\d{8}T\d{6}Z-/, '') })),
-    demo: isDemo(), canRestart: INSTALL !== 'manual',
+    demo: isDemo(), canRestart: INSTALL !== 'manual', security: securityScore(),   // 79k-score.js
   });
 });
 app.post('/api/doctor/fix', requireRole('admin'), express.json({ limit: '2kb' }), async (req, res) => {
