@@ -111,6 +111,18 @@ export default async function gateUnit(t) {
       for (const x of texts) { const r = rows.get(x); assert.ok(r, `not in i18n-strings.tsv: ${x}`); assert.equal(r.length, 14, x); assert.ok(r.every(Boolean), x); }
       assert.ok(texts.length > 60, String(texts.length));
     });
+    await t('edge gate: when casatorch.com already has a higher epoch (this box lost its record: a restore, a new key), the box takes it on', async () => {
+      const st = G.gateState(), keep = { epoch: st.epoch, v: st.v, synced: st.synced, registered: st.registered }, realFetch = globalThis.fetch, sent = [];
+      globalThis.fetch = async (u, init) => { sent.push(JSON.parse(init.body)); return new Response(JSON.stringify({ ok: true, active: true, epoch: keep.epoch + 5, graceUntil: null }), { status: 200, headers: { 'Content-Type': 'application/json' } }); };
+      try {
+        const r = await G.gateSync(); assert.equal(r.ok, true);
+        assert.equal(sent[0].state.epoch, keep.epoch);
+        assert.equal(st.epoch, keep.epoch + 5, 'the epoch in place at the edge');
+        assert.equal(parse(G.gateBrowserTicket('bdevice7').t).p.e, keep.epoch + 5, 'new tickets carry it, so the edge takes them');
+        globalThis.fetch = async () => new Response(JSON.stringify({ ok: true, active: true, epoch: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        await G.gateSync(); assert.equal(st.epoch, keep.epoch + 5, 'never lowered by an answer');
+      } finally { globalThis.fetch = realFetch; Object.assign(st, keep); }
+    });
     t('edge gate: remoteView says when remote access is locked; the tunnel request says the box knows the gate', () => {
       const v = RM.remoteView({ on: true, state: 'connected', check: { ok: true }, locked: true });
       assert.equal(v.status, 'locked'); assert.equal(v.title, 'Remote access is locked');

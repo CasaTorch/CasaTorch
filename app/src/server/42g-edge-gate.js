@@ -94,7 +94,12 @@ function gateSync({ handoff = null, grace } = {}) {
       let res, j = {};
       try { res = await fetch(GATE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CT-Sig': sig }, body, signal: AbortSignal.timeout(15_000) }); j = await res.json().catch(() => ({})); }
       catch (e) { gate.lastSync = { at: nowIso(), ok: false, error: `casatorch.com couldn't be reached (${e.cause?.code || e.name})` }; gateSave(); gateRetry(); return { ok: false, error: gate.lastSync.error }; }
-      if (res.ok && j.active) { st.registered = { host, pub: k.pub, at: st.registered?.host === host ? st.registered.at : nowIso() }; st.synced = st.v; st.graceUntil = j.graceUntil || null; gate.lastSync = { at: nowIso(), ok: true }; gateSave(); return { ok: true }; }
+      if (res.ok && j.active) {
+        // casatorch.com never lowers the epoch (this box may have lost its own record of it: a backup restored on new
+        // hardware, a key that no longer opens edge-gate.json): take on the one in place, so new tickets get through
+        if (Number.isInteger(j.epoch) && j.epoch > st.epoch && j.epoch <= 2 ** 31) st.epoch = j.epoch;
+        st.registered = { host, pub: k.pub, at: st.registered?.host === host ? st.registered.at : nowIso() }; st.synced = st.v; st.graceUntil = j.graceUntil || null; gate.lastSync = { at: nowIso(), ok: true }; gateSave(); return { ok: true };
+      }
       if (res.status === 409 && j.stale && attempt === 0) continue;   // casatorch.com has a newer one (this box's clock went back): once more, newer
       gate.lastSync = { at: nowIso(), ok: false, error: String(j.error || `casatorch.com answered ${res.status}`).slice(0, 160) }; gateSave();
       if (res.status >= 500 || res.status === 429) gateRetry();

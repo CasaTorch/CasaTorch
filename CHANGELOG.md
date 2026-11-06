@@ -51,6 +51,7 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Security score** (Settings › Health): which protections are on - sign-in, two-step sign-in, the secure address,
   the key store, updates, backups, access from away, the activity log and CasaTorch's own files - each with a button to
   turn it on.
+- Secure access: a CasaTorch restored on new hardware no longer lets devices that were signed out of away access back in.
 
 ## 0.9.3
 
