@@ -4305,6 +4305,7 @@
 "The map could not be loaded.": "Kartan kunde inte laddas.",
 "The microphone is blocked - allow it for this site in the browser's settings.": "Mikrofonen är blockerad - tillåt den för den här webbplatsen i webbläsarens inställningar.",
 "The names of your settings - never their values": "Namnen på dina inställningar - aldrig värdena",
+"The new secret key wasn't used: {n} files couldn't be saved, so the old key stays and nothing was changed. Check the data folder has free space and can be written to, then try again.": "Den nya hemliga nyckeln användes inte: {n} filer kunde inte sparas, så den gamla nyckeln finns kvar och inget ändrades. Kontrollera att datamappen har ledigt utrymme och går att skriva till och försök sedan igen.",
 "The next days": "De kommande dagarna",
 "The next pickup (or any one you know)": "Nästa hämtning (eller någon du känner till)",
 "The next things on your calendars": "Nästa saker i dina kalendrar",

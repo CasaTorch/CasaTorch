@@ -118,6 +118,29 @@ export default async function keystoreUnit(t) {
       assert.equal(K.ksRotatePending(file), null, 'nothing waiting: nothing done');
     });
 
+    await t('rotation: a file that can\'t be saved (read-only, disk full) stops the rotation and puts every value back on the old key - nothing is lost', () => {
+      const dir = path.join(tmp, 'nowrite'), file = path.join(dir, 'secret.key'), k1 = crypto.randomBytes(32);
+      fs.mkdirSync(path.join(dir, '.settings-history', '20261101T000000Z-start'), { recursive: true });
+      fs.writeFileSync(file, k1.toString('base64'));
+      fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ a: { token: seal2(k1, 'a.token', 'one') } }));
+      fs.writeFileSync(path.join(dir, 'users.json'), JSON.stringify({ users: [{ totp: { secret: seal2(k1, 'users.totp', 'two') } }] }));
+      fs.writeFileSync(path.join(dir, 'inbox.json'), seal2(k1, 'inbox', 'three'));
+      const h = path.join(dir, '.settings-history', '20261101T000000Z-start'); fs.writeFileSync(path.join(h, 'secret.key'), k1.toString('base64')); fs.writeFileSync(path.join(h, 'config.json'), JSON.stringify({ a: { token: seal2(k1, 'a.token', 'four') } }));
+      fs.mkdirSync(path.join(dir, `users.json.${process.pid}.ks.tmp`));   // users.json can't be written (as if read-only, even for root)
+      K.ksStageRotation(file);
+      const r = K.ksRotatePending(file);
+      assert.equal(r.ok, false, JSON.stringify(r));
+      assert.ok(K.ksOpen(fs.readFileSync(file, 'utf8')).key.equals(k1), 'the old key stays');
+      assert.ok(!fs.existsSync(`${file}.next`) && fs.readdirSync(dir).some((n) => n.startsWith('secret.key.next.unused-')), 'the new key is put aside');
+      assert.equal(open2(k1, JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8')).a.token), 'one');
+      assert.equal(open2(k1, JSON.parse(fs.readFileSync(path.join(dir, 'users.json'), 'utf8')).users[0].totp.secret), 'two');
+      assert.equal(open2(k1, fs.readFileSync(path.join(dir, 'inbox.json'), 'utf8')), 'three');
+      assert.ok(K.ksOpen(fs.readFileSync(path.join(h, 'secret.key'), 'utf8')).key.equals(k1));
+      assert.equal(open2(k1, JSON.parse(fs.readFileSync(path.join(h, 'config.json'), 'utf8')).a.token), 'four');
+      const was = { ...K.KS }; Object.assign(K.KS, { rotated: r, problem: null });
+      try { const c = K.docKeyStore(); assert.equal(c.status, 'warn'); assert.match(JSON.stringify(c), /new secret key wasn't used/); } finally { Object.assign(K.KS, was); }
+    });
+
     await t('rotation: when the old key can\'t be opened, nothing is changed and the staged key is kept aside', () => {
       const dir = path.join(tmp, 'bad'), file = path.join(dir, 'secret.key');
       fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, 'ctkw1.secret.AAAA'); fs.writeFileSync(`${file}.next`, crypto.randomBytes(32).toString('base64'));

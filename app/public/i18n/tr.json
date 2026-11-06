@@ -4351,6 +4351,7 @@
 "The map could not be loaded.": "Harita yüklenemedi.",
 "The microphone is blocked - allow it for this site in the browser's settings.": "Mikrofon engellendi - tarayıcı ayarlarından bu siteye izin verin.",
 "The names of your settings - never their values": "Ayarlarınızın adları - değerleri asla",
+"The new secret key wasn't used: {n} files couldn't be saved, so the old key stays and nothing was changed. Check the data folder has free space and can be written to, then try again.": "Yeni gizli anahtar kullanılmadı: {n} dosya kaydedilemedi, bu yüzden eski anahtar kaldı ve hiçbir şey değişmedi. Veri klasöründe boş alan olduğunu ve yazılabildiğini kontrol edip yeniden deneyin.",
 "The next days": "Sonraki günler",
 "The next pickup (or any one you know)": "Sonraki toplama (veya bildiğiniz herhangi biri)",
 "The next things on your calendars": "Takvimlerinizdeki sıradaki şeyler",

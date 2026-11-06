@@ -4367,6 +4367,7 @@
 "The map could not be loaded.": "नक्शा लोड नहीं हो सका।",
 "The microphone is blocked - allow it for this site in the browser's settings.": "माइक्रोफ़ोन ब्लॉक है - ब्राउज़र की सेटिंग में इस साइट के लिए अनुमति दें।",
 "The names of your settings - never their values": "आपकी सेटिंग्स के नाम - उनके मान कभी नहीं",
+"The new secret key wasn't used: {n} files couldn't be saved, so the old key stays and nothing was changed. Check the data folder has free space and can be written to, then try again.": "नई गुप्त कुंजी का उपयोग नहीं हुआ: {n} फ़ाइलें सहेजी नहीं जा सकीं, इसलिए पुरानी कुंजी ही रहेगी और कुछ नहीं बदला। जाँचें कि डेटा फ़ोल्डर में खाली जगह है और उसमें लिखा जा सकता है, फिर दोबारा आज़माएँ।",
 "The next days": "अगले दिन",
 "The next pickup (or any one you know)": "अगली उठाई (या कोई भी जो आप जानते हों)",
 "The next things on your calendars": "आपके कैलेंडर की अगली चीज़ें",

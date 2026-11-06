@@ -4293,6 +4293,7 @@
 "The map could not be loaded.": "Impossibile caricare la mappa.",
 "The microphone is blocked - allow it for this site in the browser's settings.": "Il microfono è bloccato - consentilo per questo sito nelle impostazioni del browser.",
 "The names of your settings - never their values": "I nomi delle impostazioni, mai i valori",
+"The new secret key wasn't used: {n} files couldn't be saved, so the old key stays and nothing was changed. Check the data folder has free space and can be written to, then try again.": "La nuova chiave segreta non è stata usata: {n} file non sono stati salvati, quindi resta la chiave precedente e non è cambiato nulla. Controlla che la cartella dei dati abbia spazio libero e sia scrivibile, poi riprova.",
 "The next days": "I prossimi giorni",
 "The next pickup (or any one you know)": "Il prossimo ritiro (o uno che conosci)",
 "The next things on your calendars": "I prossimi impegni nei tuoi calendari",

@@ -20,7 +20,7 @@
  * Rotation (Settings › Safety › New secret key): a new key is staged as secret.key.next and CasaTorch restarts; at
  * the start, before anything opens a secret, every sealed value in the data folder is sealed again with the new key,
  * then the new key replaces the old one. Each value opens with one key or the other, so a power cut halfway through
- * just carries on at the next start.
+ * just carries on at the next start; a file that can't be saved stops it, and every value goes back to the old key.
  * ====================================================================== */
 import { spawnSync as ksSpawn } from 'node:child_process';
 const KS_WRAPPED = /^ctkw1\.([a-z]+)\.([\w-]+)$/;
@@ -130,8 +130,8 @@ const ksKeyOfFile = (file) => { try { return ksOpen(fs.readFileSync(file, 'utf8'
 const ksLooksLikeKey = (text) => { const t = String(text || '').trim(); return KS_WRAPPED.test(t) || (/^[A-Za-z0-9+/]{43}=$/.test(t)); };
 function ksWrite(file, text) {
   const tmp = `${file}.${process.pid}.ks.tmp`, fd = fs.openSync(tmp, 'w', 0o600);
-  try { fs.writeFileSync(fd, text); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
-  fs.renameSync(tmp, file);
+  try { fs.writeFileSync(fd, text); fs.fsyncSync(fd); fs.closeSync(fd); fs.renameSync(tmp, file); }
+  catch (e) { try { fs.closeSync(fd); } catch { /* closed */ } try { fs.rmSync(tmp, { force: true }); } catch { /* gone */ } throw e; }
   try { const d = fs.openSync(path.dirname(file), 'r'); fs.fsyncSync(d); fs.closeSync(d); } catch { /* Windows can't fsync a folder */ }
 }
 /* A key that is still the plain key, with a key store now there: wrapped in place (checked first), and the plain copies
@@ -184,7 +184,7 @@ function ksResealDir(dir, k1, k2, n, depth = 0, top = dir) {
     const t = text.trim(); let out = null;
     if (KS_SEALED.test(t)) out = ksReseal(t, k1, k2, n);
     else if (/^[[{]/.test(t)) { let j; try { j = JSON.parse(t); } catch { continue; } const before = n.values; const r = ksResealJson(j, (s) => ksReseal(s, k1, k2, n)); if (n.values > before) out = JSON.stringify(r, null, /^\{\n\s/.test(t) ? 2 : undefined); }
-    if (out !== null && out !== t) { try { ksWrite(p, out); n.files++; } catch (err) { n.failed++; console.error(`Key rotation: couldn't save ${e.name}: ${err.message}`); } }
+    if (out !== null && out !== t) { try { ksWrite(p, out); n.files++; } catch (err) { n.failed++; n.unsaved = (n.unsaved || 0) + 1; console.error(`Key rotation: couldn't save ${e.name}: ${err.message}`); } }
   }
 }
 /** Finish a rotation asked for in Settings (secret.key.next): run at the start, before anything opens a secret. */
@@ -195,6 +195,17 @@ function ksRotatePending(file) {
   if (!k2 || !k1) { try { fs.renameSync(next, `${next}.unused-${Date.now()}`); } catch { /* read-only */ } console.error('Key rotation: the old or the new key could not be opened, so nothing was changed.'); KS.rotated = { at: new Date().toISOString(), ok: false }; return KS.rotated; }
   const n = { values: 0, files: 0, already: 0, failed: 0 }, t0 = Date.now();
   ksResealDir(path.dirname(file), k1, k2, n);
+  if (n.unsaved) {
+    // A file couldn't be saved (read-only, a full disk): its values are still sealed with the old key, so the new key
+    // must not take over. Everything already sealed again goes back to the old key, and the new key is put aside.
+    const back = { values: 0, files: 0, already: 0, failed: 0 };
+    ksResealDir(path.dirname(file), k2, k1, back);
+    try { fs.renameSync(next, `${next}.unused-${Date.now()}`); } catch { /* read-only */ }
+    k2.fill(0);
+    console.error(`Key rotation stopped: ${n.unsaved} file${n.unsaved === 1 ? '' : 's'} couldn't be saved, so the old key stays and nothing was changed${back.unsaved ? ` (${back.unsaved} couldn't be put back either)` : ''}.`);
+    KS.rotated = { at: new Date().toISOString(), ok: false, values: 0, files: 0, failed: n.unsaved, ms: Date.now() - t0 };
+    return KS.rotated;
+  }
   fs.renameSync(next, file);   // the new key takes over only once every value is sealed with it
   try { const d = fs.openSync(path.dirname(file), 'r'); fs.fsyncSync(d); fs.closeSync(d); } catch { /* Windows */ }
   k1.fill(0);

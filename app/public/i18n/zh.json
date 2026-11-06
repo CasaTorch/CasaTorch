@@ -4370,6 +4370,7 @@
 "The map could not be loaded.": "无法加载地图。",
 "The microphone is blocked - allow it for this site in the browser's settings.": "麦克风被阻止 - 请在浏览器设置中允许此网站使用。",
 "The names of your settings - never their values": "设置的名称——绝不含其值",
+"The new secret key wasn't used: {n} files couldn't be saved, so the old key stays and nothing was changed. Check the data folder has free space and can be written to, then try again.": "未使用新密钥：有 {n} 个文件无法保存，因此保留旧密钥，未做任何更改。请检查数据文件夹有可用空间且可写入，然后重试。",
 "The next days": "未来几天",
 "The next pickup (or any one you know)": "下次收运（或任何已知的一次）",
 "The next things on your calendars": "日历上的下一项",

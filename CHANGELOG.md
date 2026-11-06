@@ -52,6 +52,7 @@ What changed in each CasaTorch version. The illustrated version, with links into
   the key store, updates, backups, access from away, the activity log and CasaTorch's own files - each with a button to
   turn it on.
 - Secure access: a CasaTorch restored on new hardware no longer lets devices that were signed out of away access back in.
+- A new secret key can no longer lose a saved value when a file can't be written during the change: the old key stays.
 
 ## 0.9.3
 

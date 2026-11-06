@@ -4369,6 +4369,7 @@
 "The map could not be loaded.": "지도를 불러오지 못했습니다.",
 "The microphone is blocked - allow it for this site in the browser's settings.": "마이크가 차단되어 있습니다 - 브라우저 설정에서 이 사이트에 허용하세요.",
 "The names of your settings - never their values": "설정 이름만 - 값은 절대 포함하지 않음",
+"The new secret key wasn't used: {n} files couldn't be saved, so the old key stays and nothing was changed. Check the data folder has free space and can be written to, then try again.": "새 비밀 키를 사용하지 않았습니다. 파일 {n}개를 저장할 수 없어 이전 키를 그대로 두었고 아무것도 바뀌지 않았습니다. 데이터 폴더에 여유 공간이 있고 쓸 수 있는지 확인한 뒤 다시 시도하세요.",
 "The next days": "향후 며칠",
 "The next pickup (or any one you know)": "다음 수거일(또는 알고 있는 아무 날)",
 "The next things on your calendars": "캘린더의 다음 일정",

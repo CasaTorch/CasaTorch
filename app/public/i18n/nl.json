@@ -4260,6 +4260,7 @@
 "The map could not be loaded.": "De kaart kon niet worden geladen.",
 "The microphone is blocked - allow it for this site in the browser's settings.": "De microfoon is geblokkeerd - sta hem toe voor deze site in de browserinstellingen.",
 "The names of your settings - never their values": "De namen van je instellingen - nooit de waarden",
+"The new secret key wasn't used: {n} files couldn't be saved, so the old key stays and nothing was changed. Check the data folder has free space and can be written to, then try again.": "De nieuwe geheime sleutel is niet gebruikt: {n} bestanden konden niet worden opgeslagen, dus de oude sleutel blijft en er is niets veranderd. Controleer of de gegevensmap vrije ruimte heeft en beschrijfbaar is, en probeer het opnieuw.",
 "The next days": "De komende dagen",
 "The next pickup (or any one you know)": "De volgende ophaling (of een die je kent)",
 "The next things on your calendars": "De volgende afspraken in je agenda's",

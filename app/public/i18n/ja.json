@@ -4370,6 +4370,7 @@
 "The map could not be loaded.": "マップを読み込めませんでした。",
 "The microphone is blocked - allow it for this site in the browser's settings.": "マイクがブロックされています。ブラウザの設定でこのサイトに許可してください。",
 "The names of your settings - never their values": "設定の名前のみ（値は含みません）",
+"The new secret key wasn't used: {n} files couldn't be saved, so the old key stays and nothing was changed. Check the data folder has free space and can be written to, then try again.": "新しい秘密鍵は使われませんでした。{n} 個のファイルを保存できなかったため、古い鍵のままで何も変更されていません。データフォルダーに空き容量があり書き込めることを確認して、もう一度お試しください。",
 "The next days": "今後数日",
 "The next pickup (or any one you know)": "次回の収集日（わかっている日でも可）",
 "The next things on your calendars": "カレンダーの次の予定",
