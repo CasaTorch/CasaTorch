@@ -3162,7 +3162,7 @@
 "Protect your CasaTorch": "Proteggi il tuo CasaTorch",
 "Protect your account": "Proteggi il tuo account",
 "Public IP": "IP pubblico",
-"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". Your settings are kept.": "Scarica la nuova immagine e ricrea il container: in Portainer o nell'app del NAS scegli \"Pull and redeploy\". Le impostazioni vengono mantenute.",
+"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". If your compose file names an exact image (@sha256:), download the new one from casatorch.com/download first. Your settings are kept.": "Scarica la nuova immagine e ricrea il container: in Portainer o nell'app del NAS scegli \"Pull and redeploy\". Se il file compose indica un'immagine esatta (@sha256:), scarica prima quello nuovo da casatorch.com/download. Le impostazioni vengono mantenute.",
 "Purple": "Viola",
 "Purple and gold": "Viola e oro",
 "Push is off": "L'invio è disattivato",

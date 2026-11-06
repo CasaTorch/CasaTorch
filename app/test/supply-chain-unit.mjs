@@ -45,4 +45,15 @@ export default async function supplyChainUnit(t) {
     assert.ok(!/^env:/m.test(s) && !/^\s+- run:/m.test(s), 'Scorecard: no env and no run steps (needed to publish results)');
   });
 
+  await t('releases: an SBOM for the app and the image, the image signed (cosign keyless) with build provenance, digest in the notes', () => {
+    const r = rd('.github/workflows/release.yml');
+    assert.match(r, /npm sbom [^\n]*--sbom-format cyclonedx/, 'the app SBOM (CycloneDX)');
+    assert.match(r, /anchore\/sbom-action@[0-9a-f]{40}[\s\S]*?format: cyclonedx-json/, 'the image SBOM (CycloneDX)');
+    assert.match(r, /cosign sign --yes [^\n]*@\$\{?DIGEST/, 'the image is signed by digest, never by tag');
+    assert.match(r, /attest-build-provenance@[0-9a-f]{40}[\s\S]*?push-to-registry: true/, 'image provenance pushed to the registry');
+    assert.match(r, /attest-build-provenance@[0-9a-f]{40}[\s\S]*?subject-path:/, 'installer provenance');
+    assert.match(r, /id-token: write/); assert.match(r, /attestations: write/);
+    assert.match(r, /sed "s#image: ghcr.io\/casatorch\/casatorch:latest#image: \$IMAGE:\$V@\$DIGEST#"/, 'the compose file people download names the image by digest');
+    assert.match(r, /cosign verify/, 'the release notes say how to check the image');
+  });
 }

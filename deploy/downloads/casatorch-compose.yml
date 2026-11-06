@@ -1,6 +1,9 @@
 # CasaTorch - for Synology Container Manager, QNAP Container Station, TrueNAS, Portainer or any Docker host.
 # Step-by-step for your NAS: https://casatorch.com/download
 # When it is running, open http://<your NAS or server address>:8090 and follow the setup screens.
+# The file from casatorch.com/download names one release's image exactly (version@sha256:digest), so you run
+# the image that was built, signed and published for that release - nothing else. To update, download the new file
+# (or change the version and digest on the image line), then pull and redeploy.
 services:
   casatorch:
     image: ghcr.io/casatorch/casatorch:latest

@@ -3206,7 +3206,7 @@
 "Protect your account": "Hesabınızı koruyun",
 "Provider": "Sağlayıcı",
 "Public IP": "Genel IP",
-"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". Your settings are kept.": "Yeni imajı çekin ve kapsayıcıyı yeniden oluşturun - Portainer'da veya NAS uygulamanızda \"Pull and redeploy\" seçin. Ayarlarınız korunur.",
+"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". If your compose file names an exact image (@sha256:), download the new one from casatorch.com/download first. Your settings are kept.": "Yeni imajı çekin ve kapsayıcıyı yeniden oluşturun - Portainer'da veya NAS uygulamanızda \"Pull and redeploy\" seçin. Compose dosyanız belirli bir imajı (@sha256:) gösteriyorsa önce yenisini casatorch.com/download adresinden indirin. Ayarlarınız korunur.",
 "Purple": "Mor",
 "Purple and gold": "Mor ve altın",
 "Push": "Bildirim",

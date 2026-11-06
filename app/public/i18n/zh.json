@@ -3223,7 +3223,7 @@
 "Protect your account": "保护你的帐户",
 "Provider": "运营商",
 "Public IP": "公网 IP",
-"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". Your settings are kept.": "拉取新镜像并重新创建容器 - 在 Portainer 或 NAS 应用中选择\"Pull and redeploy\"。你的设置会保留。",
+"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". If your compose file names an exact image (@sha256:), download the new one from casatorch.com/download first. Your settings are kept.": "拉取新镜像并重新创建容器 - 在 Portainer 或 NAS 应用中选择\"Pull and redeploy\"。如果你的 compose 文件指定了确切的镜像（@sha256:），请先从 casatorch.com/download 下载新文件。你的设置会保留。",
 "Purple": "紫色",
 "Purple and gold": "紫色和金色",
 "Push": "推送",

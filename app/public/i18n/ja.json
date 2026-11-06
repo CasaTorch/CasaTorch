@@ -3223,7 +3223,7 @@
 "Protect your account": "アカウントを保護する",
 "Provider": "プロバイダー",
 "Public IP": "グローバルIP",
-"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". Your settings are kept.": "新しいイメージを取得してコンテナを作り直します。PortainerやNASのアプリで「Pull and redeploy」を選んでください。設定はそのまま残ります。",
+"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". If your compose file names an exact image (@sha256:), download the new one from casatorch.com/download first. Your settings are kept.": "新しいイメージを取得してコンテナを作り直します。PortainerやNASのアプリで「Pull and redeploy」を選んでください。compose ファイルが正確なイメージ（@sha256:）を指定している場合は、先に casatorch.com/download から新しいファイルをダウンロードしてください。設定はそのまま残ります。",
 "Purple": "紫",
 "Purple and gold": "紫とゴールド",
 "Push": "プッシュ",

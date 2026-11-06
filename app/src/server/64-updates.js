@@ -32,7 +32,7 @@ setTimeout(() => checkUpdates().catch(() => {}), 90_000).unref?.();
 setInterval(() => checkUpdates().catch(() => {}), 24 * 3600_000).unref?.();
 const HOW_TO_UPDATE = {
   'ha-addon': 'Home Assistant shows the update under Settings > Add-ons > CasaTorch - click Update. Your settings are kept.',
-  docker: 'Pull the new image and recreate the container - in Portainer or your NAS app choose "Pull and redeploy". Your settings are kept.',
+  docker: 'Pull the new image and recreate the container - in Portainer or your NAS app choose "Pull and redeploy". If your compose file names an exact image (@sha256:), download the new one from casatorch.com/download first. Your settings are kept.',
   deb: 'It installs itself overnight. To update now, download the new .deb from casatorch.com/download and open it.',
   'pi-image': 'It installs itself overnight - nothing to do.',
   windows: 'Download the new installer from casatorch.com/download and run it. Your settings are kept.',

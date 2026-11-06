@@ -23,6 +23,9 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Lock remote access.** One switch for the owner refuses everything from outside right away, until it's unlocked at
   home or from the CasaTorch app (with Face ID or your fingerprint).
 - **Allowed countries** (optional): answer from away only in the countries you pick.
+- **Signed container image.** The CasaTorch image is signed (Sigstore cosign) and published with its build provenance
+  and a software bill of materials; each release's notes say how to check it. The compose file from
+  casatorch.com/download names the release's image exactly, so it runs only the image that was published.
 
 ## 0.9.3
 

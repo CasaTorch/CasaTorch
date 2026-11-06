@@ -3148,7 +3148,7 @@
 "Protect your account": "Schütze dein Konto",
 "Provider": "Anbieter",
 "Public IP": "Öffentliche IP",
-"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". Your settings are kept.": "Hol das neue Image und erstelle den Container neu – wähle in Portainer oder deiner NAS-App „Pull and redeploy“. Deine Einstellungen bleiben erhalten.",
+"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". If your compose file names an exact image (@sha256:), download the new one from casatorch.com/download first. Your settings are kept.": "Hol das neue Image und erstelle den Container neu – wähle in Portainer oder deiner NAS-App „Pull and redeploy“. Nennt deine Compose-Datei ein genaues Image (@sha256:), lade zuerst die neue von casatorch.com/download. Deine Einstellungen bleiben erhalten.",
 "Purple": "Lila",
 "Purple and gold": "Lila und Gold",
 "Push is off": "Push ist aus",

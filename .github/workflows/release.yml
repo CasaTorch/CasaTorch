@@ -17,7 +17,11 @@ env:
 jobs:
   image:
     runs-on: ubuntu-24.04
-    permissions: { contents: read, packages: write }
+    # packages: push to ghcr.io; id-token: sign the image with cosign (keyless, this workflow's GitHub OIDC identity,
+    # logged in the public Rekor transparency log); attestations: attach the SLSA build provenance.
+    permissions: { contents: read, packages: write, id-token: write, attestations: write }
+    outputs: { digest: "${{ steps.build.outputs.digest }}" }
+    env: { IMAGE: "ghcr.io/${{ github.repository_owner }}/casatorch" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -28,11 +32,12 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/${{ github.repository_owner }}/casatorch
+          images: ${{ env.IMAGE }}
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: app/Dockerfile
@@ -40,6 +45,31 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          provenance: mode=max
+      # Everything below works on the digest the build pushed, never on a tag (a tag can be moved; a digest can't).
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - name: Sign the image (cosign, keyless)
+        env: { DIGEST: "${{ steps.build.outputs.digest }}" }
+        run: cosign sign --yes "$IMAGE@${DIGEST}"
+      - name: SBOM of the image (CycloneDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx-json
+          output-file: casatorch-image.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Attach the SBOM to the image (signed attestation)
+        env: { DIGEST: "${{ steps.build.outputs.digest }}" }
+        run: cosign attest --yes --type cyclonedx --predicate casatorch-image.cdx.json "$IMAGE@${DIGEST}"
+      - name: Build provenance (SLSA), pushed next to the image
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: sbom-image, path: casatorch-image.cdx.json }
 
   bundle:
     runs-on: ubuntu-24.04
@@ -52,6 +82,10 @@ jobs:
       - run: tar czf bundle.tgz -C dist bundle
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with: { name: bundle, path: bundle.tgz }
+      # The app's software bill of materials (CycloneDX): every package it ships, from the lock file.
+      - run: cd app && npm sbom --omit=dev --package-lock-only --sbom-format cyclonedx --sbom-type application > ../casatorch-app.cdx.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with: { name: sbom-app, path: casatorch-app.cdx.json }
 
   linux:
     needs: bundle
@@ -181,7 +215,13 @@ jobs:
     needs: [image, linux, raspberry-pi, windows, macos]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
-    permissions: { contents: write, actions: read }
+    # The release key lives in this environment's secrets (Settings > Environments > release): only tags may use it,
+    # and a required reviewer can be set there (docs/GITHUB-SECURITY-SETTINGS.md).
+    environment: release
+    # contents: create the release; actions: read this run's artifacts; id-token + attestations: build provenance for
+    # every file in the release (gh attestation verify <file> -R casatorch/casatorch).
+    permissions: { contents: write, actions: read, id-token: write, attestations: write }
+    env: { IMAGE: "ghcr.io/${{ github.repository_owner }}/casatorch", DIGEST: "${{ needs.image.outputs.digest }}" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -191,7 +231,7 @@ jobs:
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           mkdir -p out
-          for a in deb-amd64 deb-arm64 windows macos pi-image; do
+          for a in deb-amd64 deb-arm64 windows macos pi-image sbom-app sbom-image; do
             for try in 1 2 3 4 5; do
               rm -rf "tmp-$a"
               if gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n "$a" -D "tmp-$a"; then break; fi
@@ -200,7 +240,16 @@ jobs:
             done
             mv "tmp-$a"/* out/ && rmdir "tmp-$a"
           done
-      - run: cp deploy/downloads/casatorch-compose.yml out/ && cp deploy/unraid/casatorch.xml out/casatorch-unraid.xml && ls -la out
+      # The compose file people download names this release's image by its digest, so `docker compose up` runs exactly
+      # the image that was built, signed and listed here (the digest is also in SHA256SUMS, under the offline signature).
+      - name: Pin the image by digest
+        run: |
+          echo "$DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "no image digest from the image job" >&2; exit 1; }
+          V="${CASATORCH_VERSION#v}"
+          sed "s#image: ghcr.io/casatorch/casatorch:latest#image: $IMAGE:$V@$DIGEST#" deploy/downloads/casatorch-compose.yml > out/casatorch-compose.yml
+          grep -q "@$DIGEST" out/casatorch-compose.yml || { echo "the compose file has no image line to pin" >&2; exit 1; }
+          printf '%s@%s\n' "$IMAGE:$V" "$DIGEST" > out/casatorch-image.digest
+          cp deploy/unraid/casatorch.xml out/casatorch-unraid.xml && ls -la out
       # Signed with an offline key: the Linux and Pi updater installs a release only when SHA256SUMS carries this
       # signature (checked against deploy/packaging/release-key.pub.pem, built into every package) - so even someone
       # who took over casatorch.com or the download path couldn't push an update. No key, no release.
@@ -217,7 +266,28 @@ jobs:
           rm -f "$RUNNER_TEMP/release.key"
           openssl pkeyutl -verify -pubin -inkey deploy/packaging/release-key.pub.pem -rawin -in out/SHA256SUMS -sigfile out/SHA256SUMS.sig
           cat out/SHA256SUMS
+      - name: Build provenance for every download
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with: { subject-path: "out/*" }
+      - name: Release notes - how to check what you downloaded
+        run: |
+          V="${CASATORCH_VERSION#v}"
+          cat > "$RUNNER_TEMP/notes.md" <<EOF
+          ### Check your download
+          **Container image:** \`$IMAGE:$V@$DIGEST\`
+
+          \`\`\`
+          cosign verify $IMAGE@$DIGEST \\
+            --certificate-identity-regexp '^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@refs/tags/v' \\
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com
+          gh attestation verify oci://$IMAGE@$DIGEST -R ${GITHUB_REPOSITORY}
+          \`\`\`
+          **Installers:** \`gh attestation verify <file> -R ${GITHUB_REPOSITORY}\`, and \`sha256sum -c SHA256SUMS --ignore-missing\`
+          after checking SHA256SUMS.sig with the release key (see SECURITY.md › Verify your download).
+          Software bills of materials (CycloneDX): casatorch-app.cdx.json, casatorch-image.cdx.json.
+          EOF
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           generate_release_notes: true
+          body_path: ${{ runner.temp }}/notes.md
           files: out/*

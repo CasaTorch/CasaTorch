@@ -3222,7 +3222,7 @@
 "Protect your account": "अपना खाता सुरक्षित करें",
 "Provider": "प्रदाता",
 "Public IP": "पब्लिक IP",
-"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". Your settings are kept.": "नई इमेज लें और कंटेनर दोबारा बनाएँ - Portainer या अपने NAS ऐप में \"Pull and redeploy\" चुनें। आपकी सेटिंग्स बनी रहती हैं।",
+"Pull the new image and recreate the container - in Portainer or your NAS app choose \"Pull and redeploy\". If your compose file names an exact image (@sha256:), download the new one from casatorch.com/download first. Your settings are kept.": "नई इमेज लें और कंटेनर दोबारा बनाएँ - Portainer या अपने NAS ऐप में \"Pull and redeploy\" चुनें। अगर आपकी compose फ़ाइल कोई तय इमेज (@sha256:) बताती है, तो पहले casatorch.com/download से नई फ़ाइल डाउनलोड करें। आपकी सेटिंग्स बनी रहती हैं।",
 "Purple": "बैंगनी",
 "Purple and gold": "बैंगनी और सुनहरा",
 "Push": "पुश",
