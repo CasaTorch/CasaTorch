@@ -4,11 +4,13 @@
    setup ("config flow"): Home Assistant sends its questions, we show them. */
 const W = { cat: null, steps: [], i: 0, a: {}, ha: null, haDomains: [], added: [], tests: {}, flows: {}, rerun: false, keeps: {}, hue: null, ring: null };
 const $ = (s) => document.querySelector(s);
+/* A style sheet made by the page itself: a blob: link, never an inline <style> (the CSP has no 'unsafe-inline'). */
+const ctSheet = (id, css) => { let l = document.getElementById(id); if (!l) { l = document.createElement('link'); l.rel = 'stylesheet'; l.id = id; l.dataset.ctSheet = '1'; document.head.append(l); } const old = l.href; l.href = URL.createObjectURL(new Blob([css], { type: 'text/css' })); if (old.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(old), 10000); return l; };
 function el(tag, attrs = {}, ...kids) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v == null || v === false) continue;
-    if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
+    if (k === 'class') e.className = v; else if (k === 'style') e.style.cssText = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
   }
   for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k)));
   return e;
@@ -215,7 +217,7 @@ const LK = { cat: null, saveT: null };
 const lookArt = (q) => `/api/looks/art.svg?${new URLSearchParams(q)}`;
 function lookStepStyle() {
   if (document.getElementById('lookstep-css')) return;
-  document.head.append(el('style', { id: 'lookstep-css' }, `
+  ctSheet('lookstep-css', `
 .lk-stage { position: relative; border-radius: 18px; overflow: hidden; aspect-ratio: 16 / 9; background: var(--p-bg); border: 1px solid var(--line); margin: 6px 0 16px; color: var(--p-text); }
 .lk-stage > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .lk-stage-ui { position: relative; padding: 4% 4.5%; display: flex; flex-direction: column; gap: 4%; height: 100%; }
@@ -237,7 +239,7 @@ function lookStepStyle() {
 .lk-pair { display: inline-flex; padding: 4px; border-radius: 999px; border: 1px solid var(--line); background: transparent; cursor: pointer; } .lk-pair.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
 .lk-pair i { width: 18px; height: 18px; border-radius: 50%; display: block; } .lk-pair i + i { margin-left: -5px; } .lk-pair.none { font-size: 12px; padding: 4px 10px; color: var(--text); }
 @media (max-width: 560px) { .lk-stage { aspect-ratio: 4 / 5; } .lk-stage-grid { grid-template-columns: 1fr 1fr; } .lk-stage-card:nth-child(3) { grid-column: span 2; } }
-`));
+`);
 }
 /* The art for the preview: the weather by this device's clock (a fair sky - the real weather once CasaTorch knows your town). */
 function lookStepArt(bg, mode) {

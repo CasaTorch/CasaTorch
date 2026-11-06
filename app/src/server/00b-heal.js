@@ -184,10 +184,9 @@ if (process.env.CASATORCH_TEST !== '1' && !isDemo()) {
    doesn't start: the setup wizard would look like a new install and write over the real settings, and every
    integration would run with none. Only a small page says what happened and what to do (503 for every address,
    so installers and health checks see it too); the file is left exactly as it is. */
+const RECOVERY_CSS = ':root{color-scheme:light dark;--bg:#f5f5f7;--card:#fff;--ink:#1d1d1f;--sub:#6e6e73}@media (prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--ink:#f5f5f7;--sub:#a1a1a6}}\nbody{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:16px}main{max-width:560px;margin:8vh auto;background:var(--card);border-radius:18px;padding:28px}\nh1{font-size:22px;margin:0 0 8px}p,li{color:var(--sub)}b{color:var(--ink)}code{font:14px ui-monospace,Menlo,monospace}';   // allowed by its hash: no 'unsafe-inline'
 const recoveryPage = (p, aside) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CasaTorch needs your help</title>
-<style>:root{color-scheme:light dark;--bg:#f5f5f7;--card:#fff;--ink:#1d1d1f;--sub:#6e6e73}@media (prefers-color-scheme:dark){:root{--bg:#000;--card:#1c1c1e;--ink:#f5f5f7;--sub:#a1a1a6}}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:16px}main{max-width:560px;margin:8vh auto;background:var(--card);border-radius:18px;padding:28px}
-h1{font-size:22px;margin:0 0 8px}p,li{color:var(--sub)}b{color:var(--ink)}code{font:14px ui-monospace,Menlo,monospace}</style></head><body><main>
+<style>${RECOVERY_CSS}</style></head><body><main>
 <h1>CasaTorch can't open its settings</h1>
 <p>${p.kind === 'unreadable' ? 'CasaTorch isn\'t allowed to read its settings file, <code>config.json</code>.' : 'Its settings file, <code>config.json</code>, is damaged'}${p.kind === 'unreadable' ? '' : ', and there was no good copy in its settings history to go back to'}. So it hasn't started, and it hasn't changed anything: your settings, sign-ins and history are all still in its data folder.</p>
 <p><b>To get going again</b>, do one of these, then restart CasaTorch (or the device it runs on):</p><ul>
@@ -198,7 +197,7 @@ if (configProblem && process.env.CASATORCH_TEST !== '1' && !isDemo()) {
   console.error(`\n${configProblem.detail}\nThere is no good copy in the settings history to go back to, so CasaTorch is not starting (only a recovery page answers on port ${PORT}). Nothing was changed${configAside ? `; a copy of the damaged file was kept as ${configAside}` : ''}.\nFix or replace config.json (or move it away to run setup again), then restart CasaTorch.\n`);
   const rec = express(); rec.disable('x-powered-by');
   rec.use((req, res) => {
-    res.status(503).set({ 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'", 'Retry-After': '60' });
+    res.status(503).set({ 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': `default-src 'none'; style-src 'sha256-${crypto.createHash('sha256').update(RECOVERY_CSS).digest('base64')}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`, 'Retry-After': '60' });
     if (req.path.startsWith('/api/')) return res.json({ ok: false, recovery: true, error: 'CasaTorch can\'t open its settings file. Open CasaTorch in a browser to see what to do.' });
     res.type('html').send(recoveryPage(configProblem, configAside));
   });

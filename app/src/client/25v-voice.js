@@ -7,9 +7,7 @@
   const LANGS = { en: 'en-US', es: 'es-ES', de: 'de-DE', fr: 'fr-FR', pt: 'pt-BR', it: 'it-IT', nl: 'nl-NL', ja: 'ja-JP', zh: 'zh-CN', ko: 'ko-KR', hi: 'hi-IN', pl: 'pl-PL', sv: 'sv-SE', tr: 'tr-TR' };
   const lang = () => { const l = (document.documentElement.lang || 'en').split('-')[0]; return (navigator.languages || []).find((x) => x.toLowerCase().startsWith(`${l}-`)) || LANGS[l] || 'en-US'; };
   const MIC = 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3';
-  const style = document.createElement('style');
-  style.textContent = '.micbtn.on{background:var(--bad);border-color:var(--bad);color:#fff}.micbtn svg{width:18px;height:18px;display:block}.askvoice-hint{font-size:12px;color:var(--muted);margin-top:6px}';
-  document.head.append(style);
+  ctSheet('ct-voice-css', '.micbtn.on{background:var(--bad);border-color:var(--bad);color:#fff}.micbtn svg{width:18px;height:18px;display:block}.askvoice-hint{font-size:12px;color:var(--muted);margin-top:6px}');
   let plan = null, planAt = 0;
   async function where(text) {   // a place on the 3D plan, or null
     try {

@@ -1,12 +1,20 @@
 /* ======================================================================
  * Security headers on every answer, and fast static files.
  *
- *  - Content-Security-Policy: scripts only from this CasaTorch (inline
- *    scripts in our own pages are allowed by their hashes, worked out at
- *    start-up), no plugins, forms only to here, and the page may only be
- *    framed by this CasaTorch and your Home Assistant (for the HACS card).
- *  - No sniffing, no referrer leaks, no camera/geolocation for pages,
- *    HSTS when served over https.
+ *  - Content-Security-Policy: scripts and styles only from this CasaTorch -
+ *    no 'unsafe-inline' for either: inline scripts and <style> blocks in our
+ *    own pages are allowed by their hashes, worked out at start-up; styles a
+ *    page makes itself are blob: style sheets - no plugins, forms only to
+ *    here, and the page may only be framed by this CasaTorch and your Home
+ *    Assistant (for the HACS card).
+ *  - Trusted Types: every HTML sink and script address goes through the
+ *    page's policy (public/tt.js); strings are never run as code.
+ *  - Isolation: COOP same-origin (setup's Home Assistant sign-in window is
+ *    the one exception: it reports back through window.opener), CORP
+ *    same-origin, Origin-Agent-Cluster. No COEP: camera pictures, news and
+ *    map images come from other sites, which don't send CORP headers.
+ *  - Only the browser features CasaTorch uses (Permissions-Policy), no
+ *    referrer at all, no sniffing, HSTS (a year) when served over https.
  *  - API answers are never cached by the browser (they can hold home data).
  *  - Static files (and three.js) are compressed once with Brotli or gzip and
  *    kept in memory: a wall tablet on Wi-Fi loads the 3D page several times
@@ -15,11 +23,16 @@
 import zlib from 'node:zlib';
 const QRCode = { toString: async (...a) => (await import('qrcode')).default.toString(...a) };   // loaded the first time a QR code is drawn, not at every start
 const PUBLIC_DIR = path.join(APP_DIR, 'public'), THREE_DIR = path.join(APP_DIR, 'node_modules', 'three');
+const cspHash = (text) => `'sha256-${crypto.createHash('sha256').update(text).digest('base64')}'`;
+const STYLE_HASHES = new Set();
+/** A <style> block a server-made page carries: allowed by its hash, never by 'unsafe-inline'. Returns the CSS. */
+const inlineStyle = (css) => { STYLE_HASHES.add(cspHash(css)); return css; };
 const inlineScriptHashes = (() => {
   const out = new Set();
   for (const f of fs.existsSync(PUBLIC_DIR) ? fs.readdirSync(PUBLIC_DIR).filter((x) => x.endsWith('.html')) : []) {
     const html = fs.readFileSync(path.join(PUBLIC_DIR, f), 'utf8');
-    for (const m of html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)) out.add(`'sha256-${crypto.createHash('sha256').update(m[1]).digest('base64')}'`);
+    for (const m of html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)) out.add(cspHash(m[1]));
+    for (const m of html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)) STYLE_HASHES.add(cspHash(m[1]));
   }
   return [...out].join(' ');
 })();
@@ -72,22 +85,31 @@ app.use('/api', (req, res, next) => {
 /* Live camera video comes over a WebSocket to this same address. Newer browsers count ws:/wss: to the page's own
    address as 'self'; older Safari (and so older iPhones) don't, so the page's own address is named too - only that one. */
 const wsSelf = (req) => { const h = String(req.headers.host || ''); return /^[\w.-]{1,253}(:\d{1,5})?$|^\[[\da-f:.]{2,45}\](:\d{1,5})?$/i.test(h) ? ` wss://${h}${req.secure ? '' : ` ws://${h}`}` : ''; };
+/* Browser features: only what CasaTorch's pages use (the microphone for the Home AI Agent, full screen and keeping the
+   screen on for wall panels, sharing, copying, picture-in-picture for camera video, video autoplay); everything else off. */
+const PERMISSIONS_POLICY = ['accelerometer=()', 'autoplay=(self)', 'camera=()', 'clipboard-read=()', 'clipboard-write=(self)', 'display-capture=()', 'encrypted-media=()', 'fullscreen=(self)',
+  'geolocation=()', 'gyroscope=()', 'hid=()', 'idle-detection=()', 'magnetometer=()', 'microphone=(self)', 'midi=()', 'payment=()', 'picture-in-picture=(self)', 'publickey-credentials-get=(self)',
+  'screen-wake-lock=(self)', 'serial=()', 'usb=()', 'web-share=(self)', 'xr-spatial-tracking=()', 'browsing-topics=()'].join(', ');
+const SETUP_PAGE = /^\/setup(\.html)?$/;
 /* 'wasm-unsafe-eval' lets WebAssembly run (the 3D home's Draco, meshopt and KTX2 decoders for compressed scans); JavaScript eval stays off. */
 app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', [
-    "default-src 'self'", `script-src 'self' 'wasm-unsafe-eval' ${inlineScriptHashes}`.trim(), "style-src 'self' 'unsafe-inline'", "font-src 'self' data:",
+"default-src 'self'", `script-src 'self' 'wasm-unsafe-eval' ${inlineScriptHashes}`.trim(), `style-src 'self' blob: ${[...STYLE_HASHES].join(' ')}`.trim(), "font-src 'self' data:",
     "img-src 'self' data: blob: https:", "media-src 'self' blob: https:", `connect-src 'self' blob: data:${wsSelf(req)}`, "worker-src 'self' blob:", "frame-src 'self'",
-    "object-src 'none'", "base-uri 'self'", `form-action 'self' https://accounts.google.com${/^home-[a-z0-9]{8}\.casatorch\.com$/.test(String(config.remote?.hostname || '')) ? ` https://${config.remote.hostname}` : ''}`, `frame-ancestors ${frameAncestors()}`,
+    "object-src 'none'", "base-uri 'self'", "require-trusted-types-for 'script'", 'trusted-types casatorch default', "manifest-src 'self'", `form-action 'self' https://accounts.google.com${/^home-[a-z0-9]{8}\.casatorch\.com$/.test(String(config.remote?.hostname || '')) ? ` https://${config.remote.hostname}` : ''}`, `frame-ancestors ${frameAncestors()}`,
   ].join('; '));
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'same-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), payment=(), usb=(), microphone=(self), screen-wake-lock=(self), fullscreen=(self)');
-  res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
-  // a page that opened CasaTorch gets no handle on its window. "allow-popups", and none on the way back from Home
-  // Assistant's sign-in window: that window tells setup it's done through window.opener (public/setup-ha-done.js).
-  if (req.path !== '/setup-ha-done.html' && req.path !== '/api/setup/ha/callback') res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', PERMISSIONS_POLICY);
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('Origin-Agent-Cluster', '?1');
+  // A page that opened CasaTorch gets no handle on its window, and CasaTorch none on windows it opens - except setup,
+  // which opens Home Assistant's sign-in and hears back through window.opener (public/setup-ha-done.js): there
+  // "allow-popups", and none on the page that window comes back to.
+  // (Browsers ignore COOP on a plain-http network address - and say so in the console - so it goes only where it counts.)
+  if (req.path !== '/setup-ha-done.html' && req.path !== '/api/setup/ha/callback' && (req.secure || /^(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?$/i.test(String(req.headers.host || '')))) res.setHeader('Cross-Origin-Opener-Policy', SETUP_PAGE.test(req.path) ? 'same-origin-allow-popups' : 'same-origin');
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
-  if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+  if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
   next();
 });

@@ -6,7 +6,7 @@
 import * as G from './floorplan-geom.js';
 
 const T = (s, v) => (typeof window !== 'undefined' && window.T ? window.T(s, v) : String(s).replace(/\{(\w+)\}/g, (m, k) => (v && v[k] != null ? v[k] : m)));
-const svgEl = (tag, attrs = {}) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, v); return e; };
+const svgEl = (tag, attrs = {}) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, v] of Object.entries(attrs)) if (v != null) { if (k === 'style') e.style.cssText = v; else e.setAttribute(k, v); } return e; };
 const r2 = (v) => Math.round(v * 100) / 100;
 const fmt = (v) => `${r2(v).toFixed(2)} m`;
 const ICON = {

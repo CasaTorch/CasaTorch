@@ -9,12 +9,14 @@ const el = (tag, attrs = {}, ...kids) => {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
     if (v == null || v === false) continue;
-    if (k === 'class') e.className = v; else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
-    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'html') e.innerHTML = v; else e.setAttribute(k, v === true ? '' : v);
+    if (k === 'class') e.className = v; else if (k === 'style') { if (typeof v === 'object') Object.assign(e.style, v); else e.style.cssText = v; }   // CSSOM: allowed by the CSP (no 'unsafe-inline')
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'html') e.innerHTML = window.ctPolicy ? window.ctPolicy.createHTML(v) : v; else e.setAttribute(k, v === true ? '' : v);
   }
   for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k)));
   return e;
 };
+/* A style sheet made by the page itself: a blob: link, never an inline <style> (the CSP has no 'unsafe-inline'). */
+const ctSheet = (id, css) => { let l = document.getElementById(id); if (!l) { l = document.createElement('link'); l.rel = 'stylesheet'; l.id = id; l.dataset.ctSheet = '1'; document.head.append(l); } const old = l.href; l.href = URL.createObjectURL(new Blob([css], { type: 'text/css' })); if (old.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(old), 10000); return l; };
 /* Icons: 24x24 strokes, drawn here so CasaTorch needs nothing from the internet. */
 const ICONS = {
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6', paw: 'M5.7 10.5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M14.7 10.5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M8.4 6.5a1.7 1.7 0 1 0 3.4 0a1.7 1.7 0 1 0-3.4 0M12.2 6.5a1.7 1.7 0 1 0 3.4 0a1.7 1.7 0 1 0-3.4 0M12 13c-2.8 0-5 3-5 5 0 1.8 1.8 2.2 5 1.3 3.2.9 5 .5 5-1.3 0-2-2.2-5-5-5z',
@@ -374,11 +376,11 @@ function pageFresh() {
   }, 150);
 }
 /* The look of the bits above (kept here with the code that draws them). */
-document.head.append(el('style', {}, `#netstate{display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:3px 9px;border-radius:999px;font-size:12px;line-height:1.4;color:var(--muted,#9aa4b2);background:color-mix(in srgb,currentColor 9%,transparent);white-space:nowrap;vertical-align:middle}
+ctSheet('ct-netstate-css', `#netstate{display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:3px 9px;border-radius:999px;font-size:12px;line-height:1.4;color:var(--muted,#9aa4b2);background:color-mix(in srgb,currentColor 9%,transparent);white-space:nowrap;vertical-align:middle}
 #netstate[hidden]{display:none}#netstate::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.8}#netstate.busy::before{animation:netpulse 1.2s ease-in-out infinite}#netstate.off{color:#fbbf24}
 .skel{padding:2px 0}.skel-row{display:flex;gap:10px;margin-bottom:14px}.skel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}.skel-card{border-radius:16px;padding:18px;background:color-mix(in srgb,var(--text,#e5e7eb) 5%,transparent);display:grid;gap:12px;min-height:120px}
 .skel-b{display:block;height:12px;border-radius:6px;background:color-mix(in srgb,var(--text,#e5e7eb) 10%,transparent);animation:netpulse 1.4s ease-in-out infinite}.skel-row .skel-b{height:16px}.skel-w20{width:20%}.skel-w40{width:40%}.skel-w60{width:60%}.skel-w75{width:75%}.skel-w90{width:90%}
-@keyframes netpulse{0%,100%{opacity:.45}50%{opacity:1}}@media (prefers-reduced-motion:reduce){.skel-b,#netstate.busy::before{animation:none}}`));
+@keyframes netpulse{0%,100%{opacity:.45}50%{opacity:1}}@media (prefers-reduced-motion:reduce){.skel-b,#netstate.busy::before{animation:none}}`);
 /* Once the dashboard is up and the browser is idle, the 3D Home's files are fetched ahead (Pro only, only if its
    button is on the bar), so opening it is instant. Skipped on metered or "save data" connections. */
 function warmUp() {

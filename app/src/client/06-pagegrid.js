@@ -226,7 +226,7 @@ function pgSkel(lines = 3) { return el('div', { class: 'pg-skel', 'aria-hidden':
 
 /* ---- small chart helpers shared by page tiles (inline SVG, no libraries) ---- */
 const SVGNS = 'http://www.w3.org/2000/svg';
-function svgEl(tag, attrs = {}, ...kids) { const e = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) if (v != null && v !== false) e.setAttribute(k, v); for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k))); return e; }
+function svgEl(tag, attrs = {}, ...kids) { const e = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) if (v != null && v !== false) { if (k === 'style') e.style.cssText = v; else e.setAttribute(k, v); } for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k))); return e; }
 /* A sparkline: a 2px line with a soft wash under it and a dot at the end. vals: numbers (null = no reading). */
 function pgSpark(vals, { w = 120, h = 34, cls = '', label = '', max: top, min: bottom } = {}) {
   const pts = vals.map((v, i) => [i, v]).filter(([, v]) => Number.isFinite(v));

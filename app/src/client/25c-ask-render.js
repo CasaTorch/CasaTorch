@@ -49,7 +49,7 @@ function askMd(text) {
   return box;
 }
 const ASK_SVGNS = 'http://www.w3.org/2000/svg';
-const askSv = (tag, attrs = {}, text) => { const e = document.createElementNS(ASK_SVGNS, tag); for (const [k, v] of Object.entries(attrs)) if (v != null) e.setAttribute(k, String(v)); if (text != null) e.textContent = String(text); return e; };
+const askSv = (tag, attrs = {}, text) => { const e = document.createElementNS(ASK_SVGNS, tag); for (const [k, v] of Object.entries(attrs)) if (v != null) { if (k === 'style') e.style.cssText = String(v); else e.setAttribute(k, String(v)); } if (text != null) e.textContent = String(text); return e; };
 /* Round numbers for the y axis: 0, 5, 10, 15... */
 function askTicks(lo, hi, n = 4) {
   if (hi === lo) { hi = lo + 1; }

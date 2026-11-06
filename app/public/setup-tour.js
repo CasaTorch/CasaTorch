@@ -13,7 +13,7 @@
   const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   const mk = (tag, attrs = {}, ...kids) => {
     const e = document.createElement(tag);
-    for (const [k, v] of Object.entries(attrs)) { if (v == null || v === false) continue; if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'text') e.textContent = v; else e.setAttribute(k, v === true ? '' : v); }
+    for (const [k, v] of Object.entries(attrs)) { if (v == null || v === false) continue; if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'text') e.textContent = v; else if (k === 'style') e.style.cssText = v; else e.setAttribute(k, v === true ? '' : v); }
     for (const k of kids.flat()) if (k != null) e.append(k);
     return e;
   };

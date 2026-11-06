@@ -17,7 +17,7 @@
     const e = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
       if (v == null || v === false) continue;
-      if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
+      if (k === 'class') e.className = v; else if (k === 'style') e.style.cssText = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
     }
     for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k)));
     return e;
@@ -162,6 +162,6 @@
 .dc-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}.dc-chip{border:1px solid var(--line);background:none;color:var(--text);border-radius:99px;padding:4px 11px;font:inherit;font-size:13px;cursor:pointer}.dc-chip.on{background:var(--accent,var(--hl));color:var(--on-accent,var(--hl-ink,#06101e));border-color:transparent}
 .dc-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:8px;margin:6px 0 2px}.dc-stat b{font-size:16px;font-variant-numeric:tabular-nums}
 .dc-note{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.45}`;
-  const style = document.createElement('style'); style.textContent = css; document.head.append(style);
+  ((id, css) => { let l = document.getElementById(id); if (!l) { l = document.createElement('link'); l.rel = 'stylesheet'; l.id = id; l.dataset.ctSheet = '1'; document.head.append(l); } const old = l.href; l.href = URL.createObjectURL(new Blob([css], { type: 'text/css' })); if (old.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(old), 10000); return l; })('ct-device-controls-css', css);   // a blob: style sheet: the CSP allows no inline <style>
   window.CasaControls = { build, can, allowed };
 })();

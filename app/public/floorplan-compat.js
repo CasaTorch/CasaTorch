@@ -82,20 +82,22 @@
   var texts = null;
   function sources() {
     if (texts) return Promise.resolve(texts);
-    var links = [].slice.call(d.querySelectorAll('link[rel=stylesheet]')).filter(function (l) { return /floorplan[\w-]*\.css/.test(l.href); });
+    var links = [].slice.call(d.querySelectorAll('link[rel=stylesheet]')).filter(function (l) { return l.id !== 'cmfix' && (/floorplan[\w-]*\.css/.test(l.href) || l.getAttribute('data-ct-sheet')); });
     return Promise.all(links.map(function (l) { return fetch(l.href).then(function (r) { return r.text(); }).catch(function () { return ''; }); })).then(function (list) { texts = list; return list; });
   }
   function apply() {
     sources().then(function (list) {
       var inline = [].slice.call(d.querySelectorAll('style')).filter(function (s) { return s.id !== 'cmfix'; }).map(function (s) { return s.textContent; });
       var css = list.concat(inline).map(rewrite).join('\n'), st = d.getElementById('cmfix');
-      if (!st) { st = el('style'); st.id = 'cmfix'; } d.head.appendChild(st);   // last, so it wins over the rules it stands in for
-      st.textContent = css;
+      // a blob: style sheet (the CSP allows no inline <style>), last, so it wins over the rules it stands in for
+      if (!st) { st = el('link'); st.rel = 'stylesheet'; st.id = 'cmfix'; } d.head.appendChild(st);
+      var old = st.href; st.href = URL.createObjectURL(new Blob([css], { type: 'text/css' })); st.setAttribute('data-css', css.length); w.__cmfixCss = css;
+      if (old && old.indexOf('blob:') === 0) setTimeout(function () { URL.revokeObjectURL(old); }, 10000);
     });
   }
   var t = null; function soon() { clearTimeout(t); t = setTimeout(apply, 120); }
   if (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', soon); else soon();
   w.addEventListener('load', soon);
   new MutationObserver(soon).observe(d.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-night'] });
-  new MutationObserver(function (list) { for (var i = 0; i < list.length; i++) for (var j = 0; j < list[i].addedNodes.length; j++) { var n = list[i].addedNodes[j]; if (n.tagName === 'STYLE' && n.id !== 'cmfix' || n.tagName === 'LINK') { texts = n.tagName === 'LINK' ? null : texts; soon(); return; } } }).observe(d.head, { childList: true });
+  new MutationObserver(function (list) { for (var i = 0; i < list.length; i++) for (var j = 0; j < list[i].addedNodes.length; j++) { var n = list[i].addedNodes[j]; if (n.tagName === 'STYLE' && n.id !== 'cmfix' || n.tagName === 'LINK' && n.id !== 'cmfix') { texts = n.tagName === 'LINK' ? null : texts; soon(); return; } } }).observe(d.head, { childList: true });
 })();

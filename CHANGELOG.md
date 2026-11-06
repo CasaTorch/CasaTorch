@@ -42,6 +42,9 @@ What changed in each CasaTorch version. The illustrated version, with links into
   puts the key back once the key store works again. Backups still restore on any computer.
 - **A new secret key on request.** Settings › Health › Secret key › Make a new secret key (owner, with your password):
   CasaTorch restarts and seals everything again with the new key. Nothing needs entering again.
+- **Stricter browser protections.** CasaTorch's pages now run with no inline scripts or styles at all, Trusted Types
+  (a piece of text can never turn into a script on the page), full isolation from other sites' windows and pages, no
+  referrer sent anywhere, only the browser features it uses, and a year of HTTPS-only once you use the secure address.
 
 ## 0.9.3
 

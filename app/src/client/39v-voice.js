@@ -2,7 +2,7 @@
    bridge (scan a code, pick what's shared, see and remove the apps it's added to), and "Ask CasaTorch" from Siri with
    a token per phone. Locks, garage doors, gates and alarms are never shared - the box enforces it (79v-voice.js). ---- */
 ICONS.mic ||= 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3';
-document.head.append(el('style', {}, `
+ctSheet('ct-voice-settings-css', `
 .vo-status{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:var(--surface-2);margin:10px 0}
 .vo-status .dot{margin-top:5px}
 .vo-pair{display:grid;grid-template-columns:minmax(0,180px) 1fr;gap:18px;align-items:center;margin:12px 0}
@@ -26,7 +26,7 @@ label.vo-row{cursor:pointer}
 .vo-kv{display:grid;grid-template-columns:max-content 1fr;gap:6px 12px;font-size:13px;margin:8px 0}
 .vo-kv dt{color:var(--muted)} .vo-kv dd{margin:0;overflow-wrap:anywhere}
 @media (max-width:600px){.vo-pair{grid-template-columns:1fr}.vo-qr{max-width:200px;margin:0 auto}.vo-code{font-size:24px;text-align:center}}
-`));
+`);
 const VO_KIND = { light: 'Lights', plug: 'Plugs and switches', switch: 'Plugs and switches', fan: 'Fans', cover: 'Blinds and shades', climate: 'Thermostats', action: 'Scenes', sensor: 'Sensors', lock: 'Never shared', alarm: 'Never shared' };
 const VO_STEPS = {
   alexa: ['Open the Alexa app and tap Devices, then +.', 'Tap Add Device, then Other, then Matter.', 'Scan the code (or type the 11 digits).', 'Alexa finds the devices CasaTorch shares. Say "Alexa, turn off the kitchen lights".'],

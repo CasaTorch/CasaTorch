@@ -30,7 +30,7 @@ document.addEventListener('click', (e) => {
   if (!a || a.classList.contains('doclink') || typeof window.CasaNative?.openExternal !== 'function') return;
   e.preventDefault(); window.CasaNative.openExternal(a.href);
 });
-document.head.append(el('style', {}, `
+ctSheet('ct-docs-links-css', `
 .doclink{font-size:13px;color:var(--accent);text-decoration:none;white-space:nowrap}
 .doclink:hover,.doclink:focus-visible{text-decoration:underline}
 .doclink:not(.doclink-q)::after{content:" ↗";font-size:.85em;opacity:.75}
@@ -48,7 +48,7 @@ document.head.append(el('style', {}, `
 .chg-hero{border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .region-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:4px 12px}
 .health-doc{margin-top:4px}
-`));
+`);
 
 /* ---- Settings › General › Change your setup ---- */
 /* What each step covers, in a few words (a step setup gains later shows its own intro), and where Settings has it already. */

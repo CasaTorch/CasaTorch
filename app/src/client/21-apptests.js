@@ -208,7 +208,7 @@ function atChart(runs) {
     const t0 = Date.parse(runs[0].at), t1 = Date.parse(runs[runs.length - 1].at), okv = runs.filter((r) => r.ok).map((r) => r.total);
     const top = Math.max(100, Math.ceil(Math.max(...okv, 1) * 1.15 / 100) * 100);
     const x = (t) => padL + (t1 > t0 ? (t - t0) / (t1 - t0) : 0) * (W - padL - padR), y = (v) => padT + (H - padT - padB) * (1 - Math.min(v, top) / top);
-    const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'), add = (tag, at, txt) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(at)) e.setAttribute(k, v); if (txt != null) e.textContent = txt; svg.append(e); return e; };
+    const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg'), add = (tag, at, txt) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(at)) { if (k === 'style') e.style.cssText = v; else e.setAttribute(k, v); } if (txt != null) e.textContent = txt; svg.append(e); return e; };
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('role', 'img');
     svg.setAttribute('aria-label', T('Time to load over the day: median {ms}, {n} failed tests', { ms: atMs([...okv].sort((p, q) => p - q)[Math.floor(okv.length / 2)]), n: runs.filter((r) => !r.ok).length }));
     for (const v of [0, top / 2, top]) { add('line', { x1: padL, x2: W - padR, y1: y(v), y2: y(v), class: 'grid' }); add('text', { x: padL - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, atMs(v)); }
@@ -321,7 +321,7 @@ function atChangeText(c) {
    Above it, a strip of the last day or week: drag across it (or tap) to see the path at that time. */
 const PV_BAND = { home: 'Your home network', provider: 'Your internet provider', internet: 'Transit network', app: 'The app\'s network' };
 const PV_NS = 'http://www.w3.org/2000/svg';
-const pvS = (tag, at = {}, parent = null, txt = null) => { const e = document.createElementNS(PV_NS, tag); for (const [k, v] of Object.entries(at)) if (v != null && v !== false) e.setAttribute(k, v); if (txt != null) e.textContent = txt; if (parent) parent.append(e); return e; };
+const pvS = (tag, at = {}, parent = null, txt = null) => { const e = document.createElementNS(PV_NS, tag); for (const [k, v] of Object.entries(at)) if (v != null && v !== false) { if (k === 'style') e.style.cssText = v; else e.setAttribute(k, v); } if (txt != null) e.textContent = txt; if (parent) parent.append(e); return e; };
 const pvCut = (s, n) => { s = String(s ?? ''); return s.length > n ? `${s.slice(0, Math.max(1, n - 1))}…` : s; };
 const pvReduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const pvLoss = (n) => (n.kind === 'you' ? 'you' : n.kind === 'silent' ? 'quiet' : n.loss == null ? (n.kind === 'dest' ? 'nodata' : 'ok')

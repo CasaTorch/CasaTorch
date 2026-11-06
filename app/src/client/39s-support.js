@@ -5,7 +5,7 @@
  * the last update went in Settings › Updates; and an update notice that
  * doesn't nag ("Not now" hides it until the next version).
  * ====================================================================== */
-document.head.append(el('style', {}, `
+ctSheet('ct-support-css', `
 .sup-guides{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
 .sup-guide{display:flex;align-items:center;gap:10px;text-align:left;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2);color:inherit;font:inherit;font-size:14px;cursor:pointer;min-height:44px}
 .sup-guide:hover,.sup-guide:focus-visible{border-color:var(--accent)}
@@ -31,7 +31,7 @@ document.head.append(el('style', {}, `
 #banner .ban-x{margin-left:auto;background:none;border:0;color:inherit;opacity:.75;font:inherit;font-size:13px;cursor:pointer;padding:4px 6px;border-radius:8px}
 #banner .ban-x:hover{opacity:1;background:rgba(127,127,127,.15)}
 @media (max-width:760px){.sup-guides,.sup-items{grid-template-columns:1fr}}
-`));
+`);
 const SUP_DOT = { ok: 'var(--good)', warn: 'var(--warn)', bad: 'var(--bad)', info: 'var(--accent)', off: 'var(--faint)' };
 const SUP_WORD = { ok: 'OK', warn: 'Needs a look', bad: 'Not working', info: 'Good to know', off: 'Not checked' };
 /* The ten things people get stuck on most. 'here' ones run in this browser (they're about this screen). */

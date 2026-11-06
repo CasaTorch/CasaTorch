@@ -6,6 +6,7 @@
  * with its version and license, read from node_modules itself.
  * Behind sign-in like every other page (08-signin.js runs before this).
  * ====================================================================== */
+const OSS_CSS = inlineStyle('body{max-width:900px;margin:0 auto;padding:24px 16px 60px;font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}th,td{border-top:1px solid rgba(128,128,128,.3);padding:6px 8px;text-align:left;vertical-align:top}code{font-size:12px}blockquote{margin:12px 0;padding:8px 12px;border-left:3px solid rgba(128,128,128,.5);opacity:.85}.lead{padding:14px 16px;border:1px solid rgba(128,128,128,.35);border-radius:12px}');   // its hash goes into the CSP before any page is sent   // allowed by its hash (inlineStyle, 01-security.js)
 const OSS_NOTICES = [path.join(APP_DIR, 'catalog', 'THIRD_PARTY_NOTICES.md'), path.join(APP_DIR, '..', 'THIRD_PARTY_NOTICES.md')];
 let ossMemo = null;
 /** Every installed package: name, version, license (SPDX text as the package states it), at most 2,000. */
@@ -58,7 +59,7 @@ function ossPage() {
   const pk = ossPackages(), esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const counts = Object.entries(pk.reduce((m, p) => ({ ...m, [p.license]: (m[p.license] || 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
   ossMemo = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Open-source licenses - CasaTorch</title>
-<link rel="stylesheet" href="/legal.css"><style>body{max-width:900px;margin:0 auto;padding:24px 16px 60px;font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}th,td{border-top:1px solid rgba(128,128,128,.3);padding:6px 8px;text-align:left;vertical-align:top}code{font-size:12px}blockquote{margin:12px 0;padding:8px 12px;border-left:3px solid rgba(128,128,128,.5);opacity:.85}.lead{padding:14px 16px;border:1px solid rgba(128,128,128,.35);border-radius:12px}</style></head>
+<link rel="stylesheet" href="/legal.css"><style>${OSS_CSS}</style></head>
 <body><p><a href="/#settings">‹ Back to CasaTorch</a></p>
 <h1>Open-source licenses</h1>
 <div class="lead"><p><b>CasaTorch ${esc(VERSION)}</b> - copyright © the CasaTorch contributors.</p>

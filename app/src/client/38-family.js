@@ -26,7 +26,7 @@ Object.assign(ICONS, {
   bike: 'M6 18a3 3 0 1 0 0-.01M18 18a3 3 0 1 0 0-.01M6 18l4-8h5l3 8M10 10 8 6H6M15 10l-2-4h3',
   water: 'M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11zM9 14a3 3 0 0 0 3 3',
 });
-document.head.append(el('style', {}, `
+ctSheet('ct-family-css', `
 .fam-av { display: inline-grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; font-weight: 700; font-size: 15px; color: #06101e; box-shadow: inset 0 0 0 2px rgba(255,255,255,.25); }
 .fam-av.lg { width: 64px; height: 64px; font-size: 28px; } .fam-av.xs { width: 24px; height: 24px; font-size: 11px; }
 .fam-stars { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; color: #f59e0b; font-variant-numeric: tabular-nums; } .fam-stars svg { width: 15px; height: 15px; fill: currentColor; }
@@ -84,7 +84,7 @@ document.head.append(el('style', {}, `
 #statusbar .fam-sbchip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; white-space: nowrap; } #statusbar .fam-sbchip svg { width: 14px; height: 14px; color: var(--muted); }
 #statusbar .fam-sbchip.warn { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 12%, var(--surface-2)); } #statusbar .fam-sbchip.warn svg { color: var(--warn); }
 @media (max-width: 760px) { #statusbar .fam-sbchips { order: 5; flex: 1 1 100%; } .fam-week { grid-template-columns: 1fr; } .fam-day { min-height: 0; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 4px 10px; } .fam-day .d { width: 64px; } .fam-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .fam-step { min-height: 140px; font-size: 16px; } .fam-step .ic { width: 60px; height: 60px; } .fam-step .ic svg { width: 36px; height: 36px; } }
-`));
+`);
 
 /* ==================== pure: conditional widgets (test/family-unit.mjs runs this part in Node) ==================== */
 /* pure:start */

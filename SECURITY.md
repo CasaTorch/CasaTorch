@@ -66,6 +66,8 @@ when an update is available; please install it promptly.
 - **Sign-in is protected** with per-person accounts and roles, optional (or required) two-step sign-in, limits on
   guessing, and a security log.
 - **No open ports.** CasaTorch never asks you to open a port on your router.
+- **Strict browser rules.** CasaTorch's pages load scripts and styles only from your CasaTorch, use Trusted Types, and
+  are isolated from other sites; other sites can't frame them, read them or use their windows.
 - **Safety:** CasaTorch and its AI never unlock doors, open garage doors or gates, or disarm alarms.
 
 Every change goes through automated security and attack testing before it's released.

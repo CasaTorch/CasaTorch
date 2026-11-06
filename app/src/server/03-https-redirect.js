@@ -10,7 +10,7 @@ const LOCAL_TLS = { url: null };   // set by 43-local-https.js when the certific
 const isLoopback = (req) => /^(::1|127\.|::ffff:127\.)/.test(String(req.socket?.remoteAddress || ''));
 function wantsSecure(req) {
   if (!LOCAL_TLS.url || req.secure || req.method !== 'GET' || isLoopback(req)) return false;
-  if (req.path.startsWith('/api/') || /^\/(go-secure\.(html|js)|i18n|icons\/|favicon|sw\.js|manifest\.webmanifest)/.test(req.path)) return false;
+  if (req.path.startsWith('/api/') || /^\/(go-secure\.(html|js)|tt\.js|i18n|icons\/|favicon|sw\.js|manifest\.webmanifest)/.test(req.path)) return false;
   if (/(?:^|;\s*)ct_plain=1/.test(String(req.headers.cookie || ''))) return false;   // this browser couldn't reach it
   const dest = req.headers['sec-fetch-dest'];
   return dest ? dest === 'document' : /text\/html/.test(String(req.headers.accept || ''));

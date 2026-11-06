@@ -122,4 +122,26 @@ export default async function supplyChainUnit(t) {
     for (const [f, h] of Object.entries(pin.files)) if (f.endsWith('.js')) assert.equal(map.integrity[`/vendor/three/${f}`], h, f);
     assert.match(rd('app/src/server/50-floorplan.js'), /if \(!vendorPinned\(rel\)\) return res\.status\(404\)/);
   });
+
+  await t('browser protections in the source: no inline <style> made by script, no style="" in pages, tt.js first on every page with scripts', () => {
+    const pub = path.join(root, 'app/public'), cl = path.join(root, 'app/src/client');
+    const js = [...fs.readdirSync(cl).map((f) => path.join(cl, f)), ...fs.readdirSync(pub).filter((f) => f.endsWith('.js') && !/^app(-[a-z]+)?\.js$/.test(f)).map((f) => path.join(pub, f))];
+    for (const f of js) {
+      const t = fs.readFileSync(f, 'utf8');
+      assert.ok(!/el\(\s*'style'|createElement\(\s*['"]style['"]\s*\)/.test(t), `${path.basename(f)}: an inline <style> (use a blob: sheet - ctSheet)`);
+      assert.ok(!/setAttribute\(\s*['"]style['"]/.test(t), `${path.basename(f)}: style set as an attribute (use .style / cssText)`);
+      assert.ok(!/\.(innerHTML|outerHTML)\s*=[^=][^;]*\bstyle=/.test(t), `${path.basename(f)}: HTML with a style attribute`);
+    }
+    for (const f of fs.readdirSync(pub).filter((x) => x.endsWith('.html'))) {
+      const h = fs.readFileSync(path.join(pub, f), 'utf8');
+      assert.ok(!/\sstyle="/.test(h), `${f}: a style attribute`);
+      assert.ok(!/\son[a-z]+="/.test(h), `${f}: an inline event handler`);
+      if (/<script/.test(h)) assert.match(h, /^[\s\S]{0,300}<meta charset="utf-8"><script src="\/tt\.js"><\/script>/, `${f}: tt.js first`);
+    }
+    const tt = fs.readFileSync(path.join(pub, 'tt.js'), 'utf8');
+    assert.match(tt, /createPolicy\('casatorch'/); assert.match(tt, /createPolicy\('default'/); assert.ok(!/createScript\s*[:(]/.test(tt.replace(/createScriptURL/g, '')), 'no policy turns strings into code');
+    const sec = rd('app/src/server/01-security.js');
+    assert.match(sec, /"require-trusted-types-for 'script'", 'trusted-types casatorch default'/);
+    assert.ok(!/style-src[^"`]*'unsafe-inline'/.test(sec), 'style-src without unsafe-inline');
+  });
 }

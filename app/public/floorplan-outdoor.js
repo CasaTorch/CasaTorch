@@ -144,7 +144,7 @@ const STYLE = `
 .odcard { position: fixed; z-index: 60; transform: translate(-50%, calc(-100% - 12px)); min-width: 190px; max-width: 260px; padding: 10px 12px; border-radius: 14px; background: var(--panel-solid, #0e1424); color: var(--text); border: 1px solid var(--line-2, rgba(148,163,184,.3)); box-shadow: var(--shadow); display: grid; gap: 6px; font-size: 13px; }
 .odcard small { color: var(--muted); } .odcard .row { display: flex; gap: 6px; }
 `;
-const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (v == null || v === false) continue; if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'value') e.value = v; else e.setAttribute(k, v === true ? '' : v); } for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k))); return e; };
+const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (v == null || v === false) continue; if (k === 'class') e.className = v; else if (k === 'style') e.style.cssText = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (k === 'value') e.value = v; else e.setAttribute(k, v === true ? '' : v); } for (const k of kids.flat()) if (k != null && k !== false) e.append(k instanceof Node ? k : document.createTextNode(String(k))); return e; };
 const svgIc = (k) => { const s = el('span', { class: 'odic', 'aria-hidden': 'true' }); s.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS[k] || ICONS.dot}"/></svg>`; return s; };
 const kelvinHex = (k) => { const t = Math.max(0, Math.min(1, ((k || 2700) - 2200) / 4300)); return `#${new THREE.Color('#ffb46b').lerp(new THREE.Color('#e6eeff'), t).getHexString()}`; };
 const nameOf = (it) => T(FURN[it.kind]?.[0] || it.kind);
@@ -165,7 +165,7 @@ export function createOutdoor(scene, yard, getCtx) {
   const st = { sel: new Set(), shape: 'rect', cat: 'living', pick: null, clip: [], hh: null, hhAt: 0, hhBusy: false, down: null, dragged: false, prevCam: null, lastTap: null, devSig: '' };
   let P = null, preview = null, card = null;
   yard.lowQuality = () => C().low?.();   // the yard asks when it builds
-  if (typeof document !== 'undefined' && !document.getElementById('od-style')) document.head.append(el('style', { id: 'od-style' }, STYLE));
+  if (typeof document !== 'undefined' && !document.getElementById('od-style')) ((id, css) => { let l = document.getElementById(id); if (!l) { l = document.createElement('link'); l.rel = 'stylesheet'; l.id = id; l.dataset.ctSheet = '1'; document.head.append(l); } const old = l.href; l.href = URL.createObjectURL(new Blob([css], { type: 'text/css' })); if (old.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(old), 10000); return l; })('od-style', STYLE);   // a blob: style sheet (no inline <style> under the CSP)
 
   const items = () => C().S.plan?.items || [];
   const itemOf = (id) => items().find((x) => x.id === id);

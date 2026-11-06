@@ -46,7 +46,10 @@ async function newEnglishPage(browser) {
   page.setDefaultTimeout(Number(process.env.E2E_TIMEOUT) || 15000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|net::ERR_|status of 40[13]/.test(m.text())) errors.push(`console: ${m.text()}`); });
+  page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|net::ERR_|status of 40[13]|^Applying inline style violates|^Refused to /.test(m.text())) errors.push(`console: ${m.text()}`); });
+  /* Every Content-Security-Policy or Trusted Types violation is an error, named by what was blocked (where it is). */
+  await ctx.addInitScript(() => { document.addEventListener('securitypolicyviolation', (e) => { const t = e.target && e.target.outerHTML ? e.target.outerHTML.slice(0, 160) : ''; window.__cspViolations = (window.__cspViolations || 0) + 1; console.warn(`CSP violation: ${e.violatedDirective} ${e.blockedURI || ''} ${e.sample || ''} at ${location.pathname}${location.hash} ${t}`); }); });
+  page.on('console', (m) => { if (m.type() === 'warning' && m.text().startsWith('CSP violation:')) errors.push(m.text()); });
   return { ctx, page, errors };
 }
 

@@ -48,7 +48,8 @@ app.use(async (req, res, next) => {
   }
   res.status(403).type('html').send(awayPage(srvT('You\'re away from home'), srvT(needsSignIn ? AWAY_SIGNIN_TEXT : AWAY_PAGE_TEXT)));
 });
+const AWAY_CSS = inlineStyle('body{font:16px system-ui;background:#070a12;color:#e8eef7;display:grid;place-items:center;min-height:100vh;margin:0}div{max-width:420px;padding:24px}h1{font-size:22px}p{color:#8fa0ba}a{color:#5eb8ff}');   // its hash goes into the CSP before any page is sent
 function awayPage(title, text) {
   const lang = /^[a-z]{2}$/.test(String(config.house?.lang || '')) ? config.house.lang : 'en';
-  return `<!doctype html><html lang="${lang}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CasaTorch</title><body style="font:16px system-ui;background:#070a12;color:#e8eef7;display:grid;place-items:center;min-height:100vh;margin:0"><div style="max-width:420px;padding:24px"><h1 style="font-size:22px">${htmlText(title)}</h1><p style="color:#8fa0ba">${htmlText(text)}</p><p><a href="/" style="color:#5eb8ff">${htmlText(srvT('Try again'))}</a></p></div>`;
+  return `<!doctype html><html lang="${lang}"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CasaTorch</title><style>${AWAY_CSS}</style><body><div><h1>${htmlText(title)}</h1><p>${htmlText(text)}</p><p><a href="/">${htmlText(srvT('Try again'))}</a></p></div>`;
 }

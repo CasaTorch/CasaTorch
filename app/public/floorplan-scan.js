@@ -178,7 +178,7 @@ const tabletLike = () => (navigator.hardwareConcurrency || 8) <= 4 || (navigator
 const lowWanted = () => { const q = C?.quality?.() || 'high'; return q === 'low' || (q !== 'high' && tabletLike()); };
 export function initScans(ctx) {
   C = ctx;
-  document.head.append(Object.assign(document.createElement('style'), { textContent: CSS }));
+  ((id, css) => { let l = document.getElementById(id); if (!l) { l = document.createElement('link'); l.rel = 'stylesheet'; l.id = id; l.dataset.ctSheet = '1'; document.head.append(l); } const old = l.href; l.href = URL.createObjectURL(new Blob([css], { type: 'text/css' })); if (old.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(old), 10000); return l; })('ct-scan-css', CSS);   // a blob: style sheet: the CSP allows no inline <style>
   let down = null;
   addEventListener('pointerdown', (e) => { if (e.target === C.renderer.domElement) down = [e.clientX, e.clientY]; }, true);
   addEventListener('click', (e) => {
@@ -487,7 +487,7 @@ function planSvg(plan) {
   if (!pts.length) return svg;
   const x0 = Math.min(...pts.map((p) => p[0])) - 0.5, y0 = Math.min(...pts.map((p) => p[1])) - 0.5, w = Math.max(...pts.map((p) => p[0])) - x0 + 0.5, h = Math.max(...pts.map((p) => p[1])) - y0 + 0.5;
   svg.setAttribute('viewBox', `${x0} ${y0} ${w} ${h}`);
-  const add = (tag, a) => { const e = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); svg.append(e); return e; };
+  const add = (tag, a) => { const e = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(a)) { if (k === 'style') e.style.cssText = v; else e.setAttribute(k, v); } svg.append(e); return e; };
   for (const r of plan.rooms) {
     add('polygon', { points: r.pts.map((q) => q.join(',')).join(' '), class: 'pr' });
     const cx = r.pts.reduce((a, q) => a + q[0], 0) / r.pts.length, cy = r.pts.reduce((a, q) => a + q[1], 0) / r.pts.length, wd = Math.max(...r.pts.map((q) => q[0])) - Math.min(...r.pts.map((q) => q[0]));

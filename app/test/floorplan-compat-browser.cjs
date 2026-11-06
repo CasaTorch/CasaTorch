@@ -49,7 +49,7 @@ const STRIP = (opts) => {   // runs in the page before anything else
       const ready = await p.waitForFunction(() => window.__casa3dReady === true, null, { timeout: 60000 }).then(() => true).catch(() => false);
       if (ready) ok('the 3D home starts without structuredClone and color-mix()'); else fail('the 3D home did not start');
       if (await p.$('#tooold')) fail('"too old" shown on a browser that can run it'); else ok('no "too old" message');
-      const fix = await p.waitForFunction(() => document.getElementById('cmfix')?.textContent.includes('rgba('), null, { timeout: 15000 }).then(() => p.evaluate(() => document.getElementById('cmfix').textContent)).catch(() => '');
+      const fix = await p.waitForFunction(() => document.getElementById('cmfix') && String(window.__cmfixCss || '').includes('rgba('), null, { timeout: 15000 }).then(() => p.evaluate(() => window.__cmfixCss)).catch(() => '');
       if (fix && !fix.includes('color-mix(') && /\.panel|\.tabs|\.mini/.test(fix)) ok(`color-mix() stand-in wrote ${fix.split('\n').filter(Boolean).length} rules in plain colors`); else fail('no color-mix() stand-in rules');
       await p.waitForTimeout(3000);
       if (errs.length) fail(`page errors: ${errs.join(' | ')}`); else ok('no page errors');

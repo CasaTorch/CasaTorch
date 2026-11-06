@@ -18,7 +18,7 @@ const hhDay = (ymd, o = { weekday: 'short', month: 'short', day: 'numeric' }) =>
 /* White or near-black on a bin's color, whichever reads. */
 const hhInk = (hex) => { const m = /^#([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return '#fff'; const n = parseInt(m[1], 16), l = (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; return l > 0.62 ? '#14161a' : '#fff'; };
 const hhChip = (ic, color, size = 'sm') => el('span', { class: `hh-chipic ${size}`, style: `background:${safeColor(color, '#6b7280')};color:${hhInk(color)}`, 'aria-hidden': 'true' }, icon(ic || 'trash'));
-document.head.append(el('style', {}, `
+ctSheet('ct-household-css', `
 .hh-chipic { display: grid; place-items: center; flex: none; border-radius: 10px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
 .hh-chipic.sm { width: 34px; height: 34px; } .hh-chipic.sm svg { width: 19px; height: 19px; } .hh-chipic.xs { width: 26px; height: 26px; border-radius: 8px; } .hh-chipic.xs svg { width: 15px; height: 15px; }
 .hh-rows { display: grid; gap: 6px; min-width: 0; } .hh-row { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 8px; border-radius: 12px; background: var(--surface-2); }
@@ -44,7 +44,7 @@ document.head.append(el('style', {}, `
 .hh-item > svg, .hh-sugrow > svg { width: 20px; height: 20px; flex: none; color: var(--muted); } .hh-card .check { text-align: left; } .hh-card .check input[type=checkbox] { width: 18px; height: 18px; flex: none; padding: 0; margin-top: 2px; }
 .hh-card h2 svg { width: 16px; height: 16px; flex: none; }
 @media (max-width: 520px) { .hh-kinds { grid-template-columns: repeat(3, 1fr); } .hh-item { padding: 9px 10px; } }
-`));
+`);
 
 /* When to put a bin out, in words: Tonight, Tomorrow night, or (later) the day of the pickup. */
 function hhWhen(b) {
