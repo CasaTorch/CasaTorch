@@ -6,3 +6,17 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/opt/casatorch/casatorch-update
+# The updater runs as root (it installs a package), so its sandbox is lighter than CasaTorch's own: no home folders,
+# its own /tmp, no kernel changes, no new privileges.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK

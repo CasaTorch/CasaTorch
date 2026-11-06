@@ -26,6 +26,12 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Signed container image.** The CasaTorch image is signed (Sigstore cosign) and published with its build provenance
   and a software bill of materials; each release's notes say how to check it. The compose file from
   casatorch.com/download names the release's image exactly, so it runs only the image that was published.
+- **Locked-down container and services.** The Docker image runs as CasaTorch's own unprivileged user on a read-only
+  system, with no setuid programs and no package manager inside, and its base image pinned exactly. The compose files
+  and the Unraid template drop every extra right and set memory and process limits. The Linux service runs in a
+  tighter sandbox (only ordinary system calls, no devices, other processes hidden), and the Home Assistant add-on asks
+  for nothing beyond the Home Assistant API. If a NAS made the settings folder for another user, the container says
+  how to fix it.
 
 ## 0.9.3
 

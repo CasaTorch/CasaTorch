@@ -7,6 +7,9 @@
   <Registry>https://github.com/casatorch/casatorch/pkgs/container/casatorch</Registry>
   <Network>host</Network>
   <Privileged>false</Privileged>
+  <!-- Locked down: starts as root only to give the settings folder to CasaTorch's own user (uid 1000), then runs as
+       that user on a read-only system with no extra rights (the same options as casatorch-compose.yml). -->
+  <ExtraParams>--user=0 --read-only --tmpfs=/tmp:size=256m,mode=1777,noexec,nosuid,nodev --cap-drop=ALL --cap-add=CHOWN --cap-add=DAC_OVERRIDE --cap-add=FOWNER --cap-add=SETUID --cap-add=SETGID --security-opt=no-new-privileges:true --pids-limit=512 --memory=2g</ExtraParams>
   <Support>https://casatorch.com/download</Support>
   <Project>https://casatorch.com</Project>
   <Overview>One screen for your whole house: dashboard, wall panel, 3D home and AI assistant, with everything from Home Assistant.</Overview>

@@ -22,6 +22,28 @@ ports_description:
   8443/tcp: CasaTorch over https at home (Settings > Secure address at home)
 # Talk to Home Assistant through the Supervisor - no long-lived token to create or paste.
 homeassistant_api: true
+# Least privilege: the add-on asks for nothing else. No Supervisor API, no Docker, no hardware, no host PID or D-Bus,
+# no extra kernel capabilities, and Home Assistant's AppArmor profile stays on. (CasaTorch starts as root inside its
+# container only to give /data to its own user, then runs as that user; see app/docker-entrypoint.sh.)
+hassio_api: false
+hassio_role: default
+auth_api: false
+docker_api: false
+host_pid: false
+host_dbus: false
+host_ipc: false
+full_access: false
+apparmor: true
+privileged: []
+devices: []
+udev: false
+usb: false
+uart: false
+gpio: false
+audio: false
+video: false
+kernel_modules: false
+stdin: false
 environment:
   CASATORCH_DATA_DIR: /data
   PORT: "8090"

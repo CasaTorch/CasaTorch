@@ -17,10 +17,19 @@ RestartSec=5
 TimeoutStopSec=20
 StateDirectory=casatorch
 StateDirectoryMode=0700
+# The sandbox. `systemd-analyze security casatorch.service` rates it; what is left open, and why:
+#  - MemoryDenyWriteExecute: off. Node.js compiles JavaScript as it runs (V8's JIT), which needs memory that is
+#    written and then executed; with it on, Node.js stops at start.
+#  - PrivateNetwork / IPAddressDeny / RestrictAddressFamilies beyond these: CasaTorch talks to devices on the home
+#    network and to online services; AF_NETLINK is how Node.js lists this computer's network interfaces.
+#  - PrivateUsers: off. Some Raspberry Pi and NAS kernels have no user namespaces, and the service would not start.
+#  - ProcSubset=pid: off. Health reads the processor and memory figures in /proc.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectProc=invisible
 # No special powers and no reach into the system beyond the network and its own folders.
 CapabilityBoundingSet=
 AmbientCapabilities=
@@ -35,8 +44,20 @@ RestrictSUIDSGID=true
 RestrictRealtime=true
 RestrictNamespaces=true
 LockPersonality=true
+RemoveIPC=true
+KeyringMode=private
 SystemCallArchitectures=native
+# Only the system calls an ordinary service makes; nothing privileged (no mount, swap, reboot, module loading, clock
+# setting, raw I/O, debugging or changing owners). A call outside the list fails with "not permitted" instead of
+# stopping CasaTorch.
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @mount @swap @reboot @module @raw-io @debug @clock @cpu-emulation @obsolete
+SystemCallErrorNumber=EPERM
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# Memory and process limits: a runaway can't take the computer down with it.
+TasksMax=512
+MemoryHigh=1536M
+MemoryMax=2G
 
 [Install]
 WantedBy=multi-user.target

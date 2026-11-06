@@ -1,7 +1,7 @@
 # CasaTorch as a Home Assistant add-on. Home Assistant builds this on your machine the first time you
 # install (a few minutes on a Raspberry Pi). Settings, floors and photos live in the add-on's /data,
 # which Home Assistant includes in its backups.
-ARG BUILD_FROM=node:22.23.4-trixie-slim
+ARG BUILD_FROM=node:22.23.4-trixie-slim@sha256:be1e2a3dc2c4fd68cdfadad2a696a280e0d2749098bee509230174d72fb768c6
 FROM ${BUILD_FROM}
 # A release tag (build.yaml). The source is checked against the release's checksums, signed with CasaTorch's offline
 # release key, before it is built: a changed tag or download fails the build. Releases from before 0.8.0 have no

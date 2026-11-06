@@ -7,6 +7,19 @@ services:
     # build: { context: .., dockerfile: app/Dockerfile }
     container_name: casatorch
     restart: unless-stopped
+    # Locked down: CasaTorch runs as its own unprivileged user (uid 1000) on a read-only system with no extra rights.
+    # It starts as root only to give the settings folder to that user, then drops to it for good (never runs as root).
+    # If the folder already belongs to 1000:1000, you can delete the "user" line and the "cap_add" line.
+    user: "0"
+    read_only: true
+    tmpfs: ["/tmp:size=256m,mode=1777,noexec,nosuid,nodev"]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]   # only for that one-time owner fix; gone once CasaTorch runs
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 512
+    mem_limit: 2g
+    cpus: 2
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }
     # Linux hosts: "host" networking lets CasaTorch see your whole network (device count, Hue/Shelly on the LAN).
     # Docker Desktop (Mac/Windows): remove network_mode and use the ports mapping below instead.
     network_mode: host
