@@ -4,7 +4,7 @@ What changed in each CasaTorch version. The illustrated version, with links into
 [What's new](https://casatorch.com/docs/help/whats-new.html); after an update CasaTorch also shows a short
 "What's new" sheet (find it again in Settings › Help). Items marked **Coming** are not available yet.
 
-## Unreleased
+## 0.9.3
 
 ### Security
 - **New secure-access tunnels have no rules on Cloudflare's side.** CasaTorch tells casatorch.com it writes its own

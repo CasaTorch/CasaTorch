@@ -15,8 +15,8 @@ android {
         applicationId = "com.casatorch.app"
         minSdk = 28
         targetSdk = 35
-        versionCode = 902          // 0.9.2 -> 902; raise it for every upload
-        versionName = "0.9.2"
+        versionCode = 903          // 0.9.3 -> 903; raise it for every upload
+        versionName = "0.9.3"
     }
     buildTypes {
         release {
