@@ -21,6 +21,8 @@ id -u "$U" >/dev/null 2>&1 || U=nobody
 G=$(id -gn "$U" 2>/dev/null || echo nobody)
 printf '%s\n' "$U" > /Library/CasaTorch/run-as && chown root:wheel /Library/CasaTorch/run-as && chmod 644 /Library/CasaTorch/run-as
 mkdir -p "$DATA" && chown -R "$U:$G" "$DATA" && chmod 700 "$DATA"
+# The service's log: in a folder only root can change (launchd opens it as root), readable by root only.
+mkdir -p /Library/Logs/CasaTorch && chown root:wheel /Library/Logs/CasaTorch && chmod 700 /Library/Logs/CasaTorch
 launchctl bootstrap system /Library/LaunchDaemons/com.casatorch.server.plist 2>/dev/null || launchctl kickstart -k system/com.casatorch.server
 # Wait for it to answer, then open setup for whoever is at the screen.
 # If another copy already answers on 8090 (one started from Terminal, say), this one can't start: say so

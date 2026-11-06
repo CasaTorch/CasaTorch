@@ -3,7 +3,7 @@
 # unless you answer "y" below.
 echo "Removing CasaTorch (your Mac password is needed)..."
 sudo launchctl bootout system/com.casatorch.server 2>/dev/null
-sudo rm -rf /Library/CasaTorch /Library/LaunchDaemons/com.casatorch.server.plist /Applications/CasaTorch.webloc
+sudo rm -rf /Library/CasaTorch /Library/LaunchDaemons/com.casatorch.server.plist /Applications/CasaTorch.webloc /Library/Logs/CasaTorch
 sudo pkgutil --forget com.casatorch.server >/dev/null 2>&1
 printf "Also delete your CasaTorch settings? [y/N] "; read a
 if [ "$a" = y ]; then

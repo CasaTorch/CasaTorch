@@ -180,6 +180,8 @@ export default async function keystoreUnit(t) {
       assert.ok(!/exit [1-9]/.test(helper.split('unseal)')[1].split(';;')[0]), 'unseal never fails the start');
       const plist = rd('deploy/packaging/macos/com.casatorch.server.plist');
       assert.ok(!/<key>UserName<\/key>/.test(plist), 'started as root (to read the Keychain)...');
+      for (const m of plist.matchAll(/<key>Standard(?:Out|Error)Path<\/key><string>([^<]+)<\/string>/g)) assert.match(m[1], /^\/Library\/Logs\/CasaTorch\//, `launchd opens ${m[1]} as root: never in the folder CasaTorch's user owns`);
+      assert.match(rd('deploy/packaging/macos/postinstall'), /mkdir -p \/Library\/Logs\/CasaTorch && chown root:wheel \/Library\/Logs\/CasaTorch && chmod 700/);
       assert.match(rd('deploy/packaging/macos/casatorch-run.sh'), /CASATORCH_RUN_AS="\$RUN_AS"/, '...and told which user to drop to');
       // ...through casatorch-launch.mjs: Node's own modules only, the user switched, and only then CasaTorch and its packages
       assert.match(rd('deploy/packaging/macos/casatorch-run.sh'), /exec "\$NODE" \/Library\/CasaTorch\/casatorch-launch\.mjs$/m);
