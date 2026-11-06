@@ -104,6 +104,15 @@ label.field { display: block; margin: 10px 0; } label.field > span { display: bl
 .editing .tile .size-tag { display: block; } :root[data-theme="light"] .tile .size-tag { color: color-mix(in srgb, var(--accent) 48%, #0f172a); }
 .editbar { display: none; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; margin-bottom: 14px; background: rgba(94, 184, 255, .08); border: 1px solid rgba(94, 184, 255, .25); font-size: 14px; }
 .editing-on .editbar { display: flex; }
+.pg-bar-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; }
+.pg-bar-acts .btn[disabled] { opacity: .45; }
+@media (max-width: 760px) {
+  .pg-bar { flex-wrap: wrap; gap: 8px; }
+  .pg-bar > svg:first-child { display: none; }
+  .pg-bar > .grow { flex: 1 1 100%; }
+  .pg-bar > .seg { flex: 1 1 100%; overflow-x: auto; }
+  .pg-bar-acts { flex: 1 1 100%; justify-content: flex-start; }
+}
 
 /* ---- tile contents ---- */
 .wx-now { display: flex; align-items: center; gap: 14px; }

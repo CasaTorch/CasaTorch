@@ -9,7 +9,9 @@
  *    itself; once a page is arranged, new suggestions are offered in one tap ("New for your home").
  *  - Edit: Edit (or press and hold a tile) - drag to move, drag the corner to resize, the sliders button for a
  *    tile's size (Small, Medium, Large, Extra large), name and options, x to remove; "Add" opens the page's
- *    gallery. "Reset to suggested" goes back to CasaTorch's layout.
+ *    gallery. "Reset to suggested" goes back to CasaTorch's layout. Undo (or Ctrl/Cmd+Z while editing) steps back
+ *    through the last 30 changes; Export saves the page's layout as a file, Import puts one back (on this page or
+ *    the same page on another CasaTorch - tiles this one doesn't have are left out, the server checks the rest).
  *  - Whose layout: Everyone (admins), every phone / every tablet / every computer (admins), Just me (when sign-in
  *    is on), or This screen (the kitchen tablet). Saved on the box: /api/page-layout/<page>.
  *  - Size-adaptive: a tile shows more as it grows - S: the key number or state; M: + a sparkline or controls;
@@ -91,8 +93,13 @@ async function pageGrid(main, o) {
   let tiles = saved() ? cloneTiles(saved().tiles) : suggested();
   const writable = () => can[scope];
   let saveT = null;
+  // ---- undo: what the page looked like before each change (the last 30) ----
+  const undoStack = []; let lastSnap = JSON.stringify(tiles), undoing = false;
+  const undoBtn = el('button', { class: 'btn small', disabled: true, title: T('Undo the last change'), onclick: () => undo() }, icon('reset', 14), T('Undo'));
+  const remember = () => { const now = JSON.stringify(tiles); if (!undoing && now !== lastSnap) { undoStack.push(lastSnap); if (undoStack.length > 30) undoStack.shift(); } lastSnap = now; undoBtn.disabled = !undoStack.length; };
   const save = () => {
     if (!writable()) return;
+    remember();
     lay[scope] = { tiles: JSON.parse(JSON.stringify(tiles)), seen: (lay.suggested || []).map(tileKey) };
     clearTimeout(saveT);
     saveT = setTimeout(() => post(`/api/page-layout/${page}`, { scope, screen: sid, form, tiles, seen: lay[scope].seen }, 'PUT').catch((e) => toast(T('Layout not saved: {message}', { message: e.message }))), 400);
@@ -125,7 +132,10 @@ async function pageGrid(main, o) {
     bar.replaceChildren(icon('grip', 18),
       el('div', { class: 'grow', style: 'min-width:0' }, el('div', {}, T('Drag a tile to move it, drag its corner to resize, or tap '), icon('sliders', 14), T(' for its size and options.')),
         el('div', { class: 'tiny muted' }, who)),
-      seg, el('button', { class: 'btn small', onclick: () => addBtn.click() }, icon('plus', 14), T('Add')), el('button', { class: 'btn small', onclick: resetToSuggested }, icon('reset'), T('Reset to suggested')));
+      seg, el('div', { class: 'pg-bar-acts' }, el('button', { class: 'btn small', onclick: () => addBtn.click() }, icon('plus', 14), T('Add')), undoBtn,
+        el('button', { class: 'btn small', onclick: resetToSuggested }, T('Reset to suggested')),
+        el('button', { class: 'btn small ghost', title: T('Save this page\'s layout as a file'), onclick: exportLayout }, icon('download', 14), T('Export')),
+        el('button', { class: 'btn small ghost', title: T('Use a layout file saved from this page'), onclick: importLayout }, T('Import'))));
   };
   async function switchScope(k) {
     if (k === scope || !can[k]) return;
@@ -138,10 +148,43 @@ async function pageGrid(main, o) {
     }
     drawBar(); drawNote();
   }
+  async function undo() {
+    const prev = undoStack.pop(); if (!prev) return;
+    undoing = true;
+    try { tiles.splice(0, tiles.length, ...JSON.parse(prev)); await g.build(); save(); } finally { undoing = false; }
+    undoBtn.disabled = !undoStack.length; toast(T('Undone'));
+  }
+  addEventListener('keydown', function undoKey(e) {
+    if (!main.isConnected) { removeEventListener('keydown', undoKey); return; }
+    if (!document.body.classList.contains('editing-on') || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.key.toLowerCase() !== 'z' || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+    e.preventDefault(); undo();
+  });
+  /* A layout as a file, and back. */
+  function exportLayout() {
+    const blob = new Blob([JSON.stringify({ casatorch: 'page-layout', v: 1, page, at: new Date().toISOString(), tiles }, null, 1)], { type: 'application/json' });
+    const a = el('a', { href: URL.createObjectURL(blob), download: `casatorch-${page}-layout.json` });
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+  }
+  function importLayout() {
+    if (!writable()) return toast(T('Your account can look at this page, but not change it.'));
+    const f = el('input', { type: 'file', accept: '.json,application/json', style: 'display:none' });
+    f.onchange = async () => {
+      const file = f.files?.[0]; f.remove(); if (!file) return;
+      if (file.size > 256 * 1024) return toast(T('That file is too big to be a layout.'));
+      const got = layoutFromFile(await file.text().catch(() => ''), page);
+      if (got.error) return toast(T(got.error), 4000);
+      remember(); undoStack.push(lastSnap); undoBtn.disabled = false;
+      undoing = true; try { tiles.splice(0, tiles.length, ...got.tiles); await g.build(); save(); } finally { undoing = false; }
+      lastSnap = JSON.stringify(tiles);
+      toast(got.skipped ? T('Layout imported. {n} tiles this CasaTorch doesn\'t have were left out.', { n: got.skipped }) : T('Layout imported. Undo puts the old one back.'), 4000);
+    };
+    document.body.append(f); f.click();
+  }
   async function resetToSuggested() {
+    remember(); undoStack.push(lastSnap); undoBtn.disabled = false;
     tiles.splice(0, tiles.length, ...suggested());
     if (writable()) { await post(`/api/page-layout/${page}`, { scope, screen: sid, form, reset: true }, 'PUT').catch(() => {}); lay[scope] = null; }
-    await g.build(); drawNote(); toast(T('Back to the suggested layout'));
+    await g.build(); lastSnap = JSON.stringify(tiles); drawNote(); toast(T('Back to the suggested layout. Undo puts yours back.'));
   }
   /* Under the title: anything new the house can now show. */
   function drawNote() {
@@ -185,6 +228,19 @@ async function pageGrid(main, o) {
   return ctx.refresh;
 }
 
+/* @layoutfile:start */
+/** A layout file read back: { tiles } (only tiles this CasaTorch has, each with a fresh id where it may be repeated), or
+    { error }. Pure apart from wOf (the widgets this app knows). */
+function layoutFromFile(text, page, known = (t) => !!wOf(t)) {
+  let j; try { j = JSON.parse(String(text)); } catch { return { error: 'That isn\'t a CasaTorch layout file.' }; }
+  if (!j || j.casatorch !== 'page-layout' || !Array.isArray(j.tiles)) return { error: 'That isn\'t a CasaTorch layout file.' };
+  if (j.page && j.page !== page) return { error: 'That layout is for another page.' };
+  const ok = j.tiles.slice(0, 60).filter((t) => t && typeof t === 'object' && /^[a-z0-9-]{1,30}(:[\w.-]{1,60})?$/.test(String(t.id)) && known(t));
+  if (!ok.length) return { error: 'None of the tiles in that file are on this CasaTorch.' };
+  const tiles = ok.map((t) => JSON.parse(JSON.stringify({ ...t, w: Number(t.w) || 4, h: Number(t.h) || 2 })));
+  return { tiles, skipped: Math.min(60, j.tiles.length) - ok.length };
+}
+/* @layoutfile:end */
 /* The gallery: every tile this page has, with what it shows, a live preview (fixed-size pages), its sizes, and a
    "Suggested" mark on the ones CasaTorch would put here for this house. A search box once there are many. */
 function tileGallery(page, tiles, suggested, ctx, auto, onPick) {

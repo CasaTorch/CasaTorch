@@ -9,10 +9,23 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const pgSrc = fs.readFileSync(path.join(HERE, '..', 'src', 'client', '06-pagegrid.js'), 'utf8');
 const { sizeTier, atLeast } = new Function(`${pgSrc.slice(pgSrc.indexOf('/* @tier:start */'), pgSrc.indexOf('/* @tier:end */'))}; return { sizeTier, atLeast };`)();
+const { layoutFromFile } = new Function('wOf', `${pgSrc.slice(pgSrc.indexOf('/* @layoutfile:start */'), pgSrc.indexOf('/* @layoutfile:end */'))}; return { layoutFromFile };`)(() => true);
 
 export default async function pageGridTests(t) {
   const P = globalThis.__casatorchPages, E = globalThis.__casatorchEnergy, H = globalThis.__casatorch;
   const ids = (list) => list.map((x) => x.id);
+
+  t('page grid: a layout file comes back only for its own page, with only tiles this CasaTorch has', () => {
+    const file = JSON.stringify({ casatorch: 'page-layout', v: 1, page: 'home', tiles: [{ id: 'clock', w: 4, h: 2 }, { id: 'nosuch', w: 3, h: 2 }, { id: 'bad id!' }, null, { id: 'device:ab12', w: 3, h: 2, device: 'light.porch' }] });
+    const known = (t) => ['clock', 'device'].includes(String(t.id).split(':')[0]);
+    const r = layoutFromFile(file, 'home', known);
+    assert.deepEqual(r.tiles.map((x) => x.id), ['clock', 'device:ab12']); assert.equal(r.skipped, 3);
+    assert.match(layoutFromFile(file, 'controls', known).error, /another page/);
+    assert.match(layoutFromFile('{"tiles":[]}', 'home', known).error, /isn't a CasaTorch layout/);
+    assert.match(layoutFromFile('not json', 'home', known).error, /isn't a CasaTorch layout/);
+    assert.match(layoutFromFile(JSON.stringify({ casatorch: 'page-layout', tiles: [{ id: 'nosuch' }] }), 'home', known).error, /None of the tiles/);
+    assert.equal(layoutFromFile(JSON.stringify({ casatorch: 'page-layout', tiles: Array.from({ length: 200 }, () => ({ id: 'clock' })) }), 'home', known).tiles.length, 60, 'at most 60');
+  });
 
   t('page grid: an empty house is suggested how to get started, not a wall of empty charts', () => {
     const s = P.suggestPageTiles('energy', { metered: [], history: 0 });

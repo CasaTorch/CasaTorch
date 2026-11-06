@@ -21,6 +21,13 @@ What changed in each CasaTorch version. The illustrated version, with links into
   everyone, every kind of screen, each person and each screen), its cameras off camera walls, and its per-device alert
   rules.
 
+### Dashboards
+- **Undo while editing** any page (Home, Controls, Cameras and the rest): the Undo button, or Ctrl/Cmd+Z, steps back
+  through the last 30 changes, including Reset to suggested.
+- **Export and Import a page's layout** as a file, to keep it, copy it to another CasaTorch, or try a friend's. Tiles
+  this CasaTorch doesn't have are left out; Undo puts the old layout back.
+- The edit bar fits on a phone: the help text, who sees the layout, and the buttons each get their own row.
+
 ### Removing CasaTorch
 - **Remove CasaTorch** (Settings › Updates & backup, owner only): offers an encrypted backup first, then in one tap
   ends every phone's and browser's pass for away from home, deletes Secure access, its address and the secure address
