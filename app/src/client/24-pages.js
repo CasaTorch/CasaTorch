@@ -216,5 +216,5 @@ pageTile({ id: 'cam-start', page: 'cameras', auto: true, title: 'Add cameras', i
 async function camerasPage(main) {
   S.me ||= await api('/api/auth/me').catch(() => ({}));
   const load = async () => { const [r, walls, auto] = await Promise.all([api('/api/devices'), cwLoad(), api('/api/camera-auto').catch(() => ({}))]); return { devices: r.devices || [], hiddenCameras: r.hiddenCameras || [], walls, auto }; };
-  return pageGrid(main, { page: 'cameras', auto: true, title: tabLabel({ id: 'cameras', label: T('Cameras') }), load });
+  return pageGrid(main, { page: 'cameras', auto: true, title: tabLabel({ id: 'cameras', label: T('Cameras') }), load, actions: [timelineBtn()] });
 }

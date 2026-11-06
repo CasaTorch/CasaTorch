@@ -41,7 +41,8 @@ function ringEvent(cam, kind) {
   snapNow(`ring:${cam.id}`);   // a fresh picture of whoever is at the door, straight away
   ring.events.unshift({ at: nowIso(), camera: cam.name, kind });
   ring.events = ring.events.slice(0, 100);
-  if (typeof alertRaise === 'function') alertRaise({ id: `ring:${cam.id}:${kind}:${Date.now()}`, severity: kind === 'doorbell' ? 'notice' : 'info', title: kind === 'doorbell' ? `Someone at the ${cam.name}` : `Motion at the ${cam.name}`, source: 'ring', image: `/api/ring/${cam.id}/snapshot` });
+  if (typeof tlRecord === 'function') tlRecord({ type: kind, source: 'ring', camera: cam.name, cameraId: `ring:${cam.id}` }, { snapKey: `ring:${cam.id}` });   // the timeline (72t-timeline.js)
+  if (typeof alertRaise === 'function') alertRaise({ id: `ring:${cam.id}:${kind}:${Date.now()}`, severity: kind === 'doorbell' ? 'notice' : 'info', title: kind === 'doorbell' ? `Someone at the ${cam.name}` : `Motion at the ${cam.name}`, source: 'ring', image: `/api/ring/${cam.id}/snapshot`, url: '/#timeline' });
 }
 setTimeout(() => { if (proStatus().pro) ringConnect(); }, 5000).unref?.();
 

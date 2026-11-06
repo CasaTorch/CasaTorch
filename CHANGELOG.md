@@ -22,6 +22,11 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Ring chimes without Home Assistant.** With CasaTorch's own Ring connection (Pro), your Ring Chime and Chime Pro now
   show up as chimes: whether each is online, its volume and whether it's snoozed. Tap one to change the volume or snooze
   it for 30 minutes to 24 hours. Like chimes from Home Assistant, they never count or show as cameras.
+- **Timeline: everything at your doors and cameras in one list** (Cameras or Security › Timeline). Frigate's
+  detections, doorbell presses, motion, the alarm and your locks (with who, when the lock or alarm says), and people and
+  vehicles Cisco Meraki cameras count, grouped by day. Filter by kind, camera or person; tap an event to play
+  Frigate's clip or see the picture taken right then. Basic shows the last 24 hours, Pro 30 days. Kept on your
+  CasaTorch only, encrypted.
 
 ### Faster
 - **The dashboard starts with less to load.** Network (with App tests) and Energy are now files of their own, fetched

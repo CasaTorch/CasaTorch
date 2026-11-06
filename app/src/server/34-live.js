@@ -32,6 +32,7 @@ function haLiveStart() {
       const d = msg.event.data || {}; if (!d.entity_id) return;
       if (d.new_state) LIVE.states.set(d.entity_id, d.new_state); else LIVE.states.delete(d.entity_id);
       liveChanged(d.entity_id);
+      if (d.new_state && d.old_state && typeof tlFromHa === 'function') try { tlFromHa(d.old_state, d.new_state); } catch { /* the timeline never stops the live link */ }   // 72t-timeline.js
       if (d.new_state && !d.old_state && d.entity_id.startsWith('camera.')) camAutoSoon(d.entity_id);   // a camera Home Assistant just got: it shows up here too (29h-camauto.js)
     }
   });

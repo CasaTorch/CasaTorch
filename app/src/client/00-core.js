@@ -389,7 +389,7 @@ function warmUp() {
   (window.requestIdleCallback || ((f) => setTimeout(f, 2500)))(go, { timeout: 6000 });
 }
 /* The main bar: the household's order and names, only the buttons they want; on a phone the first four and "More". */
-const navTabs = () => TABS.filter((t) => !S.ui.tabs?.[t.id]?.hidden).map((t, i) => [t, S.ui.tabs?.[t.id]?.order ?? 50 + i]).sort((a, b) => a[1] - b[1]).map(([t]) => t);
+const navTabs = () => TABS.filter((t) => t.nav !== false && !S.ui.tabs?.[t.id]?.hidden).map((t, i) => [t, S.ui.tabs?.[t.id]?.order ?? 50 + i]).sort((a, b) => a[1] - b[1]).map(([t]) => t);
 function navLink(t) {
   return el('a', { href: `#${t.id}`, 'data-tab': t.id, class: t.id === current ? 'on' : null, title: tabLabel(t) }, icon(t.icon), el('span', { class: 'nl' }, S.ui.tabs?.[t.id]?.label || T(t.short || t.label)),
     t.pro && !isPro() ? el('span', { class: 'pro' }, 'PRO') : null, t.id === 'alerts' && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : newDot(t.id));   // newDot: 39-whatsnew.js

@@ -172,7 +172,7 @@ tab({ id: 'security', label: 'Security', icon: 'shield', after: 'cameras', async
   const sub = (ctx) => { const devices = ctx.data.devices, s = secData(ctx);
     const issues = devices.filter((d) => d.water || d.smoke || d.triggered).length + devices.filter((d) => d.kind === 'lock' && d.locked === false).length + s.devices.filter((d) => !d.known).length + s.devices.filter((d) => d.ports.some((p) => !p.expected && p.level === 'warning')).length;
     return issues ? T(issues === 1 ? '{n} thing to look at' : '{n} things to look at', { n: issues }) : T('All clear'); };
-  const refresh = await pageGrid(main, { page: 'security', auto: true, title: tabLabel({ id: 'security', label: T('Security') }), load });
+  const refresh = await pageGrid(main, { page: 'security', auto: true, title: tabLabel({ id: 'security', label: T('Security') }), load, actions: [timelineBtn()] });
   const ctx = pageCtx(main); if (ctx) $('#subtitle').textContent = sub(ctx);
   return async () => { if (SEC.wallEdit) return; await refresh?.(); const c = pageCtx(main); if (c && main.isConnected) $('#subtitle').textContent = sub(c); };
 } });

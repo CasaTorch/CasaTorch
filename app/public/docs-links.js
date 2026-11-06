@@ -75,6 +75,7 @@
     'settings.cameras': 'connect/cameras.html#live',
     'cameras.frigate': 'connect/cameras.html#frigate',
     'page.security': 'use/security.html',
+    'page.timeline': 'use/security.html#events',
     'page.calendar': 'connect/everyday.html#calendars',
     'page.photos': 'connect/everyday.html#photos',
     'page.energy': 'connect/energy.html#page',

@@ -61,7 +61,7 @@ function lookCard() {
 /* The main bar: which buttons, in what order, what they're called, how big, and where. Saved for every screen; changes show at once. */
 function barCard() {
   const tabs = JSON.parse(JSON.stringify(S.ui.tabs || {}));
-  let order = navTabs().map((t) => t.id); for (const t of TABS) if (!order.includes(t.id)) order.push(t.id);
+  let order = navTabs().map((t) => t.id); for (const t of TABS) if (!order.includes(t.id) && t.nav !== false) order.push(t.id);
   let saveT = null;
   const commit = () => { order.forEach((id, i) => { tabs[id] = { ...(tabs[id] || {}), order: i }; }); S.ui = { ...S.ui, tabs }; drawNav(); clearTimeout(saveT); saveT = setTimeout(() => saveUi({ tabs }).catch((e) => toast(e.message)), 400); };
   const list = el('div', { class: 'bar-list', role: 'list' });
@@ -237,6 +237,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
 /* Side-rail order */
 const TAB_ORDER = ['home', 'alerts', 'controls', 'cameras', 'security', 'calendar', 'photos', 'energy', 'network', 'house3d', 'ask', 'connect', 'settings'];
 TABS.sort((a, b) => TAB_ORDER.indexOf(a.id) - TAB_ORDER.indexOf(b.id));
+{ const k = TABS.findIndex((t) => t.nav === false); if (k >= 0 && k < TABS.findIndex((t) => t.id === 'home')) TABS.push(...TABS.splice(k, 1)); }   // a page off the bar (the timeline) is never the first page
 
 /* "Get my key by e-mail": the e-mail used to buy Pro gets a 6-digit code; the key is saved here. */
 function claimKey(done) {

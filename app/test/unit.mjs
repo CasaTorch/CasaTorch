@@ -1036,6 +1036,7 @@ await (await import('./family-unit.mjs')).default(t);   // the Family board: cho
 await (await import('./plan-net-unit.mjs')).default(t);   // 3D Home: plan backups and restore points, network on the plan, Wi-Fi estimate, voice (plan-net-unit.mjs)
 await (await import('./outdoor-unit.mjs')).default(t);
 await (await import('./lazy-unit.mjs')).default(t);   // pages loaded the first time they open (lazy-unit.mjs)
+await (await import('./timeline-unit.mjs')).default(t);   // the event timeline (timeline-unit.mjs)
 await (await import('./floorplan-compat-unit.mjs')).default(t);   // the 3D home on older browsers: no newer JS/CSS without a fallback (floorplan-compat-unit.mjs)   // 3D home outside and furniture: polygons, pools, slopes, fences, models, saved items (outdoor-unit.mjs)
 await (await import('./license-unit.mjs')).default(t);   // Pro keys, grace periods and the trial (license-unit.mjs)
 await (await import('./security-unit.mjs')).default(t);   // the pre-launch security review: outbound-request guard, member links, pre-setup gate (security-unit.mjs)
