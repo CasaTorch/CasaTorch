@@ -42,6 +42,8 @@
     homes: () => call('homes'), saveHome: (h) => call('saveHome', h), openHome: (id, o) => fire('openHome', { id, remember: !!(o && o.remember) }), removeHome: (id) => call('removeHome', { id }),
     /* the home opened at launch (null: ask when there's more than one) */
     setLaunchHome: (id) => call('setLaunchHome', { id: id || null }),
+    /* Face ID / fingerprint before something only the owner may do; and, on the app's own screens, unlocking a home's locked remote access */
+    confirmOwner: (reason) => call('confirmOwner', { reason: String(reason || '').slice(0, 80) }).then((ok) => ok === true), remoteUnlock: (id) => call('remoteUnlock', { id }),
     switchHome: () => fire('switchHome'), signOut: () => fire('signOut'), scanQR: () => call('scanQR'), deviceInfo: () => call('deviceInfo'), copy: (text) => call('copy', { text: String(text || '').slice(0, 4096) }),
     /* finding a CasaTorch (the app's own screens only): "is there one at this address?" with the exact reason when not,
        and the ones announcing themselves on this Wi-Fi (Bonjour, "_casatorch._tcp") as addresses to check */

@@ -153,6 +153,9 @@
     r = r || { error: 'other' };
     if (r.error) return { ok: false, kind: r.error, base, net: r.net || netNow() };
     if (r.status >= 300 && r.status < 400) return { ok: false, kind: 'portal', base };
+    // the owner locked remote access (at the edge gate or on the box), or this phone has no valid edge ticket: answers too
+    if (r.status === 403 && r.json && r.json.locked) return { ok: false, kind: 'locked', base };
+    if (r.status === 403 && r.json && r.json.gate) return { ok: false, kind: 'gate', base };
     // your CasaTorch's secure address, away from home, on Basic: it says so in JSON ({ away, needsPro }) - that's an answer, not an error
     if (r.status === 403 && r.json && (r.json.needsPro || r.json.away)) return { ok: false, kind: 'needspro', base };
     if (r.status === 404) return { ok: false, kind: 'old', base };
@@ -173,7 +176,7 @@
     for (const t of tries) { const r = await t; if (r.ok) return r; fails.push(r); }
     // an answer that says what's wrong beats a silence; else what the first (best) address said.
     // "away from home, that's Pro" first: the home addresses can't answer from here anyway.
-    return fails.find((f) => f.kind === 'needspro') || fails.find((f) => ['appold', 'old', 'notcasa', 'portal', 'server', 'tls'].includes(f.kind) && f.base === uniq[0])
+    return fails.find((f) => f.kind === 'locked') || fails.find((f) => f.kind === 'needspro') || fails.find((f) => f.kind === 'gate') || fails.find((f) => ['appold', 'old', 'notcasa', 'portal', 'server', 'tls'].includes(f.kind) && f.base === uniq[0])
       || fails.find((f) => ['appold', 'old', 'notcasa', 'portal', 'server'].includes(f.kind)) || fails[0];
   }
   /** The best address to sign in at: its secure address (encrypted on your Wi-Fi) when this phone can reach it, else the one that answered. */
@@ -202,6 +205,8 @@
       case 'appold': return T('This CasaTorch needs a newer version of the app ({need} or later). Update CasaTorch in the {store}.', { need: f.need, store: storeName() });
       case 'notcasa': return port === '8123' ? T('That\'s Home Assistant, not CasaTorch. CasaTorch usually uses port 8090 on the same address.') : local ? T('Something answered at {host}, but it isn\'t CasaTorch.', { host }) : T('Something answered at {host}, but it isn\'t CasaTorch. If this Wi-Fi has a sign-in page (like at a hotel or café), open your browser and sign in first.', { host });
       case 'needspro': return T('You\'re away from home. Using CasaTorch from anywhere is part of Pro (your trial includes it).');
+      case 'locked': return T('Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.');
+      case 'gate': return T('This phone\'s pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.');
       case 'portal': return T('This Wi-Fi wants you to sign in first (like at a hotel or café). Open your browser, sign in, then try again.');
       case 'server': return T('CasaTorch had a problem ({status}). Wait a moment and try again.', { status: f.status || 500 });
       default: return navigator.onLine === false ? T('This phone is offline. Turn off Airplane Mode or join your home Wi-Fi, then try again.') : T('Can\'t reach {host} from this phone. Check it\'s on your home Wi-Fi.', { host: host || T('your CasaTorch') });
@@ -439,7 +444,7 @@
     S.token = r.token; S.home = r.home; S.user = r.user;
     remember('homes');   // from here on, a reload goes to your homes (the sign-in is kept)
     const a = (r.home && r.home.addresses) || {};
-    try { await N.saveHome({ id: r.home.id, name: r.home.name, token: r.token, user: { name: (r.user && (r.user.name || r.user.username)) || '', role: (r.user && r.user.role) || '' }, addresses: { lan: a.lan, remote: a.remote, plain: a.plain, here: S.base } }); }
+    try { await N.saveHome({ id: r.home.id, name: r.home.name, token: r.token, user: { name: (r.user && (r.user.name || r.user.username)) || '', role: (r.user && r.user.role) || '' }, addresses: { lan: a.lan, remote: a.remote, plain: a.plain, here: S.base }, gate: r.gate || null }); }   // gate: tickets for the edge gate at the secure address
     catch (e) { haptic('error'); return screen(bigIcon('lock', 'calm'), el('h2', {}, T('Couldn\'t keep the sign-in')), errBox(e.message), el('div', { class: 'spacer' }), el('button', { class: 'btn primary', type: 'button', onclick: () => done(r) }, T('Try again')), el('button', { class: 'btn plain', type: 'button', onclick: welcome }, T('Start over'))); }
     haptic('success');
     if (S.recovery) return recovery();
@@ -489,6 +494,7 @@
   }
   async function pairFrom(link) {
     remember('welcome');   // the code works once: a reload mustn't try it again
+    if (!/^casatorch:\/\/pair/i.test(String(link))) return pairCode(T('That isn\'t a CasaTorch pairing code.'));   // (a browser's approval code is scanned inside your home's Settings)
     let u; try { u = new URL(String(link).replace(/^casatorch:\/\/pair/i, 'https://x/pair')); } catch { return pairCode(T('That isn\'t a CasaTorch pairing code.')); }
     const q = u.searchParams, code = q.get('c');
     if (!code) return pairCode(T('That isn\'t a CasaTorch pairing code.'));
@@ -593,11 +599,13 @@
     const why = el('p', { class: 'muted', 'aria-live': 'polite' }, T('This phone can\'t get to your CasaTorch right now. It may be switched off, or this phone isn\'t on your home Wi-Fi.'));
     const status = el('p', { class: 'status small muted', 'aria-live': 'polite' });
     const retry = el('button', { class: 'btn primary', type: 'button' }, T('Try now'));
+    // remote access locked by the owner: the owner can unlock it from here (Face ID / fingerprint first, on the phone)
+    const unlockBtn = el('button', { class: 'btn', type: 'button', hidden: true }, T('Unlock remote access'));
     const away = ad.remote ? null : el('div', { class: 'note' }, el('span', { html: svg('wifi', 18) }), el('span', {}, T('Away from home: coming with Secure access (Pro). For now the app connects on your home Wi-Fi.')));
     const title = el('h2', {}, T('Can\'t reach {name}', { name: h.name })), icon = bigIcon('wifi', 'calm');
     const gen = screen(el('div', { class: 'spacer' }), icon, title, why, away,
       h.last ? el('p', { class: 'small muted' }, T('Last connected {when}.', { when: lastSeen(h.last) })) : null,
-      el('div', { class: 'spacer' }), status, retry, el('button', { class: 'btn plain', type: 'button', onclick: homes }, T('Your homes')));
+      el('div', { class: 'spacer' }), status, unlockBtn, retry, el('button', { class: 'btn plain', type: 'button', onclick: homes }, T('Your homes')));
     const attempt = async () => {
       const r = await probeAll(addrs, 5000);
       if (gen !== S.gen) return true;
@@ -613,11 +621,18 @@
       why.textContent = pro ? T('Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.') : explain(r);
       icon.innerHTML = svg(pro ? 'lock' : 'wifi');
       retry.textContent = pro ? T('Try again') : T('Try now');
-      if (away) away.hidden = pro;
+      if (away) away.hidden = pro || r.kind === 'locked' || r.kind === 'gate';
+      unlockBtn.hidden = !(r.kind === 'locked' && h.user && h.user.role === 'owner' && typeof N.remoteUnlock === 'function');
       return false;
     };
     const loop = keepTrying(gen, attempt, (s) => { status.textContent = waitText(s); retry.disabled = s === 0; });
     retry.onclick = () => { haptic('light'); loop.now(); };
+    unlockBtn.onclick = async () => {
+      unlockBtn.disabled = true;
+      try { if (await N.remoteUnlock(id)) { haptic('success'); status.textContent = T('Unlocked. Opening {name}…', { name: h.name }); setTimeout(() => loop.now(), 3000); } }
+      catch (e) { haptic('error'); status.textContent = e.message; }
+      unlockBtn.disabled = false;
+    };
   }
   function signedOut(id) {
     remember(`signedout=${id}`);

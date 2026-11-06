@@ -105,6 +105,7 @@ final class HomeStore {
         homes.removeAll { $0.id == id }; save()
         Keychain.delete(service: Keychain.tokenService, account: id)
         Keychain.delete(service: Keychain.alertKeyService, account: id, shared: true)
+        EdgeTicket.remove(id)
         UserDefaults.standard.removeObject(forKey: Push.homeKey(id))
         if currentId == id { currentId = homes.first?.id }
         if UserDefaults.standard.string(forKey: launchKey) == id { launchHomeId = nil }

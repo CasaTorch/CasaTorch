@@ -38,6 +38,7 @@ enum Push {
         var r = URLRequest(url: base.appendingPathComponent("api/app/push")); r.httpMethod = "PUT"; r.timeoutInterval = 8
         r.setValue("application/json", forHTTPHeaderField: "Content-Type"); r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         r.httpBody = try? JSONSerialization.data(withJSONObject: ["token": now, "platform": "apns", "env": environment])
+        EdgeTicket.apply(&r)
         let req = r
         let key = homeKey(id)
         Task.detached {

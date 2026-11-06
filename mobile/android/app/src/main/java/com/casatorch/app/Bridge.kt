@@ -128,6 +128,30 @@ class Bridge(private val a: MainActivity) {
             JSONArray(discover(x.optLong("timeout", 3000).coerceIn(1000, 8000)))
         }
         "scanQR" -> scanQR()
+        "confirmOwner" -> a.authenticate(x.optString("reason").take(80).ifEmpty { "Confirm it's you" })   // before something only the owner may do
+        "remoteUnlock" -> {
+            // the app's own screen, when the home's secure address is locked: the fingerprint, then the paired phone turns the lock off
+            if (!fromShell) throw Failure("Not allowed here.")
+            val id = x.optString("id")
+            val home = HomeStore.home(id) ?: throw Failure("Not allowed here.")
+            val remote = home.remote?.let(Uri::parse) ?: throw Failure("Not allowed here.")
+            if (!a.authenticate("Unlock remote access")) false
+            else {
+                val token = a.tokenCache[id] ?: runCatching { HomeStore.token(id) }.getOrNull() ?: throw Failure("Sign in again.")
+                withContext(Dispatchers.IO) {
+                    val c = (URL(remote.buildUpon().path("/api/gate/unlock").build().toString()).openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"; doOutput = true; connectTimeout = 10000; readTimeout = 10000
+                        setRequestProperty("Content-Type", "application/json"); setRequestProperty("Authorization", "Bearer $token")
+                        HomeStore.gateForHost(remote.host)?.let { setRequestProperty("X-CT-Gate", it) }
+                    }
+                    try {
+                        c.outputStream.use { it.write("{}".toByteArray()) }
+                        if (c.responseCode == 200) true
+                        else throw Failure(runCatching { JSONObject(c.errorStream?.bufferedReader()?.use { it.readText() } ?: "{}").optString("error") }.getOrNull()?.ifEmpty { null } ?: "That didn't work. Try again on your home Wi-Fi.")
+                    } finally { c.disconnect() }
+                }
+            }
+        }
         "homes" -> JSONArray(HomeStore.homes.sortedByDescending { it.last }.map { it.toJson().apply { if (it.last > 0) put("last", java.time.Instant.ofEpochMilli(it.last).toString()) else remove("last"); put("launch", it.id == HomeStore.launchHomeId) } })
         "saveHome" -> {
             if (!fromShell) throw Failure("Not allowed here.")
@@ -140,6 +164,7 @@ class Bridge(private val a: MainActivity) {
             val saved = try { HomeStore.upsert(h, token) } catch (_: NeedsUnlock) { a.authenticate("Save the sign-in to ${h.name}") && HomeStore.upsert(h, token) }
             if (!saved) throw Failure("This phone's secure storage didn't take the sign-in.")
             a.tokenCache[id] = token
+            HomeStore.gateSave(id, x.optJSONObject("gate"))   // tickets for the edge gate in front of its secure address
             a.installBridge()
             true
         }
@@ -177,6 +202,7 @@ class Bridge(private val a: MainActivity) {
             val c = (URL(u.toString()).openConnection() as HttpURLConnection).apply {
                 connectTimeout = ms; readTimeout = ms; useCaches = false; instanceFollowRedirects = false   // a redirect is an answer: usually a Wi-Fi sign-in page
                 setRequestProperty("Accept", "application/json")
+                HomeStore.gateForHost(u.host)?.let { setRequestProperty("X-CT-Gate", it) }   // a home's secure address: through its edge gate
             }
             try {
                 val code = c.responseCode
@@ -244,7 +270,7 @@ class Bridge(private val a: MainActivity) {
         val scanner = GmsBarcodeScanning.getClient(a, opts)
         return suspendCancellableCoroutine { c ->
             scanner.startScan()
-                .addOnSuccessListener { b -> c.resume(b.rawValue?.takeIf { it.startsWith("casatorch://pair") }) }
+                .addOnSuccessListener { b -> c.resume(b.rawValue?.takeIf { it.startsWith("casatorch://pair") || it.startsWith("casatorch://approve") }) }   // a phone's pairing code, or a browser asking to be approved
                 .addOnCanceledListener { c.resume(null) }
                 .addOnFailureListener { c.resumeWithException(Failure("The scanner isn't ready on this phone. Type the pairing code instead.")) }
         }

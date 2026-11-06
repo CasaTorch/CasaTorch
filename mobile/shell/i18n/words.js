@@ -11,6 +11,10 @@
    The CasaTorch web app's languages: es de fr pt it nl ja zh ko hi pl sv tr. */
 window.CASA_WORDS = {
   es: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "El acceso remoto a esta casa está bloqueado. Nadie puede entrar desde fuera hasta que el propietario lo desbloquee.",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "El pase de este teléfono para fuera de casa caducó. Abre CasaTorch una vez en el Wi-Fi de casa para renovarlo.",
+    "Unlock remote access": "Desbloquear el acceso remoto",
+    "Unlocked. Opening {name}…": "Desbloqueado. Abriendo {name}…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "Las alertas al teléfono aún no están activadas para esta app de CasaTorch. Este teléfono ya está listo: las alertas empezarán solas en cuanto lo estén.",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Usar CasaTorch desde cualquier lugar forma parte de Pro (tu prueba lo incluye). En el Wi-Fi de tu casa se abre como siempre.",
     "You're away from home": "Estás fuera de casa",
@@ -171,6 +175,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "hace {n} minutos",
   },
   de: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "Der Fernzugriff auf dieses Zuhause ist gesperrt. Niemand erreicht es von außen, bis der Besitzer ihn entsperrt.",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "Der Pass dieses Handys für unterwegs ist abgelaufen. Öffne CasaTorch einmal im WLAN zu Hause, um ihn zu erneuern.",
+    "Unlock remote access": "Fernzugriff entsperren",
+    "Unlocked. Opening {name}…": "Entsperrt. {name} wird geöffnet…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "Handy-Benachrichtigungen sind für diese CasaTorch-App noch nicht eingeschaltet. Dieses Handy ist bereit - sie kommen von selbst, sobald sie es sind.",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "CasaTorch von überall zu nutzen ist Teil von Pro (in deiner Testphase enthalten). In deinem WLAN zu Hause öffnet es sich wie gewohnt.",
     "You're away from home": "Du bist unterwegs",
@@ -331,6 +339,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "vor {n} Minuten",
   },
   fr: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "L'accès à distance à cette maison est verrouillé. Personne ne peut la joindre de l'extérieur tant que le propriétaire ne l'a pas déverrouillé.",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "Le laissez-passer de ce téléphone pour l'extérieur a expiré. Ouvrez CasaTorch une fois sur le Wi-Fi de la maison pour le renouveler.",
+    "Unlock remote access": "Déverrouiller l'accès à distance",
+    "Unlocked. Opening {name}…": "Déverrouillé. Ouverture de {name}…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "Les alertes sur téléphone ne sont pas encore activées pour cette app CasaTorch. Ce téléphone est prêt : elles arriveront d'elles-mêmes dès qu'elles le seront.",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Utiliser CasaTorch de n'importe où fait partie de Pro (inclus dans votre essai). Sur le Wi-Fi de la maison, il s'ouvre comme d'habitude.",
     "You're away from home": "Vous n'êtes pas à la maison",
@@ -491,6 +503,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "il y a {n} minutes",
   },
   pt: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "O acesso remoto a esta casa está bloqueado. Ninguém acessa de fora até o proprietário desbloquear.",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "O passe deste celular para fora de casa expirou. Abra o CasaTorch uma vez no Wi-Fi de casa para renová-lo.",
+    "Unlock remote access": "Desbloquear o acesso remoto",
+    "Unlocked. Opening {name}…": "Desbloqueado. Abrindo {name}…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "Os alertas no celular ainda não estão ativados para este app CasaTorch. Este celular já está pronto - os alertas começam sozinhos assim que estiverem.",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Usar o CasaTorch de qualquer lugar faz parte do Pro (seu teste inclui). No Wi-Fi de casa ele abre como sempre.",
     "You're away from home": "Você está fora de casa",
@@ -651,6 +667,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "há {n} minutos",
   },
   it: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "L'accesso remoto a questa casa è bloccato. Nessuno può raggiungerla da fuori finché il proprietario non lo sblocca.",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "Il pass di questo telefono per fuori casa è scaduto. Apri CasaTorch una volta sul Wi-Fi di casa per rinnovarlo.",
+    "Unlock remote access": "Sblocca l'accesso remoto",
+    "Unlocked. Opening {name}…": "Sbloccato. Apertura di {name}…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "Gli avvisi sul telefono non sono ancora attivi per questa app CasaTorch. Questo telefono è pronto: arriveranno da soli appena lo saranno.",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Usare CasaTorch ovunque fa parte di Pro (incluso nella tua prova). Sul Wi-Fi di casa si apre come sempre.",
     "You're away from home": "Sei fuori casa",
@@ -811,6 +831,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n} minuti fa",
   },
   nl: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "Toegang op afstand tot dit huis is vergrendeld. Niemand kan het van buitenaf bereiken tot de eigenaar het ontgrendelt.",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "De pas van deze telefoon voor buitenshuis is verlopen. Open CasaTorch één keer op je wifi thuis om hem te vernieuwen.",
+    "Unlock remote access": "Toegang op afstand ontgrendelen",
+    "Unlocked. Opening {name}…": "Ontgrendeld. {name} wordt geopend…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "Telefoonmeldingen staan nog niet aan voor deze CasaTorch-app. Deze telefoon is klaar - meldingen komen vanzelf zodra ze aan staan.",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "CasaTorch overal gebruiken hoort bij Pro (je proefperiode bevat het). Op je wifi thuis opent hij zoals altijd.",
     "You're away from home": "Je bent niet thuis",
@@ -971,6 +995,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n} minuten geleden",
   },
   ja: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "この家へのリモートアクセスはロック中です。オーナーが解除するまで、外からは誰も接続できません。",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "このスマホの外出先用パスの期限が切れました。自宅の Wi-Fi で一度 CasaTorch を開くと更新されます。",
+    "Unlock remote access": "リモートアクセスのロックを解除",
+    "Unlocked. Opening {name}…": "解除しました。{name} を開いています…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "このCasaTorchアプリでは、スマホへの通知はまだ有効になっていません。このスマホの準備はできています。有効になれば自動で届き始めます。",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "どこからでも CasaTorch を使う機能は Pro に含まれます (トライアルでも使えます)。自宅の Wi-Fi ではいつもどおり開きます。",
     "You're away from home": "外出中です",
@@ -1131,6 +1159,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n}分前",
   },
   zh: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "此家的远程访问已锁定。在房主解锁之前，任何人都无法从外面访问。",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "此手机的在外通行凭证已过期。在家里的 Wi-Fi 上打开一次 CasaTorch 即可续期。",
+    "Unlock remote access": "解锁远程访问",
+    "Unlocked. Opening {name}…": "已解锁。正在打开 {name}…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "此 CasaTorch App 尚未开启手机提醒。这部手机已设置好，开启后提醒会自动开始。",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "随时随地使用 CasaTorch 是 Pro 的功能（试用期包含）。在家中 Wi-Fi 上照常打开。",
     "You're away from home": "你不在家",
@@ -1291,6 +1323,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n} 分钟前",
   },
   ko: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "이 집의 원격 접속이 잠겨 있습니다. 소유자가 잠금을 해제할 때까지 아무도 외부에서 접속할 수 없습니다.",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "이 휴대폰의 외부 접속 패스가 만료되었습니다. 집 Wi-Fi에서 CasaTorch를 한 번 열면 갱신됩니다.",
+    "Unlock remote access": "원격 접속 잠금 해제",
+    "Unlocked. Opening {name}…": "잠금 해제됨. {name} 여는 중…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "이 CasaTorch 앱의 휴대폰 알림이 아직 켜지지 않았어요. 이 휴대폰은 준비됐어요. 켜지면 알림이 자동으로 오기 시작해요.",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "어디서나 CasaTorch를 사용하는 기능은 Pro에 포함됩니다(체험에도 포함). 집 Wi-Fi에서는 평소처럼 열립니다.",
     "You're away from home": "집 밖에 있습니다",
@@ -1451,6 +1487,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n}분 전",
   },
   hi: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "इस घर का रिमोट एक्सेस लॉक है। जब तक मालिक अनलॉक नहीं करते, कोई भी बाहर से नहीं पहुँच सकता।",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "इस फ़ोन का घर से बाहर वाला पास खत्म हो गया है। इसे नया करने के लिए घर के Wi-Fi पर एक बार CasaTorch खोलें।",
+    "Unlock remote access": "रिमोट एक्सेस अनलॉक करें",
+    "Unlocked. Opening {name}…": "अनलॉक हो गया। {name} खुल रहा है…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "इस CasaTorch ऐप के लिए फ़ोन अलर्ट अभी चालू नहीं हैं। यह फ़ोन तैयार है - चालू होते ही अलर्ट अपने-आप आने लगेंगे।",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "कहीं से भी CasaTorch इस्तेमाल करना Pro का हिस्सा है (आपके ट्रायल में शामिल)। घर के Wi-Fi पर यह हमेशा की तरह खुलता है।",
     "You're away from home": "आप घर से बाहर हैं",
@@ -1611,6 +1651,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n} मिनट पहले",
   },
   pl: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "Dostęp zdalny do tego domu jest zablokowany. Nikt nie połączy się spoza domu, dopóki właściciel go nie odblokuje.",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "Przepustka tego telefonu poza domem wygasła. Otwórz CasaTorch raz w domowym Wi-Fi, aby ją odnowić.",
+    "Unlock remote access": "Odblokuj dostęp zdalny",
+    "Unlocked. Opening {name}…": "Odblokowano. Otwieranie {name}…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "Powiadomienia na telefon nie są jeszcze włączone dla tej aplikacji CasaTorch. Ten telefon jest gotowy - zaczną przychodzić same, gdy tylko zostaną włączone.",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Korzystanie z CasaTorch z dowolnego miejsca jest częścią Pro (okres próbny to obejmuje). W domowym Wi-Fi otwiera się jak zwykle.",
     "You're away from home": "Jesteś poza domem",
@@ -1771,6 +1815,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "{n} min temu",
   },
   sv: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "Fjärråtkomst till det här hemmet är låst. Ingen kan nå det utifrån förrän ägaren låser upp.",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "Telefonens pass för bortaläge har gått ut. Öppna CasaTorch en gång på hemmets wifi för att förnya det.",
+    "Unlock remote access": "Lås upp fjärråtkomst",
+    "Unlocked. Opening {name}…": "Upplåst. Öppnar {name}…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "Telefonaviseringar är inte påslagna för den här CasaTorch-appen än. Den här telefonen är klar - aviseringarna börjar av sig själva när de är det.",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "Att använda CasaTorch var som helst ingår i Pro (din provperiod inkluderar det). På ditt Wi-Fi hemma öppnas den som vanligt.",
     "You're away from home": "Du är inte hemma",
@@ -1931,6 +1979,10 @@ window.CASA_WORDS = {
     "{n} minutes ago": "för {n} minuter sedan",
   },
   tr: {
+    "Remote access to this home is locked. Nobody can reach it from outside until the owner unlocks it.": "Bu eve uzaktan erişim kilitli. Sahibi kilidi açana kadar kimse dışarıdan ulaşamaz.",
+    "This phone's pass for away from home has run out. Open CasaTorch once on your home Wi-Fi to renew it.": "Bu telefonun ev dışı geçişinin süresi doldu. Yenilemek için CasaTorch'u bir kez ev Wi-Fi'ında açın.",
+    "Unlock remote access": "Uzaktan erişimin kilidini aç",
+    "Unlocked. Opening {name}…": "Kilit açıldı. {name} açılıyor…",
     "Phone alerts aren't switched on for this CasaTorch app yet. This phone is set - alerts start by themselves once they are.": "Bu CasaTorch uygulaması için telefon uyarıları henüz açılmadı. Bu telefon hazır - açıldıklarında uyarılar kendiliğinden gelmeye başlar.",
     "Using CasaTorch from anywhere is part of Pro (your trial includes it). On your home Wi-Fi it opens as usual.": "CasaTorch'u her yerden kullanmak Pro'nun bir parçasıdır (denemeniz bunu içerir). Ev Wi-Fi'nizde her zamanki gibi açılır.",
     "You're away from home": "Evden uzaktasınız",

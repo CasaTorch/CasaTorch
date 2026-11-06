@@ -121,6 +121,7 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             let home = Home(id: id, name: String(name.prefix(60)), user: .init(name: u["name"] as? String, role: u["role"] as? String),
                             addresses: .init(lan: clean(ad["lan"]), remote: clean(ad["remote"]), plain: clean(ad["plain"]), here: clean(ad["here"])), last: Date())
             guard HomeStore.shared.upsert(home, token: token) else { throw Failure("This phone's secure storage didn't take the sign-in.") }
+            if let g = a["gate"] { EdgeTicket.save(id, g) }   // tickets for the edge gate in front of its secure address (EdgeTicket.swift)
             return true
         case "openHome":
             if let id = a["id"] as? String, HomeStore.shared.home(id) != nil {
@@ -136,6 +137,26 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         case "removeHome":
             guard fromShell, let id = a["id"] as? String else { throw Failure("Not allowed here.") }
             HomeStore.shared.remove(id); vc.tokenCache[id] = nil; return true
+        case "confirmOwner":
+            // Face ID / Touch ID (or the passcode) before something only the owner may do, like unlocking remote access
+            let ctx = LAContext()
+            let reason = (a["reason"] as? String).map { String($0.prefix(80)) } ?? "Confirm it's you"
+            return (try? await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
+        case "remoteUnlock":
+            // the app's own screen, when the home's secure address is locked: Face ID, then the paired phone turns the lock off
+            guard fromShell, let id = a["id"] as? String, let home = HomeStore.shared.home(id), let remote = home.addresses.remote, let base = URL(string: remote) else { throw Failure("Not allowed here.") }
+            let ctx = LAContext()
+            let ok = (try? await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock remote access")) ?? false
+            guard ok else { return false }
+            guard let token = vc.tokenCache[id] ?? HomeStore.shared.token(id, context: ctx) else { throw Failure("Sign in again.") }
+            var r = URLRequest(url: base.appendingPathComponent("api/gate/unlock")); r.httpMethod = "POST"; r.timeoutInterval = 15
+            r.setValue("application/json", forHTTPHeaderField: "Content-Type"); r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            r.httpBody = Data("{}".utf8)
+            EdgeTicket.apply(&r)
+            let result = try await URLSession.shared.data(for: r)
+            if (result.1 as? HTTPURLResponse)?.statusCode == 200 { return true }
+            let said = (try? JSONSerialization.jsonObject(with: result.0) as? [String: Any])?["error"] as? String
+            throw Failure(said ?? "That didn't work. Try again on your home Wi-Fi.")
         case "switchHome": vc.openShell("homes"); return nil
         case "signOut":
             if let id = vc.currentHomeId() { HomeStore.shared.remove(id); vc.tokenCache[id] = nil }

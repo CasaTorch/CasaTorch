@@ -269,6 +269,7 @@ class MainActivity : AppCompatActivity() {
             if (onShell) clearHistoryOnLoad = true
             web.loadUrl(Home.originOf(base) + (path ?: "/"))
             refreshPushToken(home, base, token)
+            renewGate(home, base, token)
         }
     }
     /** Back from the lock: hand the sign-in back and carry on where you were. */
@@ -297,7 +298,7 @@ class MainActivity : AppCompatActivity() {
         val tries = (secure + plain).map { u ->
             async(Dispatchers.IO) {
                 runCatching {
-                    val c = (URL(u.buildUpon().path("/api/app/hello").build().toString()).openConnection() as HttpURLConnection).apply { connectTimeout = timeoutMs; readTimeout = timeoutMs; useCaches = false; instanceFollowRedirects = false }
+                    val c = (URL(u.buildUpon().path("/api/app/hello").build().toString()).openConnection() as HttpURLConnection).apply { connectTimeout = timeoutMs; readTimeout = timeoutMs; useCaches = false; instanceFollowRedirects = false; HomeStore.gateForHost(u.host)?.let { setRequestProperty("X-CT-Gate", it) } }   // through the edge gate at the secure address
                     try { if (c.responseCode == 200) JSONObject(c.inputStream.bufferedReader().use { it.readText() }).takeIf { it.optBoolean("casatorch") }?.let { u to it } else null } finally { c.disconnect() }
                 }.getOrNull()
             }
@@ -388,6 +389,8 @@ class MainActivity : AppCompatActivity() {
             }
             for (u in plain) cm.setCookie(Home.originOf(u), "casatorch_session=$token; Path=/; HttpOnly; SameSite=Lax")
         }
+        // the edge gate's ticket, for the secure address only
+        HomeStore.gateHostOf(home.id)?.let { h -> HomeStore.gateCurrent(home.id, h)?.let { t -> cm.setCookie("https://$h", "__Host-ct_gate=$t; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=39600") } }
         cookiesDropped = false
         cm.flush()
     }
@@ -399,10 +402,28 @@ class MainActivity : AppCompatActivity() {
             cm.setCookie(Home.originOf(u), "casatorch_session=; Path=/; Max-Age=0")
             if (u.scheme == "https") cm.setCookie(Home.originOf(u), "casatorch_session=; Path=/; Max-Age=0; Secure")
         }
+        for (h in HomeStore.homes) HomeStore.gateHostOf(h.id)?.let { cm.setCookie("https://$it", "__Host-ct_gate=; Path=/; Max-Age=0; Secure") }
         cookiesDropped = true
         cm.flush()
     }
 
+    /** A fresh week of edge tickets when they run low, over this phone's sign-in (HomeStore.gateSave). */
+    private fun renewGate(home: Home, base: Uri, token: String) {
+        if (!HomeStore.gateNeedsRenewal(home.id)) return
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching {
+                val c = (URL(base.buildUpon().path("/api/gate/ticket").build().toString()).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; doOutput = true; connectTimeout = 8000; readTimeout = 8000
+                    setRequestProperty("Content-Type", "application/json"); setRequestProperty("Authorization", "Bearer $token")
+                    HomeStore.gateForHost(base.host)?.let { setRequestProperty("X-CT-Gate", it) }
+                }
+                try {
+                    c.outputStream.use { it.write("{}".toByteArray()) }
+                    if (c.responseCode == 200) { val j = JSONObject(c.inputStream.bufferedReader().use { it.readText() }); if (j.optBoolean("active")) HomeStore.gateSave(home.id, j) }
+                } finally { c.disconnect() }
+            }
+        }
+    }
     /** Google changes a phone's push address now and then; the home gets the new one quietly. */
     private fun refreshPushToken(home: Home, base: Uri, token: String) {
         val had = HomeStore.pushToken(home.id) ?: return
@@ -413,6 +434,7 @@ class MainActivity : AppCompatActivity() {
                 val c = (URL(base.buildUpon().path("/api/app/push").build().toString()).openConnection() as HttpURLConnection).apply {
                     requestMethod = "PUT"; doOutput = true; connectTimeout = 5000; readTimeout = 5000
                     setRequestProperty("Content-Type", "application/json"); setRequestProperty("Authorization", "Bearer $token")
+                    HomeStore.gateForHost(base.host)?.let { setRequestProperty("X-CT-Gate", it) }
                 }
                 c.outputStream.use { it.write(JSONObject().put("token", now).toString().toByteArray()) }
                 if (c.responseCode == 200) HomeStore.setPushToken(home.id, now)

@@ -113,6 +113,7 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             HomeStore.shared.touch(id, workingAddress: base)
             self.web.load(URLRequest(url: path.flatMap { URL(string: $0, relativeTo: base)?.absoluteURL } ?? base))
             Push.refreshIfNeeded(home: id, base: base, token: token)
+            EdgeTicket.renew(home: id, base: base, token: token)   // a fresh week of edge tickets when they run low
         }
     }
     /// Back from the lock: if a home is on screen, hand the sign-in back and carry on where you were; else open it.
@@ -147,6 +148,7 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             for (i, u) in allowed.enumerated() {
                 g.addTask {
                     var r = URLRequest(url: u.appendingPathComponent("api/app/hello")); r.timeoutInterval = timeout; r.cachePolicy = .reloadIgnoringLocalCacheData
+                    EdgeTicket.apply(&r)   // through the edge gate at the secure address
                     guard let res = try? await URLSession.shared.data(for: r), (res.1 as? HTTPURLResponse)?.statusCode == 200,
                           let j = try? JSONSerialization.jsonObject(with: res.0) as? [String: Any], j["casatorch"] as? Bool == true else { return nil }
                     return (i, u, j)
@@ -183,11 +185,12 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             if u.scheme == "https" { props[.secure] = "TRUE" }
             if let c = HTTPCookie(properties: props) { await store.setCookie(c) }
         }
+        await EdgeTicket.setCookie(home.id, store: store)   // the edge gate's ticket, for the secure address only
     }
     /// Locking: the sign-in cookies leave the web view, so nothing can be read until Face ID brings them back.
     func dropSessionCookies() async {
         let store = web.configuration.websiteDataStore.httpCookieStore
-        for c in await store.allCookies() where c.name == "casatorch_session" { await store.deleteCookie(c) }
+        for c in await store.allCookies() where c.name == "casatorch_session" || c.name == "__Host-ct_gate" { await store.deleteCookie(c) }
     }
 
     // MARK: - the network changed, or the app is back: keep the home at an address that works from here

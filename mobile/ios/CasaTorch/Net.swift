@@ -80,6 +80,7 @@ enum Probe {
         var r = URLRequest(url: url)
         r.timeoutInterval = timeout
         r.setValue("application/json", forHTTPHeaderField: "Accept")
+        EdgeTicket.apply(&r)   // a home's secure address: through its edge gate
         do {
             let result = try await session.data(for: r)
             let data = result.0

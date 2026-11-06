@@ -50,7 +50,8 @@ final class QRScanner: UIViewController, AVCaptureMetadataOutputObjectsDelegate 
     override func viewDidAppear(_ animated: Bool) { super.viewDidAppear(animated); if failed { finish(nil) } }
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {
         guard let s = (objects.first as? AVMetadataMachineReadableCodeObject)?.stringValue else { return }
-        if s.hasPrefix("casatorch://pair") { UINotificationFeedbackGenerator().notificationOccurred(.success); finish(s) }
+        // a phone's pairing code, or a browser asking to be approved (Settings › Devices & sessions › Approve a browser)
+        if s.hasPrefix("casatorch://pair") || s.hasPrefix("casatorch://approve") { UINotificationFeedbackGenerator().notificationOccurred(.success); finish(s) }
     }
     private func finish(_ value: String?) {
         guard let d = done else { return }

@@ -201,7 +201,7 @@ object HomeStore {
     }
     fun remove(id: String) {
         list.removeAll { it.id == id }
-        prefs.edit().remove("token.$id").remove("alertkey.$id").remove("pushtoken.$id").apply()
+        prefs.edit().remove("token.$id").remove("alertkey.$id").remove("pushtoken.$id").remove("gate.$id").apply()
         if (currentId == id) currentId = list.firstOrNull()?.id
         if (prefs.getString("launch", null) == id) launchHomeId = null
         save()
@@ -237,6 +237,55 @@ object HomeStore {
     }
 
     /** The push address this phone gave each home, so a new one can be passed on when Google changes it. */
+    /*
+     * Edge tickets: what lets this phone through the edge gate in front of a home's secure address
+     * (home-xxxxxxxx.casatorch.com) when it's away. The home signs a run of them (about a week, each valid 12 hours) when
+     * the phone signs in, pairs or opens it; they're kept sealed here. The app's own requests carry the current one as
+     * X-CT-Gate; the web view gets it as the __Host-ct_gate cookie for the secure address only. Never logged.
+     */
+    private val gateHost = Regex("^home-[a-z0-9]{8}\\.casatorch\\.com$")
+    /** What the home handed over ({ host, tickets: [{ t, nbf, exp }] }), checked and kept. */
+    fun gateSave(id: String, o: JSONObject?): Boolean {
+        if (o == null) return false
+        val host = o.optString("host").lowercase()
+        val list = o.optJSONArray("tickets") ?: return false
+        if (!gateHost.matches(host)) return false
+        val keep = JSONArray()
+        for (i in 0 until minOf(list.length(), 32)) {
+            val x = list.optJSONObject(i) ?: continue
+            val t = x.optString("t")
+            if (t.startsWith("ct1.") && t.length < 1024 && x.has("nbf") && x.has("exp")) keep.put(JSONObject().put("t", t).put("nbf", x.optLong("nbf")).put("exp", x.optLong("exp")))
+        }
+        if (keep.length() == 0) return false
+        prefs.edit().putString("gate.$id", Vault.seal(JSONObject().put("host", host).put("tickets", keep).toString().toByteArray(), false)).apply()
+        return true
+    }
+    private fun gateLoad(id: String): JSONObject? = prefs.getString("gate.$id", null)?.let { Vault.open(it, false) }?.let { runCatching { JSONObject(String(it)) }.getOrNull() }
+    /** The ticket to use now for this host (with a minute to spare), or null. */
+    fun gateCurrent(id: String, host: String?): String? {
+        val s = gateLoad(id) ?: return null
+        if (host == null || host.lowercase() != s.optString("host")) return null
+        val now = System.currentTimeMillis() / 1000
+        val list = s.optJSONArray("tickets") ?: return null
+        var best: String? = null; var bestExp = 0L
+        for (i in 0 until list.length()) { val x = list.optJSONObject(i) ?: continue; val exp = x.optLong("exp"); if (x.optLong("nbf") <= now + 60 && now < exp - 60 && exp > bestExp) { best = x.optString("t"); bestExp = exp } }
+        return best
+    }
+    fun gateHostOf(id: String): String? = gateLoad(id)?.optString("host")?.takeIf { it.isNotEmpty() }
+    /** The ticket for whichever home owns this host (the app's own requests: hello, probes, push). */
+    fun gateForHost(host: String?): String? {
+        val h = host?.lowercase() ?: return null
+        for (home in list) if (h in home.hosts) gateCurrent(home.id, h)?.let { return it }
+        return null
+    }
+    /** Less than three days of tickets left: time to ask for more. */
+    fun gateNeedsRenewal(id: String): Boolean {
+        val list = gateLoad(id)?.optJSONArray("tickets") ?: return true
+        var last = 0L
+        for (i in 0 until list.length()) last = maxOf(last, list.optJSONObject(i)?.optLong("exp") ?: 0L)
+        return last < System.currentTimeMillis() / 1000 + 3 * 86400
+    }
+
     fun pushToken(id: String): String? = prefs.getString("pushtoken.$id", null)
     fun setPushToken(id: String, t: String) { prefs.edit().putString("pushtoken.$id", t).apply() }
 }
