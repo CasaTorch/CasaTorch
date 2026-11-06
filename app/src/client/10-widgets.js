@@ -174,6 +174,7 @@ const TOGGLES = new Set(['light', 'switch', 'plug', 'media', 'fan']);
 const pretty = (s) => String(s || '').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 function devMeta(d, compact) {
   if (d.kind === 'presence') return d.home ? T('Home|presence') : T(pretty(d.state === 'not_home' ? 'Away' : d.state));
+  if (d.kind === 'chime') return [d.online === false ? T('offline') : d.snoozed ? T('Snoozed for {n} min', { n: d.snoozeMin || 1 }) : T('Chime|device'), d.volume != null && d.online !== false ? T('volume {n}', { n: d.volume }) : null].filter(Boolean).join(' · ');
   if (d.kind === 'value') return `${d.value ?? '-'}${d.unit ? ` ${d.unit}` : ''}`;
   if (d.kind === 'alarm') return T(pretty(d.state));
   if (d.kind === 'vacuum' || d.kind === 'action') return d.kind === 'action' ? (d.domain === 'scene' ? T('Scene') : d.domain === 'script' ? T('Script') : T('Button')) : T(pretty(d.state));
@@ -186,7 +187,7 @@ function devMeta(d, compact) {
 /* Devices with more than on/off (dimming, colour, speed, volume, thermostats, blinds, locks, alarms...)
    open a sheet with every control (public/device-controls.js, shared with the 3D Home). */
 const C = () => window.CasaControls;
-const hasSheet = (d) => !!C() && d.online !== false && (['climate', 'cover', 'lock', 'alarm', 'vacuum'].includes(d.kind)
+const hasSheet = (d) => !!C() && d.online !== false && (['climate', 'cover', 'lock', 'alarm', 'vacuum'].includes(d.kind) || (d.kind === 'chime' && ['volume', 'snooze'].some((x) => C().can(d, x)))
   || (d.kind === 'light' && ['brightness', 'color', 'kelvin'].some((x) => C().can(d, x))) || (d.kind === 'fan' && C().can(d, 'percent')) || (d.kind === 'media' && ['volume', 'next'].some((x) => C().can(d, x))));
 function deviceSheet(d, onChange) {
   const body = el('div', { class: 'dsheet' });
@@ -253,7 +254,7 @@ widget({ id: 'entities', title: 'Pinned devices', icon: 'sliders', multi: true, 
    Home Assistant entity automatically - anything new in Home Assistant shows up there on its own. */
 function devHeadline(d) {
   if (d.kind === 'camera') return null;
-  if (d.kind === 'chime') return d.online === false ? T('Offline') : T('Chime|device');   // a Ring Chime: rings with the doorbell, no video
+  if (d.kind === 'chime') return d.online === false ? T('Offline') : d.snoozed ? T('Snoozed') : T('Chime|device');   // a Ring Chime: rings with the doorbell, no video
   if (d.tempC != null && d.kind !== 'climate') return tempOf(d.tempC);
   if (d.kind === 'climate') return d.tempC != null ? tempOf(d.tempC) : pretty(d.mode || d.state);
   if (d.powerW != null && d.kind === 'sensor') return `${Math.round(d.powerW)} W`;

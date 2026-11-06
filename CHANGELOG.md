@@ -18,6 +18,11 @@ What changed in each CasaTorch version. The illustrated version, with links into
   testing it (such as `CASATORCH_PRO_DEV`, `CASATORCH_TEST` or `CASATORCH_ASK_FAKE`, or one that points it at another
   server), Health shows a red line naming it, and the activity log notes it at start. The demo is left alone.
 
+### Cameras
+- **Ring chimes without Home Assistant.** With CasaTorch's own Ring connection (Pro), your Ring Chime and Chime Pro now
+  show up as chimes: whether each is online, its volume and whether it's snoozed. Tap one to change the volume or snooze
+  it for 30 minutes to 24 hours. Like chimes from Home Assistant, they never count or show as cameras.
+
 ### Languages
 - **Secure access speaks your language.** Every status, problem and fix in Settings › Secure access and its Health line
   is translated into all 13 languages, and so is the "You're away from home" page.

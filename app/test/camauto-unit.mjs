@@ -114,6 +114,27 @@ export default async function camAutoTests(t) {
     assert.equal(A.camDedupe([d].filter((x) => x.kind === 'camera'), {}).show.size, 0);
   });
 
+  t('camauto: Ring chimes from the Ring integration (no Home Assistant) are chimes: online, volume, snooze - never cameras', async () => {
+    const R = globalThis.__casatorchRing;
+    const calls = [];
+    const fake = (id, data) => ({ id, model: 'Chime Pro', data, setVolume: async (v) => calls.push(['vol', id, v]), snooze: async (n) => calls.push(['snooze', id, n]), clearSnooze: async () => calls.push(['clear', id]) });
+    const a = fake(11, { description: 'Hallway', settings: { volume: 7 }, alerts: { connection: 'online' }, do_not_disturb: { seconds_left: 0 } });
+    const b = fake(12, { description: 'Upstairs', settings: { volume: 14 }, alerts: { connection: 'offline' }, do_not_disturb: { seconds_left: 3599 } });
+    const da = R.ringChimeDevice(a), db = R.ringChimeDevice(b);
+    assert.deepEqual([da.id, da.kind, da.chime, da.online, da.volume, da.snoozed, da.snoozeMin], ['ring:chime:11', 'chime', true, true, 7, false, 0]);
+    assert.deepEqual([db.online, db.volume, db.snoozed, db.snoozeMin], [false, 10, true, 60], 'offline, volume kept in 0-10, snoozed for the hour left');
+    assert.ok(!('snapshot' in da) && !('stream' in da), 'no picture or video address');
+    assert.equal(A.camDedupe([da, db].filter((x) => x.kind === 'camera'), {}).show.size, 0, 'never counted as a camera');
+    const keep = R.ring.chimes; R.ring.chimes = [a, b];
+    try {
+      const P = globalThis.__casatorchProviders.ring;
+      await P.act(da, 'volume', 3); await P.act(db, 'snooze', 0); await P.act(da, 'snooze', 30);
+      assert.deepEqual(calls, [['vol', 11, 3], ['clear', 12], ['snooze', 11, 30]]);
+      await assert.rejects(P.act(da, 'volume', 99)); await assert.rejects(P.act(da, 'snooze', 5000)); await assert.rejects(P.act(da, 'unlock'));
+      await assert.rejects(P.act({ id: 'ring:123' }, 'volume', 3), 'a camera has nothing to switch');
+    } finally { R.ring.chimes = keep; }
+  });
+
   t('camauto: Frigate camera names - the Home Assistant name, never one Frigate has (ring_ first for Ring)', () => {
     assert.equal(A.frigateCamName('Garden Gate Live view', []), 'garden_gate');
     assert.equal(A.frigateCamName('Driveway A', ['driveway_a'], { ring: true }), 'ring_driveway_a');

@@ -14,7 +14,7 @@
  * ====================================================================== */
 /* Loaded only once Ring is set up: it is the biggest part of starting CasaTorch (one to two seconds on a Raspberry Pi). */
 const ringLib = () => import('ring-client-api');
-const ring = { api: null, cameras: [], pending: null, events: [], error: null };
+const ring = { api: null, cameras: [], chimes: [], pending: null, events: [], error: null };
 /* ring-client-api's push listener logs a full stack trace when Ring sends a notification it can't decode
    (it drops that one and carries on). Say it in one line instead of alarming anyone reading the log. */
 { const logErr = console.error.bind(console); let last = 0;
@@ -26,6 +26,8 @@ async function ringConnect() {
     ring.api = new RingApi({ refreshToken: config.ring.refreshToken, controlCenterDisplayName: 'CasaTorch', cameraStatusPollingSeconds: 60 });
     ring.api.onRefreshTokenUpdated.subscribe(({ newRefreshToken }) => { saveConfig({ ...config, ring: { ...config.ring, refreshToken: newRefreshToken } }); });
     ring.cameras = await ring.api.getCameras();
+    // Ring Chime / Chime Pro: in the same account, listed per location (the cameras call above already fetched them)
+    ring.chimes = (await ring.api.getLocations().catch(() => [])).flatMap((l) => l.chimes || []);
     // Ready pictures for every Ring camera from the start (refreshed once a minute until someone watches).
     for (const cam of ring.cameras) { const e = snapEntry(`ring:${cam.id}`, async () => ({ buf: await cam.getSnapshot(), type: 'image/jpeg' }), ringBeat(cam)); snapRefresh(e); }
     for (const cam of ring.cameras) {
@@ -71,7 +73,7 @@ app.post(['/api/ring/login', '/api/setup/ring/login'], requireRole('admin'), exp
     }
   } catch (err) { res.status(400).json({ error: /2fa|Verification/i.test(err.message) ? 'That code is not right - try again.' : /password|credentials|oauth/i.test(err.message) ? 'Ring refused that e-mail and password.' : String(err.message) }); }
 });
-app.get('/api/ring/status', requirePro, (_req, res) => res.json({ connected: !!ring.api, error: ring.error, cameras: ring.cameras.map((c) => ({ id: String(c.id), name: c.name, battery: c.batteryLevel ?? null, doorbell: !!c.isDoorbot })), events: ring.events.slice(0, 20) }));
+app.get('/api/ring/status', requirePro, (_req, res) => res.json({ connected: !!ring.api, error: ring.error, cameras: ring.cameras.map((c) => ({ id: String(c.id), name: c.name, battery: c.batteryLevel ?? null, doorbell: !!c.isDoorbot })), chimes: ring.chimes.map(ringChimeDevice), events: ring.events.slice(0, 20) }));
 app.get('/api/ring/:id/snapshot', requirePro, async (req, res) => {
   const cam = ring.cameras.find((c) => String(c.id) === req.params.id);
   if (!cam) return res.status(404).end();
@@ -81,4 +83,27 @@ app.get('/api/ring/:id/snapshot', requirePro, async (req, res) => {
    so they get a new picture every 20 s while someone is looking and every 10 minutes otherwise (and always
    right away on a ring or motion). Wired ones: every 4 s while watched. */
 const ringBeat = (c) => (c.hasBattery ? { every: 20_000, idle: 10 * 60_000 } : { every: 4000, idle: 60_000 });
-PROVIDERS.ring = { async list() { return proStatus().pro ? ring.cameras.map((c) => ({ id: `ring:${c.id}`, provider: 'ring', kind: 'camera', name: c.name, battery: c.batteryLevel ?? null, online: !c.isOffline, doorbell: !!c.isDoorbot, source: c.hasBattery ? 'Ring (battery)' : 'Ring', snapshot: `/api/ring/${c.id}/snapshot`, every: c.hasBattery ? 20_000 : 4000 })) : []; } };
+/* A Ring Chime from ring-client-api (location.chimes) as a device: a chime, never a camera - the same shape a Home
+   Assistant chime gets (haChimeOf, 32-ha.js), so every camera view skips it. Online, volume (Ring's 0-10) and snooze. Pure. */
+const RING_VOL_MAX = 10;
+function ringChimeDevice(c) {
+  const x = c?.data || {}, left = Math.max(0, Number(x.do_not_disturb?.seconds_left) || 0), conn = String(x.alerts?.connection || '').toLowerCase();
+  const vol = Number(x.settings?.volume);
+  return haChimeOf({ id: `ring:chime:${c.id}`, provider: 'ring', kind: 'chime', name: String(x.description || c.name || 'Chime'), model: c.model || 'Chime', source: 'Ring',
+    online: conn ? conn !== 'offline' : true, volume: Number.isFinite(vol) ? Math.max(0, Math.min(RING_VOL_MAX, Math.round(vol))) : null, volumeMax: RING_VOL_MAX,
+    snoozed: left > 0, snoozeMin: left > 0 ? Math.ceil(left / 60) : 0, can: ['volume', 'snooze'] });
+}
+const ringCamDevice = (c) => ({ id: `ring:${c.id}`, provider: 'ring', kind: 'camera', name: c.name, battery: c.batteryLevel ?? null, online: !c.isOffline, doorbell: !!c.isDoorbot, source: c.hasBattery ? 'Ring (battery)' : 'Ring', snapshot: `/api/ring/${c.id}/snapshot`, every: c.hasBattery ? 20_000 : 4000 });
+PROVIDERS.ring = {
+  async list() { return proStatus().pro ? [...ring.cameras.map(ringCamDevice), ...ring.chimes.map(ringChimeDevice)] : []; },
+  /* Chimes only: volume 0-10, snooze for some minutes (0 = ring again). Cameras have nothing to switch. */
+  async act(d, action, value) {
+    const m = /^ring:chime:(\d+)$/.exec(d.id), chime = m && ring.chimes.find((c) => String(c.id) === m[1]);
+    if (!chime) throw new Error('that device cannot be controlled from here');
+    if (action === 'volume') { const v = Math.round(Number(value)); if (!Number.isFinite(v) || v < 0 || v > RING_VOL_MAX) throw new Error('Pick a volume from 0 to 10.'); return chime.setVolume(v); }
+    if (action === 'snooze') { const n = Math.round(Number(value)); if (!Number.isFinite(n) || n < 0 || n > 1440) throw new Error('Pick up to 24 hours.'); return n ? chime.snooze(n) : chime.clearSnooze(); }
+    throw new Error('that device cannot be controlled from here');
+  },
+};
+app.get('/api/ring/chimes', requirePro, (_req, res) => res.json({ chimes: ring.chimes.map(ringChimeDevice) }));
+if (process.env.CASATORCH_TEST === '1') { globalThis.__casatorchRing = { ringChimeDevice, ringCamDevice, ring }; globalThis.__casatorchProviders = PROVIDERS; }

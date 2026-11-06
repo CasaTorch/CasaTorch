@@ -33,6 +33,7 @@
     percent: d.kind === 'fan' && d.percent != null, volume: d.kind === 'media' && d.volume != null, next: d.kind === 'media', prev: false,
     target: d.kind === 'climate' && d.targetC != null, mode: d.kind === 'climate' && Array.isArray(d.modes) && d.modes.length > 0, position: d.kind === 'cover' && d.position != null && !d.risky,
     arm_home: d.kind === 'alarm', arm_away: d.kind === 'alarm', arm_night: false,
+    snooze: false,
   })[x] ?? false);
 
   function slider({ label, min, max, step = 1, value, fmt = (v) => `${v}%`, onset, cls = '' }) {
@@ -120,6 +121,16 @@
       case 'action':
         out.push(h('div', { class: 'dc-row' }, allowed(d, 'run') ? btn(d.domain === 'scene' ? 'Turn on scene' : 'Run', () => act('run'), 'primary') : note('CasaTorch leaves this one alone for safety.')));
         break;
+      case 'chime': {   // a Ring Chime: rings with the doorbell; volume and snooze (nothing here can open anything)
+        out.push(head(d.snoozed ? tr('Snoozed for {n} min', { n: d.snoozeMin || 1 }) : 'Rings with the doorbell'));
+        if (can(d, 'volume') && d.volume != null) { const max = d.volumeMax || 10; out.push(slider({ label: 'Volume', min: 0, max, value: d.volume, fmt: (v) => (v === 0 ? tr('Silent') : `${v}/${max}`), onset: (v) => send('volume', v, { volume: v }) })); }
+        if (can(d, 'snooze')) {
+          out.push(h('div', { class: 'dc-lab', style: 'margin-top:10px' }, tr('Snooze')));
+          out.push(h('div', { class: 'dc-chips', role: 'group', 'aria-label': tr('Snooze') }, ...[[30, '30 min'], [60, '1 hour'], [240, '4 hours'], [1440, '24 hours']].map(([n, t]) => h('button', { type: 'button', class: 'dc-chip', onclick: () => send('snooze', n, { snoozed: true, snoozeMin: n }) }, tr(t))),
+            d.snoozed ? h('button', { type: 'button', class: 'dc-chip on', onclick: () => send('snooze', 0, { snoozed: false, snoozeMin: 0 }) }, tr('Ring again')) : null));
+        }
+        break;
+      }
       case 'presence':
         out.push(head(d.home ? 'Home|house' : 'Away'));
         break;
