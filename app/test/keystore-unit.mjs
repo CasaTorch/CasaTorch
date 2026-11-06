@@ -181,6 +181,27 @@ export default async function keystoreUnit(t) {
       const plist = rd('deploy/packaging/macos/com.casatorch.server.plist');
       assert.ok(!/<key>UserName<\/key>/.test(plist), 'started as root (to read the Keychain)...');
       assert.match(rd('deploy/packaging/macos/casatorch-run.sh'), /CASATORCH_RUN_AS="\$RUN_AS"/, '...and told which user to drop to');
+      // ...through casatorch-launch.mjs: Node's own modules only, the user switched, and only then CasaTorch and its packages
+      assert.match(rd('deploy/packaging/macos/casatorch-run.sh'), /exec "\$NODE" \/Library\/CasaTorch\/casatorch-launch\.mjs$/m);
+      assert.match(rd('deploy/packaging/macos/build-pkg.sh'), /cp "\$HERE\/casatorch-launch\.mjs" "\$R\/Library\/CasaTorch\/"/);
+      const launch = rd('deploy/packaging/macos/casatorch-launch.mjs');
+      for (const m of launch.matchAll(/^import .* from '([^']+)';$/gm)) assert.match(m[1], /^node:/, `before the switch only Node's own modules: ${m[1]}`);
+      assert.ok(launch.indexOf('process.setuid(uid)') < launch.indexOf("await import("), 'the user is switched before CasaTorch is loaded');
+      assert.equal(launch.match(/service: '([^']+)', account: '([^']+)'/).slice(1).join('|'), fs.readFileSync(path.join(APP, 'src', 'server', '00-keystore.js'), 'utf8').match(/service: '([^']+)', account: '([^']+)'/).slice(1).join('|'), 'the same keychain item');
+      if (process.getuid?.() === 0) {   // for real (as root here): a package CasaTorch loads never sees root
+        const { spawnSync: sp } = await import('node:child_process'), d = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-launch-'));
+        try {
+          fs.chmodSync(d, 0o755);
+          fs.writeFileSync(path.join(d, 'dep.mjs'), 'export const uidAtLoad = process.getuid();\n');
+          fs.writeFileSync(path.join(d, 'server.js'), "import { uidAtLoad } from './dep.mjs';\nconsole.log(JSON.stringify({ uidAtLoad, uid: process.getuid(), pre: globalThis.__casatorchKsPre === undefined ? 'none' : globalThis.__casatorchKsPre }));\n");
+          fs.writeFileSync(path.join(d, 'package.json'), '{"type":"module"}');
+          const r = sp(process.execPath, [path.join(APP, '..', 'deploy/packaging/macos/casatorch-launch.mjs')], { cwd: d, encoding: 'utf8', env: { ...process.env, CASATORCH_RUN_AS: 'nobody', CASATORCH_TEST: '' } });
+          assert.equal(r.status, 0, r.stderr); const o = JSON.parse(r.stdout.trim().split('\n').pop());
+          assert.equal(o.uidAtLoad, 65534, 'a package loaded by CasaTorch already runs as its own user'); assert.equal(o.uid, 65534);
+          const bad = sp(process.execPath, [path.join(APP, '..', 'deploy/packaging/macos/casatorch-launch.mjs')], { cwd: d, encoding: 'utf8', env: { ...process.env, CASATORCH_RUN_AS: 'no-such-user-xyz' } });
+          assert.equal(bad.status, 78, 'no user to switch to: it stops'); assert.equal(bad.stdout, '', 'CasaTorch was never loaded');
+        } finally { fs.rmSync(d, { recursive: true, force: true }); }
+      }
       const ks = fs.readFileSync(path.join(APP, 'src', 'server', '00-keystore.js'), 'utf8');
       assert.match(ks, /process\.initgroups\(runAs, gid\); process\.setgid\(gid\); process\.setuid\(uid\);/);
       assert.match(ks, /if \(process\.getuid\(\) === 0 \|\| process\.geteuid\(\) === 0\) throw/, 'never carries on as root');

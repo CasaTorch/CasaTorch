@@ -57,6 +57,7 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - Releases: the container image is published and signed only for a version tag.
 - Trusted Types: pieces of HTML that rebuild a script tag or a handler once one is taken out are cleaned completely.
 - Linux updater: what it writes in the data folder (progress, the settings copy, a rollback) is written as CasaTorch's own user, never as root.
+- macOS: the service reads its key and switches to its own user before CasaTorch or any package it uses is loaded, so none of them runs as root.
 
 ## 0.9.3
 

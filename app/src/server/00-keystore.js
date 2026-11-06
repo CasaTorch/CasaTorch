@@ -33,6 +33,10 @@ const ksRun = (cmd, args, input) => { try { const r = ksSpawn(cmd, args, { input
    that doesn't work stops CasaTorch: it never runs as root. */
 const KS_KEYCHAIN = { service: 'com.casatorch.secret-key', account: 'casatorch', file: '/Library/Keychains/System.keychain' };
 const KS_PRE = (() => {
+  // Started through deploy/packaging/macos/casatorch-launch.mjs (the installed Mac service): the key was read and the
+  // process dropped to its own user there, before any package was loaded - its answer is taken over here.
+  if (globalThis.__casatorchKsPre !== undefined) { const p = globalThis.__casatorchKsPre; delete globalThis.__casatorchKsPre; return p; }
+  // Otherwise (server.js started as root by hand, say): the same here. Packages it imports have run as root by now.
   const runAs = process.env.CASATORCH_RUN_AS;
   if (!runAs || typeof process.getuid !== 'function' || process.getuid() !== 0 || process.env.CASATORCH_TEST === '1') return null;
   let pre = null;

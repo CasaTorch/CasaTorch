@@ -6,7 +6,7 @@
   <key>ProgramArguments</key><array><string>/Library/CasaTorch/casatorch-run.sh</string></array>
   <!-- Started as root only so CasaTorch can read its wrapping key from the System keychain; it then switches to its
        own user (_casatorch, or nobody on a Mac where that account couldn't be made) before doing anything else, and
-       stops rather than run as root (casatorch-run.sh, 00-keystore.js). -->
+       stops rather than run as root (casatorch-run.sh, casatorch-launch.mjs, 00-keystore.js). -->
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>10</integer>

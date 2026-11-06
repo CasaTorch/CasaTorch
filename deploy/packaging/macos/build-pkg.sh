@@ -13,6 +13,7 @@ cp -R "$BUNDLE/app" "$BUNDLE/demo" "$BUNDLE/VERSION" "$R/Library/CasaTorch/"
 "$ROOT/deploy/packaging/fetch-node.sh" darwin-arm64 "$R/Library/CasaTorch/node-arm64"
 "$ROOT/deploy/packaging/fetch-node.sh" darwin-x64 "$R/Library/CasaTorch/node-x64"
 cp "$HERE/casatorch-run.sh" "$R/Library/CasaTorch/"; chmod 755 "$R/Library/CasaTorch/casatorch-run.sh"
+cp "$HERE/casatorch-launch.mjs" "$R/Library/CasaTorch/"; chmod 644 "$R/Library/CasaTorch/casatorch-launch.mjs"   # the key, then its own user, then CasaTorch
 cp "$HERE/uninstall.command" "$R/Library/CasaTorch/Uninstall CasaTorch.command"; chmod 755 "$R/Library/CasaTorch/Uninstall CasaTorch.command"
 cp "$HERE/com.casatorch.server.plist" "$R/Library/LaunchDaemons/"; chmod 644 "$R/Library/LaunchDaemons/com.casatorch.server.plist"
 cat > "$R/Applications/CasaTorch.webloc" <<'LOC'
