@@ -44,6 +44,13 @@ const LOOK_NAMES = [['default', 'Standard'], ['tint', 'Tinted'], ['clear', 'Clea
 const TINTS = ['#5eb8ff', '#8b7bff', '#34d399', '#fbbf24', '#fb923c', '#f43f5e', '#ec4899', '#94a3b8'];
 const optsOf = (t) => (t.opts && typeof t.opts === 'object' ? t.opts : (t.opts = {}));
 const wOf = (t) => WIDGETS[String(t.id).split(':')[0]];
+/* A tile that couldn't draw: why, and a way to try again - in its own place, never a blank or a stale tile. */
+function tileFail(err, retry) {
+  const off = !navigator.onLine || err?.retry || NET.status().offline;
+  return el('div', { class: 'tile-fail', role: 'alert' }, icon(off ? 'wifi' : 'info', 18),
+    el('div', { class: 'small' }, el('b', {}, off ? T('Can\'t reach your home right now') : T('This tile didn\'t load')), err?.message && !off ? el('div', { class: 'tiny muted' }, err.message) : null),
+    retry ? el('button', { type: 'button', class: 'btn small', onclick: (e) => { e.stopPropagation(); retry(); } }, icon('reset', 14), T('Try again')) : null);
+}
 /* Small, shared fetch cache for widgets that load their own data (stocks, the weather elsewhere, the sun): every widget asking
    for the same answer within its time-to-live gets the same promise. */
 const WCACHE = new Map();
@@ -82,7 +89,7 @@ function makeGrid(host, { tiles, ctx, onSave, onEdit, onCustomize, auto = false 
     if (L.widget.live && !force && L.painted) return;
     if (L.busy && !force) return;   // still drawing the last one: a live refresh can skip a beat
     L.painted = true; L.busy = true;
-    try { await L.widget.render(L.body, ctx, sizeOf(L.t)); } catch (err) { L.body.replaceChildren(el('div', { class: 'muted small' }, T('Could not load: {message}', { message: err.message }))); }
+    try { await L.widget.render(L.body, ctx, sizeOf(L.t)); } catch (err) { L.body.replaceChildren(tileFail(err, () => paint(node, true))); }
     finally { L.busy = false; }
   }
   const save = () => onSave();

@@ -40,6 +40,14 @@ What changed in each CasaTorch version. The illustrated version, with links into
   to download and run. They're kept like the rest of the app, so they open offline too, from the web app's saved copy.
   The 3D Home already loads only when you open it.
 
+### Polish
+- **Nothing fails quietly.** A tile that can't draw says so in its own place, with Try again, instead of a bare
+  message; a page whose update fails says it's behind and how old what it shows is, with Try again, until the next
+  update works.
+- The new Timeline, Inbox and chime controls follow every theme (WCAG AA in all eight), add no motion of their own,
+  and fit phones, iPads and wall panels with no sideways scrolling (checked on every page at 390, 820, 1024 and 1920
+  pixels wide).
+
 ### Languages
 - **Secure access speaks your language.** Every status, problem and fix in Settings › Secure access and its Health line
   is translated into all 13 languages, and so is the "You're away from home" page.

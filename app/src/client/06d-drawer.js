@@ -338,7 +338,7 @@ function drGeneric(w) {
       const frame = el('section', { class: `tile dr-tile${fixed ? ' dr-fixed' : ''}`, 'data-tier': 'xl', style: `--h:${h}` }, a.w.bare ? null : el('div', { class: 'tile-h' }, icon(a.w.icon), el('span', { class: 'ttl' }, a.t.title || T(a.w.title))), tb);
       body.append(frame);
       Promise.resolve().then(() => a.w.render(tb, a.ctx, { w: cols, h, narrow: false, span: cols, cols: 12, tier: 'xl', drawer: true }))
-        .catch((err) => tb.replaceChildren(el('div', { class: 'muted small' }, T('Could not load: {message}', { message: err.message }))));
+        .catch((err) => tb.replaceChildren(tileFail(err, () => drOpenTile(null, { virtual: a.t }))));
       if (a.w.blurb) body.append(drSection(T('About this tile'), el('p', { class: 'small muted', style: 'margin:0' }, T(a.w.blurb))));
     },
   };

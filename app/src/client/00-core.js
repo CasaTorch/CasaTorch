@@ -330,7 +330,7 @@ async function show(id) {
   };
   const early = setTimeout(reveal, 250);
   setTop(tabLabel(t));
-  try { const r = (await t.render(main, sub || null)) || null; if (main.isConnected) refresher = r; }
+  try { const r = (await t.render(main, sub || null)) || null; if (main.isConnected) { refresher = r; pageGoodAt = Date.now(); } }
   catch (err) { if (seq === showSeq && !err?.aborted) main.replaceChildren(loadFail(err)); }
   clearTimeout(early);
   if (seq !== showSeq) return;
@@ -475,6 +475,19 @@ async function boot() {
   setInterval(() => { if (document.hidden || document.body.classList.contains('editing-on')) return; loadStatus(); runRefresh(); }, 30_000);
   liveStart();
 }
+/* A page whose refresh failed says so above what it shows (when it last updated, and Try again) - it never just sits
+   there looking current. Cleared by the next refresh that works. */
+let pageGoodAt = Date.now();
+function pageStale(err) {
+  const box = $('#view')?.firstElementChild; if (!box) return;
+  const old = box.querySelector(':scope > .stale-note');
+  if (!err) { pageGoodAt = Date.now(); old?.remove(); return; }
+  const off = !navigator.onLine || err?.retry || NET.status().offline;
+  const note = el('div', { class: 'stale-note', role: 'status' }, icon(off ? 'wifi' : 'info', 16),
+    el('span', { class: 'grow small' }, off ? T('Can\'t reach your home right now') : T('Couldn\'t update this page'), ' · ', T('showing what it had {ago}', { ago: ago(new Date(pageGoodAt).toISOString()) })),
+    el('button', { type: 'button', class: 'btn small', onclick: () => runRefresh() }, icon('reset', 14), T('Try again')));
+  if (old) old.replaceWith(note); else box.prepend(note);
+}
 /* One refresh at a time: a slow answer can't land after a newer one, and a burst of changes becomes one more refresh.
    Sections you opened (the "details" on a page) stay open when the page is drawn again. */
 let refreshing = false, refreshAgain = false;
@@ -485,7 +498,7 @@ async function runRefresh() {
   const view = $('#view'), keys = () => { const n = {}; return [...view.querySelectorAll('details')].map((d) => { const k = `${d.className}|${(n[d.className] = (n[d.className] || 0) + 1)}`; return [k, d]; }); };
   const open = new Set(keys().filter(([, d]) => d.open).map(([k]) => k));
   const box = view.firstElementChild, h = box?.offsetHeight || 0; if (box && h) box.style.minHeight = `${h}px`;   // a redraw never shrinks the page under you
-  try { await r(); } catch { /* the next tick tries again */ }
+  try { await r(); pageStale(null); } catch (err) { if (r === refresher && !err?.aborted) pageStale(err); }   // the next tick tries again; meanwhile the page says it's behind
   finally { refreshing = false; if (box) requestAnimationFrame(() => { box.style.minHeight = ''; }); }
   if (r === refresher && open.size) for (const [k, d] of keys()) if (open.has(k)) d.open = true;
   if (refreshAgain) { refreshAgain = false; if (r === refresher) runRefresh(); }

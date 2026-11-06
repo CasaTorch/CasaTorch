@@ -1610,3 +1610,9 @@ button.tl-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .inbox-x:hover { background: var(--surface-3); color: var(--text); }
 .inbox-empty { display: grid; justify-items: center; gap: 6px; text-align: center; padding: 24px 8px; color: var(--muted); } .inbox-empty b { color: var(--text); }
 @media (max-width: 760px) { .inbox-btn { width: 38px; height: 38px; } }
+
+/* ---- When something didn't load: in its own place, with Try again (05-grid.js tileFail, 00-core.js pageStale) ---- */
+.tile-fail { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px; border-radius: 12px; background: color-mix(in srgb, var(--bad) 9%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 28%, transparent); color: var(--text); }
+.tile-fail > svg { flex: none; color: var(--bad); } .tile-fail > div { flex: 1 1 140px; min-width: 0; overflow-wrap: anywhere; }
+.stale-note { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 8px 10px 8px 12px; border-radius: 12px; background: color-mix(in srgb, var(--warn) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+.stale-note > svg { flex: none; color: var(--warn); }
