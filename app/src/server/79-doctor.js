@@ -182,10 +182,12 @@ async function docRemote() {
   if (remote.state === 'connected' && (age() == null || age() > 20)) await remoteCheck('health').catch(() => {});
   const v = remoteView({ on: true, state: remote.state, code: remote.code, check: remote.check, anywhere: !!proStatus().pro, why: remote.why });
   const fix = v.fix ? { action: v.fix.action === 'repair' ? 'remote-repair' : 'remote-check', label: v.fix.label } : { action: 'remote-check', label: 'Check again' };
-  const m = age(), detail = m == null ? `${v.title}.` : m < 1 ? `${v.title}. Checked from outside just now.` : [m === 1 ? `${v.title}. Checked from outside a minute ago.` : `${v.title}. Checked from outside {n} minutes ago.`, { n: m }];
-  if (v.status === 'working') return chk('remote', 'connections', 'Secure access', 'ok', detail, v.detail ? { why: v.detail } : {});
-  if (v.status === 'problem') return chk('remote', 'connections', 'Secure access', 'bad', v.title, { why: v.detail, fix });
-  return chk('remote', 'connections', 'Secure access', 'warn', v.title.replace(/…$/, '...'), { why: v.detail, fix });
+  // the title is a phrase of its own ("Working from anywhere"): TM() on the screen translates it inside the sentence
+  const m = age(), vt = { title: v.title }, detail = m == null ? ['{title}.', vt] : m < 1 ? ['{title}. Checked from outside just now.', vt] : [m === 1 ? '{title}. Checked from outside a minute ago.' : '{title}. Checked from outside {n} minutes ago.', { ...vt, n: m }];
+  const why = v.detail ? { why: v.detail, ...(v.detailMsg ? { whyMsg: v.detailMsg, whyVars: v.detailVars } : {}) } : {};   // casatorch.com's words: TM() on the screen
+  if (v.status === 'working') return chk('remote', 'connections', 'Secure access', 'ok', detail, why);
+  if (v.status === 'problem') return chk('remote', 'connections', 'Secure access', 'bad', v.title, { ...why, fix });
+  return chk('remote', 'connections', 'Secure access', 'warn', v.title, { ...why, fix });
 }
 
 /* ---- keeping safe ---- */

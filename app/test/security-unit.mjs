@@ -116,6 +116,17 @@ export default async function securityUnit(t) {
       assert.ok(!('key' in trial) && !('secret' in trial));
       assert.equal(trial.localIngress, true, 'tells casatorch.com it writes its own tunnel rules'); assert.match(trial.version, /^\d+\.\d+\.\d+/);
     });
+    t('secure access: every text the server builds for it is translated in all 13 languages (tools/i18n-strings.tsv)', async () => {
+      const fs = await import('node:fs'), RM = globalThis.__casatorchRemote;
+      const rows = new Map(fs.readFileSync(new URL('../../tools/i18n-strings.tsv', import.meta.url), 'utf8').split('\n').slice(1).filter(Boolean).map((l) => { const c = l.split('\t'); return [c[0], c]; }));
+      const texts = new Set(['Developer switches', 'You\'re away from home', 'This CasaTorch\'s secure address works on your home Wi-Fi. Using it from anywhere is part of CasaTorch Pro.', 'You\'re away from home. Using CasaTorch from anywhere is part of Pro.', 'casatorch.com couldn\'t be reached', 'casatorch.com answered with an error', 'Try again',
+        '{title}.', '{title}. Checked from outside just now.', '{title}. Checked from outside a minute ago.', '{title}. Checked from outside {n} minutes ago.', 'Getting ready…', 'Setting up…', 'Getting this CasaTorch its own address. This takes up to a minute.']);
+      const add = (v) => { for (const x of [v.title, v.detail, v.detailMsg, v.fix?.label]) if (x && !(v.detailVars && x === v.detail)) texts.add(x); };
+      for (const code of [null, ...Object.keys(RM.REMOTE_WHY)]) for (const state of ['off', 'downloading', 'connecting', 'connected', 'error', 'odd']) for (const ok of [null, true]) for (const anywhere of [false, true]) add(RM.remoteView({ on: true, state, code, check: { ok }, anywhere, why: code === 'service' ? 'casatorch.com is busy' : null }));
+      add(RM.remoteView({ on: false }));
+      for (const x of texts) { const r = rows.get(x); assert.ok(r, `not in i18n-strings.tsv: ${x}`); assert.equal(r.length, 14, x); assert.ok(r.every(Boolean), x); }
+      assert.ok(texts.size > 40, String(texts.size));
+    });
     t('push relay: the home id sent to the relay is bound to the box key (nothing to squat)', () => {
       const k = Z.relayKey(), id = Z.relayHomeId(k.pub);
       assert.match(id, /^k[A-Za-z0-9_-]{32}$/);

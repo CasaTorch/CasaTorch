@@ -411,7 +411,7 @@ async function setupFinish(req, res) {
     try { if (who && typeof makePairCode === 'function') pair = await makePairCode(req, who, 30); } catch { /* pair later in Settings › Phones & alerts */ }
   }
   // "Use the app away from home": secure access, switched on in the background (it can take a minute)
-  if (!isDemo() && ['new', 'owner'].includes(a.phone?.how) && a.phone?.away !== 'no' && !config.remote?.on && typeof remoteOn === 'function') remoteOn().catch((e) => { if (typeof remote === 'object') { remote.state = 'error'; remote.why = String(e.message); } });
+  if (!isDemo() && ['new', 'owner'].includes(a.phone?.how) && a.phone?.away !== 'no' && !config.remote?.on && typeof remoteOn === 'function') remoteOn().catch((e) => { if (typeof remoteFailed === 'function') { remoteFailed(e); remote.state = 'error'; } });
   setupReopened = 0; draft.ring = null; draft.hue = null;
   if (next.ring && typeof ringConnect === 'function' && proStatus().pro) ringConnect();
   console.log(`  setup: done for "${next.house.name}"`);

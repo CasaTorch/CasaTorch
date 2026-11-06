@@ -93,17 +93,19 @@ function remoteStatusEl(r) {
   const v = r.view || { status: 'starting', title: T('Starting…') };
   const dot = { working: 'good', problem: 'bad' }[v.status] || 'warn';
   return el('div', { style: 'display:flex;gap:9px;align-items:flex-start', role: 'status', 'aria-live': 'polite' }, el('span', { class: `dot ${dot}`, style: 'flex:none;margin-top:7px' }),
-    el('div', {}, el('b', {}, v.title, v.status === 'working' ? ' ✓' : ''), v.status === 'working' && r.check?.at ? el('span', { class: 'small muted' }, ` (${T('checked {ago}', { ago: ago(r.check.at) })})`) : null));
+    el('div', {}, el('b', {}, T(v.title), v.status === 'working' ? ' ✓' : ''), v.status === 'working' && r.check?.at ? el('span', { class: 'small muted' }, ` (${T('checked {ago}', { ago: ago(r.check.at) })})`) : null));
 }
+/** The server's sentence under the status, in the home's language (detailMsg/detailVars when it has casatorch.com's words in it). */
+const remoteDetail = (v) => TM(v.detail, v.detailMsg, v.detailVars);
 /** The fix the server suggests (Repair / Check again), as a button. */
 function remoteFixBtn(r, after) {
   const f = r.view?.fix; if (!f) return null;
   return el('button', { class: `btn small ${f.action === 'repair' ? 'primary' : ''}`, onclick: async (e) => {
     const b = e.currentTarget; b.disabled = true; b.textContent = f.action === 'repair' ? T('Repairing… (up to a minute)') : T('Checking…');
-    try { const x = await post(`/api/remote/${{ repair: 'repair', on: 'on' }[f.action] || 'check'}`, {}); toast(x.view?.status === 'working' ? T('Secure access works') : f.action === 'repair' ? T('Set up again - checking it now') : x.view?.title || T('Checked')); }
+    try { const x = await post(`/api/remote/${{ repair: 'repair', on: 'on' }[f.action] || 'check'}`, {}); toast(x.view?.status === 'working' ? T('Secure access works') : f.action === 'repair' ? T('Set up again - checking it now') : x.view?.title ? T(x.view.title) : T('Checked')); }
     catch (err) { toast(err.message, 6000); }
     after();
-  } }, f.label);
+  } }, T(f.label));
 }
 /** Copy / share the secure address, to open it on a phone. */
 function remoteSendEls(url) {
@@ -124,7 +126,7 @@ async function remoteCard() {
     if (!r) return body.append(el('p', { class: 'small muted' }, T('Not available right now.')));
     const add = (...k) => body.append(...k.filter(Boolean));
     if (!r.on && r.busy) {
-      add(remoteStatusEl(r), el('p', { class: 'small muted', style: 'margin:6px 0 0' }, r.view.detail));
+      add(remoteStatusEl(r), el('p', { class: 'small muted', style: 'margin:6px 0 0' }, remoteDetail(r.view)));
       timer = setTimeout(() => { if (card.isConnected) draw(); }, 3000);
       return;
     }
@@ -134,13 +136,13 @@ async function remoteCard() {
         !r.supported ? el('p', { class: 'small bad' }, T('Secure access isn\'t available on this kind of computer yet.')) : null,
         r.demo ? el('p', { class: 'small muted' }, T('Not in the demo.')) : null,
         admin && r.supported && !r.demo ? el('button', { class: 'btn primary', onclick: async (e) => { e.target.disabled = true; e.target.textContent = T('Setting up… (up to a minute)'); try { await post('/api/remote/on', {}); toast(T('Secure access is on - checking it works')); } catch (err) { toast(err.message, 6000); } draw(); } }, icon('lock'), T('Turn on secure access')) : null);
-      if (r.view?.status === 'problem') add(el('p', { class: 'small bad', style: 'margin-bottom:2px' }, r.view.title), r.view.detail ? el('p', { class: 'small muted', style: 'margin-top:0' }, r.view.detail) : null);
+      if (r.view?.status === 'problem') add(el('p', { class: 'small bad', style: 'margin-bottom:2px' }, T(r.view.title)), r.view.detail ? el('p', { class: 'small muted', style: 'margin-top:0' }, remoteDetail(r.view)) : null);
       return;
     }
     const v = r.view || {};
     const qr = el('div', { class: 'qr', role: 'img', 'aria-label': T('QR code for the secure address'), style: 'width:150px;height:150px;background:#fff;border-radius:12px;padding:8px;flex:none' }); qr.innerHTML = r.qr || '';   // server-made SVG
     add(remoteStatusEl(r),
-      v.detail ? el('p', { class: `small ${v.status === 'problem' ? '' : 'muted'}`, style: 'margin:6px 0 0' }, v.detail) : null,
+      v.detail ? el('p', { class: `small ${v.status === 'problem' ? '' : 'muted'}`, style: 'margin:6px 0 0' }, remoteDetail(v)) : null,
       admin && v.fix ? el('div', { class: 'row wrap', style: 'gap:8px;margin-top:10px' }, remoteFixBtn(r, draw)) : null,
       el('p', { style: 'margin:14px 0 8px' }, el('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.url)),
       el('div', { class: 'row wrap', style: 'gap:16px;align-items:center' }, qr, el('div', { style: 'max-width:360px' },

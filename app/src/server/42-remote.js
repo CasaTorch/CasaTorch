@@ -77,12 +77,15 @@ const REMOTE_WHY = {
   service: ['casatorch.com couldn\'t set up the address right now.', 'Try again in a few minutes.', 'repair'],
 };
 const FIX_LABEL = { repair: 'Repair', check: 'Check again' };
-/** Settings › Secure access, in plain words: { status, title, detail, fix } - from the state alone (no clock, no I/O), for the unit tests. */
+/** Settings › Secure access, in plain words: { status, title, detail, fix } - from the state alone (no clock, no I/O), for the unit tests.
+    Everything is the plain English; the screen shows it in the home's language (T() on title, detail and fix.label, all in
+    tools/i18n-strings.tsv). A detail with a value in it also carries detailMsg + detailVars, for TM(). */
 function remoteView({ on, state, code, check, anywhere, why }) {
   if (!on) return { status: 'off', title: 'Off', detail: null, fix: null };
   if (code && REMOTE_WHY[code]) {
     const [title, detail, fix] = REMOTE_WHY[code];
-    return { status: code === 'dns' ? 'checking' : 'problem', code, title, detail: code === 'service' && why ? `${String(why).replace(/\.+$/, '')}. ${detail}` : detail, fix: fix ? { action: fix, label: FIX_LABEL[fix] } : null };
+    const said = code === 'service' && why ? String(why).replace(/\.+$/, '') : null;   // casatorch.com's own words
+    return { status: code === 'dns' ? 'checking' : 'problem', code, title, detail: said ? `${said}. ${detail}` : detail, ...(said ? { detailMsg: `{why}. ${detail}`, detailVars: { why: said } } : {}), fix: fix ? { action: fix, label: FIX_LABEL[fix] } : null };
   }
   if (state === 'error') return { status: 'problem', code: 'other', title: why || 'Not working', detail: 'Repair sets it up again. The address stays the same.', fix: { action: 'repair', label: FIX_LABEL.repair } };
   if (state === 'downloading') return { status: 'starting', title: 'Getting ready…', detail: 'Downloading the secure-access helper (once, about 20 MB).', fix: null };
@@ -367,9 +370,9 @@ async function remoteOn() {
     const body = remoteRequestBody();
     let r;
     try { r = await fetch(REMOTE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) }); }
-    catch (e) { throw Object.assign(new Error(`casatorch.com couldn't be reached (${e.cause?.code || e.name})`), { code: 'service' }); }
+    catch (e) { throw Object.assign(new Error('casatorch.com couldn\'t be reached'), { code: 'service', raw: `casatorch.com couldn't be reached (${e.cause?.code || e.name})` }); }
     const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.hostname || !j.token) throw Object.assign(new Error(j.error || `casatorch.com answered ${r.status}`), { code: 'service' });
+    if (!r.ok || !j.hostname || !j.token) throw Object.assign(new Error(j.error || 'casatorch.com answered with an error'), { code: 'service', raw: j.error || `casatorch.com answered ${r.status}` });
     stopTunnel();
     // ingress: "local" when casatorch.com made the tunnel without Cloudflare-side rules; absent from an older casatorch.com
     // (the box then still checks every rule pushed to it, and accepts the old httpHostHeader-to-its-own-name rule)
@@ -382,7 +385,7 @@ async function remoteOn() {
   return remote.busy;
 }
 function remoteFailed(err) {
-  remoteProblem(err.code && REMOTE_WHY[err.code] ? err.code : 'service', err.message);
+  remoteProblem(err.code && REMOTE_WHY[err.code] ? err.code : 'service', err.raw || err.message);   // the support details keep the cause
   if (err.code === 'service') remote.why = String(err.message);
   if (!remote.proc) remote.state = 'error';
 }

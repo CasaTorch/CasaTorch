@@ -94,6 +94,11 @@ try {
   const guess = await fetch(`http://127.0.0.1:${EDGE}/api/app/hello?check=AAAAAAAAAAAAAAAA`, { headers: { 'X-Fake-Ip': '198.51.100.7', 'X-CasaTorch-Check': 'AAAAAAAAAAAAAAAA' } });
   assert.equal(guess.status, 403, 'a made-up self-test code gets nothing');
   ok('Basic, away: JSON 403 { away, needsPro } for /api, the friendly page for pages, no way round it');
+  assert.equal((await api('/api/settings', { lang: 'de' }, 'PUT')).status, 200);
+  const de = await (await fetch(`http://127.0.0.1:${EDGE}/`, { headers: { 'X-Fake-Ip': '198.51.100.7', Accept: 'text/html' } })).text();
+  assert.match(de, /<html lang="de">/); assert.match(de, /Du bist nicht zu Hause/); assert.match(de, />Erneut versuchen</); assert.doesNotMatch(de, /away from home/);
+  assert.equal((await api('/api/settings', { lang: 'en' }, 'PUT')).status, 200);
+  ok('the away page is in the home\'s language');
   /* Health */
   const doc = (await api('/api/doctor?fresh=1')).j, rc = doc.checks.find((c) => c.id === 'remote');
   assert.equal(rc?.status, 'ok', JSON.stringify(rc)); assert.match(rc.detail, /Working on your home Wi-Fi\. Checked from outside/);

@@ -17,6 +17,12 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Health warns about developer switches.** If CasaTorch is started with a setting meant only for building and
   testing it (such as `CASATORCH_PRO_DEV`, `CASATORCH_TEST` or `CASATORCH_ASK_FAKE`, or one that points it at another
   server), Health shows a red line naming it, and the activity log notes it at start. The demo is left alone.
+
+### Languages
+- **Secure access speaks your language.** Every status, problem and fix in Settings › Secure access and its Health line
+  is translated into all 13 languages, and so is the "You're away from home" page.
+
+### Small things
 - The activity log now names "Secure access was stopped to keep your home private" and shows it in red.
 
 ## 0.9.2
