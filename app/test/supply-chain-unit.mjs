@@ -151,4 +151,19 @@ export default async function supplyChainUnit(t) {
     assert.match(sec, /"require-trusted-types-for 'script'", 'trusted-types casatorch default'/);
     assert.ok(!/style-src[^"`]*'unsafe-inline'/.test(sec), 'style-src without unsafe-inline');
   });
+
+  await t('Trusted Types policy (public/tt.js): split-up tags and handlers after a slash or quote are taken out too', async () => {
+    const vm = await import('node:vm'), pol = {};
+    const win = { trustedTypes: { createPolicy: (name, rules) => { pol[name] = rules; return rules; } } };
+    vm.runInNewContext(fs.readFileSync(path.join(root, 'app', 'public', 'tt.js'), 'utf8'), { window: win, location: { href: 'https://h/', origin: 'https://h', protocol: 'https:' }, URL, console: { warn() {} } });
+    const clean = pol.default.createHTML;
+    for (const bad of ['<scr<script>ipt>alert(1)</script>', '<ifr<iframe>ame srcdoc="x">', '<img src=x/onerror=alert(1)>', '<svg/onload=alert(1)>', '<img src="x"onerror="alert(1)">',
+      '<a href="java<script>script:alert(1)">x</a>', '<sc<scr<script>ipt>ript>alert(1)</script>']) {
+      const out = clean(bad);
+      assert.doesNotMatch(out, /<\s*\/?\s*(script|iframe)\b/i, `${bad} -> ${out}`); assert.doesNotMatch(out, /[\s/"']on[a-z]+\s*=/i, `${bad} -> ${out}`); assert.doesNotMatch(out, /javascript:/i, `${bad} -> ${out}`);
+    }
+    assert.equal(clean('<b class="x">Front door</b> <i>on</i>'), '<b class="x">Front door</b> <i>on</i>', 'ordinary markup is left alone');
+    assert.equal(clean(`${'<scr'.repeat(80)}<script>${'ipt>'.repeat(80)}alert(1)`).includes('<script'), false, 'nested past reason: nothing at all');
+    assert.equal(pol.casatorch, pol.default);
+  });
 }

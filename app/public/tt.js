@@ -8,10 +8,12 @@
   const TT = window.trustedTypes;
   if (!TT || typeof TT.createPolicy !== 'function') return;
   const KILL = /<\s*\/?\s*(script|iframe|frame|frameset|object|embed|applet|base|meta|link)\b[^>]*>/gi;
-  const ON = /\s(on[a-z]+)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
+  const ON = /([\s/"'])on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;   // after a space, a slash or a quote: <svg/onload=...>
   const JS = /\b(href|src|xlink:href|action|formaction|data)\s*=\s*(["']?)\s*(javascript|vbscript|data:text\/html)/gi;
   const createHTML = (s) => {
-    const out = String(s).replace(KILL, '').replace(ON, '').replace(JS, '$1=$2#blocked-');
+    // again until nothing changes: taking one piece out must not join the rest into a new one (<scr<script>ipt>)
+    let out = String(s);
+    for (let i = 0, prev = null; prev !== out; i++) { if (i > 50) return ''; prev = out; out = out.replace(KILL, '').replace(ON, '$1').replace(JS, '$1=$2#blocked-'); }   // nested past reason: nothing
     if (out !== String(s)) console.warn('CasaTorch took out something that could run from a piece of HTML.');
     return out;
   };
