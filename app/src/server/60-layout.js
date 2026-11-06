@@ -274,6 +274,28 @@ app.put('/api/page-layout/:page', express.json({ limit: '256kb' }), (req, res) =
   savePageLayouts();
   res.json({ ok: true });
 });
+/** One more tile at the end of a page everyone sees (a device just found, 29n-discover.js). A page still showing the
+    suggested layout keeps those tiles: they are written down first, then the new one goes after them. Nothing is added
+    when the page already has the same tile (same kind and device, group or room). Answers whether it added one. */
+async function pageAddTile(page, tile) {
+  if (!PAGES.includes(page)) return false;
+  const cur = pageLayouts.house[page];
+  let tiles = cur?.tiles ? JSON.parse(JSON.stringify(cur.tiles)) : suggestPageTiles(page, await pageFacts(page).catch(() => ({})), 'desktop');
+  if (tiles.some((t) => pageTileKey(t) === pageTileKey(tile))) return false;
+  tiles = cleanTiles([...tiles, tile].slice(-60)); if (!tiles) return false;
+  pageLayouts.house[page] = { tiles, seen: cur?.seen ?? null, at: nowIso() };
+  if (page === 'home') homeWriteThrough('house', null, tiles);
+  savePageLayouts();
+  return true;
+}
+const homeAddTile = (tile) => pageAddTile('home', tile);
+/** A room on Controls for a device just found in it - only when Controls is arranged by room already (an unarranged
+    Controls page suggests its rooms by itself). */
+async function controlsAddRoom(area) {
+  const cur = pageLayouts.house.controls;
+  if (!area || !cur?.tiles?.some((t) => String(t.id).split(':')[0] === 'ctl-room')) return false;
+  return pageAddTile('controls', { id: `ctl-room:${crypto.randomBytes(3).toString('hex')}`, w: 6, h: 1, opts: { area: String(area).slice(0, 80) } });
+}
 /* Home, kept in step with the old files (an older app on a phone reads /api/layout). */
 function homeWriteThrough(scope, screen, tiles) {
   if (isDemo()) return;

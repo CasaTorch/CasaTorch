@@ -394,14 +394,14 @@ function warmUp() {
 const navTabs = () => TABS.filter((t) => t.nav !== false && !S.ui.tabs?.[t.id]?.hidden).map((t, i) => [t, S.ui.tabs?.[t.id]?.order ?? 50 + i]).sort((a, b) => a[1] - b[1]).map(([t]) => t);
 function navLink(t) {
   return el('a', { href: `#${t.id}`, 'data-tab': t.id, class: t.id === current ? 'on' : null, title: tabLabel(t) }, icon(t.icon), el('span', { class: 'nl' }, S.ui.tabs?.[t.id]?.label || T(t.short || t.label)),
-    t.pro && !isPro() ? el('span', { class: 'pro' }, 'PRO') : null, t.id === 'alerts' && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : newDot(t.id));   // newDot: 39-whatsnew.js
+    t.pro && !isPro() ? el('span', { class: 'pro' }, 'PRO') : null, t.id === 'alerts' && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : t.id === 'connect' && typeof DISC !== 'undefined' && DISC.n ? el('span', { class: 'badge', title: T('New devices found') }, DISC.n > 99 ? '99+' : DISC.n) : newDot(t.id));   // newDot: 39-whatsnew.js; DISC: 28d-discover.js
 }
 function drawNav() {
   requestAnimationFrame(navFade);
   const list = navTabs(), phone = window.innerWidth <= 760 && ['left', 'right'].includes(S.ui.nav || 'left');
   if (!phone || list.length <= 5) { $('.nav').replaceChildren(...list.map(navLink)); return; }
   const first = list.slice(0, 4), rest = list.slice(4), inMore = rest.some((t) => t.id === current);
-  $('.nav').replaceChildren(...first.map(navLink), el('a', { href: '#', class: inMore ? 'on' : null, title: T('More'), onclick: (e) => { e.preventDefault(); moreSheet(rest); } }, icon('grid'), el('span', { class: 'nl' }, T('More')), rest.some((t) => t.id === 'alerts') && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : rest.map((t) => newDot(t.id)).find(Boolean) || null));
+  $('.nav').replaceChildren(...first.map(navLink), el('a', { href: '#', class: inMore ? 'on' : null, title: T('More'), onclick: (e) => { e.preventDefault(); moreSheet(rest); } }, icon('grid'), el('span', { class: 'nl' }, T('More')), rest.some((t) => t.id === 'alerts') && S.alertsOpen ? el('span', { class: 'badge' }, S.alertsOpen) : rest.some((t) => t.id === 'connect') && typeof DISC !== 'undefined' && DISC.n ? el('span', { class: 'badge' }, DISC.n > 99 ? '99+' : DISC.n) : rest.map((t) => newDot(t.id)).find(Boolean) || null));
 }
 function moreSheet(rest) {
   const m = modal(el('div', { class: 'more-grid' }, rest.map((t) => el('a', { href: `#${t.id}`, class: `more-item${t.id === current ? ' on' : ''}`, onclick: () => m.remove() }, icon(t.icon, 24), el('span', {}, tabLabel(t)), newDot(t.id)))), { title: T('More') });

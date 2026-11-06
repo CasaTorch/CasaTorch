@@ -6,6 +6,18 @@ What changed in each CasaTorch version. The illustrated version, with links into
 
 ## Unreleased
 
+### Adding devices
+- **New devices found.** CasaTorch now keeps looking for gear on your home network, every 30 minutes and whenever you
+  press Look again: Home Assistant and new devices in it, Hue bridges, Shelly, Frigate, go2rtc streams, ONVIF and RTSP
+  cameras, Sonos and Chromecast, UniFi, Pi-hole, AdGuard Home, your router (Bonjour, SSDP/UPnP and WS-Discovery), and
+  Ring and Meraki gear by its hardware maker. They show at the top of Connect, with a count on the Connect tab. Add
+  takes one tap: a Shelly is tested and added, a new Home Assistant device gets a tile on Home (and its room on
+  Controls when Controls is arranged by room), and the rest open the guided setup at that item with the address filled
+  in. The room comes from the Home Assistant area or the device's name. "Not now" asks again in a week; Hide is for good.
+- **Add by address.** Type an address and CasaTorch asks it what it is.
+- Only addresses on your home network are ever looked at or kept, names from the network are cleaned, and looks are
+  limited (one full look a minute, 12 address checks a minute).
+
 ### Pro
 - **When Pro ends, CasaTorch says so plainly.** "Pro ended on <date> - Renew" in the banner and in Settings ›
   CasaTorch Pro; everything keeps working as Basic and nothing is deleted. A cancelled subscription runs to the end of

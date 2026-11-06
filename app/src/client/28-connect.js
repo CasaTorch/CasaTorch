@@ -48,7 +48,7 @@ async function startConnect(item, conn) {
   const pw = el('input', { type: 'password', autocomplete: 'current-password', placeholder: T('Your CasaTorch password') });
   const msg = el('div', { class: 'small', style: 'color:var(--bad);min-height:18px' });
   const go = async () => {
-    try { await post('/api/settings/rerun-setup', { password: pw.value }); location.href = `/setup.html?step=${encodeURIComponent(step)}${addId ? `&add=${encodeURIComponent(addId)}` : ''}`; }
+    try { await post('/api/settings/rerun-setup', { password: pw.value }); const extra = item.query ? Object.entries(item.query).filter(([, v]) => v).map(([k, v]) => `&${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('') : ''; location.href = `/setup.html?step=${encodeURIComponent(step)}${addId ? `&add=${encodeURIComponent(addId)}` : ''}${extra}`; }
     catch (err) { msg.textContent = err.message; }
   };
   pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
@@ -161,6 +161,8 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
       : el('button', { class: 'btn primary', onclick: () => startConnect({ label: 'Home Assistant', step: 'homeassistant', how: 'direct' }, conn) }, T('Connect Home Assistant')),
       ha ? null : el('a', { class: 'btn', href: 'https://www.home-assistant.io/green', target: '_blank', rel: 'noopener' }, T('Don\'t have it? Home Assistant Green')))));
   main.append(el('div', { class: 'connect-stats' }, el('div', {}, el('b', {}, live), el('span', {}, T('connected'))), el('div', {}, el('b', {}, total), el('span', {}, T('devices'))), el('div', {}, el('b', {}, fromHa), el('span', {}, T('from Home Assistant'))), el('div', {}, el('b', {}, items.length), el('span', {}, T('brands & services built in')))));
+  const meC = S.me || await api('/api/auth/me').catch(() => null);
+  if (meC && (meC.signIn === false || ['owner', 'admin'].includes(meC.user?.role)) && !meC.user?.panel) main.append(el('div', { class: 'card disc-card' }, discPanel()));   // New devices found (28d-discover.js)
   if (ha) main.append(await haDiscoveredCard(conn));
   let group = 'all', filter = 'any';
   const q = el('input', { type: 'search', placeholder: T('Search brands - Ring, Hue, Meraki, ecobee…'), 'aria-label': T('Search integrations') });

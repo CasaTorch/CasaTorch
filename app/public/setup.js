@@ -958,12 +958,20 @@ function watchAsks() {
     if (pr.ui?.ha && pr.haOk) { W.ha = pr.ui.ha; W.haDomains = W.ha.domains || []; }
     else if (!pr.haOk && !W.rerun && W.a.homeassistant) { const sub = W.a.homeassistant; delete sub._signedIn; delete sub._test; }   // CasaTorch restarted before it was proven: connect again
   }
+  W.found = foundFromLink({});
   focusFromLink();
   W.ready = true;
   go();
   // Look for gear on the network in the background; whatever turns up is filled in on its step.
-  if (!st.demo) api('/api/setup/discover').then((f) => { W.found = f; const busy = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName); const cur = W.steps[W.i - 1]?.id; if (!busy && ['homeassistant', 'cameras', 'controls', 'sensors', 'energy', 'network'].includes(cur)) go(); }).catch(() => {});
+  if (!st.demo) api('/api/setup/discover').then((f) => { W.found = foundFromLink(f && typeof f === 'object' ? f : {}); const busy = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName); const cur = W.steps[W.i - 1]?.id; if (!busy && ['homeassistant', 'cameras', 'controls', 'sensors', 'energy', 'network'].includes(cur)) go(); }).catch(() => {});
 })();
+/* Opened from "New devices found" (/setup.html?step=cameras&add=frigate&found=frigate&addr=http://192.168.1.10:5000):
+   the address it was found at comes first in what the step fills in. Only a plain address is taken from the link. */
+function foundFromLink(found) {
+  const qp = new URLSearchParams(location.search), k = qp.get('found') || '', a = (qp.get('addr') || '').trim();
+  if (!/^[a-z0-9]{2,20}$/.test(k) || !/^(https?:\/\/)?[\w.-]{1,200}(:\d{1,5})?\/?$/.test(a)) return found;
+  return { ...found, [k]: [a, ...(Array.isArray(found[k]) ? found[k] : []).filter((x) => x !== a)] };
+}
 /* Opened from Connect in the dashboard (/setup.html?step=controls&add=hue-local): go straight to that
    step with that item already picked, then straight to Review & save. */
 function focusFromLink() {

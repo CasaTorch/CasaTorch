@@ -347,6 +347,19 @@ input[type=checkbox]:focus-visible, input[type=radio]:focus-visible, input[type=
 @media (prefers-reduced-motion: reduce) { .cam.cam-wait { animation: none; } }
 /* Home Assistant: found on your network, add any integration */
 .ha-found { margin-top: 14px; }
+/* New devices found (28d-discover.js) */
+.disc-card { margin-top: 14px; }
+.disc-list { display: grid; gap: 8px; }
+.disc-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--card-2, rgba(255,255,255,.04)); }
+.disc-ic { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.disc-acts { display: flex; gap: 6px; flex: none; align-items: center; }
+.disc-acts .busy { opacity: .6; pointer-events: none; }
+.disc-empty { display: flex; gap: 12px; align-items: center; padding: 8px 4px; color: var(--muted); }
+.disc-empty b { color: var(--text); }
+.disc-by-addr { margin-top: 10px; }
+.disc-by-addr summary { cursor: pointer; color: var(--accent); }
+.disc > .tiny.muted:last-child { margin-top: 8px; }
+@media (max-width: 560px) { .disc-row { flex-wrap: wrap; } .disc-acts { width: 100%; justify-content: flex-end; } }
 .ha-found-list { display: grid; gap: 8px; }
 .ha-found-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--card-2, rgba(255,255,255,.04)); }
 .ha-any-list { display: grid; gap: 6px; margin-top: 12px; max-height: 52vh; overflow: auto; }
