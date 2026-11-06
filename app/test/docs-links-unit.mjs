@@ -27,7 +27,7 @@ function docsMap() {
 /* casatorch.com/docs/... written into the app's own code (outside the list). */
 function literalLinks() {
   const files = [...fs.readdirSync(path.join(APP, 'src', 'client')).map((f) => path.join(APP, 'src', 'client', f)), ...fs.readdirSync(path.join(APP, 'src', 'server')).map((f) => path.join(APP, 'src', 'server', f)),
-    ...fs.readdirSync(path.join(APP, 'public')).filter((f) => /\.(js|html)$/.test(f) && !['app.js', 'docs-links.js'].includes(f)).map((f) => path.join(APP, 'public', f)), path.join(APP, 'catalog', 'setup.json')];
+    ...fs.readdirSync(path.join(APP, 'public')).filter((f) => /\.(js|html)$/.test(f) && !['app.js', 'docs-links.js'].includes(f) && !/^app-[a-z]+\.js$/.test(f)).map((f) => path.join(APP, 'public', f)), path.join(APP, 'catalog', 'setup.json')];
   const out = [];
   for (const f of files) for (const m of fs.readFileSync(f, 'utf8').matchAll(/casatorch\.com\/docs\/([a-z0-9/-]+\.html)(#[\w-]+)?/g)) out.push({ where: path.relative(APP, f), page: m[1], anchor: m[2]?.slice(1) || null });
   return out;

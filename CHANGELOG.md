@@ -23,6 +23,12 @@ What changed in each CasaTorch version. The illustrated version, with links into
   show up as chimes: whether each is online, its volume and whether it's snoozed. Tap one to change the volume or snooze
   it for 30 minutes to 24 hours. Like chimes from Home Assistant, they never count or show as cameras.
 
+### Faster
+- **The dashboard starts with less to load.** Network (with App tests) and Energy are now files of their own, fetched
+  in the background and run only the first time you open them, so every other page starts with about a sixth less
+  to download and run. They're kept like the rest of the app, so they open offline too, from the web app's saved copy.
+  The 3D Home already loads only when you open it.
+
 ### Languages
 - **Secure access speaks your language.** Every status, problem and fix in Settings › Secure access and its Health line
   is translated into all 13 languages, and so is the "You're away from home" page.

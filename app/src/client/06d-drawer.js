@@ -284,9 +284,12 @@ document.addEventListener('click', (e) => {
 });
 
 /** The tile's drawer: its own when it has one, the generic one otherwise. */
-function drOpenTile(node, { fromHash = false, virtual = null } = {}) {
+function drOpenTile(node, { fromHash = false, virtual = null, waited = false } = {}) {
   const tb = node?.querySelector(':scope > .tile-b'), t = virtual || tb?._t, w = t && wOf(t);
   if (!w) return false;
+  // its drawer is in a page file not loaded yet (19-lazy.js): load it, then open (the generic drawer if it can't be had)
+  const chunk = !waited && !TILE_DRAWERS[w.id] && typeof CHUNK_DRAWERS === 'object' ? CHUNK_DRAWERS[w.id] : null;
+  if (chunk && !chunkReady(chunk)) { appChunk(chunk).catch(() => {}).finally(() => drOpenTile(node, { fromHash, virtual, waited: true })); return true; }
   const ctx = node?.parentElement?._ctx || $('#view .grid')?._ctx || { data: {} }, size = node ? ctx.grid?.sizeOf?.(t) || { tier: node.dataset.tier || 'm' } : { tier: 'xl', w: 12, h: 6 };
   const a = { t, ctx, w, node: node || el('section'), size };
   const spec = TILE_DRAWERS[w.id];

@@ -21,7 +21,7 @@ const noE2e = args.includes('--no-e2e') || process.env.SKIP_E2E === '1';
 
 const STEPS = [
   ['build', APP, ['build.mjs']],
-  ['syntax', APP, ['-e', "for (const f of ['server.js','public/app.js','public/setup.js','public/floorplan.js','public/login.js']) require('node:child_process').execFileSync(process.execPath, ['--check', f], { stdio: 'inherit' })"]],
+  ['syntax', APP, ['-e', "for (const f of ['server.js','public/app.js',...require('node:fs').readdirSync('public').filter((x) => /^app-[a-z]+\\.js$/.test(x)).map((x) => `public/${x}`),'public/setup.js','public/floorplan.js','public/login.js']) require('node:child_process').execFileSync(process.execPath, ['--check', f], { stdio: 'inherit' })"]],
   ['unit', APP, ['test/unit.mjs']],
   ['security', ROOT, ['tools/test-security.mjs']],
   ['pentest', ROOT, ['tools/test-pentest.mjs']],

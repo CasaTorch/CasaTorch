@@ -43,7 +43,7 @@ function detectionsCard() {
 }
 
 /* ---- Network: a page of tiles (26-network.js) ---- */
-tab({ id: 'network', label: 'Network', icon: 'wifi', render: (main) => networkPage(main) });
+tab({ id: 'network', label: 'Network', icon: 'wifi', render: lazyTab('network', (main) => networkPage(main)) });   // its own file (19-lazy.js)
 
 /* ---- Energy ---- */
 function reportCard(rep, money, redraw) {
@@ -80,7 +80,7 @@ function reportCard(rep, money, redraw) {
     rep.ai ? null : el('p', { class: 'tiny muted', style: 'margin-top:6px' }, T('Connect an AI in Settings › Connections & AI and the report is written by it, with tips in plain words.')));
   return card;
 }
-tab({ id: 'energy', label: 'Energy', icon: 'bolt', render: (main) => energyPage(main) });   // a page of tiles (23-energy.js)
+tab({ id: 'energy', label: 'Energy', icon: 'bolt', render: lazyTab('energy', (main) => energyPage(main)) });   // a page of tiles (23-energy.js), its own file (19-lazy.js)
 
 /* ---- 3D Home (Pro) ---- */
 /* Full screen for the 3D home, in place: the frame fills the screen (the browser's full screen where it's allowed,

@@ -145,7 +145,7 @@ export default async function drawersTests(t) {
     for (const k of Object.keys(base)) assert.equal(R.drTapOpens({ ...base, [k]: true }), false, k);
   });
   t('drawer: every tile in the galleries opens a drawer - its own, or the tile at its biggest', () => {
-    const cli = fs.readFileSync(path.join(HERE, '..', 'public', 'app.js'), 'utf8');
+    const pub = path.join(HERE, '..', 'public'), cli = ['app.js', ...fs.readdirSync(pub).filter((f) => /^app-[a-z]+\.js$/.test(f))].map((f) => fs.readFileSync(path.join(pub, f), 'utf8')).join('\n');   // app.js and the pages loaded later (19-lazy.js)
     for (const id of ['sports', 'weather', 'clock', 'worldclock', 'sun', 'calendar', 'news', 'stocks', 'photos', 'internet', 'alerts', 'today', 'energy', 'camera', 'doorbell', 'device', 'room', 'lights', 'entities', 'thermostat', 'media', 'batteries', 'secure', 'household', 'radar',
       'en-top', 'en-dev', 'en-rooms', 'en-now', 'net-devices', 'net-internet', 'net-speed', 'hh-bins', 'hh-plants', 'rem-today', 'al-now', 'cam-wall', 'sec-wall', 'ctl-room'])
       assert.match(cli, new RegExp(`tileDrawer\\([^)]*'${id}'`), `${id} has its own drawer`);
