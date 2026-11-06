@@ -67,9 +67,10 @@ export default async function licenseTests(t) {
     const restore = L.patchConfig({ license: key });
     try {
       assert.equal(L.proStatus().pro, true);
-      L.licState.check = { at: iso(Date.now()), kid: L.licKid(key), state: 'revoked', endedAt: iso(Date.now() - 3600_000), reason: 'refunded' };
+      const endedAt = iso(Date.now() - 3600_000);   // once: two Date.now() calls can be a millisecond apart
+      L.licState.check = { at: iso(Date.now()), kid: L.licKid(key), state: 'revoked', endedAt, reason: 'refunded' };
       const p = L.proStatus();
-      assert.equal(p.pro, false); assert.equal(p.revoked, true); assert.equal(p.endedOn, iso(Date.now() - 3600_000)); assert.match(p.note, /Nothing was deleted/); assert.match(p.renew, /casatorch\.com\/pro/);
+      assert.equal(p.pro, false); assert.equal(p.revoked, true); assert.equal(p.endedOn, endedAt); assert.match(p.note, /Nothing was deleted/); assert.match(p.renew, /casatorch\.com\/pro/);
     } finally { restore(); }
     const fresh = sign({ email: 'r@example.com', plan: 'monthly', homes: 1, expires: iso(Date.now() + 30 * day) });
     const r2 = L.patchConfig({ license: fresh });
