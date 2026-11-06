@@ -281,7 +281,7 @@ async function doctorRun() {
     const one = (id, fn) => timed(Promise.resolve().then(fn), 15000, id).catch((err) => chk(id, 'connections', id, 'bad', errDetail(err)));
     const conn = isDemo() ? DOC_DEMO.map(([id, t, d]) => chk(id, 'connections', t, 'ok', d)) : await Promise.all(Object.entries(DOC_CONN).map(([id, fn]) => one(id, fn)));
     await storageUse().catch(() => {});
-    const sys = await Promise.all([docStorage, docMemory, docClock, docDataFolder, docSettings, docSignIns, docInternet, docRemote, docEdgeGate, docCerts, docBackup, docUpdates, docDevSwitches].map((fn) => one(fn.name.replace(/^doc/, '').toLowerCase(), fn)));
+    const sys = await Promise.all([docStorage, docMemory, docClock, docDataFolder, docSettings, docSignIns, docInternet, docRemote, docEdgeGate, docCerts, docKeyStore, docBackup, docUpdates, docDevSwitches].map((fn) => one(fn.name.replace(/^doc/, '').toLowerCase(), fn)));
     const checks = [...sys, ...conn].filter(Boolean);
     DOC.checks = checks; DOC.at = nowIso();
     if (!isDemo()) doctorAlerts(checks);

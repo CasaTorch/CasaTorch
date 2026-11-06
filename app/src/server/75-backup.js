@@ -29,7 +29,12 @@ const bkAllowed = (p) => typeof p === 'string' && !p.includes('\0') && !path.isA
 const bkSource = (rel) => (rel === 'config.json' ? CONFIG_FILE : path.join(DATA_DIR, rel));
 function bkList(withMedia) {
   const out = [];
-  for (const f of BK_FILES) { try { const st = fs.statSync(bkSource(f)); if (st.isFile()) out.push({ p: f, s: st.size }); } catch { /* not there */ } }
+  for (const f of BK_FILES) {
+    // The key goes in as the key itself (the backup is sealed by its passphrase), never wrapped by this computer's key
+    // store: a backup must restore on another computer.
+    if (f === 'secret.key') { try { const mem = Buffer.from(keyOf().toString('base64')); out.push({ p: f, s: mem.length, mem }); } catch { /* no key */ } continue; }
+    try { const st = fs.statSync(bkSource(f)); if (st.isFile()) out.push({ p: f, s: st.size }); } catch { /* not there */ }
+  }
   if (withMedia) {
     const walk = (rel) => { for (const e of fs.readdirSync(path.join(DATA_DIR, rel), { withFileTypes: true })) { const r = `${rel}/${e.name}`; if (e.isDirectory()) walk(r); else if (e.isFile()) out.push({ p: r, s: fs.statSync(path.join(DATA_DIR, r)).size }); } };
     for (const d of BK_DIRS) { try { walk(d); } catch { /* none */ } }
@@ -40,8 +45,9 @@ function bkList(withMedia) {
 }
 async function* bkEntries(list) {
   for (const f of list) {
-    const h = Buffer.from(JSON.stringify(f)), len = Buffer.alloc(4); len.writeUInt32BE(h.length);
+    const h = Buffer.from(JSON.stringify({ p: f.p, s: f.s })), len = Buffer.alloc(4); len.writeUInt32BE(h.length);
     yield Buffer.concat([len, h]);
+    if (f.mem) { yield f.mem; continue; }
     let sent = 0;
     for await (const chunk of fs.createReadStream(bkSource(f.p), { end: Math.max(0, f.s - 1) })) { if (f.s === 0) break; sent += chunk.length; yield chunk; }
     if (sent !== f.s) throw new Error(`${f.p} changed while it was being backed up - try again`);

@@ -36,25 +36,33 @@ const KEY_FILE = path.join(DATA_DIR, 'secret.key');
 let secretKey = null;
 /* The key is never overwritten: a key file that can't be read stops CasaTorch with a clear message (so a
    permissions slip can't quietly throw every saved secret away), and a damaged one is moved aside, kept,
-   before a new key is made. A new key is written atomically, owner-only, and only if no key file exists. */
+   before a new key is made. A new key is written atomically, owner-only, and only if no key file exists.
+   With a key store (00-keystore.js) the file holds the key wrapped by it; a plain key is wrapped on the first start
+   that has one, and a wrapped key the key store can't open is kept aside (secret.key.locked-...) - never deleted. */
 function loadKeyFile(file, tries = 0) {
+  if (tries === 0 && !isDemo0()) { try { ksRotatePending(file); } catch (e) { console.error(`Key rotation didn't finish: ${e.message} (it carries on at the next start).`); } }
   let raw = null;
   try { raw = fs.readFileSync(file, 'utf8'); }
   catch (e) { if (e.code !== 'ENOENT') throw new Error(`CasaTorch can't read its key file (${file}: ${e.code}). Fix its permissions; nothing was changed.`); }
   if (raw !== null) {
-    const k = Buffer.from(raw.trim(), 'base64');
-    if (k.length === 32) {
+    const o = ksOpen(raw);
+    if (o.key) {
       try { if (process.platform !== 'win32' && (fs.statSync(file).mode & 0o077)) fs.chmodSync(file, 0o600); } catch { /* not ours to change */ }
-      return k;
+      KS.kind = o.kind;
+      if (o.kind === 'file' && !isDemo0()) { try { if (ksMigrate(file, o.key)) KS.kind = ksUsable().kind; } catch (e) { console.error(`Secret key: the key store didn't take it (${e.message}); it stays in the key file.`); } }
+      return o.key;
     }
-    const aside = `${file}.damaged-${Date.now()}`;
+    const aside = `${file}.${o.locked ? 'locked' : 'damaged'}-${Date.now()}`;
     try { fs.renameSync(file, aside); } catch { /* read-only: making the new key below fails too, and says so */ }
-    console.error(`${path.basename(file)} was damaged: kept as ${path.basename(aside)}; a new key was made, so saved passwords and tokens must be entered again.`);
+    if (o.locked) { KS.problem = { kind: o.locked, aside: path.basename(aside) }; console.error(`${path.basename(file)} is sealed by the key store (${o.locked}), which didn't open it: kept as ${path.basename(aside)} (it's put back by itself once the key store opens it again); a new key was made, so saved passwords and tokens must be entered again until then.`); }
+    else console.error(`${path.basename(file)} was damaged: kept as ${path.basename(aside)}; a new key was made, so saved passwords and tokens must be entered again.`);
   }
   if (tries > 2) throw new Error(`CasaTorch couldn't make its key file (${file}).`);
   const k = crypto.randomBytes(32), tmp = `${file}.${process.pid}.tmp`;
+  let text; try { text = ksText(k); } catch { text = k.toString('base64'); }
+  KS.kind = KS_WRAPPED.exec(text)?.[1] || 'file';
   const fd = fs.openSync(tmp, 'w', 0o600);
-  try { fs.writeFileSync(fd, k.toString('base64')); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  try { fs.writeFileSync(fd, text); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
   try { fs.linkSync(tmp, file); fs.rmSync(tmp, { force: true }); }   // only if there is still no key file
   catch {
     if (fs.existsSync(file)) { fs.rmSync(tmp, { force: true }); return loadKeyFile(file, tries + 1); }   // another copy of CasaTorch made one first: use that

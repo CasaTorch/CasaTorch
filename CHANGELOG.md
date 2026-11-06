@@ -34,6 +34,14 @@ What changed in each CasaTorch version. The illustrated version, with links into
   how to fix it.
 - **Pinned 3D engine files.** The 3D home's engine (three.js) is pinned file by file: CasaTorch sends a browser only
   the files it was built with, unchanged, and the browser checks them too.
+- **Your secret key in the system's key store.** The key that seals every saved password and token is now kept with
+  the system's own key store where there is one - the macOS Keychain, Windows data protection, systemd credentials
+  (with the computer's TPM2 chip when it has one) on Linux and the Raspberry Pi, or a Docker secret - so a copy of the
+  data folder alone opens nothing. Existing installs move over by themselves; without a key store nothing changes.
+  CasaTorch never locks you out: if the key store doesn't open the key, CasaTorch keeps running, says so in Health and
+  puts the key back once the key store works again. Backups still restore on any computer.
+- **A new secret key on request.** Settings › Health › Secret key › Make a new secret key (owner, with your password):
+  CasaTorch restarts and seals everything again with the new key. Nothing needs entering again.
 
 ## 0.9.3
 

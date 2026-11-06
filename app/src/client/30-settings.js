@@ -192,7 +192,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
   /* Sections, like a phone's Settings: a list on the left (the whole page on a phone), one section at a time, and search. */
   const SECTIONS = [
     ['general', T('General'), 'home', T('Your home\'s name, language, energy price and this CasaTorch'), async () => [await changeSetupCard(s, me), everyday, langCard(s), scoresCard, await famOutsideCard(), acct]],   // changeSetupCard: 39d-docs-links.js   // famOutsideCard: 38-family.js
-    ['health', T('Health|settings'), 'checkc', T('Is everything working? Checks, one-tap fixes and saved copies of your settings'), async () => [...await healthCards(s, me), await supportHelpCard(s)], admin],   // supportHelpCard: 39s-support.js
+    ['health', T('Health|settings'), 'checkc', T('Is everything working? Checks, one-tap fixes and saved copies of your settings'), async () => [...await healthCards(s, me), await keyCard(me), await supportHelpCard(s)], admin],   // keyCard: 31k-keys.js; supportHelpCard: 39s-support.js
     ['appearance', T('Look & main bar'), 'palette', T('Themes, backgrounds, colors, the main bar and the Home screen'), async () => [lookThemesCard(), lookCard(), barCard(), await famChipsCard(), homeCard]],   // famChipsCard: 38-family.js
     ['people', T('People & sign-in'), 'user', T('Your account, two-step sign-in, people in the house and the activity log'), async () => [...await securityCards(), await activityCard()]],   // activityCard: 39s-support.js
     ['devices', T('Devices & sessions'), 'lock', T('Every phone and browser signed in, approved browsers, and remote access protection'), async () => devicesCards()],   // 31d-devices.js

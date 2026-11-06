@@ -26,7 +26,8 @@ const SH_FILES = ['config.json', 'users.json', 'secret.key'];
 const shSource = (f) => (f === 'config.json' ? CONFIG_FILE : path.join(DATA_DIR, f));
 const shStamp = (d = new Date()) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');   // 20261017T101500Z
 const shTime = (id) => { const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z/.exec(id); return m ? Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : NaN; };
-const shReadable = (file, kind) => { try { const t = fs.readFileSync(file, 'utf8'); if (kind === 'secret.key') return Buffer.from(t.trim(), 'base64').length === 32; const j = JSON.parse(t); return !!j && typeof j === 'object'; } catch { return false; } };
+/* (a key file: the key itself, or wrapped by the key store - 00-keystore.js) */
+const shReadable = (file, kind) => { try { const t = fs.readFileSync(file, 'utf8'); if (kind === 'secret.key') return ksLooksLikeKey(t); const j = JSON.parse(t); return !!j && typeof j === 'object'; } catch { return false; } };
 /** Snapshot ids, newest first. */
 function settingsHistory(dir = SH_DIR) {
   let list = []; try { list = fs.readdirSync(dir).filter((n) => /^\d{8}T\d{6}Z-[a-z0-9-]{1,40}$/.test(n)); } catch { /* none yet */ }
@@ -98,18 +99,21 @@ function healData(f, { dir = DATA_DIR } = {}) {
 }
 const sealedSample = (o) => { if (typeof o === 'string') return SEALED.test(o) ? o : null; if (o && typeof o === 'object') for (const v of Object.values(o)) { const s = sealedSample(v); if (s) return s; } return null; };
 const opensWith = (sealed, key) => { try { const [, iv, enc, tag] = sealed.split('.'); const d = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64url')); d.setAuthTag(Buffer.from(tag, 'base64url')); d.update(Buffer.from(enc, 'base64url')); d.final(); return true; } catch { return false; } };
-/** The key file doesn't open the settings, but a copy in the history does: use that copy (the other is kept aside). */
+/** The key file doesn't open the settings, but a copy in the history does - or a key the key store couldn't open at an
+    earlier start (kept as secret.key.locked-..., 00-setup.js) now opens again: use that one (the other is kept aside). */
 function healKey({ dir = SH_DIR } = {}) {
   let disk; try { disk = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return null; }
   const sample = sealedSample(disk); if (!sample) return null;
-  let cur = null; try { cur = Buffer.from(fs.readFileSync(KEY_FILE, 'utf8').trim(), 'base64'); } catch { /* missing */ }
+  const cur = ksKeyOfFile(KEY_FILE);
   if (cur?.length === 32 && opensWith(sample, cur)) return null;
-  for (const id of settingsHistory(dir)) {
-    let k; try { k = Buffer.from(fs.readFileSync(path.join(dir, id, 'secret.key'), 'utf8').trim(), 'base64'); } catch { continue; }
-    if (k.length === 32 && opensWith(sample, k)) {
+  const locked = (() => { try { return fs.readdirSync(DATA_DIR).filter((n) => /^secret\.key\.locked-\d+$/.test(n)).sort().reverse().map((n) => ({ id: n, file: path.join(DATA_DIR, n) })); } catch { return []; } })();
+  for (const c of [...locked, ...settingsHistory(dir).map((id) => ({ id, file: path.join(dir, id, 'secret.key') }))]) {
+    const k = ksKeyOfFile(c.file);
+    if (k?.length === 32 && opensWith(sample, k)) {
       try { if (fs.existsSync(KEY_FILE)) fs.copyFileSync(KEY_FILE, `${KEY_FILE}.unmatched-${shStamp()}`); } catch { /* keep going */ }
-      writeFileSafe(KEY_FILE, `${k.toString('base64')}`, 0o600);
-      return { from: id };
+      writeFileSafe(KEY_FILE, ksText(k), 0o600);
+      if (c.id.startsWith('secret.key.locked-')) { try { fs.rmSync(c.file, { force: true }); } catch { /* kept */ } KS.problem = null; }
+      return { from: c.id };
     }
   }
   return { from: null };
