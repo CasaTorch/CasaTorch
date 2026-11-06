@@ -41,6 +41,17 @@ export default async function auditChainUnit(t) {
     const r = A.auditVerify([broken[0], ...[], restart, ...after]);
     assert.equal(r.ok, true, JSON.stringify(r)); assert.equal(r.chained, 3);
   });
+  await t('activity log: an ordinary restart doesn\'t start a new chain (that would hide lines cut off before it); only a new key does', () => {
+    const restarts = () => { try { return fs.readFileSync(A.files.log, 'utf8').split('\n').filter((l) => l.includes('"audit-chain-restart"')).length; } catch { return 0; } };
+    A.auditKeysGet(); const keyWas = fs.readFileSync(A.files.key, 'utf8'), n0 = restarts();
+    A.reloadKeys(); A.resetHead(); A.auditKeysGet();
+    assert.equal(restarts(), n0, 'the same key: the chain just goes on');
+    try {
+      fs.writeFileSync(A.files.key, JSON.stringify({ mac: 'v2.AAAA.BBBB.CCCC', sig: 'v2.AAAA.BBBB.CCCC', pub: 'x' }));   // sealed with a key that is gone
+      A.reloadKeys(); A.resetHead(); A.auditKeysGet();
+      assert.equal(restarts(), n0 + 1, 'a new key: marked');
+    } finally { fs.writeFileSync(A.files.key, keyWas); A.reloadKeys(); A.resetHead(); }
+  });
   await t('activity export (JSON): signed with Ed25519 and the public key; an edited file no longer checks out', () => {
     const x = A.auditSignedExport([{ at: '2026-11-05T00:00:00.000Z', event: 'login', user: 'owner1' }], { exported: '2026-11-05T00:00:01.000Z', version: 'test' });
     const { signature: s, ...body } = JSON.parse(JSON.stringify(x, null, 1));

@@ -17,4 +17,4 @@ function securityScore() {
   ];
   return { on: items.filter((i) => i.on).length, of: items.length, items };
 }
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchAudit = { auditVerify, auditChainLine, auditSignedExport, auditCheck, auditMac, securityScore, resetHead: () => { auditHead = undefined; } };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchAudit = { auditVerify, auditChainLine, auditSignedExport, auditCheck, auditMac, securityScore, resetHead: () => { auditHead = undefined; }, reloadKeys: () => { auditKeys = null; }, auditKeysGet, files: { log: AUDIT_FILE, key: AUDIT_KEY_FILE } };

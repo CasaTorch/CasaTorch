@@ -15,7 +15,8 @@ function auditKeysGet() {
   if (auditKeys) return auditKeys;
   let j = null; try { j = JSON.parse(fs.readFileSync(AUDIT_KEY_FILE, 'utf8')); } catch { /* first time */ }
   let mac = j?.mac ? unseal(j.mac, 'audit.mac') : null, priv = j?.sig ? unseal(j.sig, 'audit.sig') : null;
-  if (!mac || !priv) {   // the first time, or the secret key changed underneath (a new chain starts; the old one is reported as such)
+  const fresh = !mac || !priv;
+  if (fresh) {   // the first time, or the secret key changed underneath (a new chain starts; the old one is reported as such)
     const kp = crypto.generateKeyPairSync('ed25519');
     mac = crypto.randomBytes(32).toString('base64'); priv = kp.privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64');
     if (!isDemo0()) { try { writeFileSafe(AUDIT_KEY_FILE, JSON.stringify({ mac: seal(mac, 'audit.mac'), sig: seal(priv, 'audit.sig'), pub: kp.publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64'), at: new Date().toISOString() }), 0o600); } catch { /* a read-only data folder: in memory for now */ } }
@@ -24,7 +25,8 @@ function auditKeysGet() {
   auditKeys = { mac: Buffer.from(mac, 'base64'), priv: key, pub: crypto.createPublicKey(key).export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64') };
   // A new key while the log already has a chain (the secret key was lost and made again): say so in the log, and start
   // the chain again from that line - the lines before it are then "older", not "changed".
-  if (j && !isDemo0()) {
+  // Only then: an ordinary start goes on with the same chain, so lines cut off the end before a restart still show.
+  if (j && fresh && !isDemo0()) {
     try {
       const body = JSON.stringify({ at: new Date().toISOString(), event: 'audit-chain-restart', reason: 'new key' }), ch = auditMac(null, body);
       fs.appendFileSync(AUDIT_FILE, `${body.slice(0, -1)},"ch":"${ch}"}\n`, { mode: 0o600 }); auditHead = ch;

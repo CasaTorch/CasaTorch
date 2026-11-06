@@ -53,6 +53,7 @@ What changed in each CasaTorch version. The illustrated version, with links into
   turn it on.
 - Secure access: a CasaTorch restored on new hardware no longer lets devices that were signed out of away access back in.
 - A new secret key can no longer lose a saved value when a file can't be written during the change: the old key stays.
+- Activity log: an event removed from just before a restart of CasaTorch now shows up in Health too.
 
 ## 0.9.3
 
