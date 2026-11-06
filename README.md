@@ -163,8 +163,9 @@ screen and phone, the Security Center, Household, the Family board and the rain 
 | **Away from home** - Secure access: your CasaTorch from anywhere, encrypted, no port forwarding (Basic: the secure address on your home Wi-Fi) | |
 
 When a trial or subscription ends, nothing is deleted: Pro features pause (your 3D home stays viewable),
-and everything comes back when a key is added. The key is checked on your box, offline; if casatorch.com
-can't be reached, Pro keeps working for 30 days after a key's end date.
+CasaTorch keeps working as Basic, and everything comes back when a key is added. The key is checked on your box,
+offline, and once a day with casatorch.com (so a cancellation or a refund reaches it); if casatorch.com can't be
+reached, Pro keeps working for 30 days after a key's end date.
 
 **Phone apps** for iPhone, iPad and Android - Face ID or fingerprint lock, end-to-end encrypted alerts,
 LiDAR room scans into the 3D Home - are built and coming to the App Store and Google Play, free in every

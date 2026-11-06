@@ -434,6 +434,8 @@ function drawBanner() {
   else if (S.updates?.available && !updSnoozed(S.updates.latest)) b.append(icon('spark', 16), S.updates.auto ? T('CasaTorch {v} is available - it installs itself overnight.', { v: S.updates.latest }) : T('CasaTorch {v} is available.', { v: S.updates.latest }), el('a', { href: '#settings/updates' }, S.updates.auto ? T('Details') : T('How to update')), updSnoozeBtn(S.updates.latest));
   else if (p.plan === 'trial') b.append(icon('spark', 16), p.trialDaysLeft === 1 ? T('Pro trial: 1 day left - 3D Home, your Home AI Agent and Ring are unlocked.') : T('Pro trial: {n} days left - 3D Home, your Home AI Agent and Ring are unlocked.', { n: p.trialDaysLeft }), el('a', { href: '#settings/pro' }, T('Enter a license key')));
   else if (p.grace) b.append(T('Your Pro subscription has ended - Pro keeps working for a few more days.'), el('a', { href: '#settings/pro' }, T('Renew')));
+  /* Pro that was paid for and ended (a cancellation, a refund, a key that ran out): for two months, when and how to renew */
+  else if (!p.pro && p.endedOn && Date.now() - Date.parse(p.endedOn) < 60 * 86400_000) { b.className = 'free'; b.append(`${T('Pro ended on {date}', { date: fmt(p.endedOn, { dateStyle: 'medium' }) })} - ${T('CasaTorch keeps working as Basic.')}`, el('a', { href: '#settings/pro' }, T('Renew'))); }
   else if (!p.pro) {
     /* Right after Pro or the trial ends, say once (per browser) what that means: nothing was deleted. */
     let once = false; try { if (p.note && localStorage.getItem('casatorch-pro-ended') !== p.note) { localStorage.setItem('casatorch-pro-ended', p.note); once = true; } } catch { /* fine */ }

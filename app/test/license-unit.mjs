@@ -62,6 +62,47 @@ export default async function licenseTests(t) {
     const restore = L.patchConfig({ setupAt: iso(Date.now() - 90 * day), license: sign({ email: 'c@example.com', plan: 'lifetime', homes: 1, expires: null }) });
     try { const p = L.proStatus(); assert.equal(p.pro, true); assert.equal(p.plan, 'lifetime'); assert.equal(p.expires, null); } finally { restore(); reset(); }
   });
+  t('revocation: a key casatorch.com says was revoked is Basic right away (no grace), with the date; a new key starts clean', () => {
+    const key = sign({ email: 'r@example.com', plan: 'yearly', homes: 1, expires: iso(Date.now() + 30 * day), issued: iso(Date.now() - day) });
+    const restore = L.patchConfig({ license: key });
+    try {
+      assert.equal(L.proStatus().pro, true);
+      L.licState.check = { at: iso(Date.now()), kid: L.licKid(key), state: 'revoked', endedAt: iso(Date.now() - 3600_000), reason: 'refunded' };
+      const p = L.proStatus();
+      assert.equal(p.pro, false); assert.equal(p.revoked, true); assert.equal(p.endedOn, iso(Date.now() - 3600_000)); assert.match(p.note, /Nothing was deleted/); assert.match(p.renew, /casatorch\.com\/pro/);
+    } finally { restore(); }
+    const fresh = sign({ email: 'r@example.com', plan: 'monthly', homes: 1, expires: iso(Date.now() + 30 * day) });
+    const r2 = L.patchConfig({ license: fresh });
+    try { assert.equal(L.proStatus().pro, true, 'the answer was about the old key only'); } finally { r2(); L.licState.check = null; reset(); }
+  });
+  t('revocation: a cancelled subscription ends at its paid period plus 14 days, even with a longer key on the box', () => {
+    const key = sign({ email: 'c@example.com', plan: 'yearly', homes: 1, expires: iso(Date.now() + 20 * day) });
+    const restore = L.patchConfig({ license: key }); L.licState.renew = { unreachable: false };
+    try {
+      L.licState.check = { at: iso(Date.now()), kid: L.licKid(key), state: 'grace', endsAt: iso(Date.now() - 5 * day), reason: 'cancelled' };
+      let p = L.proStatus(); assert.equal(p.pro, true); assert.equal(p.grace, true); assert.equal(p.cancelled, true); assert.ok(p.endsOn);
+      L.licState.check = { ...L.licState.check, state: 'expired', endsAt: iso(Date.now() - 20 * day) };
+      p = L.proStatus(); assert.equal(p.pro, false); assert.equal(p.endedOn, iso(Date.now() - 6 * day));
+    } finally { restore(); L.licState.check = null; reset(); }
+  });
+  t('revocation: the daily check asks casatorch.com, follows its answer both ways, and an outage changes nothing', async () => {
+    const C = globalThis.__casatorchLicCheck, realFetch = globalThis.fetch, key = sign({ email: 'd@example.com', plan: 'monthly', homes: 1, expires: iso(Date.now() + 25 * day) });
+    let answer = null; const asked = [];
+    globalThis.fetch = async (url, init) => { asked.push([String(url), JSON.parse(init.body)]); if (answer === 'down') throw new TypeError('fetch failed'); return new Response(JSON.stringify(answer), { status: 200, headers: { 'Content-Type': 'application/json' } }); };
+    const restore = L.patchConfig({ license: key });
+    try {
+      answer = { state: 'revoked', endedAt: iso(Date.now()), reason: 'disputed' };
+      await C.licenseCheck();
+      assert.match(asked[0][0], /\/api\/license\/check$/); assert.equal(asked[0][1].key, key); assert.ok(asked[0][1].home && asked[0][1].home.length < 30, 'a one-way tag, never the install id');
+      assert.equal(L.proStatus().pro, false);
+      await C.licenseCheck(); assert.equal(asked.length, 1, 'once a day, not on every call');
+      answer = { state: 'active', until: iso(Date.now() + 39 * day) };
+      L.licState.check.at = iso(Date.now() - 11 * 60_000);
+      await C.licenseCheck({ force: true }); assert.equal(L.proStatus().pro, true, 'restored by CasaTorch: Pro is back');
+      answer = 'down'; L.licState.check.at = iso(Date.now() - 25 * 3600_000);
+      await C.licenseCheck(); assert.equal(L.proStatus().pro, true, 'casatorch.com not answering never switches Pro off');
+    } finally { globalThis.fetch = realFetch; restore(); L.licState.check = null; reset(); }
+  });
   t('radar provider: NWS tiles are a WMS box for the tile, US-only; RainViewer stays the default', () => {
     const R = globalThis.__casatorchRadar;
     const u = new URL(R.radarNwsTileUrl(7, 20, 49));

@@ -18,6 +18,14 @@
  * an outage on our side never switches anyone's Pro off. Then Pro features
  * switch off; nothing is deleted, and core home control and safety alerts are
  * never part of Pro.
+ *
+ * Revocation: once a day the box asks casatorch.com whether its key is still
+ * good (66-pro-keys.js, licenseCheck). After a full refund, a chargeback or a
+ * revocation by CasaTorch the answer is "revoked" and Pro ends at once; after a
+ * cancellation the answer carries the date the subscription ended, and Pro ends
+ * then plus the usual grace. The answer is remembered per key (licState.check),
+ * so a new key starts clean. A box that never asks still loses Pro at its key's
+ * end date: keys are short (about 34 days monthly, 35-day slices yearly).
  * ====================================================================== */
 let LICENSE_PUBLIC_KEY = crypto.createPublicKey({ key: Buffer.from('MCowBQYDK2VwAyEABf+qQNUoFUyjunG6K/hZL7XnsA+950eq2nek4Sg/j7U=', 'base64'), format: 'der', type: 'spki' });   // `let` only so the unit tests can use a key of their own (below)
 const TRIAL_DAYS = 14, GRACE_DAYS = 14, OFFLINE_GRACE_DAYS = 30, LIC_PLANS = new Set(['monthly', 'yearly', 'lifetime']);
@@ -47,7 +55,7 @@ function checkLicenseKeyNow(key) {
 
 /* ---- what the box remembers about its license (license-state.json, owner-only) ---- */
 const LICENSE_STATE_FILE = path.join(DATA_DIR, 'license-state.json');
-const licState = { trialStart: null, runMs: 0, renew: null };
+const licState = { trialStart: null, runMs: 0, renew: null, check: null };
 try { Object.assign(licState, JSON.parse(fs.readFileSync(LICENSE_STATE_FILE, 'utf8'))); } catch { /* first start */ }
 let licStateDirty = false;
 function saveLicState() {
@@ -81,17 +89,28 @@ function trialDaysLeft(now = Date.now()) {
 /** Grace after the end date: longer when the last renewal try couldn't reach casatorch.com at all. */
 const licGraceDays = () => (licState.renew?.unreachable ? OFFLINE_GRACE_DAYS : GRACE_DAYS);
 
+/** The short id casatorch.com knows a key by (lib/entitlement.js keyId there): never the key itself. */
+const licKid = (key) => crypto.createHash('sha256').update(String(key || '').trim().split('.')[0] || '').digest('hex').slice(0, 32);
+const PRO_RENEW_URL = 'https://casatorch.com/pro';
+const PRO_ENDED_NOTE = 'Pro has ended on this CasaTorch. Nothing was deleted - your 3D home, history and settings come back as soon as Pro is on again.';
+/** What casatorch.com last said about the key in use (null when it never answered for this key). */
+function licCheckFor(key) { const c = licState.check; return c && c.kid === licKid(key) ? c : null; }
 function proStatus() {
   if (process.env.CASATORCH_PRO_DEV === '1') return { pro: true, plan: 'developer', why: 'CASATORCH_PRO_DEV=1' };
   const lic = config.license ? checkLicenseKey(config.license) : null;
   if (lic?.valid) {
-    const exp = lic.payload.plan === 'lifetime' ? null : Date.parse(lic.payload.expires);
+    const chk = licCheckFor(config.license);
+    // revoked (refund, chargeback, by CasaTorch): off now, no grace; nothing is deleted
+    if (chk?.state === 'revoked') return { pro: false, plan: 'free', revoked: true, endedOn: chk.endedAt || chk.at, expired: chk.endedAt || chk.at, why: 'your Pro subscription ended', note: PRO_ENDED_NOTE, renew: PRO_RENEW_URL };
+    let exp = lic.payload.plan === 'lifetime' ? null : Date.parse(lic.payload.expires);
+    if (chk?.endsAt && Number.isFinite(Date.parse(chk.endsAt))) exp = Math.min(exp ?? Infinity, Date.parse(chk.endsAt));   // cancelled: the paid period's end
+    if (exp === Infinity) exp = null;
     const grace = licGraceDays();
     if (!exp || Date.now() < exp + grace * 86400_000) {
       const inGrace = !!exp && Date.now() > exp;
-      return { pro: true, plan: lic.payload.plan, email: lic.payload.email, expires: lic.payload.expires || null, grace: inGrace, ...(inGrace ? { graceDaysLeft: Math.max(1, Math.ceil((exp + grace * 86400_000 - Date.now()) / 86400_000)) } : {}) };
+      return { pro: true, plan: lic.payload.plan, email: lic.payload.email, expires: exp ? new Date(exp).toISOString() : null, grace: inGrace, ...(chk?.endsAt ? { cancelled: true } : {}), ...(inGrace ? { graceDaysLeft: Math.max(1, Math.ceil((exp + grace * 86400_000 - Date.now()) / 86400_000)), endsOn: new Date(exp + grace * 86400_000).toISOString(), renew: PRO_RENEW_URL } : {}) };
     }
-    return { pro: false, plan: 'free', expired: lic.payload.expires, why: 'your Pro subscription ended', note: 'Pro has ended on this CasaTorch. Nothing was deleted - your 3D home, history and settings come back as soon as Pro is on again.' };
+    return { pro: false, plan: 'free', expired: new Date(exp).toISOString(), endedOn: new Date(exp + grace * 86400_000).toISOString(), why: 'your Pro subscription ended', note: PRO_ENDED_NOTE, renew: PRO_RENEW_URL };
   }
   const left = trialDaysLeft();
   return left > 0 ? { pro: true, plan: 'trial', trialDaysLeft: Math.min(TRIAL_DAYS, left) } : { pro: false, plan: 'free', trialEnded: true, note: 'Your Pro trial has ended. Nothing was deleted - everything you set up in Pro comes back when you add a key.' };
@@ -99,6 +118,6 @@ function proStatus() {
 /** Route guard: Pro features answer 402 with what to do (never for core home control or safety alerts). */
 const requirePro = (req, res, next) => { const p = proStatus(); return p.pro ? next() : res.status(402).json({ error: 'This is a CasaTorch Pro feature.', pro: p, upgrade: 'https://casatorch.com/pro', kept: 'Nothing you made with Pro has been deleted.' }); };
 app.get('/api/license', (req, res) => { const p = proStatus(); if (signInOn() && !sessionOf(req)) { const { email, ...rest } = p; return res.json(rest); } res.json(p); });   // the e-mail only for people signed in
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchLicense = { checkLicenseKeyNow, proStatus, trialDaysLeft, trialStartMs, licState, licenseTick, TRIAL_DAYS, GRACE_DAYS, OFFLINE_GRACE_DAYS,
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchLicense = { checkLicenseKeyNow, proStatus, licKid, trialDaysLeft, trialStartMs, licState, licenseTick, TRIAL_DAYS, GRACE_DAYS, OFFLINE_GRACE_DAYS,
   useTestKey: (pub) => { LICENSE_PUBLIC_KEY = pub; licenseMemo = { key: null, out: null }; },   // tests only (CASATORCH_TEST=1)
   patchConfig: (p) => { const was = config; config = { ...config, ...p }; licenseMemo = { key: null, out: null }; return () => { config = was; licenseMemo = { key: null, out: null }; }; } };

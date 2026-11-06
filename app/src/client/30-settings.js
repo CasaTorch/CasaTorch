@@ -146,11 +146,15 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
   const [s, me] = await Promise.all([api('/api/settings'), api('/api/auth/me').catch(() => null)]); S.settings = s;
   const admin = !me || me.signIn === false || ['admin', 'owner'].includes(me.user?.role);
   const p = s.pro || {};
-  const status = p.plan === 'trial' ? T(p.trialDaysLeft === 1 ? 'Pro trial - {n} day left' : 'Pro trial - {n} days left', { n: p.trialDaysLeft }) : p.pro ? `Pro (${p.plan})${p.email ? ` - ${p.email}` : ''}${p.expires ? T(', renews {date}', { date: fmt(p.expires, { dateStyle: 'medium' }) }) : ''}` : 'Basic';
+  const status = p.plan === 'trial' ? T(p.trialDaysLeft === 1 ? 'Pro trial - {n} day left' : 'Pro trial - {n} days left', { n: p.trialDaysLeft })
+    : p.pro ? `Pro (${p.plan})${p.email ? ` - ${p.email}` : ''}${p.expires ? T(p.cancelled || p.grace ? ', ends {date}' : ', renews {date}', { date: fmt(p.endsOn || p.expires, { dateStyle: 'medium' }) }) : ''}`
+      : p.endedOn ? `Basic - ${T('Pro ended on {date}', { date: fmt(p.endedOn, { dateStyle: 'medium' }) })}` : 'Basic';
+  // a fresh word from casatorch.com about the key (a refund or a renewal shows here and in the banner at once)
+  if (admin && !s.demo && (p.endedOn || (p.pro && !['trial', 'developer'].includes(p.plan)))) post('/api/license/check', {}).then((r) => { if (r?.pro && (r.pro.pro !== p.pro || r.pro.endedOn !== p.endedOn)) { loadStatus(); if (location.hash.startsWith('#settings')) show('settings'); } }).catch(() => {});
   const key = el('textarea', { rows: 3, placeholder: T('Paste your CasaTorch license key'), spellcheck: 'false', autocomplete: 'off' });
   const saveKey = el('button', { class: 'btn primary' }, T('Save key'));
   saveKey.onclick = async () => { try { await post('/api/license', { key: key.value }); toast(T('Pro is on. Thank you!')); await loadStatus(); show('settings'); } catch (err) { toast(err.message, 4000); } };
-  const pro = el('div', { class: 'card', style: 'grid-column:1/-1' }, el('h2', {}, T('CasaTorch Pro')), el('div', { class: 'row between wrap' }, el('b', { style: 'font-size:18px' }, status), el('a', { href: 'https://casatorch.com/pro', target: '_blank', rel: 'noopener' }, T('$5/mo or $49/yr'))),
+  const pro = el('div', { class: 'card', style: 'grid-column:1/-1' }, el('h2', {}, T('CasaTorch Pro')), el('div', { class: 'row between wrap' }, el('b', { style: 'font-size:18px' }, status), el('a', { href: 'https://casatorch.com/pro', target: '_blank', rel: 'noopener' }, p.endedOn ? T('Renew - $5/mo or $49/yr') : T('$5/mo or $49/yr'))),
     el('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 18px;margin:12px 0' }, PRO_FEATURES.map(([t, d, now]) => el('div', { style: 'padding:8px 0;border-top:1px solid var(--line)' }, el('b', {}, T(t)), now ? el('span', { class: 'pill good', style: 'margin-left:6px' }, T('ready')) : el('span', { class: 'pill', style: 'margin-left:6px' }, T('coming')), d ? el('div', { class: 'small muted' }, T(d)) : null))),
     el('label', { class: 'field' }, el('span', {}, T('License key')), key), el('div', { class: 'row wrap' }, saveKey, el('span', { class: 'small muted' }, T('or')), el('button', { class: 'btn', onclick: () => claimKey(async () => { await loadStatus(); show('settings'); }) }, T('Get my key by e-mail'))),
     el('p', { class: 'small muted' }, T('Bought Pro? "Get my key by e-mail" sends a code to the address you bought with - no copying keys around.')));

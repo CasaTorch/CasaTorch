@@ -6,6 +6,14 @@ What changed in each CasaTorch version. The illustrated version, with links into
 
 ## Unreleased
 
+### Pro
+- **When Pro ends, CasaTorch says so plainly.** "Pro ended on <date> - Renew" in the banner and in Settings ›
+  CasaTorch Pro; everything keeps working as Basic and nothing is deleted. A cancelled subscription runs to the end of
+  the paid period plus the usual 14 days.
+- **A daily check of the Pro key** with casatorch.com, so a cancellation, a refund or a renewal shows up within a day.
+  If casatorch.com can't be reached nothing changes.
+- Yearly plans now pick up their key a month at a time, by themselves.
+
 ### Security
 - **Secure access only opens on approved devices.** Requests to your home's secure address are now checked by
   Cloudflare before they reach your CasaTorch: only your paired phones (the CasaTorch app) and browsers you approve get

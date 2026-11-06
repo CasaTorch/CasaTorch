@@ -424,7 +424,7 @@ const ACT_KINDS = {
   settings: ['settings-changed', 'setup-reopened', 'ai-settings-changed', 'alert-settings-changed', 'security-settings-changed', 'update-settings-changed', 'find-setting-changed', 'safety-exception-changed', 'license-added', 'license-removed', 'connection-removed', 'settings-put-back', 'floorplan-imported', 'camera-walls-changed', 'frigate-camera-added', 'frigate-change-undone', 'frigate-restarted'],
   remote: ['secure-access-on', 'secure-access-off', 'secure-access-repaired', 'secure-access-stopped', 'home-https-on', 'home-https-off'],
   exports: ['activity-exported', 'backup-checked', 'backup-made', 'backup-restored', 'floorplan-exported', 'diagnostics-downloaded', 'support-file-made', 'support-summary-copied'],
-  system: ['restarted', 'updated', 'alert-acknowledged', 'camera-found', 'dev-switches-on'],
+  system: ['restarted', 'updated', 'alert-acknowledged', 'camera-found', 'dev-switches-on', 'pro-ended', 'pro-restored'],
 };
 const ACT_KIND_OF = Object.fromEntries(Object.entries(ACT_KINDS).flatMap(([k, list]) => list.map((e) => [e, k])));
 const ACT_BAD = new Set([...ACT_KINDS.failed, 'secure-access-stopped', 'dev-switches-on']);   // shown in red
