@@ -145,6 +145,7 @@ async function remoteCard() {
       v.detail ? el('p', { class: `small ${v.status === 'problem' ? '' : 'muted'}`, style: 'margin:6px 0 0' }, remoteDetail(v)) : null,
       admin && v.fix ? el('div', { class: 'row wrap', style: 'gap:8px;margin-top:10px' }, remoteFixBtn(r, draw)) : null,
       el('p', { style: 'margin:14px 0 8px' }, el('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.url)),
+      r.gate ? el('p', { class: 'small muted', style: 'margin:0 0 8px' }, r.gate.active ? T('Edge gate on: only approved devices reach this CasaTorch from outside.') : T('Edge gate not active yet. Secure access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.'), ' ', el('a', { href: '#settings/devices' }, T('Devices & sessions'))) : null,   // 31d-devices.js
       el('div', { class: 'row wrap', style: 'gap:16px;align-items:center' }, qr, el('div', { style: 'max-width:360px' },
         el('p', { class: 'small muted', style: 'margin-top:0' }, T('Scan this with your phone\'s camera to open CasaTorch at its secure address, sign in, then add it to your home screen and turn on alerts (Settings › Phones & alerts).')),
         el('p', { class: 'small muted' }, T('Or send it to your phone:')), remoteSendEls(r.url),

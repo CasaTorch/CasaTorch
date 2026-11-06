@@ -54,6 +54,7 @@
     'settings.household': 'use/household.html',
     'settings.family': 'use/family-board.html',
     'settings.phones': 'use/phone-app.html',
+    'settings.devices': 'help/remote-access.html',
     'settings.alerts': 'use/alerts.html',
     'settings.updates': 'help/updates.html',
     'settings.pro': 'pro/about.html',

@@ -106,8 +106,10 @@ export default async function gateUnit(t) {
         'Edge gate not active yet: this CasaTorch\'s key is registered, but its address still answers devices without a ticket.', 'On: only approved devices reach this CasaTorch from outside.', 'On. The next self-test checks the address is closed to other devices.',
         'Edge gate not active yet. Secure access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.'];
       for (const m of src.matchAll(/res\.status\(\d+\)\.json\(\{ error: '((?:[^'\\]|\\.)*)'/g)) texts.push(m[1].replace(/\\'/g, '\''));
+      const client = fs.readFileSync(new URL('../src/client/31d-devices.js', import.meta.url), 'utf8');
+      for (const m of client.matchAll(/T\('((?:[^'\\]|\\.)*)'/g)) texts.push(m[1].replace(/\\'/g, '\''));
       for (const x of texts) { const r = rows.get(x); assert.ok(r, `not in i18n-strings.tsv: ${x}`); assert.equal(r.length, 14, x); assert.ok(r.every(Boolean), x); }
-      assert.ok(texts.length > 25, String(texts.length));
+      assert.ok(texts.length > 60, String(texts.length));
     });
     t('edge gate: remoteView says when remote access is locked; the tunnel request says the box knows the gate', () => {
       const v = RM.remoteView({ on: true, state: 'connected', check: { ok: true }, locked: true });
