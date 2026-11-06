@@ -422,12 +422,12 @@ const ACT_KINDS = {
   people: ['user-added', 'user-removed', 'user-reset', 'role-changed', 'owner-saved', 'policy-changed', 'google-on', 'google-off', 'panel-link-made', 'panel-link-revoked'],
   pairing: ['phone-paired', 'pairing-code-made', 'alerts-device-on', 'alerts-device-off', 'alerts-phone-on', 'alerts-phone-off'],
   settings: ['settings-changed', 'setup-reopened', 'ai-settings-changed', 'alert-settings-changed', 'security-settings-changed', 'update-settings-changed', 'find-setting-changed', 'safety-exception-changed', 'license-added', 'license-removed', 'connection-removed', 'settings-put-back', 'floorplan-imported', 'camera-walls-changed', 'frigate-camera-added', 'frigate-change-undone', 'frigate-restarted'],
-  remote: ['secure-access-on', 'secure-access-off', 'secure-access-repaired', 'home-https-on', 'home-https-off'],
+  remote: ['secure-access-on', 'secure-access-off', 'secure-access-repaired', 'secure-access-stopped', 'home-https-on', 'home-https-off'],
   exports: ['activity-exported', 'backup-checked', 'backup-made', 'backup-restored', 'floorplan-exported', 'diagnostics-downloaded', 'support-file-made', 'support-summary-copied'],
-  system: ['restarted', 'updated', 'alert-acknowledged', 'camera-found'],
+  system: ['restarted', 'updated', 'alert-acknowledged', 'camera-found', 'dev-switches-on'],
 };
 const ACT_KIND_OF = Object.fromEntries(Object.entries(ACT_KINDS).flatMap(([k, list]) => list.map((e) => [e, k])));
-const ACT_BAD = new Set(ACT_KINDS.failed);
+const ACT_BAD = new Set([...ACT_KINDS.failed, 'secure-access-stopped', 'dev-switches-on']);   // shown in red
 const ACT_KEEP_DAYS = 365, ACT_KEEP_N = 5000;
 function supAuditRead() {
   try { return fs.readFileSync(AUDIT_FILE, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter((e) => e && e.at && e.event); } catch { return []; }

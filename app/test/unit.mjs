@@ -648,6 +648,20 @@ t('3D: one device per real device; garage doors and locks keep their own pin', (
 
 /* ---- setup and self-healing (05b-setup-net.js, 00b-heal.js, 79-doctor.js) ---- */
 const SU = globalThis.__casatorchSetup;
+t('health: a developer or test switch set outside the demo is a red line (names only, never values); none set, or the demo: no line', () => {
+  assert.deepEqual(SU.devSwitchesOn({}), []);
+  assert.deepEqual(SU.devSwitchesOn({ CASATORCH_PRO_DEV: '0', CASATORCH_TEST: '', CASATORCH_REMOTE_URL: '  ' }), [], 'off, or empty');
+  const env = { CASATORCH_PRO_DEV: '1', CASATORCH_TEST: '1', CASATORCH_ASK_FAKE: '1', CASATORCH_ACME_URL: 'https://ca.example.com/dir', CASATORCH_DATA_DIR: '/x', PORT: '8090' };
+  assert.deepEqual(SU.devSwitchesOn(env), ['CASATORCH_PRO_DEV', 'CASATORCH_TEST', 'CASATORCH_ASK_FAKE', 'CASATORCH_ACME_URL'], 'ordinary settings (data folder, port) are not developer switches');
+  const c = SU.docDevSwitches(env, false);
+  assert.equal(c.status, 'bad'); assert.equal(c.group, 'safety'); assert.equal(c.title, 'Developer switches'); assert.equal(c.vars.n, 4);
+  assert.match(c.detail, /^4 developer switches are set: CASATORCH_PRO_DEV, CASATORCH_TEST, CASATORCH_ASK_FAKE, CASATORCH_ACME_URL\./); assert.doesNotMatch(JSON.stringify(c), /ca\.example\.com/, 'no values');
+  assert.match(SU.docDevSwitches({ CASATORCH_PRO_DEV: '1' }, false).detail, /^A developer switch is set: CASATORCH_PRO_DEV\./);
+  assert.equal(SU.docDevSwitches(env, true), null, 'the demo sets some on purpose'); assert.equal(SU.docDevSwitches({}, false), null);
+  for (const [k] of SU.DEV_SWITCHES) assert.match(k, /^CASATORCH_[A-Z_]+$/);
+  const src = fsMod.readFileSync(new URL('../server.js', import.meta.url), 'utf8');   // every switch the server reads that only tests and developers use is on the list
+  for (const k of ['CASATORCH_PRO_DEV', 'CASATORCH_TEST', 'CASATORCH_ASK_FAKE', 'CASATORCH_REMOTE_FAST', 'CASATORCH_CFD_BASE', 'CASATORCH_REMOTE_CHECK_BASE', 'CASATORCH_MERAKI_BASE']) { assert.ok(src.includes(`process.env.${k}`), k); assert.ok(SU.DEV_SWITCHES.some(([n]) => n === k), k); }
+});
 t('setup: addresses are tidied the way people type them', () => {
   const ha = (x) => SU.normalizeAddress(x, { defaultPort: 8123 }).url;
   assert.equal(ha('homeassistant.local'), 'http://homeassistant.local:8123');

@@ -229,6 +229,36 @@ function docUpdates() {
   return chk('updates', 'safety', 'Updates', 'ok', [u.latest ? 'Up to date ({version}).' : 'Version {version}.', { version: u.version }], { fix: u.error ? { action: 'check-updates', label: 'Check now' } : undefined });
 }
 
+/* ---- developer and test switches ---- */
+/* Settings for building and testing CasaTorch, never for a home: each one makes it less safe or less real (Pro without a
+   key, test hooks, a made-up AI agent, or casatorch.com, Let's Encrypt and Cloudflare swapped for something else). The
+   demo sets some of them on purpose, so they're only reported outside the demo. [name, what it does, on when] */
+const DEV_FLAG = (v) => v === '1', DEV_SET = (v) => v != null && String(v).trim() !== '';
+const DEV_SWITCHES = [
+  ['CASATORCH_PRO_DEV', 'every Pro feature without a key', DEV_FLAG], ['CASATORCH_TEST', 'test hooks', DEV_FLAG],
+  ['CASATORCH_ASK_FAKE', 'a stand-in AI agent and made-up web search', DEV_FLAG], ['CASATORCH_REMOTE_FAST', 'test timings for secure access', DEV_FLAG],
+  ['CASATORCH_REMOTE_URL', 'another server for secure access', DEV_SET], ['CASATORCH_REMOTE_CHECK_BASE', 'another address for the secure access self-test', DEV_SET],
+  ['CASATORCH_CFD_BASE', 'another download place for the secure-access helper', DEV_SET], ['CASATORCH_LOCAL_URL', 'another server for the secure address at home', DEV_SET],
+  ['CASATORCH_ACME_URL', 'another certificate authority', DEV_SET], ['CASATORCH_PRO_API', 'another server for Pro keys', DEV_SET],
+  ['CASATORCH_PUSH_RELAY', 'another relay for app alerts', DEV_SET], ['CASATORCH_FIND_URL', 'another server for Find my CasaTorch', DEV_SET],
+  ['CASATORCH_UPDATE_URL', 'another server for updates', DEV_SET], ['CASATORCH_MERAKI_BASE', 'another server for Meraki', DEV_SET],
+  ['CASATORCH_HA_QUIET_SECONDS', 'test timings for Home Assistant', DEV_SET],
+];
+/** The developer and test switches set in `env` (names only - never their values, which can be addresses). */
+const devSwitchesOn = (env = process.env) => DEV_SWITCHES.filter(([k, , on]) => on(env[k])).map(([k]) => k);
+/** Health: a red line when any is set outside the demo; nothing at all when none is (or in the demo). */
+function docDevSwitches(env = process.env, demo = isDemo()) {
+  const on = demo ? [] : devSwitchesOn(env);
+  if (!on.length) return null;
+  return chk('devswitches', 'safety', 'Developer switches', 'bad', [on.length === 1 ? 'A developer switch is set: {list}. It is for testing CasaTorch, not for a home.' : '{n} developer switches are set: {list}. They are for testing CasaTorch, not for a home.', { n: on.length, list: on.join(', ') }],
+    { why: 'They can turn off safety checks or send CasaTorch\'s requests somewhere else. Remove them from where CasaTorch is started (the service file, Docker settings or the command line), then restart CasaTorch.', switches: on });
+}
+/* At start: one line in the activity log (and the console) when any is set. */
+{
+  const on = isDemo() ? [] : devSwitchesOn();
+  if (on.length) { console.warn(`Developer switches are set (${on.join(', ')}) - for testing only.`); if (typeof audit === 'function') audit(null, 'dev-switches-on', { switches: on }); }
+}
+
 const DOC_CONN = { ha: docHa, hue: docHue, shelly: docShelly, frigate: docFrigate, yolink: docYolink };
 const DOC_DEMO = [['ha', 'Home Assistant', 'Connected - changes arrive instantly.'], ['hue', 'Philips Hue', ['Bridge "{name}" is answering.', { name: 'Hue' }]], ['shelly', 'Shelly', ['All {n} answering.', { n: 2 }]], ['frigate', 'Frigate', ['Answering - {n} cameras.', { n: 3 }]]];
 async function doctorRun() {
@@ -237,7 +267,7 @@ async function doctorRun() {
     const one = (id, fn) => timed(Promise.resolve().then(fn), 15000, id).catch((err) => chk(id, 'connections', id, 'bad', errDetail(err)));
     const conn = isDemo() ? DOC_DEMO.map(([id, t, d]) => chk(id, 'connections', t, 'ok', d)) : await Promise.all(Object.entries(DOC_CONN).map(([id, fn]) => one(id, fn)));
     await storageUse().catch(() => {});
-    const sys = await Promise.all([docStorage, docMemory, docClock, docDataFolder, docSettings, docSignIns, docInternet, docRemote, docCerts, docBackup, docUpdates].map((fn) => one(fn.name.replace(/^doc/, '').toLowerCase(), fn)));
+    const sys = await Promise.all([docStorage, docMemory, docClock, docDataFolder, docSettings, docSignIns, docInternet, docRemote, docCerts, docBackup, docUpdates, docDevSwitches].map((fn) => one(fn.name.replace(/^doc/, '').toLowerCase(), fn)));
     const checks = [...sys, ...conn].filter(Boolean);
     DOC.checks = checks; DOC.at = nowIso();
     if (!isDemo()) doctorAlerts(checks);
@@ -356,4 +386,4 @@ app.post('/api/doctor/fix', requireRole('admin'), express.json({ limit: '2kb' })
   try { res.json({ ok: true, ...(await fn(req.body || {}, req)) }); }
   catch (err) { res.status(err.status || 400).json({ error: String(err.message) }); }
 });
-if (process.env.CASATORCH_TEST === '1') Object.assign(globalThis.__casatorchSetup, { docStorage, docSettings, doctorAlerts, DOC });
+if (process.env.CASATORCH_TEST === '1') Object.assign(globalThis.__casatorchSetup, { docStorage, docSettings, doctorAlerts, DOC, devSwitchesOn, docDevSwitches, DEV_SWITCHES });

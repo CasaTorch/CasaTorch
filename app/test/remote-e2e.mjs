@@ -98,6 +98,11 @@ try {
   const doc = (await api('/api/doctor?fresh=1')).j, rc = doc.checks.find((c) => c.id === 'remote');
   assert.equal(rc?.status, 'ok', JSON.stringify(rc)); assert.match(rc.detail, /Working on your home Wi-Fi\. Checked from outside/);
   ok('Health has a Secure access line');
+  const dev = doc.checks.find((c) => c.id === 'devswitches');   // this test points secure access at fakes (CASATORCH_REMOTE_URL...)
+  assert.equal(dev?.status, 'bad', JSON.stringify(dev)); assert.ok(dev.switches.includes('CASATORCH_REMOTE_URL') && dev.switches.includes('CASATORCH_REMOTE_FAST'));
+  assert.doesNotMatch(JSON.stringify(dev), /127\.0\.0\.1/, 'names only, not their values');
+  assert.match(fs.readFileSync(path.join(DIR, 'audit.log'), 'utf8'), /"event":"dev-switches-on"/);
+  ok('developer switches set outside the demo: a red Health line, and one line in the activity log at start');
   /* the helper stops by itself: started again */
   const before = runs().length; mode('crash');
   r = await api('/api/remote/repair', {}); assert.equal(r.status, 200);

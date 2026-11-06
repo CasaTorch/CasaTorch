@@ -14,6 +14,10 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Only your CasaTorch can get certificates for its secure address at home.** CasaTorch sends its Let's Encrypt
   account with the request for its `lan-` name, and casatorch.com adds a CAA record that lets Let's Encrypt issue
   certificates for that name to that account only. Names made before get one at their next renewal.
+- **Health warns about developer switches.** If CasaTorch is started with a setting meant only for building and
+  testing it (such as `CASATORCH_PRO_DEV`, `CASATORCH_TEST` or `CASATORCH_ASK_FAKE`, or one that points it at another
+  server), Health shows a red line naming it, and the activity log notes it at start. The demo is left alone.
+- The activity log now names "Secure access was stopped to keep your home private" and shows it in red.
 
 ## 0.9.2
 
