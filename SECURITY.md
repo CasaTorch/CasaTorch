@@ -7,8 +7,8 @@ version, with a diagram and what to do if something is lost or stolen, is in the
 
 ## Reporting a vulnerability
 
-E-mail **support@casatorch.com** with "Security" in the subject. <!-- scrub-ok: public support address -->
-Please include what you found, steps to reproduce, and the version you tested (Settings › Updates). Don't open a
+E-mail **security@casatorch.com**, or use **Report a vulnerability** on the repository's Security tab (GitHub private <!-- scrub-ok: public security address -->
+vulnerability reporting). casatorch.com/.well-known/security.txt has the same details. Please include what you found, steps to reproduce, and the version you tested (Settings › Updates). Don't open a
 public issue, and don't test against homes that aren't yours. We'll reply, keep you posted while we fix it, and
 credit you in the release notes if you'd like.
 
@@ -67,6 +67,38 @@ when an update is available; please install it promptly.
 - **Safety:** CasaTorch and its AI never unlock doors, open garage doors or gates, or disarm alarms.
 
 Every change goes through automated security and attack testing before it's released.
+
+## Verify your download
+
+Every release is built by GitHub Actions from its tag, and you can check what you downloaded came from there.
+
+**Installers** (`.deb`, `.pkg`, `.exe`, the Raspberry Pi image, the compose file): the release's `SHA256SUMS` is
+signed with CasaTorch's offline release key (`deploy/packaging/release-key.pub.pem`, also built into every
+package). With OpenSSL 3 and the files in one folder:
+
+```sh
+openssl pkeyutl -verify -pubin -inkey release-key.pub.pem -rawin -in SHA256SUMS -sigfile SHA256SUMS.sig
+sha256sum -c SHA256SUMS --ignore-missing        # macOS: shasum -a 256 -c SHA256SUMS --ignore-missing
+gh attestation verify casatorch_amd64.deb -R casatorch/casatorch   # build provenance (any file of the release)
+```
+
+On Windows, compare `Get-FileHash CasaTorch-Setup-Windows.exe` with its line in `SHA256SUMS`.
+
+**Container image** (`ghcr.io/casatorch/casatorch`): signed with Sigstore cosign (keyless, by the release workflow)
+and published with SLSA build provenance and a CycloneDX SBOM. The release notes and the compose file from
+casatorch.com/download name each release's image by its digest.
+
+```sh
+cosign verify ghcr.io/casatorch/casatorch:<version> \
+  --certificate-identity-regexp '^https://github\.com/casatorch/casatorch/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+gh attestation verify oci://ghcr.io/casatorch/casatorch:<version> -R casatorch/casatorch
+```
+
+The **Home Assistant add-on** is built on your machine from the release's source, and the build stops unless every
+file matches the signed release. The Linux package and the Raspberry Pi image install updates only when they carry
+the release signature. Software bills of materials (`casatorch-app.cdx.json`, `casatorch-image.cdx.json`) are
+attached to every release.
 
 ## Keeping your CasaTorch safe
 
