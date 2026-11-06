@@ -75,6 +75,18 @@ export default async function licenseTests(t) {
     const r2 = L.patchConfig({ license: fresh });
     try { assert.equal(L.proStatus().pro, true, 'the answer was about the old key only'); } finally { r2(); L.licState.check = null; reset(); }
   });
+  t('revocation: the box downgrades cleanly - Pro routes answer 402 with "nothing deleted", Basic goes on; Pro back on restore', () => {
+    const key = sign({ email: 'g@example.com', plan: 'monthly', homes: 1, expires: iso(Date.now() + 20 * day) });
+    const restore = L.patchConfig({ license: key });
+    const run = () => { let out = null; const res = { status(c) { out = { code: c }; return this; }, json(b) { out.body = b; return this; } }; L.requirePro({}, res, () => { out = { next: true }; }); return out; };
+    try {
+      assert.equal(run().next, true);
+      L.licState.check = { at: iso(Date.now()), kid: L.licKid(key), state: 'revoked', endedAt: iso(Date.now()) };
+      const r = run(); assert.equal(r.code, 402); assert.match(r.body.kept, /Nothing/); assert.equal(r.body.pro.revoked, true); assert.ok(r.body.pro.endedOn);
+      L.licState.check = { ...L.licState.check, state: 'active', endedAt: null };
+      assert.equal(run().next, true);
+    } finally { restore(); L.licState.check = null; reset(); }
+  });
   t('revocation: a cancelled subscription ends at its paid period plus 14 days, even with a longer key on the box', () => {
     const key = sign({ email: 'c@example.com', plan: 'yearly', homes: 1, expires: iso(Date.now() + 20 * day) });
     const restore = L.patchConfig({ license: key }); L.licState.renew = { unreachable: false };

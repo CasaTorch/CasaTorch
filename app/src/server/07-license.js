@@ -118,6 +118,6 @@ function proStatus() {
 /** Route guard: Pro features answer 402 with what to do (never for core home control or safety alerts). */
 const requirePro = (req, res, next) => { const p = proStatus(); return p.pro ? next() : res.status(402).json({ error: 'This is a CasaTorch Pro feature.', pro: p, upgrade: 'https://casatorch.com/pro', kept: 'Nothing you made with Pro has been deleted.' }); };
 app.get('/api/license', (req, res) => { const p = proStatus(); if (signInOn() && !sessionOf(req)) { const { email, ...rest } = p; return res.json(rest); } res.json(p); });   // the e-mail only for people signed in
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchLicense = { checkLicenseKeyNow, proStatus, licKid, trialDaysLeft, trialStartMs, licState, licenseTick, TRIAL_DAYS, GRACE_DAYS, OFFLINE_GRACE_DAYS,
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchLicense = { checkLicenseKeyNow, proStatus, licKid, requirePro: (...a) => requirePro(...a), trialDaysLeft, trialStartMs, licState, licenseTick, TRIAL_DAYS, GRACE_DAYS, OFFLINE_GRACE_DAYS,
   useTestKey: (pub) => { LICENSE_PUBLIC_KEY = pub; licenseMemo = { key: null, out: null }; },   // tests only (CASATORCH_TEST=1)
   patchConfig: (p) => { const was = config; config = { ...config, ...p }; licenseMemo = { key: null, out: null }; return () => { config = was; licenseMemo = { key: null, out: null }; }; } };
