@@ -4,6 +4,26 @@ What changed in each CasaTorch version. The illustrated version, with links into
 [What's new](https://casatorch.com/docs/help/whats-new.html); after an update CasaTorch also shows a short
 "What's new" sheet (find it again in Settings › Help). Items marked **Coming** are not available yet.
 
+## Unreleased
+
+### Security
+- **Secure access only opens on approved devices.** Requests to your home's secure address are now checked by
+  Cloudflare before they reach your CasaTorch: only your paired phones (the CasaTorch app) and browsers you approve get
+  through. Everyone else sees a plain "This home only opens on approved devices" page and never reaches your CasaTorch,
+  not even its sign-in. Approve a browser at home (Settings › Devices & sessions › Approve this browser), or from the
+  app by scanning the code the browser shows. New secure addresses have it from the start; an existing one gets it when
+  CasaTorch updates (phones that are already signed in keep working while they pick up their passes). Health shows
+  whether it's on. Everything CasaTorch already checked (sign-in, two-step sign-in, limits, Basic only at home) stays.
+- **Sign-in alerts.** A new phone paired, a sign-in from a device you haven't used before, and every sign-in from
+  away from home: an alert in the inbox and on your phones, saying who, which device, where (city or country) and
+  when. Each person gets their own; the owner gets everyone's.
+- **Devices & sessions** (Settings): every phone and browser signed in, with where and when it was last used, and the
+  browsers approved for away from home. Sign one out, sign out everywhere else, or remove a phone, which also ends its
+  access from away at once. The owner sees everyone's; others see their own.
+- **Lock remote access.** One switch for the owner refuses everything from outside right away, until it's unlocked at
+  home or from the CasaTorch app (with Face ID or your fingerprint).
+- **Allowed countries** (optional): answer from away only in the countries you pick.
+
 ## 0.9.3
 
 ### Security

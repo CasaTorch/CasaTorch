@@ -53,6 +53,12 @@ when an update is available; please install it promptly.
   anywhere else (your router, Home Assistant, another computer) or to route into your network, CasaTorch stops secure
   access at once, writes it to the security log and alerts you. A visitor through the tunnel is always treated as
   someone away from home.
+- **Secure access opens only on approved devices.** Requests to your home's secure address are checked at
+  Cloudflare's edge before they can reach your CasaTorch: only your paired phones and the browsers you approve get
+  through, with short-lived passes your CasaTorch signs itself. Removing a phone or browser, "Lock remote access" and
+  the optional allowed-countries list take effect at the edge and on the box. This is an extra layer: everything your
+  CasaTorch checks itself stays in place. New phones paired, sign-ins from new devices and sign-ins from away raise an
+  alert, and Settings › Devices & sessions lists every signed-in device.
 - **No install scripts.** Packages CasaTorch uses never run their own scripts when installed - on the box, in the
   installers or in CI.
 - **Sign-in is protected** with per-person accounts and roles, optional (or required) two-step sign-in, limits on
