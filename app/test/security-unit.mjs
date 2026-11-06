@@ -171,6 +171,24 @@ export default async function securityUnit(t) {
       assert.ok(!/if \[ -f "\$KEY" \]/.test(upd), 'the signature check is not optional');
       assert.match(upd, /dpkg-deb -f "\$tmp\/\$file" Version/); assert.match(upd, /dpkg --compare-versions "\$pkgver" gt "\$cur"/);
       assert.ok(upd.indexOf('dpkg --compare-versions') < upd.indexOf('apt-get install'), 'versions are checked before anything is installed');
+      // The updater runs as root but the data folder is CasaTorch's user's: nothing written, copied or chown-ed there as root.
+      for (const l of upd.split('\n').filter((x) => /\$DATA|\$snap|\$aside/.test(x) && !/^\s*#/.test(x))) {
+        if (/^\s*(if \[|\[ -f|snap=|aside=|DATA=)/.test(l) && !/>|\bcp\b|chown|chmod|mkdir/.test(l.replace(/2>\/dev\/null/g, ''))) continue;   // reading or naming
+        if (/^\s*rm -f "\$DATA\/\.update-skip"$/.test(l)) continue;   // removing a link removes the link
+        assert.match(l, /\bas_app sh -c /, `the updater writes in the data folder as CasaTorch's user: ${l.trim()}`);
+      }
+      if (typeof process.getuid === 'function' && process.getuid() === 0 && spawnSync('sh', ['-c', 'command -v setpriv']).status === 0) {
+        // a link planted in the data folder by CasaTorch's user: root's progress note must not write (or chown) through it
+        const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ct-upd-')), victim = path.join(d, 'victim'), data = path.join(d, 'data');
+        fs.chmodSync(d, 0o755); fs.mkdirSync(data); fs.writeFileSync(victim, 'root only\n', { mode: 0o644 }); fs.chownSync(data, 65534, 65534);
+        fs.symlinkSync(victim, path.join(data, '.update-status.json.tmp')); fs.symlinkSync(victim, path.join(data, '.update-skip.lnk'));
+        const fn = upd.slice(upd.indexOf('APP_USER='), upd.indexOf('\n}\n', upd.indexOf('status() {')) + 3);
+        const r = spawnSync('sh', ['-c', `set -eu; cur=1.0.0; ver=1.0.1; DATA=${JSON.stringify(data)}\n${fn.replace('APP_USER=${CASATORCH_USER:-casatorch}', 'APP_USER=nobody')}\nstatus downloading`], { encoding: 'utf8' });
+        assert.equal(r.status, 0, r.stderr);
+        assert.equal(fs.readFileSync(victim, 'utf8'), 'root only\n', 'the file behind the link is untouched'); assert.equal(fs.statSync(victim).uid, 0);
+        assert.match(fs.readFileSync(path.join(data, '.update-status.json'), 'utf8'), /"state":"downloading"/, 'the note itself is written (as that user)'); assert.equal(fs.statSync(path.join(data, '.update-status.json')).uid, 65534);
+        fs.rmSync(d, { recursive: true, force: true });
+      }
       for (const f of ['deploy/install.sh', 'deploy/install.ps1']) assert.match(rdx(f), /should be signed, but its signed file list couldn't be checked/, `${f}: a 0.8+ release without its signed list is refused`);
       const unit = rdx('deploy/packaging/linux/casatorch.service');
       for (const k of ['NoNewPrivileges=true', 'CapabilityBoundingSet=', 'ProtectSystem=strict', 'ProtectKernelTunables=true', 'RestrictSUIDSGID=true', 'UMask=0077']) assert.ok(unit.includes(k), `casatorch.service: ${k}`);

@@ -27,12 +27,17 @@ let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{
 }catch(e){}})" "$cur" "$file")
 [ -n "$plan" ] || { echo "CasaTorch $cur is up to date"; exit 0; }
 ver=${plan% *}; ver=${ver#v}; sha=${plan#* }
-DATA=/var/lib/casatorch
+DATA=${CASATORCH_DATA:-/var/lib/casatorch}
 PORT=${CASATORCH_PORT:-8090}
+# The data folder belongs to CasaTorch's own user, so everything this updater (root) writes there is written as that
+# user: a link CasaTorch's user left there (to /etc/passwd, say) must never get root writing, copying or chown-ing
+# through it.
+APP_USER=${CASATORCH_USER:-casatorch}
+as_app() { setpriv --reuid="$APP_USER" --regid="$(id -g "$APP_USER")" --init-groups -- "$@"; }
 # Progress for Settings > Updates (and the "An update didn't work" troubleshooter).
 status() {
-  printf '{"state":"%s","from":"%s","to":"%s","at":"%s","message":"%s"}\n' "$1" "$cur" "$ver" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(printf '%s' "${2:-}" | tr -d '"\\' | head -c 300)" > "$DATA/.update-status.json.tmp" 2>/dev/null \
-    && chmod 600 "$DATA/.update-status.json.tmp" && chown casatorch:casatorch "$DATA/.update-status.json.tmp" 2>/dev/null; mv -f "$DATA/.update-status.json.tmp" "$DATA/.update-status.json" 2>/dev/null || true
+  printf '{"state":"%s","from":"%s","to":"%s","at":"%s","message":"%s"}\n' "$1" "$cur" "$ver" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(printf '%s' "${2:-}" | tr -d '"\\' | head -c 300)" \
+    | as_app sh -c 'umask 077; t=$(mktemp "$1.XXXXXX") && cat > "$t" && mv -f "$t" "$1"' sh "$DATA/.update-status.json" 2>/dev/null || true
 }
 if [ "$(cat "$DATA/.update-skip" 2>/dev/null || true)" = "$ver" ]; then echo "CasaTorch $ver didn't start here last time - waiting for a newer version"; exit 0; fi
 status downloading
@@ -62,9 +67,7 @@ dpkg --compare-versions "$pkgver" gt "$cur" || { status failed "The download ($p
 snap=""
 if [ -f "$DATA/config.json" ]; then
   snap="$DATA/.settings-history/$(date -u +%Y%m%dT%H%M%SZ)-before-update"
-  mkdir -p "$snap" && chmod 700 "$DATA/.settings-history" "$snap"
-  for f in config.json users.json secret.key; do [ -f "$DATA/$f" ] && cp -p "$DATA/$f" "$snap/$f"; done
-  chown -R casatorch:casatorch "$DATA/.settings-history" 2>/dev/null || true
+  as_app sh -c 'umask 077; mkdir -p "$1" && chmod 700 "${1%/*}" "$1" || exit 1; for f in config.json users.json secret.key; do [ ! -f "$2/$f" ] || cp -p "$2/$f" "$1/$f"; done' sh "$snap" "$DATA" || snap=""
 fi
 # The installed version, kept aside (outside the data folder, so backups don't carry it) to go back to.
 RB=/var/cache/casatorch-rollback
@@ -94,12 +97,10 @@ echo "CasaTorch $ver didn't answer within 5 minutes - going back to $cur" >&2
 systemctl stop casatorch || true
 if [ -n "$snap" ]; then
   aside="$DATA/.settings-history/$(date -u +%Y%m%dT%H%M%SZ)-after-failed-update"
-  mkdir -p "$aside" && chmod 700 "$aside"
-  for f in config.json users.json secret.key; do [ -f "$DATA/$f" ] && cp -p "$DATA/$f" "$aside/$f"; [ -f "$snap/$f" ] && cp -p "$snap/$f" "$DATA/$f"; done
-  chown -R casatorch:casatorch "$DATA/.settings-history" "$DATA/config.json" "$DATA/users.json" "$DATA/secret.key" 2>/dev/null || true
+  as_app sh -c 'umask 077; mkdir -p "$1" && chmod 700 "$1"; for f in config.json users.json secret.key; do [ ! -f "$3/$f" ] || cp -p "$3/$f" "$1/$f"; [ ! -f "$2/$f" ] || cp -p "$2/$f" "$3/$f"; done' sh "$aside" "$snap" "$DATA" || true
 fi
 rm -rf /opt/casatorch.failed && mv /opt/casatorch /opt/casatorch.failed && tar -C /opt -xzf "$RB/casatorch-app.tgz" && rm -rf /opt/casatorch.failed
-printf '%s\n' "$ver" > "$DATA/.update-skip"; chown casatorch:casatorch "$DATA/.update-skip" 2>/dev/null || true
+printf '%s\n' "$ver" | as_app sh -c 'cat > "$1"' sh "$DATA/.update-skip" || true
 systemctl start casatorch || true
 status rolled-back "CasaTorch $ver didn't answer within 5 minutes, so $cur was put back with your settings from before the update."
 exit 1

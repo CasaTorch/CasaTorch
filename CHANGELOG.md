@@ -56,6 +56,7 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - Activity log: an event removed from just before a restart of CasaTorch now shows up in Health too.
 - Releases: the container image is published and signed only for a version tag.
 - Trusted Types: pieces of HTML that rebuild a script tag or a handler once one is taken out are cleaned completely.
+- Linux updater: what it writes in the data folder (progress, the settings copy, a rollback) is written as CasaTorch's own user, never as root.
 
 ## 0.9.3
 
