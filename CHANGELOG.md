@@ -32,6 +32,8 @@ What changed in each CasaTorch version. The illustrated version, with links into
   tighter sandbox (only ordinary system calls, no devices, other processes hidden), and the Home Assistant add-on asks
   for nothing beyond the Home Assistant API. If a NAS made the settings folder for another user, the container says
   how to fix it.
+- **Pinned 3D engine files.** The 3D home's engine (three.js) is pinned file by file: CasaTorch sends a browser only
+  the files it was built with, unchanged, and the browser checks them too.
 
 ## 0.9.3
 

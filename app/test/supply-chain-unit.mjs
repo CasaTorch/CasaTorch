@@ -111,4 +111,15 @@ export default async function supplyChainUnit(t) {
     const up = rd('deploy/packaging/linux/casatorch-update.service');
     for (const k of ['NoNewPrivileges=true', 'PrivateTmp=true', 'ProtectHome=true', 'ProtectKernelModules=true']) assert.ok(up.split('\n').includes(k), `casatorch-update.service: ${k}`);
   });
+
+  await t('vendored front-end files: three.js pinned file by file (SHA-384), the import map carries the same hashes, the server serves only those', async () => {
+    const { spawnSync } = await import('node:child_process');
+    const r = spawnSync(process.execPath, [path.join(root, 'tools/make-vendor-integrity.mjs'), '--check'], { encoding: 'utf8' });
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+    const pin = JSON.parse(rd('app/catalog/vendor-integrity.json')), lock = JSON.parse(rd('app/package-lock.json'));
+    assert.equal(pin.version, lock.packages['node_modules/three'].version, 'pinned for the version in package-lock.json');
+    const map = JSON.parse(/<script type="importmap">([\s\S]*?)<\/script>/.exec(rd('app/public/floorplan.html'))[1]);
+    for (const [f, h] of Object.entries(pin.files)) if (f.endsWith('.js')) assert.equal(map.integrity[`/vendor/three/${f}`], h, f);
+    assert.match(rd('app/src/server/50-floorplan.js'), /if \(!vendorPinned\(rel\)\) return res\.status\(404\)/);
+  });
 }

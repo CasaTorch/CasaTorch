@@ -27,6 +27,26 @@ const DEMO_FP = path.join(APP_DIR, '..', 'demo', 'floorplan');
 /* Plans saved with the dark look's old name are read as "night". */
 const fpTheme = (d) => { if (d?.style?.theme === 'neon' || d?.style?.theme === 'blueprint') d.style.theme = 'night'; if (d?.style?.colors?.neon) { d.style.colors.night ||= d.style.colors.neon; delete d.style.colors.neon; } if (d?.view?.theme === 'neon') d.view.theme = 'night'; return d; };
 const fpData = () => fpTheme(isDemo() ? (demoFp ||= JSON.parse(fs.readFileSync(path.join(DEMO_FP, 'floorplan.json'), 'utf8'))) : fpRead());
+/* three.js: only the files the dashboard and the 3D home load, each only while it still has the SHA-384 it was pinned
+   with (catalog/vendor-integrity.json, made by tools/make-vendor-integrity.mjs): a changed or extra file in
+   node_modules/three is never sent to a browser. Each file is checked once, the first time it's asked for. */
+const VENDOR_PIN = (() => { try { return JSON.parse(fs.readFileSync(path.join(APP_DIR, 'catalog', 'vendor-integrity.json'), 'utf8')); } catch { return null; } })();
+const VENDOR_SEEN = new Map();   // file -> it matched its pin
+function vendorPinned(rel) {
+  if (!VENDOR_PIN?.files || !Object.hasOwn(VENDOR_PIN.files, rel)) return false;
+  if (!VENDOR_SEEN.has(rel)) {
+    let ok = false; try { ok = `sha384-${crypto.createHash('sha384').update(fs.readFileSync(path.join(APP_DIR, 'node_modules', 'three', rel))).digest('base64')}` === VENDOR_PIN.files[rel]; } catch { /* missing */ }
+    VENDOR_SEEN.set(rel, ok);
+    if (!ok) console.warn(`three.js file ${rel} doesn't match the version CasaTorch was built with - not sent to browsers.`);
+  }
+  return VENDOR_SEEN.get(rel);
+}
+const vendorMismatch = () => [...VENDOR_SEEN].filter(([, ok]) => !ok).map(([f]) => f);
+app.use('/vendor/three', (req, res, next) => {
+  let rel = ''; try { rel = decodeURIComponent(req.path).replace(/^\/+/, ''); } catch { /* bad escape */ }
+  if (!vendorPinned(rel)) return res.status(404).type('text/plain').send('Not found');
+  next();
+});
 /* three.js: compressed (Brotli/gzip, kept in memory) and cached for a week - 2.7 MB becomes about 0.6 MB. */
 app.use((req, res, next) => (req.path.startsWith('/vendor/three/') ? staticPacked(req, res, next) : next()));
 app.use('/vendor/three', express.static(path.join(APP_DIR, 'node_modules', 'three'), { maxAge: '7d' }));
