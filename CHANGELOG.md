@@ -11,6 +11,9 @@ What changed in each CasaTorch version. The illustrated version, with links into
   tunnel rules, and casatorch.com then makes the tunnel "locally managed": there's nothing on Cloudflare's side that
   could point it anywhere else. casatorch.com also refuses every change to an existing tunnel's rules. Tunnels made
   before keep working; Repair moves one to the new kind (same address).
+- **Only your CasaTorch can get certificates for its secure address at home.** CasaTorch sends its Let's Encrypt
+  account with the request for its `lan-` name, and casatorch.com adds a CAA record that lets Let's Encrypt issue
+  certificates for that name to that account only. Names made before get one at their next renewal.
 
 ## 0.9.2
 

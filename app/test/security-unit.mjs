@@ -250,6 +250,32 @@ export default async function securityUnit(t) {
       } finally { fs.rmSync(f, { force: true }); }
     });
 
+    await t('secure address at home: the name is bound to this box\'s Let\'s Encrypt account (CAA), only a production account is sent, and a new account is bound before a renewal', async () => {
+      const fs = await import('node:fs'), T = globalThis.__casatorchTls, ACC = 'https://acme-v02.api.letsencrypt.org/acme/acct/4242', ACC2 = 'https://acme-v02.api.letsencrypt.org/acme/acct/4343';
+      for (const u of ['https://acme-staging-v02.api.letsencrypt.org/acme/acct/1', 'https://pebble.example/my-account/1', 'https://acme-v02.api.letsencrypt.org/acme/acct/1/x', null, 7]) {
+        assert.equal(T.ltAccountUriOk(u), false, String(u)); assert.deepEqual(T.ltNameRequest({ id: 'i', ip: '192.168.1.20', accountUri: u }), { id: 'i', ip: '192.168.1.20' });   // scrub-ok: example address
+      }
+      assert.deepEqual(T.ltNameRequest({ id: 'i', ip: '192.168.1.20', accountUri: ACC }), { id: 'i', ip: '192.168.1.20', accountUri: ACC });   // scrub-ok: example address
+      assert.equal(T.ltCaaUpdate({ id: 'i', secret: 's', caaUri: ACC }, ACC), null, 'already bound');
+      assert.equal(T.ltCaaUpdate({ id: 'i', secret: 's' }, null), null, 'no account to name (an older box, or another ACME server)');
+      assert.deepEqual(T.ltCaaUpdate({ id: 'i', secret: 's', ip: '192.168.1.20', caaUri: ACC }, ACC2), { id: 'i', secret: 's', ip: '192.168.1.20', accountUri: ACC2 });   // scrub-ok: example address
+      // ltEnable, with casatorch.com and Let's Encrypt played here
+      const had = fs.existsSync(T.LT_STATE) ? fs.readFileSync(T.LT_STATE) : null, realFetch = globalThis.fetch, hooks = { ...T.ltHooks }, sent = [];
+      try {
+        fs.rmSync(T.LT_STATE, { force: true });
+        T.ltHooks.issue = () => {}; T.ltHooks.accountUri = async () => ACC;
+        globalThis.fetch = async (u, init) => { sent.push({ u: String(u), method: init.method, body: JSON.parse(init.body) }); return new Response(JSON.stringify({ hostname: 'lan-abcdefgh.casatorch.com', secret: 'sec-1', caa: true }), { headers: { 'Content-Type': 'application/json' } }); };
+        assert.equal(await T.ltEnable('192.168.1.20'), 'lan-abcdefgh.casatorch.com');   // scrub-ok: example address
+        assert.equal(sent.length, 1); assert.equal(sent[0].method, 'POST'); assert.equal(sent[0].body.accountUri, ACC);
+        assert.equal(T.ltConf().caaUri, ACC); assert.ok(!fs.readFileSync(T.LT_STATE, 'utf8').includes('sec-1'), 'the secret is still sealed');
+        // an older box (or no account reachable): nothing extra is sent, nothing is remembered
+        fs.rmSync(T.LT_STATE, { force: true }); sent.length = 0; T.ltHooks.accountUri = async () => null;
+        await T.ltEnable('192.168.1.20'); assert.equal('accountUri' in sent[0].body, false); assert.equal(T.ltConf().caaUri, undefined);   // scrub-ok: example address
+      } finally {
+        globalThis.fetch = realFetch; Object.assign(T.ltHooks, hooks);
+        if (had) fs.writeFileSync(T.LT_STATE, had); else fs.rmSync(T.LT_STATE, { force: true });
+      }
+    });
     t('secure access: a request that came through the tunnel counts as from outside, whatever Host it carries', () => {
       const R = globalThis.__casatorchRemote, U = globalThis.__casatorchSupport, undo = R.patchConfig({ remote: { on: true, hostname: 'home-a.casatorch.com' } });
       try {

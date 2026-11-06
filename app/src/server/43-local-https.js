@@ -11,6 +11,11 @@
  * The certificate's private key is made here and never leaves this box;
  * casatorch.com only creates the DNS records (the name, and the one-off value
  * Let's Encrypt checks to see the name is ours - functions/api/local.js).
+ * Only this box can get certificates for its name: CasaTorch sends casatorch.com its
+ * Let's Encrypt account address, and casatorch.com puts a CAA record on the name
+ * (0 issue "letsencrypt.org; accounturi=<that account>"), so Let's Encrypt refuses
+ * anyone else - even someone who could put a check value in DNS. If the account
+ * changes (a backup restored on another box), the record follows at the next renewal.
  * Renewal is automatic. If the box's home-network address changes, the name
  * follows it. The plain http address keeps working and sends browsers on to
  * https (03-https-redirect.js).
@@ -24,6 +29,9 @@
 const acmeLib = async () => (await import('acme-client')).default;   // loaded the first time a certificate is made, not at every start
 const LOCAL_URL = process.env.CASATORCH_LOCAL_URL || 'https://casatorch.com/api/local';
 const ACME_URL = process.env.CASATORCH_ACME_URL || 'https://acme-v02.api.letsencrypt.org/directory';   // acme-client's directory.letsencrypt.production
+/* A Let's Encrypt production account address (what casatorch.com accepts for the CAA record), and nothing else. */
+const LE_ACCOUNT = /^https:\/\/acme-v02\.api\.letsencrypt\.org\/acme\/acct\/[1-9][0-9]{0,19}$/;
+const ltAccountUriOk = (u) => typeof u === 'string' && LE_ACCOUNT.test(u);
 const HTTPS_PORT = Number(process.env.HTTPS_PORT || 8443);
 const TLS_DIR = path.join(DATA_DIR, 'tls');
 const lt = { state: 'off', why: null, server: null, expires: null, busy: false, fails: 0, nextTry: 0 };
@@ -55,6 +63,32 @@ const ltWriteKey = (file, pem, field) => writeFileSafe(file, seal(String(pem), f
 function ltFiles() { try { return { key: ltReadKey(path.join(TLS_DIR, 'key.pem'), 'tls.key'), cert: fs.readFileSync(path.join(TLS_DIR, 'cert.pem')) }; } catch { return null; } }
 const certInfo = (pem) => { try { const x = new crypto.X509Certificate(pem); return { until: new Date(x.validTo), names: String(x.subjectAltName || '') }; } catch { return null; } };
 
+/** The ACME client with this box's account key (made the first time; one that doesn't open here means a new account). */
+async function ltAccountClient() {
+  fs.mkdirSync(TLS_DIR, { recursive: true, mode: 0o700 });
+  const accPath = path.join(TLS_DIR, 'account.pem');
+  let accountKey = null; try { accountKey = fs.existsSync(accPath) ? Buffer.from(ltReadKey(accPath, 'tls.account')) : null; } catch { accountKey = null; }
+  const acme = await acmeLib();
+  if (!accountKey) { accountKey = await acme.crypto.createPrivateKey(); ltWriteKey(accPath, accountKey, 'tls.account'); }
+  return { acme, client: new acme.Client({ directoryUrl: ACME_URL, accountKey }) };
+}
+/** This box's Let's Encrypt account address (registering the account if it's new), or null when there isn't a
+    production one to give (another ACME server, or Let's Encrypt can't be reached right now). */
+async function ltAccountUriLive(client) {
+  try {
+    client ||= (await ltAccountClient()).client;
+    await Promise.race([client.createAccount({ termsOfServiceAgreed: true }), new Promise((_, no) => setTimeout(() => no(new Error('timed out')), 20_000).unref?.())]);
+    const u = client.getAccountUrl(); return ltAccountUriOk(u) ? u : null;
+  } catch { return null; }
+}
+/** What to ask casatorch.com for the name: its account goes along only when it's one casatorch.com can put in CAA. */
+const ltNameRequest = ({ id, ip, accountUri }) => ({ id, ip, ...(ltAccountUriOk(accountUri) ? { accountUri } : {}) });
+/** Before a certificate is asked for: the CAA record must name this account. The PUT to send, or null when it already does
+    (or there's no account to name). The address goes along so an older casatorch.com just sees an address update. */
+const ltCaaUpdate = (c, accountUri) => (c?.secret && ltAccountUriOk(accountUri) && c.caaUri !== accountUri ? { id: c.id, secret: c.secret, ...(c.ip ? { ip: c.ip } : {}), accountUri } : null);
+/* Swapped by the unit tests (no Let's Encrypt there). */
+const ltHooks = { accountUri: ltAccountUriLive, issue: (o) => ltIssue(o) };
+
 /* Get (or renew) the certificate. Let's Encrypt asks for a value in DNS; casatorch.com puts it there for us. */
 async function ltIssue({ now = false } = {}) {
   const c = ltConf(); if (!c?.hostname || lt.busy) return;
@@ -62,12 +96,10 @@ async function ltIssue({ now = false } = {}) {
 
   lt.busy = true; lt.state = lt.server ? lt.state : 'certificate'; lt.why = null;
   try {
-    fs.mkdirSync(TLS_DIR, { recursive: true, mode: 0o700 });
-    const accPath = path.join(TLS_DIR, 'account.pem');
-    let accountKey = null; try { accountKey = fs.existsSync(accPath) ? Buffer.from(ltReadKey(accPath, 'tls.account')) : null; } catch { accountKey = null; }   // one that doesn't open here: a new account
-    const acme = await acmeLib();
-    if (!accountKey) { accountKey = await acme.crypto.createPrivateKey(); ltWriteKey(accPath, accountKey, 'tls.account'); }
-    const client = new acme.Client({ directoryUrl: ACME_URL, accountKey });
+    const { acme, client } = await ltAccountClient();
+    // the CAA record first: a name bound to an older account (or to none yet) is bound to this one before the order
+    const caa = ltCaaUpdate(c, await ltHooks.accountUri(client));
+    if (caa) { try { const j = await ltCall('PUT', caa); if (j.caa) ltSaveConf({ ...ltConf(), caaUri: caa.accountUri }); } catch (e) { console.warn(`Secure address at home: couldn't bind the name to this box's certificate account (${e.message})`); } }
     const [key, csr] = await acme.crypto.createCsr({ commonName: c.hostname, altNames: [c.hostname] });
     const cert = await client.auto({
       csr, termsOfServiceAgreed: true, challengePriority: ['dns-01'], skipChallengeVerification: true,
@@ -114,9 +146,13 @@ async function ltEnable(ipIn) {
   if (lt.enabling) throw new Error('It\'s already setting itself up - give it a minute.');
   const id = ltConf()?.id || crypto.randomBytes(9).toString('base64url');
   lt.enabling = true;
-  let j; try { j = await ltCall('POST', { id, ip }); } finally { lt.enabling = false; }
-  ltSaveConf({ on: true, id, hostname: j.hostname, secret: j.secret, ip, ipAuto: !ipIn });
-  lt.state = 'certificate'; ltIssue({ now: true });   // about a minute
+  let j, accountUri = null;
+  try {
+    accountUri = await ltHooks.accountUri();   // the Let's Encrypt account first, so the name is bound to it from the start (CAA)
+    j = await ltCall('POST', ltNameRequest({ id, ip, accountUri }));
+  } finally { lt.enabling = false; }
+  ltSaveConf({ on: true, id, hostname: j.hostname, secret: j.secret, ip, ipAuto: !ipIn, ...(j.caa === true && accountUri ? { caaUri: accountUri } : {}) });
+  lt.state = 'certificate'; ltHooks.issue({ now: true });   // about a minute
   return j.hostname;
 }
 /* Twice a day: renew 30 days before it runs out, and keep the name pointing at this box. */
@@ -172,4 +208,4 @@ if (process.env.CASATORCH_TEST !== '1') {
   setInterval(ltAuto, 3600_000).unref?.();
   setInterval(ltCheck, 12 * 3600_000).unref?.();
 }
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchTls = { ltReadKey, ltWriteKey, ltFiles, TLS_DIR };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchTls = { ltReadKey, ltWriteKey, ltFiles, TLS_DIR, ltAccountUriOk, ltNameRequest, ltCaaUpdate, ltEnable, ltConf, ltHooks, LT_STATE };
