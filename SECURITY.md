@@ -34,7 +34,7 @@ when an update is available; please install it promptly.
   itself. There is no CasaTorch account and no cloud copy of your home.
 - **Secrets are encrypted at rest** with AES-256-GCM, using a key unique to each CasaTorch that never leaves it
   (except inside a backup you make) - saved passwords and keys, the secure address's private keys, voice pairings,
-  the Home AI Agent's chats, the event timeline and the pictures it keeps, and copies of your Frigate settings.
+  the Home AI Agent's chats, the event timeline and the pictures it keeps, each person's inbox, and copies of your Frigate settings.
 - **Passwords are never stored**, only salted scrypt hashes. Recovery codes, invite links and sign-in tokens are
   stored only as hashes.
 - **Encrypted in transit.** At home, browsers reach CasaTorch over https (TLS) with a real certificate made on the

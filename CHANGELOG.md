@@ -28,6 +28,12 @@ What changed in each CasaTorch version. The illustrated version, with links into
   Frigate's clip or see the picture taken right then. Basic shows the last 24 hours, Pro 30 days. Kept on your
   CasaTorch only, encrypted.
 
+### Alerts
+- **Your own inbox.** The bell at the top of every page counts what you haven't read and lists what happened, newest
+  first: exactly the alerts your settings show you in the app (water, smoke and other safety alerts always). Tap one to
+  go where it happened, mark one or all read, clear one or all. Everyone in the house has their own, kept on your
+  CasaTorch and encrypted. What's sent to phones is still up to Settings › Alerts.
+
 ### Faster
 - **The dashboard starts with less to load.** Network (with App tests) and Energy are now files of their own, fetched
   in the background and run only the first time you open them, so every other page starts with about a sixth less
