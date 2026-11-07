@@ -150,8 +150,8 @@ const endSessionsOf = (userId, exceptKey) => {
 };
 
 /* ---- brute-force limits ---- */
-const tries = new Map();
-function limited(key, max, windowMs = 15 * 60_000) { const now = Date.now(), list = (tries.get(key) || []).filter((t) => now - t < windowMs); if (list.length) tries.set(key, list); else tries.delete(key); return list.length >= max; }   // only keys with recent failures are kept
+const tries = new Map(), triesWin = new Map();   // triesWin: keys counted over more than 15 minutes (an hour, a day) and how long
+function limited(key, max, windowMs = 15 * 60_000) { if (windowMs > 15 * 60_000) triesWin.set(key, windowMs); const now = Date.now(), list = (tries.get(key) || []).filter((t) => now - t < windowMs); if (list.length) tries.set(key, list); else tries.delete(key); return list.length >= max; }   // only keys with recent failures are kept
 const failed = (...keys) => { for (const k of keys) tries.set(k, [...(tries.get(k) || []), Date.now()]); };
 /** Count a try *before* the slow (async) password check, so parallel requests can't all slip under a limit;
     call the returned function to take it back when the try turns out right. */
@@ -161,7 +161,13 @@ const reserveTry = (...keys) => {
 };
 /** A plain rate limit (every call counts, not only failures): true when this call is over `max` in the window. */
 const overLimit = (key, max, windowMs) => { if (limited(key, max, windowMs)) return true; failed(key); return false; };
-setInterval(() => { const now = Date.now(); for (const [k, v] of tries) if (!v.some((t) => now - t < 15 * 60_000)) tries.delete(k); }, 10 * 60_000).unref?.();
+/* Tidy-up: a key goes once nothing in it counts any more - over its own window (an hourly or daily limit keeps its tries for
+   that long, or spacing tries out would get round it). */
+function triesSweep(now = Date.now()) {
+  for (const [k, v] of tries) { const w = triesWin.get(k) || 15 * 60_000; if (!v.some((t) => now - t < w)) { tries.delete(k); triesWin.delete(k); } }
+  for (const k of triesWin.keys()) if (!tries.has(k)) triesWin.delete(k);
+}
+setInterval(() => triesSweep(), 10 * 60_000).unref?.();
 
 /* ---- TOTP (RFC 6238: SHA-1, 6 digits, 30 s) ---- */
 const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';

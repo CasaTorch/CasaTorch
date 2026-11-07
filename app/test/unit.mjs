@@ -336,6 +336,16 @@ t('safety rule: scenes, groups and scripts are judged by what they act on, not t
   assert.equal(S.haActionRisk({ sequence: [{ action: 'scene.apply', data: { entities: { 'lock.front_door': 'unlocked' } } }] }, (e) => S.haEntityRisk(e, null)), 'sure', 'a scene made on the fly');
 });
 
+t('rate limits: an hourly or daily limit is not cleared by the 15-minute tidy-up', () => {
+  const G = globalThis.__casatorchGuard, k = 'unit-daily:198.51.100.9';   // scrub-ok: documentation address
+  for (let i = 0; i < 3; i++) { assert.equal(G.limited(k, 3, 86400_000), false); G.failed(k); }
+  assert.equal(G.limited(k, 3, 86400_000), true);
+  G.triesSweep(Date.now() + 30 * 60_000);
+  assert.equal(G.limited(k, 3, 86400_000), true, 'still limited half an hour later');
+  G.triesSweep(Date.now() + 86400_000 + 60_000); assert.ok(!G.tries.has(k), 'gone after its day');
+  const q = 'unit-quick:198.51.100.9'; G.failed(q); G.triesSweep(Date.now() + 16 * 60_000); assert.ok(!G.tries.has(q));   // scrub-ok
+});
+
 t('energy card: solar, battery and grid come only from sensors that exist', () => {
   const none = H.energyFlows([{ id: 'ha:sensor.fridge_power', name: 'Fridge', kind: 'sensor', powerW: 90 }], 900);
   assert.equal(none.solarW, null); assert.equal(none.battery, null); assert.equal(none.gridW, null);
