@@ -281,7 +281,7 @@ export default async function camAutoTests(t) {
     } finally { cfg.homeAssistant = was.ha; cfg.cameras = was.cams; clear(); srv.close(); }
   });
 
-  t('camauto: a Ring camera that go2rtc has plays only through it - never Home Assistant\'s slow video; a chime has no plan', async () => {
+  await t('camauto: a Ring camera that go2rtc has plays only through it - never Home Assistant\'s slow video; a chime has no plan', async () => {
     const L = globalThis.__casatorchCamLive;
     const srv = http.createServer((req, res) => {
       const send = (code, j) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(j)); };
