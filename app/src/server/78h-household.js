@@ -304,7 +304,7 @@ async function hhRefreshExt(force = false) {
     const url = hh.cfg.ical ? unseal(hh.cfg.ical) : null;
     try {
       if (!url) throw new Error('Add the calendar link first.');
-      const occ = expandEvents((await hhIcalEvents(url)).events, Date.now() - 86400_000, Date.now() + 120 * 86400_000, tz);
+      const occ = expandEvents((await hhIcalEvents(url, hh.cfg.icalPublic !== false)).events, Date.now() - 86400_000, Date.now() + 120 * 86400_000, tz);
       for (const b of icalBins) { const m = String(b.match || b.name).toLowerCase(); ext[b.id] = { dates: [...new Set(occ.filter((e) => String(e.title || '').toLowerCase().includes(m)).map((e) => hhIcalDay(e, tz)))].sort() }; }
     } catch (e) { for (const b of icalBins) ext[b.id] = { dates: hh.ext[b.id]?.dates || [], error: String(e.message || e).slice(0, 120) }; }
   }
@@ -520,7 +520,7 @@ app.put('/api/household/setup', requireRole('member'), express.json({ limit: '64
     if ('appsPush' in b) next.appsPush = !!b.appsPush && !!proStatus().pro;
     if ('ical' in b) {
       if (!b.ical) next.ical = null;
-      else { const u = String(b.ical).trim().replace(/^webcal:/i, 'https:'); if (!/^https?:\/\/[^\s]{4,1500}$/i.test(u)) throw new Error('That doesn\'t look like a calendar link.'); next.ical = seal(u); }
+      else { const u = String(b.ical).trim().replace(/^webcal:/i, 'https:'); if (!/^https?:\/\/[^\s]{4,1500}$/i.test(u)) throw new Error('That doesn\'t look like a calendar link.'); next.ical = seal(u); next.icalPublic = !hhAdmin(req); }   // a member's link stays on the internet every time it is read, redirects included
     }
     for (const id of Object.keys(hh.st.bins)) if (!next.bins.some((x) => x.id === id)) delete hh.st.bins[id];
     hh.st.active = hh.st.active.filter((a) => !a.id.startsWith('hh-bin-') || next.bins.some((x) => a.id === `hh-bin-${x.id}`));
@@ -533,10 +533,11 @@ app.post('/api/household/ical', requireRole('member'), express.json({ limit: '4k
   if (hh.demo) return hhNotDemo(res);
   if (overLimit(`hh-ics:${req.ip}`, 20, 60_000)) return res.status(429).json({ error: 'Slow down a little.' });
   const raw = req.body?.url ? String(req.body.url).trim() : (hh.cfg.ical ? unseal(hh.cfg.ical) : '');
+  const savedPublic = !req.body?.url && hh.cfg.icalPublic !== false;   // a link saved before this was remembered counts as a member's
   const u = String(raw || '').replace(/^webcal:/i, 'https:');
   if (!/^https?:\/\/[^\s]{4,1500}$/i.test(u)) return res.status(400).json({ error: 'That doesn\'t look like a calendar link.' });
   try {
-    const pub = !hhAdmin(req) && !!req.body?.url, why = pub && await publicUrlProblem(u);
+    const pub = (!hhAdmin(req) && !!req.body?.url) || savedPublic, why = pub && await publicUrlProblem(u);
     if (why) return res.status(400).json({ error: why });
     const tz = houseTz(), occ = expandEvents((await hhIcalEvents(u, pub)).events, Date.now() - 86400_000, Date.now() + 120 * 86400_000, tz);
     if (!occ.length) return res.status(400).json({ error: 'That calendar has no pickups in the next four months.' });
@@ -587,4 +588,4 @@ function hhDemoStates(now) {
 }
 if (isDemo()) hhDemoSetup();
 
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchHousehold = { hhLocal, hhAt, hhRawDates, hhApplyChanges, hhBinDates, hhBinState, hhWasteDates, hhMinutes, hhAppStep, hhMailStep, hhPlantOf, hhSuggest, hhIcalKinds, hhCleanBin, hhCleanChange, hhDateOf, hhActive, hhAnswer, hhView, hhFromSetup, hh, ymdAdd, ymdDiff };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchHousehold = { hhRefreshExt, hhLocal, hhAt, hhRawDates, hhApplyChanges, hhBinDates, hhBinState, hhWasteDates, hhMinutes, hhAppStep, hhMailStep, hhPlantOf, hhSuggest, hhIcalKinds, hhCleanBin, hhCleanChange, hhDateOf, hhActive, hhAnswer, hhView, hhFromSetup, hh, ymdAdd, ymdDiff };

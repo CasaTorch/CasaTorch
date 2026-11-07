@@ -361,6 +361,20 @@ t('reminders: a photo name from a restored file can only remove a reminder photo
   fsMod.rmSync(outside, { force: true });
 });
 
+await t('household: a calendar link a member saved stays on the internet each time it is read', async () => {
+  const HH = globalThis.__casatorchHousehold, was = HH.hh.cfg, wasExt = HH.hh.ext;
+  try {
+    for (const [pub, want] of [[true, /internet/i], [undefined, /internet/i]]) {
+      HH.hh.cfg = { ...was, ical: H.seal('http://127.0.0.1:9/bins.ics'), ...(pub === undefined ? {} : { icalPublic: pub }), bins: [{ id: 'unitbin', source: 'ical', name: 'Trash', match: 'trash' }] };
+      await HH.hhRefreshExt(true);
+      assert.match(String(HH.hh.ext.unitbin?.error), want, `icalPublic ${pub}`);
+    }
+    HH.hh.cfg = { ...was, ical: H.seal('http://127.0.0.1:9/bins.ics'), icalPublic: false, bins: [{ id: 'unitbin', source: 'ical', name: 'Trash', match: 'trash' }] };
+    await HH.hhRefreshExt(true);
+    assert.doesNotMatch(String(HH.hh.ext.unitbin?.error), /internet/i, 'an admin\'s link may point home');
+  } finally { HH.hh.cfg = was; HH.hh.ext = wasExt; }
+});
+
 t('energy card: solar, battery and grid come only from sensors that exist', () => {
   const none = H.energyFlows([{ id: 'ha:sensor.fridge_power', name: 'Fridge', kind: 'sensor', powerW: 90 }], 900);
   assert.equal(none.solarW, null); assert.equal(none.battery, null); assert.equal(none.gridW, null);
