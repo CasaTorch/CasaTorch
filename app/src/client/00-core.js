@@ -439,9 +439,17 @@ const navFade = () => {
   }
 };
 document.addEventListener('DOMContentLoaded', () => { $('.nav')?.addEventListener('scroll', navMore, { passive: true }); new ResizeObserver(navFade).observe($('.nav')); document.fonts?.ready.then(() => { navFitKey = ''; navFade(); }); });
+/* Basic: a small chip at the top right, next to the clock - a quiet way to find out what Pro adds, never a bar
+   across the page. Hidden on a phone, where Settings › CasaTorch Pro says it instead. */
+function planChip(show) {
+  let c = $('#planchip');
+  if (!show) { c?.remove(); return; }
+  if (!c) { c = el('a', { id: 'planchip', class: 'plan-chip', href: '#settings/pro' }, icon('spark', 13), el('span', {}, 'Basic')); $('#clock')?.before(c); }
+  c.title = T('See what Pro adds'); c.setAttribute('aria-label', `CasaTorch Basic. ${T('See what Pro adds')}`);
+}
 function drawBanner() {
   const b = $('#banner'), s = S.status; if (!s) return;
-  const p = s.pro || {}; b.className = ''; b.replaceChildren();
+  const p = s.pro || {}; b.className = ''; b.replaceChildren(); planChip(false);
   if (s.demo) b.append(T('Demo mode - sample data, no real house connected.'), el('a', { href: '/setup.html' }, T('Set up my house')));
   else if (S.updates?.available && !updSnoozed(S.updates.latest)) b.append(icon('spark', 16), S.updates.auto ? T('CasaTorch {v} is available - it installs itself overnight.', { v: S.updates.latest }) : T('CasaTorch {v} is available.', { v: S.updates.latest }), el('a', { href: '#settings/updates' }, S.updates.auto ? T('Details') : T('How to update')), updSnoozeBtn(S.updates.latest));
   else if (p.plan === 'trial') b.append(icon('spark', 16), p.trialDaysLeft === 1 ? T('Pro trial: 1 day left - 3D Home and your Home AI Agent are unlocked.') : T('Pro trial: {n} days left - 3D Home and your Home AI Agent are unlocked.', { n: p.trialDaysLeft }), el('a', { href: '#settings/pro' }, T('Enter a license key')));
@@ -451,7 +459,8 @@ function drawBanner() {
   else if (!p.pro) {
     /* Right after Pro or the trial ends, say once (per browser) what that means: nothing was deleted. */
     let once = false; try { if (p.note && localStorage.getItem('casatorch-pro-ended') !== p.note) { localStorage.setItem('casatorch-pro-ended', p.note); once = true; } } catch { /* fine */ }
-    b.className = 'free'; b.append(once ? `${T('CasaTorch Basic.')} ${T(p.note)}` : T('CasaTorch Basic.'), el('a', { href: '#settings/pro' }, T('See what Pro adds')));
+    if (once) { b.className = 'free'; b.append(`${T('CasaTorch Basic.')} ${T(p.note)}`, el('a', { href: '#settings/pro' }, T('See what Pro adds'))); }
+    planChip(true);
   }
   b.hidden = !b.textContent;
 }

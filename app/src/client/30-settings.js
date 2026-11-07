@@ -215,7 +215,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     // System
     ['health', T('Health|settings'), 'checkc', T('Checks, fixes and saved copies'), async () => [...await healthCards(s, me), await keyCard(me), await supportHelpCard(s)], admin],   // keyCard: 31k-keys.js; supportHelpCard: 39s-support.js
     ['updates', T('Updates & backup'), 'download', T('Versions, backup, removing CasaTorch'), async () => [await updatesCard(), await updateStatusCard(), await backupCard(s), await removeCard(s)]],   // updateStatusCard: 39s-support.js; removeCard: 30r-remove.js
-    ['pro', T('CasaTorch Pro'), 'spark', T('Your plan and license key'), async () => [pro]],
+    ['pro', T('CasaTorch Pro'), 'spark', p.pro ? T('Your plan and license key') : `Basic · ${T('See what Pro adds')}`, async () => [pro]],
     ['help', T('Help'), 'help', T('Guides, the tour, getting help'), async () => [helpCard(), await supportStartAgainCard()]],
     ['advanced', T('Advanced'), 'log', T('Log, diagnostics, maintenance'), async () => [await systemCard(), await logCard(), maintCard(s, me)], admin],
   ].filter((x) => x[5] !== false);
