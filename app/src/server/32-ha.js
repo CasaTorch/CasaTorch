@@ -280,7 +280,7 @@ async function haScriptConfigs(ents, { fresh = false } = {}) {
   try {
     return await cached(key, 60_000, async () => {
       const h = config.homeAssistant;
-      const res = await famHaWs(list.map((entity_id) => ({ type: 'script/config', entity_id })), { url: h?.url, token: h?.token, timeout: 4000 });
+      const res = await famHaWs(list.map((entity_id) => ({ type: 'script/config', entity_id })), { url: h?.url, token: h?.token, timeout: 4000 }).catch(() => []);   // not answering: every script is "couldn't check" for a minute (not asked again on every look)
       return Object.fromEntries(list.map((e, i) => [e, res[i]?.ok && res[i].result?.config && typeof res[i].result.config === 'object' ? res[i].result.config : null]));
     });
   } catch { return {}; }
@@ -298,7 +298,7 @@ async function haSafetyNow(ent) {
   const devs = haPairPlugs(states.map(haDevice).filter(Boolean));
   return haSafetyLevels(states, devs, scripts, await haDevIds()).get(String(ent).toLowerCase()) || null;
 }
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchHaSafety = { haServiceFor, haActionRisk, haEntityRisk, haSafetyLevels, haSafetyMark };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchHaSafety = { haScriptConfigs, haServiceFor, haActionRisk, haEntityRisk, haSafetyLevels, haSafetyMark };
 /** A camera entity that is really a chime becomes one (the snapshot and stream addresses go). Pure. */
 function haChimeOf(d) { const { snapshot: _s, stream: _l, every: _e, liveVia: _v, ...rest } = d; return { ...rest, kind: 'chime', chime: true }; }
 PROVIDERS.ha = {

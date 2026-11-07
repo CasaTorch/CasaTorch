@@ -392,6 +392,12 @@ await t('safety rule: a name the household gives a device never hides what it re
   } finally { delete P.unitsafe; M.restore(kept); }
 });
 
+await t('safety rule: scripts Home Assistant does not describe count as unchecked, and that is remembered for a minute', async () => {
+  const S = globalThis.__casatorchHaSafety;
+  assert.deepEqual(await S.haScriptConfigs(['script.unit_a']), { 'script.unit_a': null });
+  assert.ok([...H.CACHE.keys()].some((k) => k.startsWith('ha:scriptcfg:')), 'kept, so the device list does not wait for it every time');
+});
+
 t('energy card: solar, battery and grid come only from sensors that exist', () => {
   const none = H.energyFlows([{ id: 'ha:sensor.fridge_power', name: 'Fridge', kind: 'sensor', powerW: 90 }], 900);
   assert.equal(none.solarW, null); assert.equal(none.battery, null); assert.equal(none.gridW, null);
