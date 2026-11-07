@@ -375,10 +375,14 @@ function pvDraw(g, o) {
   const shut = (c) => V && o.collapsed?.has(bandId(colBand(c)));
   const perCol = new Map(); for (const n of g.nodes) perCol.set(n.col, (perCol.get(n.col) || 0) + 1);
   const ringAt = Math.max(10, 0.15 * Math.max(0, ...g.nodes.filter((n) => n.kind === 'dest').map((n) => n.avg || 0)));   // a hop adding a real share of the trip
-  let W, H, X, Y, P, COLW = 0, LANEW = 0;
+  let W, H, X, Y, P, COLW = 0, LANEW = 0, stag = false;
   if (!V) {
-    const PADX = ov ? 46 : 62, TOP = ov ? 46 : 70, LANEH = ov ? 62 : 100;
-    COLW = Math.min(ov ? 170 : 150, Math.max(ov ? 86 : 108, (o.width - 2 * PADX) / Math.max(1, cols - 1)));
+    // A long path (10+ hops) in a box that's too narrow for one label per column: the labels take turns above and
+    // below their hop, so columns can sit closer and the whole path still fits, with every address readable.
+    const PADX = ov ? 46 : 62, LANEH = ov ? 62 : 100, raw = (o.width - 2 * PADX) / Math.max(1, cols - 1);
+    stag = !ov && raw < 112;
+    const TOP = ov ? 46 : stag ? 96 : 70;
+    COLW = ov ? Math.min(170, Math.max(86, raw)) : stag ? Math.max(68, raw) : Math.min(150, raw);
     W = Math.round(2 * PADX + (cols - 1) * COLW); X = (c) => PADX + c * COLW; Y = (y) => TOP + (y - y0) * LANEH;
     H = Math.round(Y(y1) + (ov ? 50 : 60) + ([...(o.flags?.keys() || [])].some((k) => g.nodes.find((n) => n.k === k)?.y === y1) ? 26 : 0)); P = (c, y) => [X(c), Y(y)];
     for (const b of g.bands) { b._x0 = b.c0 === 0 ? 4 : X(b.c0) - COLW / 2 + 3; b._x1 = b.c1 === cols - 1 ? W - 4 : X(b.c1) + COLW / 2 - 3; }
@@ -440,9 +444,9 @@ function pvDraw(g, o) {
     const cmp = pvCmp(e), quiet = a.kind === 'silent' || b.kind === 'silent';
     const w = (ov ? 1.6 : 1.8) + (ov ? 3 : 4.5) * Math.min(1, e.share || 0) + (e.bad ? 1.5 : 0);
     pvS('path', { d: curve(pts), class: `pve${e.bad ? ' bad' : e.jump ? ' jump' : ''}${quiet ? ' quiet' : ''}${cmp ? ` ${cmp}` : ''}${e.back ? ' back' : ''}`, 'stroke-width': w.toFixed(1) }, ge);
-    if (!ov && !V && e.dl != null && e.dl >= 1 && (e.share >= 0.2 || e.bad || e.jump)) {   // on a phone the added delay is on the node's own line
+    if (!ov && !V && e.dl != null && e.dl >= 1 && (stag ? e.bad || e.jump : e.share >= 0.2 || e.bad || e.jump)) {   // on a phone the added delay is on the node's own line; a long path keeps only the ones that matter, on the line itself
       const [ax, ay] = pts[pts.length - 2], [bx, by] = pts[pts.length - 1], txt = `+${atMs(e.dl)}`, tw = txt.length * 6.3 + 10;
-      const mx = V ? (ax + bx) / 2 + (Math.abs(bx - ax) > 1 ? 0 : 8 + tw / 2) : (ax + bx) / 2, my = V ? (ay + by) / 2 : (ay + by) / 2 - (Math.abs(by - ay) > 1 ? 0 : 11);
+      const mx = V ? (ax + bx) / 2 + (Math.abs(bx - ax) > 1 ? 0 : 8 + tw / 2) : (ax + bx) / 2, my = V ? (ay + by) / 2 : (ay + by) / 2 - (Math.abs(by - ay) > 1 || stag ? 0 : 11);
       const lg = pvS('g', { class: `pvel${e.bad ? ' bad' : e.jump ? ' jump' : ''}`, transform: `translate(${mx.toFixed(1)},${my.toFixed(1)})` }, gl);
       pvS('rect', { x: -tw / 2, y: -9, width: tw, height: 18, rx: 9 }, lg); pvS('text', { x: 0, y: 4, 'text-anchor': 'middle' }, lg, txt);
     }
@@ -468,13 +472,15 @@ function pvDraw(g, o) {
     else pvS('text', { x: 0, y: 4, 'text-anchor': 'middle', class: 'pvnum' }, ng, n.kind === 'silent' ? '·' : String(n.ns?.[0] ?? ''));
     // the label: under the node (sideways layout, or a crowded phone row), else to its right
     const crowded = V && (perCol.get(n.col) || 1) > 1 && LANEW < 132;
+    const above = stag && n.col % 2 === 1;
     if (!V || crowded) {
-      const chars = Math.max(6, Math.floor(((V ? LANEW : COLW) - 10) / (n.kind === 'hop' ? 6.4 : 6.6)));
-      // the last column on a wide screen: right-aligned, so a long app name stays inside the picture
-      const edge = !V && n.col === cols - 1 && label.length * 6.6 / 2 > W - x - 6, ax = edge ? r + 4 : 0, anchor = edge ? 'end' : 'middle';
+      const chars = Math.max(6, Math.floor(((V ? LANEW : stag ? 2 * COLW - 6 : COLW) - 10) / (n.kind === 'hop' ? 6.4 : 6.6)));
+      // the last column on a wide screen: right-aligned, so a long app name stays inside the picture (the first: left-aligned)
+      const edge = !V && n.col === cols - 1 && Math.min(label.length, chars) * 6.6 / 2 > W - x - 6, first = !V && n.col === 0 && stag && Math.min(label.length, chars) * 6.6 / 2 > x - 6;
+      const ax = edge ? r + 4 : first ? -r - 4 : 0, anchor = edge ? 'end' : first ? 'start' : 'middle';
       if (!(crowded && chars < 11 && n.kind !== 'dest')) {   // a crowded phone row: addresses would be cut to nothing - tap for them
-        pvS('text', { x: ax, y: r + 15, 'text-anchor': anchor, class: `pvl1${n.kind === 'hop' ? ' mono' : ''}` }, ng, pvCut(label, chars));
-        if (l2) pvS('text', { x: ax, y: r + 28, 'text-anchor': anchor, class: `pvl2${lc === 'bad' ? ' bad' : ''}` }, ng, pvCut(l2, chars));
+        pvS('text', { x: ax, y: above ? (l2 ? -r - 21 : -r - 8) : r + 15, 'text-anchor': anchor, class: `pvl1${n.kind === 'hop' ? ' mono' : ''}` }, ng, pvCut(label, chars));
+        if (l2) pvS('text', { x: ax, y: above ? -r - 8 : r + 28, 'text-anchor': anchor, class: `pvl2${lc === 'bad' ? ' bad' : ''}` }, ng, pvCut(l2, chars));
       }
     } else {
       const room = Math.floor((W - x - r - 22) / 6.6);
@@ -484,7 +490,7 @@ function pvDraw(g, o) {
     const flag = o.flags?.get(n.k);
     if (flag) {
       const [txt, kind] = flag, tw = txt.length * 6.1 + 16;
-      const fx = V ? Math.min(W - 10 - tw / 2, Math.max(tw / 2 + 8, x + (crowded ? 0 : r + 10 + tw / 2))) : Math.min(W - 6 - tw / 2, Math.max(tw / 2 + 6, x)), fy = V ? y - r - 15 : y + r + (l2 ? 46 : 33);
+      const fx = V ? Math.min(W - 10 - tw / 2, Math.max(tw / 2 + 8, x + (crowded ? 0 : r + 10 + tw / 2))) : Math.min(W - 6 - tw / 2, Math.max(tw / 2 + 6, x)), fy = V ? y - r - 15 : y + r + (above ? 16 : l2 ? 46 : 33);
       const fg = pvS('g', { class: `pvflag ${kind || ''}`, transform: `translate(${fx.toFixed(1)},${fy.toFixed(1)})` }, gf);
       pvS('rect', { x: -tw / 2, y: -10, width: tw, height: 20, rx: 10 }, fg); pvS('text', { x: 0, y: 4, 'text-anchor': 'middle' }, fg, txt);
     }
@@ -508,22 +514,25 @@ function pvDraw(g, o) {
 
 /* Pinch, Ctrl + wheel (a trackpad pinch) and buttons zoom a long path on a big screen; it scrolls sideways when wider. */
 function pvZoomable(box) {
-  let k = null, W = 0, H = 0, svg = null, pts = new Map(), pinch = null;
+  let k = null, W = 0, H = 0, svg = null, pts = new Map(), pinch = null, manual = false;
+  /* The whole path in view: as wide as the box, and no taller than about two thirds of the screen (never smaller than half size - past that it scrolls). */
+  const fitK = () => Math.max(0.5, Math.min(1, (box.clientWidth || W) / W, H > 0 ? Math.max(240, innerHeight * 0.62) / H : 1));
   const apply = (nk, cx = null) => {
     if (!svg) return; const old = k || 1; k = Math.min(2.2, Math.max(0.5, nk));
     const fx = cx ?? box.clientWidth / 2, sx = (box.scrollLeft + fx) / old;
     svg.setAttribute('width', Math.round(W * k)); svg.setAttribute('height', Math.round(H * k));
     box.scrollLeft = sx * k - fx;
   };
-  const set = (r) => { svg = r.svg; W = r.W; H = r.H; const fit = box.clientWidth / W; if (k == null) k = W <= box.clientWidth ? 1 : fit >= 0.78 ? fit : 1; apply(k); };
-  box.addEventListener('wheel', (e) => { if (!e.ctrlKey || !svg) return; e.preventDefault(); const b = box.getBoundingClientRect(); apply(k * Math.exp(-e.deltaY * 0.01), e.clientX - b.left); }, { passive: false });
+  /* Each new drawing (a new time, a resize) fits again - unless you zoomed yourself; Fit goes back to fitting. */
+  const set = (r) => { svg = r.svg; W = r.W; H = r.H; if (k == null || !manual) k = fitK(); apply(k); };
+  box.addEventListener('wheel', (e) => { if (!e.ctrlKey || !svg) return; e.preventDefault(); manual = true; const b = box.getBoundingClientRect(); apply(k * Math.exp(-e.deltaY * 0.01), e.clientX - b.left); }, { passive: false });
   box.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; pts.set(e.pointerId, [e.clientX, e.clientY]); if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), k }; } });
-  box.addEventListener('pointermove', (e) => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]); if (pinch && pts.size === 2) { const [a, b] = [...pts.values()], bb = box.getBoundingClientRect(); apply(pinch.k * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d, (a[0] + b[0]) / 2 - bb.left); } });
+  box.addEventListener('pointermove', (e) => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]); if (pinch && pts.size === 2) { const [a, b] = [...pts.values()], bb = box.getBoundingClientRect(); manual = true; apply(pinch.k * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d, (a[0] + b[0]) / 2 - bb.left); } });
   const up = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; };
   box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up);
   const btn = (ic, lab, f) => el('button', { type: 'button', class: 'btn small ghost pvzb', 'aria-label': lab, title: lab, onclick: f }, ic);
   const tools = el('div', { class: 'pvzoom', role: 'group', 'aria-label': T('Zoom|graph') },
-    btn('−', T('Zoom out'), () => apply(k / 1.25)), btn('+', T('Zoom in'), () => apply(k * 1.25)), btn(T('Fit'), T('Fit the whole path'), () => apply(Math.min(1, box.clientWidth / W))));
+    btn('−', T('Zoom out'), () => { manual = true; apply(k / 1.25); }), btn('+', T('Zoom in'), () => { manual = true; apply(k * 1.25); }), btn(T('Fit'), T('Fit the whole path'), () => { manual = false; apply(fitK()); }));
   return { set, tools };
 }
 
@@ -636,7 +645,8 @@ function pvSection(t, a, nm, id) {
   const draw = () => {
     const g = st.data?.graph;
     if (!g) { gbox.replaceChildren(el('p', { class: 'small muted pvempty' }, st.from ? T('No traces in that time - pick another on the strip above.') : T('Tracing the path - it shows up here within a few minutes.'))); info.replaceChildren(); return; }
-    const width = gbox.clientWidth || 900; st.vertical = width < 600;
+    // top to bottom when sideways would have to shrink the path below about 80% to fit (a phone, or a long path on a tablet)
+    const width = gbox.clientWidth || 900; st.vertical = width < 600 || 124 + (g.layout.cols - 1) * 68 > width / 0.8;
     if (!st.collapsed) st.collapsed = new Set();
     const r = pvDraw(g, { width, vertical: st.vertical, nm, short: t.short, collapsed: st.collapsed, flags: flagsOf(g), sel: st.sel, onPick: (n, _ng, how) => pick(n, how), onHover: hover, uid: id,
       onBand: (bid) => { if (st.collapsed.has(bid)) st.collapsed.delete(bid); else st.collapsed.add(bid); draw(); gbox.querySelector(`.pvbh[data-b="${CSS.escape(bid)}"]`)?.focus({ preventScroll: true }); },

@@ -402,7 +402,7 @@ tileDrawer(['today', 'rem-today', 'rem-list'], {
 /* ---- The rest: tiles whose own full view is their "more" ---- */
 tileDrawer('radar', { custom(a) { if (typeof radarFull !== 'function') return false; const o = optsOf(a.t); radarFull({ zoom: o.zoom || 7, autoplay: o.play !== false, title: a.t.title || null }); return true; } });
 /* Tiles that live on their own page: the tile at its biggest, plus the way to that page. */
-const DR_PAGE_OF = { 'net-apptests': ['#apptests', 'Open App tests', 'page.apptests'], 'rem-phones': ['#reminders', 'Open Reminders', 'page.reminders'], 'al-week': ['#alerts', 'Open Alerts', 'settings.alerts'], 'al-phones': ['#settings/phones', 'Phones & alerts', 'settings.phones'],
+const DR_PAGE_OF = { 'net-apptests': ['#network', 'Open Network', 'page.apptests'], 'rem-phones': ['#reminders', 'Open Reminders', 'page.reminders'], 'al-week': ['#alerts', 'Open Alerts', 'settings.alerts'], 'al-phones': ['#settings/phones', 'Phones & alerts', 'settings.phones'],
   'sec-check': ['#security', 'Open Security', 'page.security'], 'sec-events': ['#security', 'Open Security', 'page.security'], 'sec-lan': ['#security', 'Open Security', 'page.security'], 'sec-alarm': ['#security', 'Open Security', 'page.security'],
   'cam-det': ['#cameras', 'Open Cameras', 'page.cameras'], ask: ['#ask', 'Open your Home AI Agent', 'page.ask'], house3d: ['#house3d', 'Open 3D Home', 'page.house3d'] };
 for (const [id, [href, label, doc]] of Object.entries(DR_PAGE_OF)) {

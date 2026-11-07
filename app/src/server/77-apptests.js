@@ -1146,6 +1146,16 @@ const AT_DEMO_TESTS = {
     dest: ['198.51.100.200', 64511, 'Example Video', 24.3] },   // scrub-ok: demo
   'demo-google': { preset: 'google', base: 22, seed: 41, tail: [AT_DEMO_HOP('192.0.2.14', null, 64512, 'Example Search', 'app', 13.1)], dest: ['192.0.2.80', 64512, 'Example Search', 13.6] },   // scrub-ok: demo
   'demo-netflix': { preset: 'netflix', base: 30, seed: 53, down: true, tail: [AT_DEMO_HOP('198.51.100.71', 'ipv4.example-cdn.net', 64513, 'Example Streaming', 'app', 16.6)], dest: ['198.51.100.240', 64513, 'Example Streaming', 17.4] },   // scrub-ok: demo
+  /* A long way round: two transit networks, routers that share the traffic three ways, then the app's own network -
+     14 hops, several parallel routes, and a route that moved five hours ago (it was shorter and a little faster). */
+  'demo-steam': { preset: 'steam', base: 64, seed: 61, changeAt: 5 * 3600_000 + 60_000,
+    tail: [AT_DEMO_TR('203.0.113.40', 'ae25-0.icr01.transit-example.net', 14.8), [AT_DEMO_TR('203.0.113.52', 'ae7-0.icr03.transit-example.net', 19.8), AT_DEMO_TR('203.0.113.56', 'ae8-0.icr04.transit-example.net', 20.6)],   // scrub-ok: demo
+      AT_DEMO_TR('203.0.113.60', 'be-3.cr2.transit-example.net', 24.1),   // scrub-ok: demo
+      [AT_DEMO_HOP('198.51.100.9', 'xe-0-1-0.edge3.example-backbone.net', 64502, 'Example Backbone', 'internet', 29.4), AT_DEMO_HOP('198.51.100.13', 'xe-0-2-0.edge4.example-backbone.net', 64502, 'Example Backbone', 'internet', 30.2), AT_DEMO_HOP('198.51.100.25', 'xe-1-0-0.edge5.example-backbone.net', 64502, 'Example Backbone', 'internet', 31.0)],   // scrub-ok: demo
+      AT_DEMO_HOP('198.51.100.29', 'ae1.cr7.example-backbone.net', 64502, 'Example Backbone', 'internet', 36.8), AT_DEMO_HOP('198.51.100.37', 'ae2.cr9.example-backbone.net', 64502, 'Example Backbone', 'internet', 41.5),   // scrub-ok: demo
+      [AT_DEMO_HOP('192.0.2.33', null, 64514, 'Example Games', 'app', 44.2), AT_DEMO_HOP('192.0.2.37', null, 64514, 'Example Games', 'app', 44.9)], AT_DEMO_HOP('192.0.2.41', null, 64514, 'Example Games', 'app', 45.3)],   // scrub-ok: demo
+    old: [AT_DEMO_TR('203.0.113.40', 'ae25-0.icr01.transit-example.net', 14.8), AT_DEMO_TR('203.0.113.64', 'be-5.cr3.transit-example.net', 27.2), AT_DEMO_HOP('192.0.2.33', null, 64514, 'Example Games', 'app', 42.0)],   // scrub-ok: demo
+    dest: ['192.0.2.50', 64514, 'Example Games', 46.1] },   // scrub-ok: demo
 };
 const atDemoRand = (s) => () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
 /* One made-up trace at time t (k: how many traces ago). */
@@ -1158,7 +1168,7 @@ function atDemoTrace(cfg, t, k, now) {
   };
   const [ispA, branch, core] = AT_DEMO_NET.isp, tail = cfg.old && now - t > cfg.changeAt ? cfg.old : cfg.tail;
   const hops = [hop(AT_DEMO_NET.home, 1), hop(ispA, 2), hop(branch[k % 5 < 3 ? 0 : 1], 3), hop(core, 4), { n: 5, ip: null, sent: 10, loss: 100, min: null, avg: null, max: null }];
-  tail.forEach((x, i) => hops.push(bad && i >= cfg.bad.from ? hop(x, 6 + i, cfg.bad.ms, cfg.bad.loss) : hop(x, 6 + i)));
+  tail.forEach((y, i) => { const x = Array.isArray(y) ? y[(k + i) % y.length] : y; hops.push(bad && i >= cfg.bad.from ? hop(x, 6 + i, cfg.bad.ms, cfg.bad.loss) : hop(x, 6 + i)); });   // [a, b]: routers that share the traffic
   const [ip, asn, org, ms] = cfg.dest, j = rnd(), dAvg = down ? null : at1(ms * (1 + j * 0.06) + ev + (bad ? cfg.bad.ms : 0));
   const dest = { ip, name: new URL(atPreset(cfg.preset).url).hostname, asn, org, cc: 'US', zone: 'app', dest: true, sent: 5, from: 'probe', loss: down ? 100 : bad ? cfg.bad.loss : 0,
     min: dAvg == null ? null : at1(dAvg * 0.92), avg: dAvg, max: dAvg == null ? null : at1(dAvg * 1.2 + 1) };

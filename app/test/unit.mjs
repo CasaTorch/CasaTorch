@@ -508,6 +508,15 @@ t('App tests: the demo path - a provider branch, a transit network, a lossy hop'
   assert.deepEqual([g.trouble.kind, g.trouble.k], ['loss', '203.0.113.41']);   // scrub-ok
   assert.ok(g.nodes.every((x) => !x.ip || /^(192\.168\.1\.|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.)/.test(x.ip)));   // scrub-ok
 });
+t('App tests: the demo\'s long path - 14 hops, routers sharing the traffic three ways, a route that moved', () => {
+  const A = globalThis.__casatorchAT, st = A.atDemoState('demo-steam'), now = Date.now();
+  const g = A.atGraphFor(st, now - 3600_000, now, { now });
+  assert.ok(g.layout.cols >= 14, `columns: ${g.layout.cols}`);
+  assert.ok(g.distinct >= 3, 'several parallel routes');
+  assert.ok(['198.51.100.9', '198.51.100.13', '198.51.100.25'].every((ip) => g.nodes.some((x) => x.ip === ip)));   // scrub-ok
+  assert.ok(st.changes.some((c) => c.kind === 'route' && c.hopsTo > c.hopsFrom));
+  assert.ok(g.nodes.every((x) => !x.ip || /^(192\.168\.1\.|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.)/.test(x.ip)));   // scrub-ok
+});
 
 t('security: only home names reach CasaTorch (no DNS rebinding), and cloud metadata is never fetched', () => {
   for (const h of ['localhost:8090', '127.0.0.1:8090', '192.168.1.20:8090', '[::1]:8090', 'casatorch:8090', 'casatorch.local:8090', 'nas.lan', 'homehub', 'box.home.arpa']) assert.ok(H.hostAllowed(h), h);   // scrub-ok: examples

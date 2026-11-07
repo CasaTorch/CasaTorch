@@ -854,7 +854,7 @@ body.nav-left .nav.more-below, body.nav-right .nav.more-below { -webkit-mask-ima
 :root { --pv-home: #34d399; --pv-provider: #5eb8ff; --pv-internet: #a78bfa; --pv-app: #fbbf24; --pv-band-a: 6%; --pv-band-line: 20%; --pv-node-ring: rgba(7, 10, 18, .9); --pv-label: #c9d3e3; --pv-new: #38bdf8; --pv-gone: #fb7185; }
 :root[data-theme="light"] { --pv-home: #059669; --pv-provider: #2563eb; --pv-internet: #7c3aed; --pv-app: #b45309; --pv-band-a: 5%; --pv-band-line: 22%; --pv-node-ring: #ffffff; --pv-label: #334155; --pv-new: #0369a1; --pv-gone: #be123c; }
 #modal .box.wide.pvwide { width: min(1240px, 100%); }
-.pv { display: grid; gap: 8px; }
+.pv { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; } .pv > *, .atdetail > *, .atcols > * { min-width: 0; }   /* a wide path scrolls inside its own box, never the whole sheet */
 .pvtop { gap: 8px; align-items: center; }
 .pvstrip { min-height: 112px; outline-offset: 3px; border-radius: 10px; } .pvstrip svg { cursor: crosshair; touch-action: pan-y; user-select: none; }
 .pvstrip .pvarea { fill: color-mix(in srgb, var(--accent) 12%, transparent); stroke: none; }
@@ -870,7 +870,7 @@ body.nav-left .nav.more-below, body.nav-right .nav.more-below { -webkit-mask-ima
 .pvgraph { overflow: auto; border-radius: 16px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface-2) 60%, transparent); overscroll-behavior-x: contain; touch-action: pan-x pan-y; min-height: 120px; transition: opacity .2s; }
 .pvgraph.busy { opacity: .55; } .pvgraph.vert { overflow: visible; } .pvgraph.ov { background: transparent; border: 0; }
 .pvempty { padding: 28px; text-align: center; }
-.pvsvg { display: block; font-family: var(--font); }
+.pvsvg { display: block; margin: 0 auto; font-family: var(--font); }
 .pvsvg.pvin { animation: pvin .28s ease-out; } @keyframes pvin { from { opacity: 0; } to { opacity: 1; } }
 .pvband { stroke-width: 1; }
 .pvband.z-home { fill: color-mix(in srgb, var(--pv-home) var(--pv-band-a), transparent); stroke: color-mix(in srgb, var(--pv-home) var(--pv-band-line), transparent); }
