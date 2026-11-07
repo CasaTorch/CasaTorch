@@ -4346,6 +4346,7 @@
 "The devices CasaTorch shares show up in SmartThings.": "I dispositivi condivisi da CasaTorch compaiono in SmartThings.",
 "The devices you use most, in one place - pick any": "I dispositivi che usi di più, in un unico posto: scegli quelli che vuoi",
 "The diagnostics file has the version, how it's installed, memory, which kinds of things are set up (not their settings) and the log - safe to send to support@casatorch.com.": "Il file di diagnostica contiene la versione, come è installato, la memoria, quali tipi di cose sono configurate (non le loro impostazioni) e il registro: è sicuro inviarlo a support@casatorch.com.",
+"The disk was almost full, so CasaTorch removed its own leftover files (temporary files, unfinished backups, old copies and the map cache).": "Il disco era quasi pieno, quindi CasaTorch ha eliminato i propri file rimasti (file temporanei, backup non completati, copie vecchie e la cache della mappa).",
 "The easy way in at home: ": "Il modo facile per entrare da casa: ",
 "The edge gate is on.": "Il cancello perimetrale è attivo.",
 "The edge gate isn't on yet - turn on Secure Remote Access first.": "Il cancello perimetrale non è ancora attivo: attiva prima l'accesso remoto sicuro.",

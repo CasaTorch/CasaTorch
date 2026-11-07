@@ -4358,6 +4358,7 @@
 "The devices CasaTorch shares show up in SmartThings.": "Enheterna som CasaTorch delar dyker upp i SmartThings.",
 "The devices you use most, in one place - pick any": "Enheterna du använder mest, på ett ställe - välj vilka som helst",
 "The diagnostics file has the version, how it's installed, memory, which kinds of things are set up (not their settings) and the log - safe to send to support@casatorch.com.": "Diagnosfilen innehåller version, hur det är installerat, minne, vilka typer av saker som är inställda (inte deras inställningar) och loggen – säker att skicka till support@casatorch.com.",
+"The disk was almost full, so CasaTorch removed its own leftover files (temporary files, unfinished backups, old copies and the map cache).": "Disken var nästan full, så CasaTorch tog bort sina egna överblivna filer (tillfälliga filer, ofärdiga säkerhetskopior, gamla kopior och kartcachen).",
 "The easy way in at home: ": "Det enkla sättet hemma: ",
 "The edge gate is on.": "Kantgrinden är på.",
 "The edge gate isn't on yet - turn on Secure Remote Access first.": "Kantgrinden är inte på än - slå först på säker fjärråtkomst.",

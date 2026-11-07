@@ -119,5 +119,30 @@ export default async function automateTests(t) {
       assert.deepEqual([mine.name, mine.timezone, mine.units, mine.currency, mine.location.name], ['Our place', 'Asia/Tokyo', 'F', 'JPY', 'Kyoto']);
       assert.equal(ctx.fill({}, null), false);
     });
+
+    t('full disk: tidied by itself when Storage is red or the data folder is full - at most every 6 hours', () => {
+      const S = globalThis.__casatorchSetup, now = Date.now();
+      const red = [{ id: 'storage', status: 'bad' }], full = [{ id: 'data', status: 'bad', fix: { action: 'free-space' } }];
+      assert.equal(S.autoFreeDue(red, 0, now), true); assert.equal(S.autoFreeDue(full, 0, now), true);
+      assert.equal(S.autoFreeDue([{ id: 'storage', status: 'warn' }], 0, now), false, 'getting low is only a warning: the button is there');
+      assert.equal(S.autoFreeDue([{ id: 'data', status: 'bad' }], 0, now), false, 'not allowed to save is not a full disk');
+      assert.equal(S.autoFreeDue(red, now - 3600_000, now), false); assert.equal(S.autoFreeDue(red, now - 7 * 3600_000, now), true);
+    });
+
+    t('full disk: what it removed is listed under "Fixed by itself", and Storage is checked again', () => {
+      const S = globalThis.__casatorchSetup, heal = M.HEAL.length, was = S.DOC.freedAt; let ran = 0;
+      try {
+        S.DOC.freedAt = 0;
+        const checks = [{ id: 'storage', status: 'bad', title: 'Storage space' }, { id: 'ha', status: 'ok' }];
+        const out = S.doctorAutoFree(checks, { free: () => { ran++; return { freed: 5 * 1048576, what: ['leftover temporary files'] }; } });
+        assert.equal(ran, 1); assert.equal(M.HEAL.length, heal + 1); assert.match(M.HEAL[M.HEAL.length - 1].detail, /disk was almost full/);
+        assert.notEqual(out[0], checks[0], 'Storage looked at again'); assert.equal(out[1], checks[1]);
+        S.doctorAutoFree(checks, { free: () => { ran++; return { freed: 1 }; } });
+        assert.equal(ran, 1, 'not again within 6 hours');
+        S.DOC.freedAt = 0;
+        assert.equal(S.doctorAutoFree(checks, { free: () => ({ freed: 0, what: [] }) }), checks, 'nothing to remove: nothing changes, no note');
+        assert.equal(M.HEAL.length, heal + 1);
+      } finally { S.DOC.freedAt = was; }
+    });
   } finally { M.restore(kept); }
 }

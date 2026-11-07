@@ -4325,6 +4325,7 @@
 "The devices CasaTorch shares show up in SmartThings.": "Die Geräte, die CasaTorch teilt, erscheinen in SmartThings.",
 "The devices you use most, in one place - pick any": "Die Geräte, die du am meisten nutzt, an einem Ort – wähle beliebige",
 "The diagnostics file has the version, how it's installed, memory, which kinds of things are set up (not their settings) and the log - safe to send to support@casatorch.com.": "Die Diagnosedatei enthält Version, Installationsart, Speicher, welche Arten von Dingen eingerichtet sind (nicht ihre Einstellungen) und das Protokoll – sicher an support@casatorch.com zu senden.",
+"The disk was almost full, so CasaTorch removed its own leftover files (temporary files, unfinished backups, old copies and the map cache).": "Der Speicher war fast voll, also hat CasaTorch seine eigenen übrig gebliebenen Dateien gelöscht (temporäre Dateien, unfertige Backups, alte Kopien und den Karten-Cache).",
 "The easy way in at home: ": "Der einfache Weg zu Hause: ",
 "The edge gate is on.": "Der Edge-Schutz ist an.",
 "The edge gate isn't on yet - turn on Secure Remote Access first.": "Der Edge-Schutz ist noch nicht an – schalte zuerst den sicheren Fernzugriff ein.",

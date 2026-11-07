@@ -6,7 +6,8 @@
  * Frigate, YoLink), certificates, backups and updates - each green, amber or
  * red, in one plain sentence, with a "Fix it" button where CasaTorch can fix
  * it itself (try again, free up space, save a copy of the settings, put an
- * earlier copy back, check for updates, restart).
+ * earlier copy back, check for updates, restart). A disk that's almost full is
+ * tidied by itself (its own leftovers only, doctorAutoFree).
  *
  * It runs every 15 minutes. A connection that stops answering is tried again
  * after 1, 2, 4, 8... minutes (at most every 30), and if it's still down a
@@ -289,12 +290,27 @@ async function doctorRun() {
     const conn = isDemo() ? DOC_DEMO.map(([id, t, d]) => chk(id, 'connections', t, 'ok', d)) : await Promise.all(Object.entries(DOC_CONN).map(([id, fn]) => one(id, fn)));
     await storageUse().catch(() => {});
     const sys = await Promise.all([docStorage, docMemory, docClock, docDataFolder, docSettings, docSignIns, docInternet, docRemote, docEdgeGate, docCerts, docKeyStore, docAuditLog, docBackup, docUpdates, docDevSwitches].map((fn) => one(fn.name.replace(/^doc/, '').toLowerCase(), fn)));
-    const checks = [...sys, ...conn].filter(Boolean);
+    let checks = [...sys, ...conn].filter(Boolean);
+    if (!isDemo()) checks = doctorAutoFree(checks);
     DOC.checks = checks; DOC.at = nowIso();
     if (!isDemo()) doctorAlerts(checks);
     return checks;
   })().finally(() => { DOC.running = null; });
   return DOC.running;
+}
+/* The disk almost full (or full): CasaTorch removes its own leftovers by itself - the same safe things "Free up space"
+   removes (old temporary files, unfinished backups, copies kept from restores and damaged files more than 30 days old,
+   the map cache) - at most every 6 hours. Never photos, scans, history or settings. "Fixed by itself" says so. */
+const autoFreeDue = (checks, lastAt, now = Date.now()) => now - (lastAt || 0) > 6 * 3600_000 && checks.some((c) => (c.id === 'storage' && c.status === 'bad') || (c.id === 'data' && c.fix?.action === 'free-space'));
+function doctorAutoFree(checks, { free = freeSpace, now = Date.now() } = {}) {
+  if (!autoFreeDue(checks, DOC.freedAt, now)) return checks;
+  DOC.freedAt = now;
+  let r; try { r = free(); } catch { return checks; }
+  if (!(r?.freed > 0)) return checks;
+  healNote('space-freed', 'The disk was almost full, so CasaTorch removed its own leftover files (temporary files, unfinished backups, old copies and the map cache).');
+  if (typeof audit === 'function') audit(null, 'space-freed', { bytes: r.freed });
+  const again = [docStorage(), docDataFolder()].filter(Boolean);
+  return checks.map((c) => again.find((x) => x.id === c.id) || c);
 }
 /* One alert for what broke (only once it's been broken twice in a row - a blip isn't worth anyone's attention), one when it's fixed. */
 function doctorAlerts(checks) {
@@ -358,6 +374,7 @@ function freeSpace() {
       else if (/\.(damaged|unmatched|broken)-[\w-]+$/.test(name) && st.mtimeMs < old) { rm(p); gone.push('old damaged files'); }
       else if (/\.\d+\.tmp$/.test(name) && st.mtimeMs < Date.now() - 86400_000) { rm(p); gone.push('leftover temporary files'); }
       else if (/^\.(backup|restore)-[0-9a-f]+(\.ctbk)?$/.test(name) && !bkBusy) { rm(p); gone.push('an unfinished backup'); }
+      else if (name === 'radar-cache' && st.isDirectory()) { rm(p); gone.push('the map cache (it fills again as maps are shown)'); }
     } catch { /* skip that one */ }
   }
   CACHE.clear();
@@ -415,4 +432,4 @@ app.post('/api/doctor/fix', requireRole('admin'), express.json({ limit: '2kb' })
   try { res.json({ ok: true, ...(await fn(req.body || {}, req)) }); }
   catch (err) { res.status(err.status || 400).json({ error: String(err.message) }); }
 });
-if (process.env.CASATORCH_TEST === '1') Object.assign(globalThis.__casatorchSetup, { docStorage, docSettings, doctorAlerts, DOC, devSwitchesOn, docDevSwitches, DEV_SWITCHES });
+if (process.env.CASATORCH_TEST === '1') Object.assign(globalThis.__casatorchSetup, { docStorage, docSettings, doctorAlerts, doctorAutoFree, autoFreeDue, DOC, devSwitchesOn, docDevSwitches, DEV_SWITCHES });

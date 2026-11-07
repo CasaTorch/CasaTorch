@@ -4423,6 +4423,7 @@
 "The devices CasaTorch shares show up in SmartThings.": "CasaTorch 共享的设备会出现在 SmartThings 中。",
 "The devices you use most, in one place - pick any": "最常用的设备集中在一处 - 随意挑选",
 "The diagnostics file has the version, how it's installed, memory, which kinds of things are set up (not their settings) and the log - safe to send to support@casatorch.com.": "诊断文件包含版本、安装方式、内存、已设置了哪些类型的内容（不含具体设置）以及日志 - 可以放心发送给 support@casatorch.com。",
+"The disk was almost full, so CasaTorch removed its own leftover files (temporary files, unfinished backups, old copies and the map cache).": "磁盘快满了，所以 CasaTorch 删除了它自己的残留文件（临时文件、未完成的备份、旧副本和地图缓存）。",
 "The easy way in at home: ": "在家最简单的打开方式： ",
 "The edge gate is on.": "边缘门禁已开启。",
 "The edge gate isn't on yet - turn on Secure Remote Access first.": "边缘门禁尚未开启 - 请先开启安全远程访问。",

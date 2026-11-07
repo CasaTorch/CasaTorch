@@ -4423,6 +4423,7 @@
 "The devices CasaTorch shares show up in SmartThings.": "CasaTorch が共有するデバイスが SmartThings に表示されます。",
 "The devices you use most, in one place - pick any": "よく使うデバイスを 1 か所に - 自由に選べます",
 "The diagnostics file has the version, how it's installed, memory, which kinds of things are set up (not their settings) and the log - safe to send to support@casatorch.com.": "診断ファイルには、バージョン、インストール方法、メモリ、設定済みの項目の種類（設定内容は含まない）、ログが入っています。support@casatorch.comに安心して送れます。",
+"The disk was almost full, so CasaTorch removed its own leftover files (temporary files, unfinished backups, old copies and the map cache).": "ディスクがほぼいっぱいだったため、CasaTorchが自分の不要なファイル(一時ファイル、未完了のバックアップ、古いコピー、地図のキャッシュ)を削除しました。",
 "The easy way in at home: ": "自宅での簡単なアクセス方法： ",
 "The edge gate is on.": "エッジゲートはオンです。",
 "The edge gate isn't on yet - turn on Secure Remote Access first.": "エッジゲートはまだオンではありません。先に安全なリモートアクセスをオンにしてください。",

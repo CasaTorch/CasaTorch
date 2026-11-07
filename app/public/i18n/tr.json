@@ -4404,6 +4404,7 @@
 "The devices CasaTorch shares show up in SmartThings.": "CasaTorch'un paylaştığı cihazlar SmartThings'te görünür.",
 "The devices you use most, in one place - pick any": "En çok kullandığınız cihazlar tek yerde - istediğinizi seçin",
 "The diagnostics file has the version, how it's installed, memory, which kinds of things are set up (not their settings) and the log - safe to send to support@casatorch.com.": "Tanılama dosyasında sürüm, kurulum şekli, bellek, hangi tür şeylerin kurulu olduğu (ayarları değil) ve günlük bulunur - support@casatorch.com adresine göndermek güvenlidir.",
+"The disk was almost full, so CasaTorch removed its own leftover files (temporary files, unfinished backups, old copies and the map cache).": "Disk neredeyse doluydu, bu yüzden CasaTorch kendi artık dosyalarını (geçici dosyalar, tamamlanmamış yedekler, eski kopyalar ve harita önbelleği) sildi.",
 "The easy way in at home: ": "Evde kolay yol: ",
 "The edge gate is on.": "Uç geçidi açık.",
 "The edge gate isn't on yet - turn on Secure Remote Access first.": "Uç geçidi henüz açık değil - önce güvenli uzaktan erişimi açın.",
