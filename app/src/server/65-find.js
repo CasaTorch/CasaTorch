@@ -17,7 +17,7 @@ function lanAddress() {
   const rank = (ip) => (ip.startsWith('192.168.') ? 0 : ip.startsWith('10.') ? 1 : /^172\.(1[6-9]|2\d|3[01])\./.test(ip) ? 2 : 9);
   return all.map((a) => a.address).filter((ip) => rank(ip) < 9).sort((a, b) => rank(a) - rank(b))[0] || null;
 }
-/* A random id for this CasaTorch (Find my CasaTorch, secure access). Kept in its own file, not config.json:
+/* A random id for this CasaTorch (Find my CasaTorch, Secure Remote Access). Kept in its own file, not config.json:
    writing config.json before setup would make CasaTorch look set up and skip the setup wizard. */
 const INSTALL_ID_FILE = path.join(DATA_DIR, 'install-id');
 let installIdMemo = null;

@@ -104,7 +104,7 @@ export default async function gateUnit(t) {
       const texts = [...Object.values(G.GATE_MSG), 'Not you? Open Settings › Devices & sessions and sign it out.', 'Remote access is locked', 'Nobody can reach this CasaTorch from outside until you unlock it, here at home or from the CasaTorch app.',
         'Remote access to this CasaTorch is locked. The owner can unlock it at home or from the CasaTorch app.', 'This CasaTorch doesn\'t answer from where you are right now.', 'Edge gate', 'Edge gate not active yet: {why}', 'On. Remote access is locked.',
         'Edge gate not active yet: this CasaTorch\'s key is registered, but its address still answers devices without a ticket.', 'On: only approved devices reach this CasaTorch from outside.', 'On. The next self-test checks the address is closed to other devices.',
-        'Edge gate not active yet. Secure access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.'];
+        'Edge gate not active yet. Secure Remote Access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.'];
       for (const m of src.matchAll(/res\.status\(\d+\)\.json\(\{ error: '((?:[^'\\]|\\.)*)'/g)) texts.push(m[1].replace(/\\'/g, '\''));
       const client = fs.readFileSync(new URL('../src/client/31d-devices.js', import.meta.url), 'utf8');
       for (const m of client.matchAll(/T\('((?:[^'\\]|\\.)*)'/g)) texts.push(m[1].replace(/\\'/g, '\''));

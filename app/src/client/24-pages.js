@@ -211,7 +211,7 @@ function hiddenCamList(ctx) {
 }
 pageTile({ id: 'cam-hidden', page: 'cameras', auto: true, title: 'Detected cameras', icon: 'camera', blurb: 'Cameras you removed, and the same camera seen twice', size: [12, 1], render(b, ctx) { pgPut(b, hiddenCamList(ctx)); } });
 pageTile({ id: 'cam-start', page: 'cameras', auto: true, title: 'Add cameras', icon: 'camera', blurb: 'Connect your first camera', size: [12, 1], render(b) {
-  pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, any camera with a snapshot address, Ring (Pro) or cameras in Home Assistant from Connect.'), '#connect', T('Set this up')));
+  pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, any camera with a snapshot address, Ring or cameras in Home Assistant from Connect.'), '#connect', T('Set this up')));
 } });
 async function camerasPage(main) {
   S.me ||= await api('/api/auth/me').catch(() => ({}));

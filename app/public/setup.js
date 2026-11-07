@@ -461,7 +461,7 @@ function shownOptions(list) {
   });
 }
 function badge(o) {
-  if (o.method === 'ring') return el('span', { class: 'badge pro' }, T('Pro · Labs'));
+  if (o.method === 'ring') return el('span', { class: 'badge direct' }, T('no Home Assistant needed'));
   if (needsHa(o)) return el('span', { class: 'badge ha' }, W.ha ? T('via Home Assistant') : T('needs Home Assistant'));
   if (inHaAlready(o)) return el('span', { class: 'badge ha' }, T('in Home Assistant ✓'));
   if (o.method === 'direct' || o.method === 'hue') return el('span', { class: 'badge direct' }, T('no Home Assistant needed'));
@@ -523,12 +523,12 @@ function hueEl(card) {
 function ringEl(card) {
   const st = W.ring ||= { email: '', step: 'login' };
   if (st.step === 'done') { card.append(el('div', { class: 'ok' }, T('✓ Signed in to Ring. Your Ring password was not saved - only a sign-in token.'))); return card; }
-  card.append(el('p', { class: 'note' }, T('Ring has no official API. CasaTorch signs in the way the Ring app does (the method Homebridge and ring-mqtt use). It works today, but Ring could change it - that\'s why it\'s "Labs". Included with Pro and the free trial.')));
+  card.append(el('p', { class: 'note' }, T('Ring has no official API. CasaTorch signs in the way the Ring app does (the method Homebridge and ring-mqtt use). It works today, but Ring could change it - that\'s why it\'s "Labs".')));
   const out = el('div', {});
   const send = async (body) => {
     out.replaceChildren(el('div', { class: 'note' }, T('Talking to Ring...')));
     try { const r = await api('/api/setup/ring/login', { body }); if (r.ok) { st.step = 'done'; go(); return; } if (r.needsCode) { st.step = 'code'; st.prompt = r.prompt; go(); return; } out.replaceChildren(el('div', { class: 'err' }, r.error || T('Ring did not accept that'))); }
-    catch (e) { out.replaceChildren(el('div', { class: 'err' }, /Pro feature/.test(e.message) ? T('Ring needs CasaTorch Pro (the trial has ended).') : e.message)); }
+    catch (e) { out.replaceChildren(el('div', { class: 'err' }, e.message)); }
   };
   if (st.step === 'code') {
     const code = el('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', placeholder: '123456' });
@@ -608,8 +608,8 @@ function pairDone(p) {
     el('p', { class: 'note' }, T('No app yet? Add a phone later in Settings › Phones & alerts.')), awayCard(), safeNote(true));
   scrollTo(0, 0);
 }
-/* After setup: secure access (the phone app away from home) switches itself on in the background - say how it's going,
-   in the same words as Settings › Connections & AI › Secure access, with its address to send to the phone. */
+/* After setup: Secure Remote Access (the phone app away from home) switches itself on in the background - say how it's going,
+   in the same words as Settings › Connections & AI › Secure Remote Access, with its address to send to the phone. */
 function awayCard() {
   const box = el('div', { class: 'card', id: 'awaycard', hidden: true, 'aria-live': 'polite' });
   let tries = 0;
@@ -644,7 +644,7 @@ function welcome() {
     ...(window.CasaTour ? [window.CasaTour.card()] : []),   // "See what's possible" film (setup-tour.js)
     el('div', { class: 'wsteps' },
       step('1', 'The everyday things', 'Your town for the weather, calendars, sports teams, headlines and reminders.'),
-      step('2', 'Your devices', 'Hue, Shelly, YoLink, Frigate, Reolink and Ring (Pro) connect directly. Thousands more come in through Home Assistant, if you use it.'),
+      step('2', 'Your devices', 'Hue, Shelly, YoLink, Frigate, Reolink and Ring connect directly. Thousands more come in through Home Assistant, if you use it.'),
       step('3', 'Your dashboard', 'Then a one-minute tour of where everything is. Change anything later in Settings.')),
     el('p', { class: 'note' }, T('About 10 to 20 minutes. Every step can be skipped and added later.')),
     el('p', { class: 'note' }, `${T('Stuck at any point? E-mail')} `, el('a', { href: 'mailto:support@casatorch.com' }, 'support@casatorch.com'), T(' - a real person answers.')),   // scrub-ok: public support address

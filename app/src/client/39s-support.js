@@ -40,7 +40,7 @@ const SUP_GUIDES = [
   ['ha', 'home', 'Home Assistant stopped working'],
   ['cameras', 'camera', 'Cameras aren\'t showing'],
   ['slow3d', 'cube', 'The 3D home is slow on a tablet', true],
-  ['remote', 'lock', 'Secure access isn\'t working'],
+  ['remote', 'lock', 'Secure Remote Access isn\'t working'],
   ['locked', 'user', 'Forgot a password or locked out'],
   ['alerts', 'bell', 'Alerts don\'t reach my phone'],
   ['tablet', 'phone', 'The wall tablet goes to sleep', true],
@@ -224,11 +224,11 @@ const SUP_EVENT = {
   'phone-paired': 'Paired a phone', 'pairing-code-made': 'Made a pairing code', 'alerts-device-on': 'Turned on alerts on a device', 'alerts-device-off': 'Turned off alerts on a device', 'alerts-phone-on': 'Turned on alerts in the app', 'alerts-phone-off': 'Turned off alerts in the app',
   'settings-changed': 'Changed settings', 'setup-reopened': 'Opened setup again', 'ai-settings-changed': 'Changed the Home AI Agent', 'alert-settings-changed': 'Changed alert settings', 'security-settings-changed': 'Changed security settings', 'update-settings-changed': 'Changed update settings',
   'find-setting-changed': 'Changed casatorch.com/home', 'safety-exception-changed': 'Changed a safety exception', 'license-added': 'Added a license key', 'license-removed': 'Removed the license key', 'connection-removed': 'Removed a connection', 'settings-put-back': 'Put back saved settings', 'floorplan-imported': 'Imported a floor plan', 'camera-found': 'Found a new camera', 'pro-ended': 'Pro ended', 'pro-restored': 'Pro came back', 'camera-walls-changed': 'Changed the camera walls', 'frigate-camera-added': 'Added a camera to Frigate', 'frigate-change-undone': 'Undid a change to Frigate', 'frigate-restarted': 'Restarted Frigate',
-  'secure-access-on': 'Turned on secure access', 'secure-access-off': 'Turned off secure access', 'secure-access-repaired': 'Set up secure access again', 'secure-access-stopped': 'Secure access was stopped to keep your home private', 'dev-switches-on': 'Started with developer switches set', 'home-https-on': 'Turned on the secure address at home', 'home-https-off': 'Turned off the secure address at home',
+  'secure-access-on': 'Turned on Secure Remote Access', 'secure-access-off': 'Turned off Secure Remote Access', 'secure-access-repaired': 'Set up Secure Remote Access again', 'secure-access-stopped': 'Secure Remote Access was stopped to keep your home private', 'dev-switches-on': 'Started with developer switches set', 'home-https-on': 'Turned on the secure address at home', 'home-https-off': 'Turned off the secure address at home',
   'activity-exported': 'Exported the activity log', 'backup-checked': 'Checked a backup file', 'backup-made': 'Made a backup', 'backup-restored': 'Restored a backup', 'floorplan-exported': 'Exported the floor plan', 'diagnostics-downloaded': 'Downloaded diagnostics', 'support-file-made': 'Made a support file', 'support-summary-copied': 'Copied a support summary',
   restarted: 'Restarted CasaTorch', updated: 'Updated CasaTorch', 'alert-acknowledged': 'Acknowledged an alert',
 };
-const SUP_KINDS = [['all', 'Everything'], ['signin', 'Sign-ins'], ['failed', 'Failed attempts'], ['account', 'Accounts'], ['people', 'People'], ['pairing', 'Phones & pairing'], ['settings', 'Settings'], ['remote', 'Secure access'], ['exports', 'Exports'], ['system', 'System']];
+const SUP_KINDS = [['all', 'Everything'], ['signin', 'Sign-ins'], ['failed', 'Failed attempts'], ['account', 'Accounts'], ['people', 'People'], ['pairing', 'Phones & pairing'], ['settings', 'Settings'], ['remote', 'Secure Remote Access'], ['exports', 'Exports'], ['system', 'System']];
 async function activityCard() {
   const me = await api('/api/auth/me').catch(() => null);
   if (!me?.signIn || me.user?.panel || !['admin', 'owner'].includes(me.user?.role)) return null;
@@ -256,7 +256,7 @@ async function activityCard() {
   days.onchange = () => { f.days = Number(days.value); load(); };
   drawChips(); load();
   return el('div', { class: 'card wide', id: 'activity', style: 'grid-column:1/-1' }, el('h2', {}, icon('log', 15), T('Activity')),
-    el('p', { class: 'small muted', style: 'margin-top:0' }, T('Sign-ins, failed attempts, changes to settings and people, pairing, secure access and exports. Only what changed is recorded - never passwords or values.')),
+    el('p', { class: 'small muted', style: 'margin-top:0' }, T('Sign-ins, failed attempts, changes to settings and people, pairing, Secure Remote Access and exports. Only what changed is recorded - never passwords or values.')),
     chips, el('div', { class: 'row wrap', style: 'gap:8px;margin:10px 0' }, q, days), list, foot);
 }
 

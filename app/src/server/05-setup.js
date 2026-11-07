@@ -410,10 +410,10 @@ async function setupFinish(req, res) {
     const who = ph ? authAddUser({ username: ph.username, passwordHash: hashSecret(ph.password), name: ph.name || `${String(ph.username)}`, role: 'admin', acceptedTerms: acct.terms === true }) : users.list.find((x) => x.role === 'owner');
     try { if (who && typeof makePairCode === 'function') pair = await makePairCode(req, who, 30); } catch { /* pair later in Settings › Phones & alerts */ }
   }
-  // "Use the app away from home": secure access, switched on in the background (it can take a minute)
+  // "Use the app away from home": Secure Remote Access, switched on in the background (it can take a minute)
   if (!isDemo() && ['new', 'owner'].includes(a.phone?.how) && a.phone?.away !== 'no' && !config.remote?.on && typeof remoteOn === 'function') remoteOn().catch((e) => { if (typeof remoteFailed === 'function') { remoteFailed(e); remote.state = 'error'; } });
   setupReopened = 0; draft.ring = null; draft.hue = null;
-  if (next.ring && typeof ringConnect === 'function' && proStatus().pro) ringConnect();
+  if (next.ring && typeof ringConnect === 'function') ringConnect();
   console.log(`  setup: done for "${next.house.name}"`);
   res.json({ ok: true, ...(pair ? { pair } : {}) });
 }

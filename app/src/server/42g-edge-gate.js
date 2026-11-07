@@ -1,5 +1,5 @@
 /* ======================================================================
- * Secure access: the edge gate, sign-in alerts, and devices & sessions.
+ * Secure Remote Access: the edge gate, sign-in alerts, and devices & sessions.
  *
  * The edge gate: Cloudflare checks every request to this home's secure address
  * (home-xxxxxxxx.casatorch.com) before it comes down the tunnel, and lets only
@@ -273,7 +273,7 @@ function gateNewBrowser(req, { name, user }) {
   return b;
 }
 app.post('/api/gate/approve-here', requireRole('owner'), (req, res) => {
-  if (!gateActive()) return res.status(409).json({ error: 'The edge gate isn\'t on yet - turn on secure access first.' });
+  if (!gateActive()) return res.status(409).json({ error: 'The edge gate isn\'t on yet - turn on Secure Remote Access first.' });
   if (overLimit(`gateapprove:${req.user?.id || 'local'}`, 20, 10 * 60_000)) return res.status(429).json({ error: 'Too many tries. Wait a few minutes.' });
   const b = gateNewBrowser(req, { name: browserLabel(req.headers['user-agent']), user: req.user?.id });
   audit(req, 'browser-approved', { device: b.name, via: 'here' });
@@ -281,7 +281,7 @@ app.post('/api/gate/approve-here', requireRole('owner'), (req, res) => {
 });
 /* From the paired app: the browser's page shows casatorch://approve?c=<request>&k=<hash of its secret>; the app scans it. */
 app.post('/api/gate/approve', requireRole('owner'), express.json({ limit: '2kb' }), asyncRoute(async (req, res) => {
-  if (!gateActive()) return res.status(409).json({ error: 'The edge gate isn\'t on yet - turn on secure access first.' });
+  if (!gateActive()) return res.status(409).json({ error: 'The edge gate isn\'t on yet - turn on Secure Remote Access first.' });
   if (overLimit(`gateapprove:${req.user?.id || 'local'}`, 20, 10 * 60_000)) return res.status(429).json({ error: 'Too many tries. Wait a few minutes.' });
   const m = /^casatorch:\/\/approve\?c=([0-9a-f]{32})&k=([0-9a-f]{32})$/.exec(String(req.body?.code || '').trim());
   if (!m) return res.status(400).json({ error: 'That isn\'t a CasaTorch approval code. Scan the code on the browser\'s page.' });

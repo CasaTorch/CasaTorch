@@ -8,7 +8,7 @@ EVERYTHING YOU KNOW, FITTED TO YOUR PHONE
 - Your cameras, with live video
 - The 3D home
 - Settings, with the same people and roles as at home
-- Away from home too, with Secure access (part of CasaTorch Pro)
+- Away from home too, with Secure Remote Access (part of CasaTorch Pro)
 
 WHAT ONLY THE APP CAN DO
 - Face ID or Touch ID lock. Your sign-in stays in the iPhone's Keychain and only comes out when it's you. While locked, the app hides itself in the app switcher.

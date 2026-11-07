@@ -50,12 +50,12 @@ when an update is available; please install it promptly.
   only when its signature is CasaTorch's offline release key and it is newer than the version installed; without the
   key, or for an older release, nothing is installed. Installers refuse a release whose signed file list is missing.
 - **casatorch.com can't reach into your home.** There is no remote command channel and no settings push: casatorch.com
-  only answers requests your CasaTorch makes. Secure access's tunnel reaches this CasaTorch and nothing else on your
+  only answers requests your CasaTorch makes. Secure Remote Access's tunnel reaches this CasaTorch and nothing else on your
   network - its rules are written on the box, and if Cloudflare's side of the tunnel is ever told to send visitors
   anywhere else (your router, Home Assistant, another computer) or to route into your network, CasaTorch stops secure
   access at once, writes it to the security log and alerts you. A visitor through the tunnel is always treated as
   someone away from home.
-- **Secure access opens only on approved devices.** Requests to your home's secure address are checked at
+- **Secure Remote Access opens only on approved devices.** Requests to your home's secure address are checked at
   Cloudflare's edge before they can reach your CasaTorch: only your paired phones and the browsers you approve get
   through, with short-lived passes your CasaTorch signs itself. Removing a phone or browser, "Lock remote access" and
   the optional allowed-countries list take effect at the edge and on the box. This is an extra layer: everything your

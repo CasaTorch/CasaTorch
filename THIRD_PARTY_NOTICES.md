@@ -24,7 +24,7 @@ CasaTorch comes with **no warranty**, to the extent the law allows (AGPL-3.0 sec
 | express 4 | MIT | Web server |
 | three (three.js) 0.186 | MIT | 3D Home rendering (copyright the three.js authors) |
 | web-push 3.6 | MPL-2.0 | Web push for phone alerts. Shipped unmodified; source is in `node_modules/web-push` and at github.com/web-push-libs/web-push |
-| ring-client-api 14 | MIT | Ring (Pro, Labs). See section 3 - Ring's own terms |
+| ring-client-api 14 | MIT | Ring (Labs). See section 3 - Ring's own terms |
 | acme-client 5.4 | MIT | Let's Encrypt certificates for the secure address at home |
 | qrcode 1.5 | MIT | QR codes in setup |
 | multicast-dns 7.2 | MIT | Finding the box on the home network (Bonjour) |
@@ -95,9 +95,9 @@ casatorch.com is not in the middle (except where marked), and nothing is resold.
 | **Team Cymru** IP-to-ASN DNS service (origin.asn.cymru.com) | Who runs each network on an App test path | Free community service; no published restriction on commercial use; asks for modest volume and the DNS interface for repeat lookups (CasaTorch uses DNS and caches each answer 7 days). Not for geolocation (CasaTorch doesn't use it for that). | Basic |
 | **Cloudflare** speed test (speed.cloudflare.com) | Speed tests | Public endpoint behind Cloudflare's speed test; occasional use | Basic |
 | **Let's Encrypt** | The certificate for the secure address at home | Turning that address on accepts the Let's Encrypt Subscriber Agreement for the box | Basic |
-| **Cloudflare Tunnel** (`cloudflared`, downloaded from Cloudflare's GitHub releases) | Secure access away from home (coming) | cloudflared: Apache-2.0. Traffic passes through Cloudflare under Cloudflare's terms | Pro (coming) |
+| **Cloudflare Tunnel** (`cloudflared`, downloaded from Cloudflare's GitHub releases) | Secure Remote Access away from home (coming) | cloudflared: Apache-2.0. Traffic passes through Cloudflare under Cloudflare's terms | Pro (coming) |
 | **Anthropic** (Claude) or **OpenAI** API, or your own Ollama | Home AI Agent | Your own API key, under your own agreement with that company; billed by them | Pro |
-| **Ring** (via ring-client-api) | Ring doorbells and cameras without Home Assistant | **Unofficial API** - not made or approved by Ring; it may break or Ring may object; your Ring account's terms apply. Marked "Labs" in the app. | Pro |
+| **Ring** (via ring-client-api) | Ring doorbells and cameras without Home Assistant | **Unofficial API** - not made or approved by Ring; it may break or Ring may object; your Ring account's terms apply. Marked "Labs" in the app. | Basic |
 | **Cisco Meraki, UniFi, Pi-hole, AdGuard Home, YoLink, Philips Hue, Shelly, Frigate, Reolink, Home Assistant** | Your own devices and accounts | Official APIs, with your own keys or on your own network | Basic / Pro as listed in docs/EDITIONS.md |
 | **Web Speech** (the browser's own speech recognition) | Voice in the Home AI Agent and 3D Home | Runs in the browser. In Chrome and Edge the audio goes to Google or Microsoft to be turned into text, under their terms; Safari uses Apple's. CasaTorch never receives audio, only the text. | Pro |
 | **Google sign-in** (optional) | Signing in to CasaTorch with Google | Google's OAuth terms; only if the household turns it on | Basic |

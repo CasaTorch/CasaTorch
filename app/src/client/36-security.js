@@ -25,7 +25,7 @@ function wallBody(b, ctx, size) {
   const key = JSON.stringify([shown.map((d) => d.id), w.cols, w.live, SEC.wallEdit, size.tier, (ctx.data.hiddenCameras || []).length]);
   if (b._key === key && b.firstChild && !b.querySelector('.pg-skel')) return;   // the wall keeps playing while the rest refreshes
   b._key = key;
-  if (!cams.length) return pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, any camera with a picture address, Ring (Pro) or cameras in Home Assistant from Connect.'), '#connect', T('Set this up')));
+  if (!cams.length) return pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, any camera with a picture address, Ring or cameras in Home Assistant from Connect.'), '#connect', T('Set this up')));
   const auto = shown.length <= 1 ? 1 : shown.length <= 4 ? 2 : shown.length <= 9 ? 3 : 4;
   const cols = Math.min(w.cols || auto, { s: 1, m: 2, l: 3, xl: 4 }[size.tier || 'xl']);
   const grid = el('div', { class: 'wall', style: `--cols:${cols}` }, shown.map((d) => camView(d, { live: w.live })));
@@ -164,7 +164,7 @@ pageTile({ id: 'sec-check', page: 'security', auto: true, title: 'Checklist', ic
 pageTile({ id: 'sec-events', page: 'security', auto: true, title: 'Recent security events', icon: 'clock', blurb: 'Doorbell, motion, doors, leaks, new devices, sign-in trouble', size: [6, 1], render: (b, ctx, size) => pgPut(b, eventsCard(secData(ctx).events || [], size)) });
 pageTile({ id: 'sec-lan', page: 'security', auto: true, title: 'Devices on your network', icon: 'wifi', blurb: 'Who is on your home network, and risky open services', size: [12, 1], render: (b, ctx, size) => pgPut(b, lanCard(secData(ctx), () => ctx.refresh?.(), size)) });
 pageTile({ id: 'sec-hidden', page: 'security', auto: true, title: 'Detected cameras', icon: 'camera', blurb: 'Cameras you removed, and the same camera seen twice', size: [6, 1], render: (b, ctx) => pgPut(b, hiddenCamList(ctx)) });
-pageTile({ id: 'sec-start', page: 'security', auto: true, title: 'Add cameras', icon: 'camera', blurb: 'Connect your first camera', size: [12, 1], render: (b) => pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, any camera with a picture address, Ring (Pro) or cameras in Home Assistant from Connect.'), '#connect', T('Set this up'))) });
+pageTile({ id: 'sec-start', page: 'security', auto: true, title: 'Add cameras', icon: 'camera', blurb: 'Connect your first camera', size: [12, 1], render: (b) => pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, any camera with a picture address, Ring or cameras in Home Assistant from Connect.'), '#connect', T('Set this up'))) });
 tab({ id: 'security', label: 'Security', icon: 'shield', after: 'cameras', async render(main) {
   SEC.wallEdit = false;
   S.me ||= await api('/api/auth/me').catch(() => ({}));

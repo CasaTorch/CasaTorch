@@ -1,5 +1,5 @@
 /* ======================================================================
- * Ring cameras and doorbells - CasaTorch Pro, Labs.
+ * Ring cameras, doorbells and chimes - in Basic (free), Labs.
  *
  * Ring has no public API. This uses ring-client-api (MIT), the same library
  * behind ring-mqtt and the Homebridge plugin: it signs in the way the Ring app
@@ -44,7 +44,7 @@ function ringEvent(cam, kind) {
   if (typeof tlRecord === 'function') tlRecord({ type: kind, source: 'ring', camera: cam.name, cameraId: `ring:${cam.id}` }, { snapKey: `ring:${cam.id}` });   // the timeline (72t-timeline.js)
   if (typeof alertRaise === 'function') alertRaise({ id: `ring:${cam.id}:${kind}:${Date.now()}`, severity: kind === 'doorbell' ? 'notice' : 'info', title: kind === 'doorbell' ? `Someone at the ${cam.name}` : `Motion at the ${cam.name}`, source: 'ring', image: `/api/ring/${cam.id}/snapshot`, url: '/#timeline' });
 }
-setTimeout(() => { if (proStatus().pro) ringConnect(); }, 5000).unref?.();
+setTimeout(() => { ringConnect(); }, 5000).unref?.();
 
 /* During setup the token waits in the wizard's draft (saving config.json early would end setup). */
 async function ringSave(refreshToken) {
@@ -53,7 +53,7 @@ async function ringSave(refreshToken) {
   saveConfig({ ...config, ring: { refreshToken, connectedAt: nowIso() } });
   await ringConnect(); return ring.cameras.map((c) => c.name);
 }
-app.post(['/api/ring/login', '/api/setup/ring/login'], requireRole('admin'), express.json(), requirePro, async (req, res) => {
+app.post(['/api/ring/login', '/api/setup/ring/login'], requireRole('admin'), express.json(), async (req, res) => {
   const { email, password, code } = req.body || {};
   try {
     if (code) {
@@ -74,8 +74,8 @@ app.post(['/api/ring/login', '/api/setup/ring/login'], requireRole('admin'), exp
     }
   } catch (err) { res.status(400).json({ error: /2fa|Verification/i.test(err.message) ? 'That code is not right - try again.' : /password|credentials|oauth/i.test(err.message) ? 'Ring refused that e-mail and password.' : String(err.message) }); }
 });
-app.get('/api/ring/status', requirePro, (_req, res) => res.json({ connected: !!ring.api, error: ring.error, cameras: ring.cameras.map((c) => ({ id: String(c.id), name: c.name, battery: c.batteryLevel ?? null, doorbell: !!c.isDoorbot })), chimes: ring.chimes.map(ringChimeDevice), events: ring.events.slice(0, 20) }));
-app.get('/api/ring/:id/snapshot', requirePro, async (req, res) => {
+app.get('/api/ring/status', (_req, res) => res.json({ connected: !!ring.api, error: ring.error, cameras: ring.cameras.map((c) => ({ id: String(c.id), name: c.name, battery: c.batteryLevel ?? null, doorbell: !!c.isDoorbot })), chimes: ring.chimes.map(ringChimeDevice), events: ring.events.slice(0, 20) }));
+app.get('/api/ring/:id/snapshot', async (req, res) => {
   const cam = ring.cameras.find((c) => String(c.id) === req.params.id);
   if (!cam) return res.status(404).end();
   return sendSnap(req, res, `ring:${cam.id}`, async () => ({ buf: await cam.getSnapshot(), type: 'image/jpeg' }), ringBeat(cam));
@@ -96,7 +96,7 @@ function ringChimeDevice(c) {
 }
 const ringCamDevice = (c) => ({ id: `ring:${c.id}`, provider: 'ring', kind: 'camera', name: c.name, battery: c.batteryLevel ?? null, online: !c.isOffline, doorbell: !!c.isDoorbot, source: c.hasBattery ? 'Ring (battery)' : 'Ring', snapshot: `/api/ring/${c.id}/snapshot`, every: c.hasBattery ? 20_000 : 4000 });
 PROVIDERS.ring = {
-  async list() { return proStatus().pro ? [...ring.cameras.map(ringCamDevice), ...ring.chimes.map(ringChimeDevice)] : []; },
+  async list() { return [...ring.cameras.map(ringCamDevice), ...ring.chimes.map(ringChimeDevice)]; },
   /* Chimes only: volume 0-10, snooze for some minutes (0 = ring again). Cameras have nothing to switch. */
   async act(d, action, value) {
     const m = /^ring:chime:(\d+)$/.exec(d.id), chime = m && ring.chimes.find((c) => String(c.id) === m[1]);
@@ -106,5 +106,5 @@ PROVIDERS.ring = {
     throw new Error('that device cannot be controlled from here');
   },
 };
-app.get('/api/ring/chimes', requirePro, (_req, res) => res.json({ chimes: ring.chimes.map(ringChimeDevice) }));
+app.get('/api/ring/chimes', (_req, res) => res.json({ chimes: ring.chimes.map(ringChimeDevice) }));
 if (process.env.CASATORCH_TEST === '1') { globalThis.__casatorchRing = { ringChimeDevice, ringCamDevice, ring }; globalThis.__casatorchProviders = PROVIDERS; }

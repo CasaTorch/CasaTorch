@@ -4,7 +4,7 @@
  * at casatorch.com, and (if you choose) erases everything this CasaTorch keeps. Then: how to uninstall the program on
  * this kind of computer.
  * ====================================================================== */
-const REMOVE_STEP = { passes: 'Passes for phones and browsers away from home ended', 'secure-access': 'Secure access and its address deleted at casatorch.com', 'home-address': 'The secure address at home deleted at casatorch.com', find: 'Taken off "Find my CasaTorch"', 'sign-out': 'Every phone and browser signed out', erase: 'Everything on this computer erased' };
+const REMOVE_STEP = { passes: 'Passes for phones and browsers away from home ended', 'secure-access': 'Secure Remote Access and its address deleted at casatorch.com', 'home-address': 'The secure address at home deleted at casatorch.com', find: 'Taken off "Find my CasaTorch"', 'sign-out': 'Every phone and browser signed out', erase: 'Everything on this computer erased' };
 /** How to remove the program itself, for the way it was installed: [text, command?] lines. Commands aren't translated. */
 function uninstallHow(kind) {
   const H = {

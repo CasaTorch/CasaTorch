@@ -34,7 +34,7 @@ async function phoneCard() {
     /* 2. Alerts on this device */
     add(el('h3', { class: 'sub' }, T('Alerts on this device')));
     if (!isSecureContext) {
-      const secure = el('p', { class: 'small muted' }, T('Phones only allow app installs and alerts on a secure (https) address, and this page is on {host} (http). At home, open CasaTorch at its secure address (Settings › Connections & AI › Secure address at home); away from home, use Secure access (Pro).', { host: location.host }));
+      const secure = el('p', { class: 'small muted' }, T('Phones only allow app installs and alerts on a secure (https) address, and this page is on {host} (http). At home, open CasaTorch at its secure address (Settings › Connections & AI › Secure address at home); away from home, use Secure Remote Access (Pro).', { host: location.host }));
       api('/api/local-https/target').then((j) => { if (j.url) secure.replaceChildren(T('Phones only allow app installs and alerts on a secure (https) address. '), el('a', { href: j.url + location.pathname + location.hash }, T('Open the secure address')), T(' on this device, then install and turn on alerts there.')); }).catch(() => {});
       add(secure,
         info?.haPhone ? el('p', { class: 'small good' }, T('✓ Alerts already go to the Home Assistant app on your phones.')) : el('p', { class: 'small muted' }, T('Using Home Assistant? Its phone app can get CasaTorch alerts today - turn it on below.')));
@@ -87,7 +87,7 @@ async function phoneCard() {
   draw(); return card;
 }
 
-/* Settings > Secure access: this CasaTorch at its own https address. It checks itself from outside (42-remote.js)
+/* Settings > Secure Remote Access: this CasaTorch at its own https address. It checks itself from outside (42-remote.js)
    and says so in plain words: "Working from anywhere ✓ (checked 2 min ago)", or exactly what's wrong and the fix. */
 function remoteStatusEl(r) {
   const v = r.view || { status: 'starting', title: T('Starting…') };
@@ -102,7 +102,7 @@ function remoteFixBtn(r, after) {
   const f = r.view?.fix; if (!f) return null;
   return el('button', { class: `btn small ${f.action === 'repair' ? 'primary' : ''}`, onclick: async (e) => {
     const b = e.currentTarget; b.disabled = true; b.textContent = f.action === 'repair' ? T('Repairing… (up to a minute)') : T('Checking…');
-    try { const x = await post(`/api/remote/${{ repair: 'repair', on: 'on' }[f.action] || 'check'}`, {}); toast(x.view?.status === 'working' ? T('Secure access works') : f.action === 'repair' ? T('Set up again - checking it now') : x.view?.title ? T(x.view.title) : T('Checked')); }
+    try { const x = await post(`/api/remote/${{ repair: 'repair', on: 'on' }[f.action] || 'check'}`, {}); toast(x.view?.status === 'working' ? T('Secure Remote Access works') : f.action === 'repair' ? T('Set up again - checking it now') : x.view?.title ? T(x.view.title) : T('Checked')); }
     catch (err) { toast(err.message, 6000); }
     after();
   } }, T(f.label));
@@ -114,8 +114,8 @@ function remoteSendEls(url) {
   return el('div', { class: 'row wrap', style: 'gap:8px' }, share, copy);
 }
 async function remoteCard() {
-  const card = el('div', { class: 'card', id: 'remote-card' }, el('h2', {}, icon('lock', 15), T('Secure access')));
-  /* Secure access is finished (confirmed by the owner, 0.8.x): no Beta label any more. */
+  const card = el('div', { class: 'card', id: 'remote-card' }, el('h2', {}, icon('lock', 15), T('Secure Remote Access')));
+  /* Secure Remote Access is finished (confirmed by the owner, 0.8.x): no Beta label any more. */
   const body = el('div'); card.append(body);
   let timer = null;
   const draw = async () => {
@@ -133,9 +133,9 @@ async function remoteCard() {
     if (!r.on) {
       add(el('p', { class: 'small muted', style: 'margin-top:0' }, T('Give this CasaTorch its own secure https address, so phones can install the CasaTorch app and get alerts. Nothing to change on your router. Everyone still signs in as usual.')),
         el('p', { class: 'small muted' }, r.anywhere ? T('With Pro, the address works from anywhere - at home or away.') : T('On Basic, the address works on your home Wi-Fi. Using it from anywhere is part of Pro.')),
-        !r.supported ? el('p', { class: 'small bad' }, T('Secure access isn\'t available on this kind of computer yet.')) : null,
+        !r.supported ? el('p', { class: 'small bad' }, T('Secure Remote Access isn\'t available on this kind of computer yet.')) : null,
         r.demo ? el('p', { class: 'small muted' }, T('Not in the demo.')) : null,
-        admin && r.supported && !r.demo ? el('button', { class: 'btn primary', onclick: async (e) => { e.target.disabled = true; e.target.textContent = T('Setting up… (up to a minute)'); try { await post('/api/remote/on', {}); toast(T('Secure access is on - checking it works')); } catch (err) { toast(err.message, 6000); } draw(); } }, icon('lock'), T('Turn on secure access')) : null);
+        admin && r.supported && !r.demo ? el('button', { class: 'btn primary', onclick: async (e) => { e.target.disabled = true; e.target.textContent = T('Setting up… (up to a minute)'); try { await post('/api/remote/on', {}); toast(T('Secure Remote Access is on - checking it works')); } catch (err) { toast(err.message, 6000); } draw(); } }, icon('lock'), T('Turn on Secure Remote Access')) : null);
       if (r.view?.status === 'problem') add(el('p', { class: 'small bad', style: 'margin-bottom:2px' }, T(r.view.title)), r.view.detail ? el('p', { class: 'small muted', style: 'margin-top:0' }, remoteDetail(r.view)) : null);
       return;
     }
@@ -145,14 +145,14 @@ async function remoteCard() {
       v.detail ? el('p', { class: `small ${v.status === 'problem' ? '' : 'muted'}`, style: 'margin:6px 0 0' }, remoteDetail(v)) : null,
       admin && v.fix ? el('div', { class: 'row wrap', style: 'gap:8px;margin-top:10px' }, remoteFixBtn(r, draw)) : null,
       el('p', { style: 'margin:14px 0 8px' }, el('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.url)),
-      r.gate ? el('p', { class: 'small muted', style: 'margin:0 0 8px' }, r.gate.active ? T('Edge gate on: only approved devices reach this CasaTorch from outside.') : T('Edge gate not active yet. Secure access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.'), ' ', el('a', { href: '#settings/devices' }, T('Devices & sessions'))) : null,   // 31d-devices.js
+      r.gate ? el('p', { class: 'small muted', style: 'margin:0 0 8px' }, r.gate.active ? T('Edge gate on: only approved devices reach this CasaTorch from outside.') : T('Edge gate not active yet. Secure Remote Access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.'), ' ', el('a', { href: '#settings/devices' }, T('Devices & sessions'))) : null,   // 31d-devices.js
       el('div', { class: 'row wrap', style: 'gap:16px;align-items:center' }, qr, el('div', { style: 'max-width:360px' },
         el('p', { class: 'small muted', style: 'margin-top:0' }, T('Scan this with your phone\'s camera to open CasaTorch at its secure address, sign in, then add it to your home screen and turn on alerts (Settings › Phones & alerts).')),
         el('p', { class: 'small muted' }, T('Or send it to your phone:')), remoteSendEls(r.url),
         el('p', { class: 'small muted' }, T('The CasaTorch app picks up this address by itself the next time it connects at home.')))),
       v.status === 'working' ? null : el('p', { class: 'small muted' }, r.anywhere ? T('Works from anywhere (Pro).') : T('Works on your home Wi-Fi. From anywhere is part of Pro.')),
       admin && r.lastError && v.status !== 'working' ? el('details', { class: 'small muted' }, el('summary', {}, T('Details for support')), el('p', { class: 'tiny', style: 'word-break:break-word' }, `${fmtWhen(r.lastError.at)}: ${r.lastError.text}`)) : null,
-      admin ? el('button', { class: 'btn small ghost', style: 'margin-top:8px', onclick: async () => { if (!confirm(T('Turn off secure access? The address stops working on every phone.'))) return; await post('/api/remote/off', {}).catch((err) => toast(err.message)); draw(); } }, T('Turn off')) : null);
+      admin ? el('button', { class: 'btn small ghost', style: 'margin-top:8px', onclick: async () => { if (!confirm(T('Turn off Secure Remote Access? The address stops working on every phone.'))) return; await post('/api/remote/off', {}).catch((err) => toast(err.message)); draw(); } }, T('Turn off')) : null);
     // while it's getting there, every few seconds; once it's settled, once a minute (for "checked 2 min ago")
     timer = setTimeout(() => { if (card.isConnected) draw(); }, ['starting', 'checking'].includes(v.status) ? 3000 : 60_000);
   };

@@ -20,7 +20,7 @@ function connectItems(cat) {
       if (o.method === 'guide') continue;
       if (opts.some((x) => x.haTwin === o.id)) continue;   // the Home Assistant twin of a direct option: merged into it
       const twin = o.haTwin ? opts.find((x) => x.id === o.haTwin) : null;
-      const how = o.method === 'ring' ? 'pro' : ['ha', 'ha-ui'].includes(o.method) ? 'ha' : 'direct';
+      const how = ['ha', 'ha-ui'].includes(o.method) ? 'ha' : 'direct';
       add({ key: o.haTwin || o.domain || o.id, step: g, add: o.id, haAdd: twin?.id || null, domain: twin?.domain || o.domain || null, label: cleanLabel(o.label).replace(/\s*\((needs [^)]*)\)/i, ''), desc: o.desc || o.hint || (o.label.match(/\((needs [^)]*)\)/i)?.[1] || '').replace(/^n/, 'N'), how, alsoHa: !!twin, ids: [o.id, twin?.id].filter(Boolean) }, g);
     }
   }

@@ -136,7 +136,7 @@ ever looked at. Removing a brand also takes its tiles, camera-wall spots and ale
 | Shelly plugs, relays, meters, sensors (local) | ✓ |
 | YoLink sensors (official API) | ✓ |
 | Cameras: Frigate, Reolink, any camera with a snapshot address | ✓ |
-| Ring doorbells/cameras (Pro, Labs - unofficial API) | ✓ |
+| Ring doorbells, cameras and chimes (Labs - unofficial API) | ✓ |
 | Energy: live watts per plug, cost at your rate | ✓ |
 | Alerts: leaks, smoke, low batteries, devices offline, internet down | ✓ |
 
@@ -171,7 +171,7 @@ screen and phone, the Security Center, Household, the Family board and the rain 
 | **Cisco Meraki** MV cameras and MT sensors | |
 | **Network monitoring** - UniFi and Cisco Meraki (every device online/offline, clients), Pi-hole and AdGuard Home (queries, blocked, protection on/off), with alerts; with Meraki or UniFi, the full Network dashboard (map, Wi-Fi, ports, clients, events, firmware) | |
 | **Voice assistants** - Alexa, Google Home, Apple Home and SmartThings through Matter (never locks, garage doors, gates or alarms), and "Ask CasaTorch" with Siri | |
-| **Away from home** - Secure access: your CasaTorch from anywhere, encrypted, no port forwarding, and only on your approved devices (Basic: the secure address on your home Wi-Fi) | |
+| **Away from home** - Secure Remote Access: your CasaTorch from anywhere, encrypted, no port forwarding, and only on your approved devices (Basic: the secure address on your home Wi-Fi) | |
 
 When a trial or subscription ends, CasaTorch says so plainly ("Pro ended on <date> - Renew") and nothing is
 deleted: Pro features pause (your 3D home stays viewable), CasaTorch keeps working as Basic, and everything comes
@@ -249,7 +249,7 @@ Details: [docs/SUPPORT.md](docs/SUPPORT.md).
 - **Two-step sign-in** with any authenticator app, ten one-time recovery codes, and an option to require it
   for everyone. Optional **Sign in with Google** for people you added (needs an https address or localhost).
 - **Wall-panel links** sign a tablet in as a panel (not a person) for a year, and can be revoked.
-- **Secure access opens only on approved devices**: away from home, only your paired phones and the browsers you
+- **Secure Remote Access opens only on approved devices**: away from home, only your paired phones and the browsers you
   approve get through, checked before a request reaches your CasaTorch. **Devices & sessions** (Settings) lists every
   signed-in phone and browser; **sign-in alerts** for a new phone, a new device or a sign-in from away; **Lock remote
   access** with one switch; optional **allowed countries**.

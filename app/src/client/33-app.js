@@ -43,7 +43,7 @@ function pairCard(me) {
   };
   const phones = (me.sessions || []).filter((s) => s.kind === 'app');
   return el('div', { class: 'card' }, el('h2', {}, icon('phone', 15), T('The CasaTorch app')),
-    el('p', { class: 'small muted', style: 'margin-top:0' }, T('All of CasaTorch on your iPhone, iPad or Android phone - controls, cameras, the 3D home, alerts - signed in to this home only, behind Face ID or your fingerprint. There\'s no CasaTorch account: the app talks to your CasaTorch, at home or (with secure access) from anywhere.')),
+    el('p', { class: 'small muted', style: 'margin-top:0' }, T('All of CasaTorch on your iPhone, iPad or Android phone - controls, cameras, the 3D home, alerts - signed in to this home only, behind Face ID or your fingerprint. There\'s no CasaTorch account: the app talks to your CasaTorch, at home or (with Secure Remote Access) from anywhere.')),
     has2 ? null : el('p', { class: 'small', style: 'color:var(--warn)' }, T('Turn on two-step sign-in for your account first (People & sign-in) - the app requires it.')),
     el('div', { class: 'row wrap' }, go, el('a', { class: 'btn', href: 'https://casatorch.com/docs/use/mobile-app.html', target: '_blank', rel: 'noopener' }, T('How the app works'))),
     box,

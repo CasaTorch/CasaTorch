@@ -16,7 +16,7 @@
 import { Readable, Writable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 const BK_MAGIC = Buffer.from('CTBK1\n');
-/* Everything that is the household's, or that a move to new hardware needs (install-id: phones, secure access and the
+/* Everything that is the household's, or that a move to new hardware needs (install-id: phones, Secure Remote Access and the
    Pro key know this CasaTorch by it; tls/: its secure address at home). Not: sign-in sessions (everyone signs in again
    on new hardware), the radar map cache and the secure-access helper (fetched again), the settings history and 3D Home
    restore points (this device's own undo), and Health's bookkeeping. */

@@ -601,7 +601,7 @@
     const retry = el('button', { class: 'btn primary', type: 'button' }, T('Try now'));
     // remote access locked by the owner: the owner can unlock it from here (Face ID / fingerprint first, on the phone)
     const unlockBtn = el('button', { class: 'btn', type: 'button', hidden: true }, T('Unlock remote access'));
-    const away = ad.remote ? null : el('div', { class: 'note' }, el('span', { html: svg('wifi', 18) }), el('span', {}, T('Away from home: coming with Secure access (Pro). For now the app connects on your home Wi-Fi.')));
+    const away = ad.remote ? null : el('div', { class: 'note' }, el('span', { html: svg('wifi', 18) }), el('span', {}, T('Away from home: coming with Secure Remote Access (Pro). For now the app connects on your home Wi-Fi.')));
     const title = el('h2', {}, T('Can\'t reach {name}', { name: h.name })), icon = bigIcon('wifi', 'calm');
     const gen = screen(el('div', { class: 'spacer' }), icon, title, why, away,
       h.last ? el('p', { class: 'small muted' }, T('Last connected {when}.', { when: lastSeen(h.last) })) : null,

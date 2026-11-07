@@ -28,7 +28,7 @@ Legend: **Direct** = CasaTorch talks to it itself · **Via HA** = needs Home Ass
 | | Amcrest, Dahua, Hikvision, Lorex, Axis, Tapo C-series, any RTSP/ONVIF | Direct | Address + camera login; snapshot + stream |
 | | UniFi Protect | Direct | Local user on the console |
 | | Cisco Meraki MV | Direct | API key |
-| | **Ring** | **Labs (Pro)** | Ring login + 2-factor code; snapshots, motion and doorbell events. Unofficial API (the one ring-mqtt uses); Ring could block it. |
+| | **Ring** | **Labs (Basic)** | Ring login + 2-factor code; snapshots, motion and doorbell events. Unofficial API (the one ring-mqtt uses); Ring could block it. |
 | | Google Nest | Via HA | Google charges a one-time US$5 developer fee and needs a cloud project per user; too much to ask in a wizard. |
 | | Wyze | Direct (via wyze-bridge) | Guide only; the bridge turns them into RTSP |
 | | Arlo, Eufy, Blink | No (v1) | No stable API; may come to Labs later |

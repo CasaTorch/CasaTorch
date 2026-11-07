@@ -1,4 +1,4 @@
-/* Secure access (42-remote.js): this check has to run before every other route, so it lives here. */
+/* Secure Remote Access (42-remote.js): this check has to run before every other route, so it lives here. */
 /* Requests that came through the secure address: Basic only from home, Pro from anywhere. Runs first.
    CasaTorch's own self-test (a one-time code, remoteNonceOk) always gets through: it checks the tunnel, not the plan.
    Pages get a friendly page; /api/* gets JSON the phone app understands ({ away, needsPro }), never a page. */
@@ -7,7 +7,7 @@ const AWAY_PAGE_TEXT = 'This CasaTorch\'s secure address works on your home Wi-F
 const LOCKED_TEXT = 'Remote access to this CasaTorch is locked. The owner can unlock it at home or from the CasaTorch app.';
 const COUNTRY_TEXT = 'This CasaTorch doesn\'t answer from where you are right now.';
 const AWAY_SIGNIN_TEXT = 'You\'re away from home. Sign-in is off on this CasaTorch, so it only answers on your home network. Turn sign-in on to use it from anywhere.';
-/* The away page is the one Secure access text the server shows by itself (no app screen around it to translate it), so
+/* The away page is the one Secure Remote Access text the server shows by itself (no app screen around it to translate it), so
    it is translated here, from the same public/i18n/<lang>.json the screens use, in the home's language. */
 const srvDict = { lang: 'en', d: {} };
 function srvT(s) {

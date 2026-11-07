@@ -1,4 +1,4 @@
-/* Secure access, end to end, on a fresh CasaTorch with a fake casatorch.com and a fake cloudflared
+/* Secure Remote Access, end to end, on a fresh CasaTorch with a fake casatorch.com and a fake cloudflared
    (test/fixtures/fake-cloudflared.cjs, copied to <data>/bin/cloudflared with a VERSION file so nothing is downloaded).
    Turns it on, checks itself, the Basic "only at home" gate, Health, the helper crashing, a tunnel that went stale,
    a firewall that blocks QUIC (HTTP/2 fallback), a blocked port, a key that was turned down (Repair), casatorch.com
@@ -102,8 +102,8 @@ try {
   /* Health */
   const doc = (await api('/api/doctor?fresh=1')).j, rc = doc.checks.find((c) => c.id === 'remote');
   assert.equal(rc?.status, 'ok', JSON.stringify(rc)); assert.match(rc.detail, /Working on your home Wi-Fi\. Checked from outside/);
-  ok('Health has a Secure access line');
-  const dev = doc.checks.find((c) => c.id === 'devswitches');   // this test points secure access at fakes (CASATORCH_REMOTE_URL...)
+  ok('Health has a Secure Remote Access line');
+  const dev = doc.checks.find((c) => c.id === 'devswitches');   // this test points Secure Remote Access at fakes (CASATORCH_REMOTE_URL...)
   assert.equal(dev?.status, 'bad', JSON.stringify(dev)); assert.ok(dev.switches.includes('CASATORCH_REMOTE_URL') && dev.switches.includes('CASATORCH_REMOTE_FAST'));
   assert.doesNotMatch(JSON.stringify(dev), /127\.0\.0\.1/, 'names only, not their values');
   assert.match(fs.readFileSync(path.join(DIR, 'audit.log'), 'utf8'), /"event":"dev-switches-on"/);
@@ -169,7 +169,7 @@ try {
     assert.match(audit, /secure-access-stopped/);
   }
   mode('ok'); await api('/api/remote/repair', {}); await until('working after the stop', status('working'));
-  ok('rules from Cloudflare\'s side that reach past this CasaTorch (the router, private-network routing) stop secure access at once, logged, not restarted');
+  ok('rules from Cloudflare\'s side that reach past this CasaTorch (the router, private-network routing) stop Secure Remote Access at once, logged, not restarted');
   /* casatorch.com failing */
   fail = true; r = await api('/api/remote/repair', {}); fail = false;
   assert.equal(r.status, 502); assert.match(r.j.error, /busy/); assert.equal(r.j.view.code, 'service');

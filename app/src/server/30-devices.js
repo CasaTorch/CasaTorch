@@ -8,7 +8,7 @@
  *
  * Providers here: Shelly (local), Philips Hue (local), cameras (Frigate,
  * Reolink, any snapshot/RTSP camera), YoLink (official cloud API), and
- * Home Assistant when it is connected (32-ha.js). Ring is Pro (31-ring.js).
+ * Home Assistant when it is connected (32-ha.js). Ring is direct, in Basic (31-ring.js).
  * ====================================================================== */
 const PROVIDERS = {};   // name -> { list(): Promise<device[]>, act?(device, action, value) }
 /* ---- Integrations: one call, and a brand shows up everywhere ----

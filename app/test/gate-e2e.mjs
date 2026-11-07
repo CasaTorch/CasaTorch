@@ -1,6 +1,6 @@
-/* The edge gate, end to end, on a fresh CasaTorch with sign-in, a fake casatorch.com (secure access and the gate's
+/* The edge gate, end to end, on a fresh CasaTorch with sign-in, a fake casatorch.com (Secure Remote Access and the gate's
    signed calls) and a fake cloudflared whose "edge" plays the edge gate (test/fixtures/fake-cloudflared.cjs, GATE_STATE).
-   Turning secure access on registers the box's key; the self-test goes through the gate with its own ticket and checks
+   Turning Secure Remote Access on registers the box's key; the self-test goes through the gate with its own ticket and checks
    the address is closed without one; a stranger is turned away before the box; a paired phone gets a week of tickets
    and reaches the home from away; a browser approved at home gets its cookie, signs in from away (an alert says who,
    which device, where and when) and renews its ticket; Devices & sessions (the owner sees all, a member their own);

@@ -108,7 +108,7 @@ export default async function securityUnit(t) {
       assert.equal(Z.limited(k, 5), true, 'five in flight already fill the limit');
       undos[2](); assert.equal(Z.limited(k, 5), false, 'a right password takes its try back');
     });
-    t('secure access: the box sends its Pro key with a tunnel request (and nothing extra without one)', () => {
+    t('Secure Remote Access: the box sends its Pro key with a tunnel request (and nothing extra without one)', () => {
       const RM = globalThis.__casatorchRemote;
       const withKey = RM.remoteRequestBody({ house: { name: 'Home' }, license: ' CT1.payload.sig ', remote: { secret: 's3' } });
       assert.equal(withKey.key, 'CT1.payload.sig'); assert.equal(withKey.secret, 's3'); assert.ok(withKey.id);
@@ -116,7 +116,7 @@ export default async function securityUnit(t) {
       assert.ok(!('key' in trial) && !('secret' in trial));
       assert.equal(trial.localIngress, true, 'tells casatorch.com it writes its own tunnel rules'); assert.match(trial.version, /^\d+\.\d+\.\d+/);
     });
-    t('secure access: every text the server builds for it is translated in all 13 languages (tools/i18n-strings.tsv)', async () => {
+    t('Secure Remote Access: every text the server builds for it is translated in all 13 languages (tools/i18n-strings.tsv)', async () => {
       const fs = await import('node:fs'), RM = globalThis.__casatorchRemote;
       const rows = new Map(fs.readFileSync(new URL('../../tools/i18n-strings.tsv', import.meta.url), 'utf8').split('\n').slice(1).filter(Boolean).map((l) => { const c = l.split('\t'); return [c[0], c]; }));
       const texts = new Set(['Developer switches', 'You\'re away from home', 'This CasaTorch\'s secure address works on your home Wi-Fi. Using it from anywhere is part of CasaTorch Pro.', 'You\'re away from home. Using CasaTorch from anywhere is part of Pro.', 'casatorch.com couldn\'t be reached', 'casatorch.com answered with an error', 'Try again',
@@ -239,7 +239,7 @@ export default async function securityUnit(t) {
       } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
     });
 
-    t('secure access: only rules that reach this CasaTorch are accepted from Cloudflare\'s side of the tunnel', () => {
+    t('Secure Remote Access: only rules that reach this CasaTorch are accepted from Cloudflare\'s side of the tunnel', () => {
       const R = globalThis.__casatorchRemote, line = (c) => `2026-11-04T00:00:00Z INF Updated to new configuration config=${JSON.stringify(JSON.stringify(c))} version=2`;
       const okRules = { ingress: [{ hostname: 'home-a.casatorch.com', service: 'http://localhost:8090' }, { service: 'http_status:404' }], 'warp-routing': { enabled: false } };
       assert.equal(R.remoteConfigProblem(line(okRules), { port: 8090 }), null);
@@ -258,7 +258,7 @@ export default async function securityUnit(t) {
       ]) assert.match(String(R.remoteConfigProblem(line(bad), { port: 8090 })), why, JSON.stringify(bad));
       assert.match(R.remoteConfigProblem('INF Updated to new configuration config="{not json" version=3', { port: 8090 }), /could not be read/, 'unreadable rules count as wrong');
       assert.equal(R.remoteLineKind(line(okRules)), 'config');
-      assert.equal(R.tunnelConfigText('home-a.casatorch.com', 8090), '# Written by CasaTorch each time secure access starts: visitors reach this CasaTorch and nothing else.\ningress:\n  - hostname: home-a.casatorch.com\n    service: http://127.0.0.1:8090\n  - service: http_status:404\nwarp-routing:\n  enabled: false\n');
+      assert.equal(R.tunnelConfigText('home-a.casatorch.com', 8090), '# Written by CasaTorch each time Secure Remote Access starts: visitors reach this CasaTorch and nothing else.\ningress:\n  - hostname: home-a.casatorch.com\n    service: http://127.0.0.1:8090\n  - service: http_status:404\nwarp-routing:\n  enabled: false\n');
       assert.ok(R.tunnelConfigText('home-ab_c-d.casatorch.com', 8090));
       for (const h of ['a\nservice: ssh://x', 'a b', '', '-x.example.com', 'x:y', 'x'.repeat(260)]) assert.equal(R.tunnelConfigText(h, 8090), null, JSON.stringify(h));
     });
@@ -305,7 +305,7 @@ export default async function securityUnit(t) {
         if (had) fs.writeFileSync(T.LT_STATE, had); else fs.rmSync(T.LT_STATE, { force: true });
       }
     });
-    t('secure access: a request that came through the tunnel counts as from outside, whatever Host it carries', () => {
+    t('Secure Remote Access: a request that came through the tunnel counts as from outside, whatever Host it carries', () => {
       const R = globalThis.__casatorchRemote, U = globalThis.__casatorchSupport, undo = R.patchConfig({ remote: { on: true, hostname: 'home-a.casatorch.com' } });
       try {
         const rq = (addr, headers) => ({ socket: { remoteAddress: addr }, headers });
@@ -316,7 +316,7 @@ export default async function securityUnit(t) {
         assert.equal(R.viaTunnel(rq('192.0.2.5', { host: '192.0.2.4:8090', 'cf-connecting-ip': '198.51.100.7' })), false, 'a device at home can\'t pass itself off as the tunnel');
         assert.equal(R.viaTunnel(rq('127.0.0.1', { host: '127.0.0.1:8090' })), false, 'this computer itself');
       } finally { undo(); }
-      assert.equal(R.viaTunnel({ socket: { remoteAddress: '127.0.0.1' }, headers: { 'cf-ray': 'x' } }), false, 'secure access off: no tunnel');
+      assert.equal(R.viaTunnel({ socket: { remoteAddress: '127.0.0.1' }, headers: { 'cf-ray': 'x' } }), false, 'Secure Remote Access off: no tunnel');
     });
   } finally { dnsP.lookup = realLookup; srv.close(); }
 }

@@ -114,7 +114,7 @@ app.use((req, res, next) => {
   next();
 });
 /* API answers (JSON) are compressed too once they're worth it (the device list, history, the catalog): a few KB
-   instead of tens over Wi-Fi or secure access. Only reads, and only for CasaTorch's own pages (never another site's
+   instead of tens over Wi-Fi or Secure Remote Access. Only reads, and only for CasaTorch's own pages (never another site's
    request), so nothing a page sends in can be compared against a secret in the answer. Quick Brotli/gzip settings. */
 app.use('/api', (req, res, next) => {
   const ae = String(req.headers['accept-encoding'] || ''), enc = /\bbr\b/.test(ae) ? 'br' : /\bgzip\b/.test(ae) ? 'gzip' : null, site = req.headers['sec-fetch-site'];

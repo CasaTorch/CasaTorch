@@ -107,7 +107,7 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             }
             guard let found = await Self.firstAnswering(home.candidates) else { if !Task.isCancelled { self.openShell("unreachable=\(id)") }; return }
             let base = found.0
-            HomeStore.shared.learn(id, hello: found.1)   // secure access turned on (or off) since pairing: remember (or forget) the away-from-home address
+            HomeStore.shared.learn(id, hello: found.1)   // Secure Remote Access turned on (or off) since pairing: remember (or forget) the away-from-home address
             guard !Task.isCancelled else { return }
             await self.setSessionCookie(token: token, for: HomeStore.shared.home(id) ?? home, at: base)   // with what it just learned: the sign-in goes to the secure address too
             HomeStore.shared.touch(id, workingAddress: base)
@@ -210,7 +210,7 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
     /// A home is on screen: still answering at this address? If not, the best address that does (say, from
     /// anywhere instead of the home Wi-Fi), on the same page. If none does, "can't reach", which keeps trying.
     /// After a network change (`rerace`) the addresses are raced again even when this one still answers: back on the
-    /// home Wi-Fi, the home address (much faster than going out and back in through secure access) takes over.
+    /// home Wi-Fi, the home address (much faster than going out and back in through Secure Remote Access) takes over.
     func recheckHome(after delay: Double, rerace: Bool = false) {
         guard lock?.isLocked != true, let cur = web.url, cur.scheme != ShellSchemeHandler.scheme, let id = currentHomeId(), let home = HomeStore.shared.home(id), let here = Home.originString(cur), let hereURL = URL(string: here) else { return }
         recheckTask?.cancel()

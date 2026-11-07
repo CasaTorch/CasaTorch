@@ -165,7 +165,7 @@ function supportSummary(d) {
   if (i.homeAssistant) on.push(`Home Assistant${i.homeAssistant.liveUpdates ? ' (live)' : ''}`);
   if (i.hue) on.push('Hue'); if (i.shelly) on.push(`Shelly x${i.shelly}`); if (i.yolink) on.push('YoLink'); if (i.ring) on.push('Ring');
   if (i.cameras?.count) on.push(`${i.cameras.count} camera(s): ${Object.entries(i.cameras.types).map(([k, n]) => `${k} x${n}`).join(', ')}`);
-  if (i.secureAccess) on.push(`secure access (${i.secureAccess.state || 'on'})`);
+  if (i.secureAccess) on.push(`Secure Remote Access (${i.secureAccess.state || 'on'})`);
   const probs = (d.log || []).filter((l) => / (WARN|ERROR) /.test(l));
   const lines = [
     `CasaTorch ${d.casatorch?.version} - ${d.casatorch?.install}${d.casatorch?.pro ? ' - Pro' : ''} - ${d.system?.platform} - Node ${String(d.system?.node || '').replace(/^v/, '')}`,
@@ -241,16 +241,16 @@ const GUIDES = {
       }
     }
     if (ha.length) out.push(step(ha.some((d) => d.online === false) ? 'warn' : 'ok', 'Cameras from Home Assistant', ha.some((d) => d.online === false) ? ['{n} of {total} are unavailable in Home Assistant - check them there first.', { n: ha.filter((d) => d.online === false).length, total: ha.length }] : ['{n} cameras come through Home Assistant.', { n: ha.length }]));
-    if (config.ring) out.push(step(proStatus().pro ? 'ok' : 'warn', 'Ring', proStatus().pro ? 'Ring is connected. Battery cameras can take a few seconds to wake up.' : 'Ring cameras are part of Pro.'));
+    if (config.ring) out.push(step('ok', 'Ring', 'Ring is connected. Battery cameras can take a few seconds to wake up.'));
     out.push(step('info', 'Pictures but no live video?', 'Tiles show a fresh picture every few seconds. Live video plays when you tap a Frigate camera or a camera in Home Assistant.'));
     return { steps: out };
   },
   async remote() {
-    if (!config.remote?.on) return { steps: [step('info', 'Secure access', 'Secure access is off.', { fix: { label: 'Open Connections', href: '#settings/connections' } })] };
-    const out = [fromCheck('Secure access', await docRemote().catch(() => null))].filter(Boolean);
+    if (!config.remote?.on) return { steps: [step('info', 'Secure Remote Access', 'Secure Remote Access is off.', { fix: { label: 'Open Connections', href: '#settings/connections' } })] };
+    const out = [fromCheck('Secure Remote Access', await docRemote().catch(() => null))].filter(Boolean);
     out.push(proStatus().pro ? step('ok', 'Away from home', 'With Pro, the secure address works from anywhere.') : step('info', 'Away from home', 'On CasaTorch Basic the secure address works on your home Wi-Fi. Using it from anywhere is part of Pro.'));
     const n = typeof internetNow === 'function' ? await internetNow().catch(() => null) : null;
-    if (n && !n.online) out.push(step('bad', 'Internet', 'The internet is down at home, so secure access can\'t work until it\'s back.'));
+    if (n && !n.online) out.push(step('bad', 'Internet', 'The internet is down at home, so Secure Remote Access can\'t work until it\'s back.'));
     return { steps: out };
   },
   async locked(req) {

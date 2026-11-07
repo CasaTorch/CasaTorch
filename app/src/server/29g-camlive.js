@@ -13,7 +13,7 @@
  * Tiles get the camera's small stream (<cam>_sub and the like, or Frigate's detect stream), the full
  * view its main one (Frigate's record stream).
  *
- * Everything goes through CasaTorch, on the page's own address: the same sign-in, the same Secure access,
+ * Everything goes through CasaTorch, on the page's own address: the same sign-in, the same Secure Remote Access,
  * and Frigate's or Home Assistant's own sign-in stays on this box. Only the configured Frigate or Home
  * Assistant, and only go2rtc's fixed paths (stream.m3u8, hls/..., the MSE socket), can be reached - the
  * page never names an address or a path of its own.
@@ -190,7 +190,7 @@ async function hlsPass(status, type, body, res) {
 }
 
 /* ---- MSE over a WebSocket: the page's socket is joined, byte for byte, to go2rtc's (through Frigate) ----
-   The upgrade runs through every check a normal request does (address, Secure access, sign-in) by handing it to
+   The upgrade runs through every check a normal request does (address, Secure Remote Access, sign-in) by handing it to
    the app; only /api/camlive/<camera>/mse ever becomes a tunnel. And only from CasaTorch's own pages: the Origin
    must be this address (a page on another site can't open it with your cookies). */
 const CL_TUNNELS = new Map();   // camera -> open tunnels

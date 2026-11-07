@@ -439,7 +439,7 @@
     {
       "id": "homeassistant",
       "title": "Home Assistant",
-      "intro": "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring with Pro). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.",
+      "intro": "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.",
       "question": {
         "id": "uses",
         "label": "Do you use Home Assistant?",

@@ -77,7 +77,7 @@ function shieldsCard(d) {
   const box = el('div', { class: 'card' }), n = window.CasaNative;
   const draw = () => {
     const g = d.gate || {};
-    if (!g.on) return fillCard(box, el('h2', {}, icon('shield', 15), T('Away-from-home protection')), el('p', { class: 'small muted' }, T('Turn on secure access first (Settings › Connections & AI).')));
+    if (!g.on) return fillCard(box, el('h2', {}, icon('shield', 15), T('Away-from-home protection')), el('p', { class: 'small muted' }, T('Turn on Secure Remote Access first (Settings › Connections & AI).')));
     const done = (r, ok) => { d.gate = r.gate || d.gate; draw(); toast(r.warning ? T('Saved, but casatorch.com didn\'t get it yet: {why}', { why: r.warning }) : ok, 5000); };
     const lockBtn = g.locked
       ? el('button', { class: 'btn primary', onclick: async () => {
@@ -96,7 +96,7 @@ function shieldsCard(d) {
     sel.onchange = () => { if (sel.value) saveC([...chosen, sel.value]); };
     const chips = [...chosen].map((c) => el('button', { class: 'chip', title: T('Remove'), onclick: () => saveC([...chosen].filter((x) => x !== c)) }, countryName(c), ' ×'));
     fillCard(box, el('h2', {}, icon('shield', 15), T('Away-from-home protection')),
-      el('p', { class: 'small' }, el('span', { class: `dot ${g.active ? 'good' : 'warn'}` }), ' ', g.active ? T('Edge gate on: only approved devices reach this CasaTorch from outside.') : T('Edge gate not active yet. Secure access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.')),
+      el('p', { class: 'small' }, el('span', { class: `dot ${g.active ? 'good' : 'warn'}` }), ' ', g.active ? T('Edge gate on: only approved devices reach this CasaTorch from outside.') : T('Edge gate not active yet. Secure Remote Access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.')),
       el('h3', {}, T('Lock remote access')),
       el('p', { class: 'small muted' }, g.locked ? T('Remote access is locked. Nobody can reach this CasaTorch from outside until you unlock it, here at home or from the CasaTorch app.') : T('Refuses everything from outside right away - phones, browsers, everyone - until you unlock it here at home or from the CasaTorch app.')),
       lockBtn,

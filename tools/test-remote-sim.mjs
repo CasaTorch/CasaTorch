@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * The dashboard over a slow, flaky link (what a phone on mobile data sees through secure access).
+ * The dashboard over a slow, flaky link (what a phone on mobile data sees through Secure Remote Access).
  *
  * A demo CasaTorch runs behind a small TCP proxy that adds latency (default 150 ms round trip), a little jitter
  * and limited bandwidth, and that can:

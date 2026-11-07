@@ -262,7 +262,7 @@ class MainActivity : AppCompatActivity() {
             if (token == null) return@launch openShell("signedout=$id")
             tokenCache[id] = token
             val (base, hello) = firstAnswering(home.candidates) ?: return@launch openShell("unreachable=$id")
-            HomeStore.learn(id, hello)   // secure access turned on (or off) since pairing: remember (or forget) the away-from-home address
+            HomeStore.learn(id, hello)   // Secure Remote Access turned on (or off) since pairing: remember (or forget) the away-from-home address
             if (!isActive) return@launch
             setSessionCookie(token, HomeStore.home(id) ?: home, base)   // with what it just learned: the sign-in goes to the secure address too
             HomeStore.touch(id, base)
@@ -337,7 +337,7 @@ class MainActivity : AppCompatActivity() {
      * A home is on screen: still answering at this address? If not, the best address that does (from anywhere instead
      * of the home Wi-Fi, say), on the same page. If none does, "can't reach", which keeps trying by itself.
      * After a network change ([rerace]) the addresses are raced again even when this one still answers: back on the
-     * home Wi-Fi, the home address (much faster than going out and back in through secure access) takes over.
+     * home Wi-Fi, the home address (much faster than going out and back in through Secure Remote Access) takes over.
      */
     private fun recheckHome(delayMs: Long, rerace: Boolean = false) {
         if (lockView.visibility == View.VISIBLE || onShell) return

@@ -1,7 +1,7 @@
 /* ======================================================================
  * Setup wizard, part 2: everything that works WITHOUT Home Assistant.
  * Town lookup for the weather, calendar/feed tests, team lists, Hue
- * pairing, Shelly/YoLink/Reolink/snapshot-camera tests, Ring (Pro Labs)
+ * pairing, Shelly/YoLink/Reolink/snapshot-camera tests, Ring (Labs)
  * sign-in. Lives under /api/setup, so it closes with the wizard (05-setup.js).
  * ====================================================================== */
 app.get('/api/setup/geocode', async (req, res) => {

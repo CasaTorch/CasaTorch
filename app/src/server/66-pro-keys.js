@@ -44,7 +44,7 @@ app.post('/api/license/claim/finish', requireRole('admin'), express.json(), asyn
   } catch (err) { res.status(err.status === 400 || err.status === 404 ? 400 : err.status === 409 ? 409 : err.status === 429 ? 429 : 502).json({ error: err.message }); }   // 409: the key is already on as many homes as it covers
 });
 /** Remember what casatorch.com said about this key; when Pro changes because of it, say so in the log, and tell the edge
-    gate (Secure access from away follows Pro). */
+    gate (Secure Remote Access from away follows Pro). */
 function licRemember(key, j, at = new Date().toISOString()) {
   const before = proStatus().pro, prev = licState.check;
   const st = ['active', 'grace', 'expired', 'revoked'].includes(j?.state) ? j.state : j?.revoked ? 'revoked' : null;

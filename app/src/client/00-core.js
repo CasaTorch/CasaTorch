@@ -35,7 +35,7 @@ const ICONS = {
   image: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M15.5 10a1.5 1.5 0 1 0 0-.01', alarm: 'M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 1.5M5 3 2 6M19 3l3 3',
 };
 const icon = (name, size) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.8'); s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round'); if (size) { s.setAttribute('width', size); s.setAttribute('height', size); } s.innerHTML = `<path d="${ICONS[name] || ICONS.dotc}"/>`; return s; };
-/* ---- Talking to the CasaTorch over any network (home Wi-Fi, mobile data through secure access, a train tunnel) ----
+/* ---- Talking to the CasaTorch over any network (home Wi-Fi, mobile data through Secure Remote Access, a train tunnel) ----
    Every request has a time limit (a connection the network change left dead never answers - it would wait forever);
    a read that fails or times out is tried once more; the same read asked twice at once is asked once; the pages'
    own reads stop when you leave the page. Pages draw at once from the last answer they had (kept in memory and, for
@@ -435,7 +435,7 @@ function drawBanner() {
   const p = s.pro || {}; b.className = ''; b.replaceChildren();
   if (s.demo) b.append(T('Demo mode - sample data, no real house connected.'), el('a', { href: '/setup.html' }, T('Set up my house')));
   else if (S.updates?.available && !updSnoozed(S.updates.latest)) b.append(icon('spark', 16), S.updates.auto ? T('CasaTorch {v} is available - it installs itself overnight.', { v: S.updates.latest }) : T('CasaTorch {v} is available.', { v: S.updates.latest }), el('a', { href: '#settings/updates' }, S.updates.auto ? T('Details') : T('How to update')), updSnoozeBtn(S.updates.latest));
-  else if (p.plan === 'trial') b.append(icon('spark', 16), p.trialDaysLeft === 1 ? T('Pro trial: 1 day left - 3D Home, your Home AI Agent and Ring are unlocked.') : T('Pro trial: {n} days left - 3D Home, your Home AI Agent and Ring are unlocked.', { n: p.trialDaysLeft }), el('a', { href: '#settings/pro' }, T('Enter a license key')));
+  else if (p.plan === 'trial') b.append(icon('spark', 16), p.trialDaysLeft === 1 ? T('Pro trial: 1 day left - 3D Home and your Home AI Agent are unlocked.') : T('Pro trial: {n} days left - 3D Home and your Home AI Agent are unlocked.', { n: p.trialDaysLeft }), el('a', { href: '#settings/pro' }, T('Enter a license key')));
   else if (p.grace) b.append(T('Your Pro subscription has ended - Pro keeps working for a few more days.'), el('a', { href: '#settings/pro' }, T('Renew')));
   /* Pro that was paid for and ended (a cancellation, a refund, a key that ran out): for two months, when and how to renew */
   else if (!p.pro && p.endedOn && Date.now() - Date.parse(p.endedOn) < 60 * 86400_000) { b.className = 'free'; b.append(`${T('Pro ended on {date}', { date: fmt(p.endedOn, { dateStyle: 'medium' }) })} - ${T('CasaTorch keeps working as Basic.')}`, el('a', { href: '#settings/pro' }, T('Renew'))); }

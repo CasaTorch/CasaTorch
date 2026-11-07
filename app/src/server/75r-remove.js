@@ -2,7 +2,7 @@
  * Remove CasaTorch (Settings › Updates & backup › Remove CasaTorch): one tap, for the owner, after their password.
  * In order, each step on its own (one that fails doesn't stop the rest, and the answer says how each went):
  *   1. the edge gate's passes revoked (every phone's and browser's access from away ends at Cloudflare at once)
- *   2. Secure access off: the tunnel, its address and the gate's record deleted at casatorch.com
+ *   2. Secure Remote Access off: the tunnel, its address and the gate's record deleted at casatorch.com
  *   3. the secure address at home off: its DNS name deleted at casatorch.com, the certificate here
  *   4. off "Find my CasaTorch" at casatorch.com
  *   5. every phone and browser signed out (the phones' alerts stop with them)

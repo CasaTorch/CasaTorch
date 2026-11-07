@@ -6,6 +6,11 @@ What changed in each CasaTorch version. The illustrated version, with links into
 
 ## Unreleased
 
+### Plans
+- **Ring is now part of Basic (free).** Ring doorbells, cameras and chimes connect without Home Assistant on every
+  CasaTorch, with no Pro needed. It is still marked Labs, because Ring has no official way in.
+- **Secure access is now called Secure Remote Access**, in the app, the phone apps and all 13 languages.
+
 ### Adding devices
 - **New devices found.** CasaTorch now keeps looking for gear on your home network, every 30 minutes and whenever you
   press Look again: Home Assistant and new devices in it, Hue bridges, Shelly, Frigate, go2rtc streams, ONVIF and RTSP

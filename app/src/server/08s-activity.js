@@ -3,7 +3,7 @@
  *
  * Sign-ins, failures, people, two-step sign-in and panels are written to
  * the audit log by 08-signin.js. This adds the rest an owner wants to see in
- * Settings › People & sign-in › Activity: settings changes, secure access
+ * Settings › People & sign-in › Activity: settings changes, Secure Remote Access
  * and the secure address at home turned on or off, alerts turned on or off
  * on a device, pairing codes, safety exceptions, exports and downloads.
  *

@@ -35,7 +35,7 @@ const STORE_KINDS = [
   ['restorePoints', '3D Home restore points', (n) => n === '.floorplan-restore'], ['beforeRestore', 'Kept from restores', (n) => n.startsWith('.before-restore-')],
   ['history', 'History, energy and replay', (n) => /^(history|replay|power-baseline|alerts|apptests)\.json$|^audit\.log$/.test(n)],
   ['family', 'Family, household and reminders', (n) => /^(family|household|events|nudges)\.json$|^nudges$/.test(n)],
-  ['mapCache', 'Map cache', (n) => n === 'radar-cache'], ['helper', 'Secure access helper', (n) => n === 'bin'],
+  ['mapCache', 'Map cache', (n) => n === 'radar-cache'], ['helper', 'Secure Remote Access helper', (n) => n === 'bin'],
   ['settingsHistory', 'Settings history', (n) => n === '.settings-history'],
 ];
 let storeMemo = { at: 0, parts: null };
@@ -175,7 +175,7 @@ async function docInternet() {
     : chk('internet', 'connections', 'Internet', 'warn', 'The internet is down. Everything at home keeps working; weather, news and updates wait until it\'s back.');
 }
 
-/* Secure access (42-remote.js): does the address work from outside? CasaTorch opens it itself to find out. */
+/* Secure Remote Access (42-remote.js): does the address work from outside? CasaTorch opens it itself to find out. */
 async function docRemote() {
   if (!config.remote?.on || isDemo()) return null;
   const age = () => (remote.check.at ? Math.round((Date.now() - Date.parse(remote.check.at)) / 60_000) : null);
@@ -185,9 +185,9 @@ async function docRemote() {
   // the title is a phrase of its own ("Working from anywhere"): TM() on the screen translates it inside the sentence
   const m = age(), vt = { title: v.title }, detail = m == null ? ['{title}.', vt] : m < 1 ? ['{title}. Checked from outside just now.', vt] : [m === 1 ? '{title}. Checked from outside a minute ago.' : '{title}. Checked from outside {n} minutes ago.', { ...vt, n: m }];
   const why = v.detail ? { why: v.detail, ...(v.detailMsg ? { whyMsg: v.detailMsg, whyVars: v.detailVars } : {}) } : {};   // casatorch.com's words: TM() on the screen
-  if (v.status === 'working') return chk('remote', 'connections', 'Secure access', 'ok', detail, why);
-  if (v.status === 'problem') return chk('remote', 'connections', 'Secure access', 'bad', v.title, { ...why, fix });
-  return chk('remote', 'connections', 'Secure access', 'warn', v.title, { ...why, fix });
+  if (v.status === 'working') return chk('remote', 'connections', 'Secure Remote Access', 'ok', detail, why);
+  if (v.status === 'problem') return chk('remote', 'connections', 'Secure Remote Access', 'bad', v.title, { ...why, fix });
+  return chk('remote', 'connections', 'Secure Remote Access', 'warn', v.title, { ...why, fix });
 }
 
 /* The edge gate (42g-edge-gate.js): is this home's address closed to devices that aren't approved? */
@@ -195,7 +195,7 @@ async function docEdgeGate() {
   if (!config.remote?.on || isDemo()) return null;
   if (remote.checking) await remote.checking.catch(() => {});
   const g = gateView(), fix = { action: 'gate-sync', label: 'Try again' };
-  if (!g.active) return chk('edgegate', 'connections', 'Edge gate', 'warn', g.lastSync && !g.lastSync.ok ? ['Edge gate not active yet: {why}', { why: String(g.lastSync.error || '').replace(/\.+$/, '') }] : 'Edge gate not active yet. Secure access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.', { fix });
+  if (!g.active) return chk('edgegate', 'connections', 'Edge gate', 'warn', g.lastSync && !g.lastSync.ok ? ['Edge gate not active yet: {why}', { why: String(g.lastSync.error || '').replace(/\.+$/, '') }] : 'Edge gate not active yet. Secure Remote Access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.', { fix });
   if (g.locked) return chk('edgegate', 'connections', 'Edge gate', 'ok', 'On. Remote access is locked.');
   if (g.probe === 'open') return chk('edgegate', 'connections', 'Edge gate', 'warn', 'Edge gate not active yet: this CasaTorch\'s key is registered, but its address still answers devices without a ticket.', { fix });
   if (g.probe === 'closed') return chk('edgegate', 'connections', 'Edge gate', 'ok', 'On: only approved devices reach this CasaTorch from outside.');
@@ -250,8 +250,8 @@ function docUpdates() {
 const DEV_FLAG = (v) => v === '1', DEV_SET = (v) => v != null && String(v).trim() !== '';
 const DEV_SWITCHES = [
   ['CASATORCH_PRO_DEV', 'every Pro feature without a key', DEV_FLAG], ['CASATORCH_TEST', 'test hooks', DEV_FLAG],
-  ['CASATORCH_ASK_FAKE', 'a stand-in AI agent and made-up web search', DEV_FLAG], ['CASATORCH_REMOTE_FAST', 'test timings for secure access', DEV_FLAG],
-  ['CASATORCH_REMOTE_URL', 'another server for secure access', DEV_SET], ['CASATORCH_REMOTE_CHECK_BASE', 'another address for the secure access self-test', DEV_SET],
+  ['CASATORCH_ASK_FAKE', 'a stand-in AI agent and made-up web search', DEV_FLAG], ['CASATORCH_REMOTE_FAST', 'test timings for Secure Remote Access', DEV_FLAG],
+  ['CASATORCH_REMOTE_URL', 'another server for Secure Remote Access', DEV_SET], ['CASATORCH_REMOTE_CHECK_BASE', 'another address for the Secure Remote Access self-test', DEV_SET],
   ['CASATORCH_CFD_BASE', 'another download place for the secure-access helper', DEV_SET], ['CASATORCH_LOCAL_URL', 'another server for the secure address at home', DEV_SET],
   ['CASATORCH_ACME_URL', 'another certificate authority', DEV_SET], ['CASATORCH_PRO_API', 'another server for Pro keys', DEV_SET],
   ['CASATORCH_PUSH_RELAY', 'another relay for app alerts', DEV_SET], ['CASATORCH_FIND_URL', 'another server for Find my CasaTorch', DEV_SET],
@@ -369,19 +369,19 @@ const FIXES = {
   },
   async restart(_b, req) { if (INSTALL === 'manual') throw new Error('This copy was started by hand - stop it and start it again where it runs.'); if (typeof audit === 'function') audit(req, 'restarted'); setTimeout(() => process.exit(0), 700); return { message: 'Restarting - this page reconnects in a few seconds.', restarting: true }; },
   async 'remote-repair'(_b, req) {
-    if (!config.remote?.on) throw new Error('Secure access is off.');
+    if (!config.remote?.on) throw new Error('Secure Remote Access is off.');
     await remoteOn(); if (typeof audit === 'function') audit(req, 'secure-access-repaired');
-    return { message: 'Secure access was set up again - it checks itself in a moment.' };
+    return { message: 'Secure Remote Access was set up again - it checks itself in a moment.' };
   },
   async 'remote-check'() {
-    if (!config.remote?.on) throw new Error('Secure access is off.');
-    if (!remote.proc && remote.code !== 'token') { await ensureCloudflared(); startTunnel(); return { message: 'Starting secure access again - it checks itself in a moment.' }; }
+    if (!config.remote?.on) throw new Error('Secure Remote Access is off.');
+    if (!remote.proc && remote.code !== 'token') { await ensureCloudflared(); startTunnel(); return { message: 'Starting Secure Remote Access again - it checks itself in a moment.' }; }
     const r = await remoteCheck('by you'), c = await docRemote();
     if (c) DOC.checks = [...DOC.checks.filter((x) => x.id !== 'remote'), c];
-    return { check: c, message: r?.ok ? 'Secure access works from outside.' : 'Not working yet - see what it says above.' };
+    return { check: c, message: r?.ok ? 'Secure Remote Access works from outside.' : 'Not working yet - see what it says above.' };
   },
   async 'gate-sync'() {
-    if (!config.remote?.on) throw new Error('Secure access is off.');
+    if (!config.remote?.on) throw new Error('Secure Remote Access is off.');
     const r = await gateSync({ grace: true });
     if (!r.ok) throw new Error(r.error || 'casatorch.com couldn\'t be reached. Try again in a few minutes.');
     if (remote.state === 'connected') await remoteCheck('by you').catch(() => {});

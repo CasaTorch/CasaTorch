@@ -169,7 +169,7 @@ async function voiceCards() {
       el('p', { class: 'small', style: 'color:var(--warn)' }, T('Copy it now - CasaTorch shows it only this once. Lost it? Remove it and make a new one.')),
       el('div', { class: 'row', style: 'gap:8px;align-items:center' }, el('div', { class: 'vo-token grow' }, `Bearer ${r.token}`), copy(`Bearer ${r.token}`, T('Key'))),
       el('dl', { class: 'vo-kv' }, el('dt', {}, T('Address')), el('dd', {}, url, ' ', copy(url, T('Address')))),
-      addr.where === 'anywhere' ? null : el('p', { class: 'tiny faint' }, T('This address works on your home network. Turn on Secure access to use it away from home too.')),
+      addr.where === 'anywhere' ? null : el('p', { class: 'tiny faint' }, T('This address works on your home network. Turn on Secure Remote Access to use it away from home too.')),
       el('div', { class: 'small', style: 'font-weight:600;margin-top:10px' }, T('On the iPhone, in the Shortcuts app')),
       el('ol', { class: 'vo-steps small' }, [
         T('Tap + to make a new shortcut and name it "Ask CasaTorch" (that\'s what you\'ll say to Siri).'),

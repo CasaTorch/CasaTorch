@@ -127,7 +127,7 @@ t('power: the house total never counts a plug or a car charger twice', () => {
   assert.equal(P([{ id: 'ha:sensor.solar_power', kind: 'sensor', powerW: 3000 }, { id: 'p', kind: 'plug', powerW: 40 }]), 40, 'solar production is not use');
 });
 
-await t('secure access: Basic works from home only (IPv4 exact, IPv6 same network)', async () => {
+await t('Secure Remote Access: Basic works from home only (IPv4 exact, IPv6 same network)', async () => {
   H.remote.homeIps = { v4: '198.51.100.7', v6: '2001:db8:aa:bb::1', at: Date.now() };
   assert.ok(await H.fromHome('198.51.100.7')); assert.ok(!(await H.fromHome('198.51.100.8')));
   assert.ok(await H.fromHome('2001:db8:aa:bb:1234::9'), 'another device on the home network');
@@ -783,9 +783,9 @@ await t('self-healing: a damaged settings file with no good copy stops CasaTorch
   } finally { child.kill(); }
 });
 
-/* Secure access (42-remote.js, 02-remote-gate.js): the words for each state, the self-test, cloudflared's lines, the Basic gate. */
+/* Secure Remote Access (42-remote.js, 02-remote-gate.js): the words for each state, the self-test, cloudflared's lines, the Basic gate. */
 const RM = globalThis.__casatorchRemote;
-t('secure access: each state in plain words, with the right fix', () => {
+t('Secure Remote Access: each state in plain words, with the right fix', () => {
   const V = (o) => RM.remoteView({ on: true, state: 'connected', code: null, check: { ok: true }, anywhere: true, ...o });
   assert.equal(RM.remoteView({ on: false }).status, 'off');
   assert.equal(V({ state: 'downloading' }).title, 'Getting ready…');
@@ -803,7 +803,7 @@ t('secure access: each state in plain words, with the right fix', () => {
   assert.equal(V({ state: 'error', code: null, why: 'Something odd' }).fix.action, 'repair');
   for (const [, [title, detail]] of Object.entries(RM.REMOTE_WHY)) assert.ok(!/[A-Z]{3,}_|Error:|undefined/.test(title + (detail || '')), title);
 });
-t('secure access: what the self-test answer means', () => {
+t('Secure Remote Access: what the self-test answer means', () => {
   const R = RM.remoteCheckResult, e = (code) => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error(code), { code }) });
   const home = { id: 'h1' }, good = { casatorch: true, home, check: 'n0nce' };
   assert.deepEqual(R({ status: 200, json: good, nonce: 'n0nce', homeId: 'h1' }), { ok: true, code: 'ok' });
@@ -815,7 +815,7 @@ t('secure access: what the self-test answer means', () => {
   for (const s of [502, 530]) assert.equal(R({ status: s, json: null }).code, 'tunnel', `Cloudflare ${s}`);
   assert.equal(R({ status: 403, json: { needsPro: true } }).code, 'unreachable');
 });
-t('secure access: the pinned cloudflared is new enough, and every download has its own checksum', () => {
+t('Secure Remote Access: the pinned cloudflared is new enough, and every download has its own checksum', () => {
   const src = fsMod.readFileSync(new URL('../src/server/42-remote.js', import.meta.url), 'utf8');
   const v = /const CFD_VERSION = '(\d+)\.(\d+)\.(\d+)'/.exec(src); assert.ok(v, 'CFD_VERSION found');
   const n = (a) => a[0] * 1e6 + a[1] * 1e3 + a[2];
@@ -823,7 +823,7 @@ t('secure access: the pinned cloudflared is new enough, and every download has i
   const sums = [...src.matchAll(/\['cloudflared-[\w.-]+', '([0-9a-f]{64})'\]/g)].map((m) => m[1]);
   assert.equal(sums.length, 6, 'six platforms'); assert.equal(new Set(sums).size, 6, 'no checksum copied twice');
 });
-t('secure access: cloudflared\'s log lines', () => {
+t('Secure Remote Access: cloudflared\'s log lines', () => {
   const K = RM.remoteLineKind;
   assert.equal(K('2026-10-17T12:00:00Z INF Registered tunnel connection connIndex=0 connection=abc event=0 ip=198.41.200.13 location=sjc01 protocol=quic'), 'registered');
   assert.equal(K('ERR Register tunnel error from server side error="Unauthorized: Invalid tunnel secret" connIndex=0'), 'token');
@@ -835,7 +835,7 @@ t('secure access: cloudflared\'s log lines', () => {
   const restore = RM.patchConfig({ remote: { token: 'eyJhIjoiYmMifQsecretTOKENvalue' } });
   try { const m = RM.remoteMask('token eyJhIjoiYmMifQsecretTOKENvalue at 198.41.192.7'); assert.ok(!m.includes('secretTOKEN') && !m.includes('198.41')); } finally { restore(); }
 });
-await t('secure access: Basic, away from home - JSON for the app, a page for browsers; at home, Pro and the self-test get through', async () => {
+await t('Secure Remote Access: Basic, away from home - JSON for the app, a page for browsers; at home, Pro and the self-test get through', async () => {
   const restore = RM.patchConfig({ remote: { on: true, hostname: 'home-test.casatorch.test' }, setupAt: '2020-01-01T00:00:00.000Z', license: undefined });
   const H0 = { ...H.remote.homeIps }; H.remote.homeIps = { v4: '198.51.100.7', v6: null, at: Date.now() };
   const srv = H.app.listen(0, '127.0.0.1'); await new Promise((ok) => srv.once('listening', ok));
@@ -853,7 +853,7 @@ await t('secure access: Basic, away from home - JSON for the app, a page for bro
     assert.equal((await get('/api/app/hello', '203.0.113.50', { 'x-casatorch-check': 'q1w2e3r4t5y6u7i8' })).status, 403, 'nor an old one');
   } finally { H.remote.nonce = null; H.remote.homeIps = H0; srv.close(); restore(); }
 });
-await t('secure access: Pro away from home is refused while sign-in is off (never open on the internet); at home it still works', async () => {
+await t('Secure Remote Access: Pro away from home is refused while sign-in is off (never open on the internet); at home it still works', async () => {
   const restore = RM.patchConfig({ remote: { on: true, hostname: 'home-test.casatorch.test' }, setupAt: '2020-01-01T00:00:00.000Z', license: undefined });
   const H0 = { ...H.remote.homeIps }; H.remote.homeIps = { v4: '198.51.100.7', v6: null, at: Date.now() };
   const pd = process.env.CASATORCH_PRO_DEV; process.env.CASATORCH_PRO_DEV = '1';   // Pro, and (in the unit tests) no accounts: sign-in is off
