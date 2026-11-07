@@ -4,7 +4,7 @@
 
 | | Who it's for | What you get | Price |
 | --- | --- | --- | --- |
-| **Community** | Everyone | GitHub issues, these docs, and a Discord community (opening soon) | Free |
+| **Community** | Everyone | GitHub issues, these docs, and the [CasaTorch Discord](https://discord.gg/DU5sexJMzu) | Free |
 | **Help** | Everyone | E-mail support from the CasaTorch team | Free |
 
 E-mail: **support@casatorch.com** <!-- scrub-ok: public support address -->

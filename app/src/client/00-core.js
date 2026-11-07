@@ -19,6 +19,7 @@ const el = (tag, attrs = {}, ...kids) => {
 const ctSheet = (id, css) => { let l = document.getElementById(id); if (!l) { l = document.createElement('link'); l.rel = 'stylesheet'; l.id = id; l.dataset.ctSheet = '1'; document.head.append(l); } const old = l.href; l.href = URL.createObjectURL(new Blob([css], { type: 'text/css' })); if (old.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(old), 10000); return l; };
 /* Icons: 24x24 strokes, drawn here so CasaTorch needs nothing from the internet. */
 const ICONS = {
+  video: 'M3 6h18v12H3zM10 9.5v5l4.5-2.5z', chat: 'M4 5h16v11H9l-5 4z', chats: 'M3 4h13v9H8l-5 4zM8 16v1h8l5 4V8h-2',
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6', paw: 'M5.7 10.5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M14.7 10.5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M8.4 6.5a1.7 1.7 0 1 0 3.4 0a1.7 1.7 0 1 0-3.4 0M12.2 6.5a1.7 1.7 0 1 0 3.4 0a1.7 1.7 0 1 0-3.4 0M12 13c-2.8 0-5 3-5 5 0 1.8 1.8 2.2 5 1.3 3.2.9 5 .5 5-1.3 0-2-2.2-5-5-5z',
   pill: 'M10.5 20.5a5 5 0 0 1-7-7l6-6a5 5 0 0 1 7 7zM8.5 8.5l7 7', bill: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3', plant: 'M12 21v-8M12 13c0-4 3-7 7-7 0 4-3 7-7 7zM12 15c0-3-2-5-6-5 0 3 2 5 6 5zM7 21h10',
   cake: 'M4 21h16M5 21v-7h14v7M5 16.5c2 1.5 4.5 1.5 7 0s5-1.5 7 0M12 14v-4M12 7.5c-.9 0-1.4-.7-1.4-1.4 0-.9 1.4-2.6 1.4-2.6s1.4 1.7 1.4 2.6c0 .7-.5 1.4-1.4 1.4z', car: 'M3 17v-4l2-5h14l2 5v4H3zM6 13h12M7 17v2M17 17v2M7 15h.01M17 15h.01',

@@ -228,7 +228,7 @@ own network so nothing leaves the house. It never unlocks doors or opens garage 
 
 ## Support and services
 
-- **Community** (free): GitHub issues, and a CasaTorch Discord (opening soon)
+- **Community** (free): GitHub issues, and the [CasaTorch Discord](https://discord.gg/DU5sexJMzu)
 - **Help** (free, for everyone): e-mail support from the CasaTorch team
 - **Home network planning**: a one-on-one consultation to scope your network, Wi-Fi, cameras and
   sensors, with a written plan

@@ -34,11 +34,15 @@ function helpCard() {
   const item = (title, text, price, action) => el('div', { style: 'padding:12px 0;border-top:1px solid var(--line)' }, el('div', { class: 'row between' }, el('b', {}, title), price ? el('span', { class: 'pill' }, price) : null), el('div', { class: 'small muted', style: 'margin:4px 0 8px' }, text), action);
   return el('div', { class: 'card' }, el('h2', {}, T('Help & services')),
     el('div', { class: 'row wrap', style: 'margin-bottom:6px' }, link('mailto:support@casatorch.com', T('E-mail support'), 'btn primary'), link(`${SITE}/docs`, T('Guides')), el('button', { class: 'btn', onclick: () => tour() }, icon('spark'), T('Take the tour')), el('button', { class: 'btn', onclick: () => whatsNew(true) }, icon('info'), T('What\'s new'))),   // scrub-ok: the public support address
-    item(T('Help'), T('E-mail help from the CasaTorch team - for everyone. A community Discord is opening soon.'), T('Included')),
+    item(T('Help'), T('E-mail help from the CasaTorch team - for everyone. Or ask other CasaTorch owners on our Discord.'), T('Included'), link(SOCIALS.find((x) => x[0] === 'Discord')[1], T('Join the Discord'), 'btn small')),
     item(T('Home network design'), T('Wi-Fi, wiring, cameras and sensors planned around your home, from someone with home and business network design experience. A clear, fixed quote first.'), null, link('mailto:sales@casatorch.com?subject=Network%20project%20quote', T('Ask for a quote'), 'btn small')),   // scrub-ok: the public sales address
     item(T('CasaTorch Box'), T('A small box with CasaTorch already on it - for a second home, or a friend. Box Lite or Box, plug it in and go.'), null, link(`${SITE}/box`, T('Order a Box'), 'btn small')),
-    item(T('About CasaTorch'), T('Free software under the GNU AGPL-3.0, with no warranty. What it is built on and connects to, and every license.'), null, el('div', { class: 'row wrap', style: 'gap:8px' }, link('/about/licenses', T('Open-source licenses'), 'btn small'), link(`${SITE}/terms`, T('Terms'), 'btn small ghost'), link(`${SITE}/privacy`, T('Privacy'), 'btn small ghost'))));
+    item(T('About CasaTorch'), T('Free software under the GNU AGPL-3.0, with no warranty. What it is built on and connects to, and every license.'), null, el('div', { class: 'row wrap', style: 'gap:8px' }, link('/about/licenses', T('Open-source licenses'), 'btn small'), link(`${SITE}/terms`, T('Terms'), 'btn small ghost'), link(`${SITE}/privacy`, T('Privacy'), 'btn small ghost'))),
+    item(T('Follow CasaTorch'), T('Videos, tips and news from the team.'), null, el('div', { class: 'socials' }, SOCIALS.map(([name, href, ic]) => el('a', { class: 'btn small ghost social', href, target: '_blank', rel: 'noopener noreferrer' }, ic ? icon(ic, 15) : null, name)))));
 }
+/* Where CasaTorch is on the web: simple glyphs of our own, never the services' logos. */
+const SOCIALS = [['YouTube', 'https://www.youtube.com/channel/UCtc9Epbdrni4ILSavFesXog', 'video'], ['Reddit', 'https://www.reddit.com/user/CasaTorch/', 'chat'], ['X', 'https://x.com/CasaTorch', null],
+  ['Discord', 'https://discord.gg/DU5sexJMzu', 'chats'], ['Instagram', 'https://www.instagram.com/casa.torch/', 'camera']];
 /* The home's language: saved for everyone, and this screen switches straight away. */
 function langPicker() {
   return el('select', { 'aria-label': T('Language'), style: 'max-width:240px', onchange: async (e) => {
