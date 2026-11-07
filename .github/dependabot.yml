@@ -38,3 +38,14 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  # The Android app: Gradle itself, the Android and Kotlin build plugins, and the app's libraries. Grouped into one
+  # weekly pull request; the Mobile apps workflow builds it, so a bad combination shows up as a red check, not a broken app.
+  - package-ecosystem: gradle
+    directory: /mobile/android
+    schedule: { interval: weekly, day: monday, time: "06:00" }
+    open-pull-requests-limit: 3
+    commit-message: { prefix: "android" }
+    groups:
+      android:
+        patterns: ["*"]
