@@ -353,6 +353,14 @@ t('Google sign-in: waiting sign-ins anyone can start are capped', () => {
   G.googleStates.clear();
 });
 
+t('reminders: a photo name from a restored file can only remove a reminder photo', () => {
+  const N = globalThis.__casatorchNudgePhoto, outside = `${N.NUDGE_DIR}/../unit-keep.txt`;
+  fsMod.mkdirSync(N.NUDGE_DIR, { recursive: true }); fsMod.writeFileSync(outside, 'x');
+  N.nudgePhotoRm({ photo: '../unit-keep.txt' }); assert.ok(fsMod.existsSync(outside), 'outside the photo folder: left alone');
+  fsMod.writeFileSync(`${N.NUDGE_DIR}/0123456789ab.jpg`, 'x'); N.nudgePhotoRm({ photo: '0123456789ab.jpg' }); assert.ok(!fsMod.existsSync(`${N.NUDGE_DIR}/0123456789ab.jpg`));
+  fsMod.rmSync(outside, { force: true });
+});
+
 t('energy card: solar, battery and grid come only from sensors that exist', () => {
   const none = H.energyFlows([{ id: 'ha:sensor.fridge_power', name: 'Fridge', kind: 'sensor', powerW: 90 }], 900);
   assert.equal(none.solarW, null); assert.equal(none.battery, null); assert.equal(none.gridW, null);

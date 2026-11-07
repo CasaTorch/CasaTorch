@@ -82,6 +82,10 @@ async function nudgePush(n, { kind = 'reminders', isTest = false } = {}) {
 }
 
 /* ---- what the app gets ---- */
+/* A reminder's photo file goes with it - only a name CasaTorch itself made (nudges.json can come from a backup). */
+const NUDGE_PHOTO = /^[0-9a-f]{12}\.(jpg|png|webp)$/;
+const nudgePhotoRm = (n) => { if (typeof n?.photo === 'string' && NUDGE_PHOTO.test(n.photo)) fs.rmSync(path.join(NUDGE_DIR, n.photo), { force: true }); };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchNudgePhoto = { nudgePhotoRm, NUDGE_DIR };
 const nudgeView = (n) => ({ id: n.id, title: n.title, icon: n.icon || null, sound: NUDGE_SOUNDS.includes(n.sound) ? n.sound : 'none', photo: !!n.photo, time: n.time, repeat: n.repeat, days: n.days || [], date: n.date || null, flash: n.flash !== false, push: !!n.push, on: n.on !== false, lastFired: n.lastFired || null });
 function nudgeClean(b, old = {}) {
   const title = String(b.title ?? old.title ?? '').trim().slice(0, 60);
@@ -134,7 +138,7 @@ app.put('/api/nudges/:id', requireRole('member'), express.json({ limit: '4kb' })
 app.delete('/api/nudges/:id', requireRole('member'), (req, res) => {
   if (isDemo()) return res.status(400).json({ error: 'Not in the demo.' });
   const n = ng.list.find((x) => x.id === req.params.id); if (!n) return res.json({ ok: true });
-  if (n.photo) fs.rmSync(path.join(NUDGE_DIR, n.photo), { force: true });
+  nudgePhotoRm(n);
   ng.list = ng.list.filter((x) => x !== n); ng.active = ng.active.filter((a) => a.id !== n.id); nudgeSave(); res.json({ ok: true });
 });
 /* Done (for everyone) or snooze 10 minutes. */
@@ -159,17 +163,17 @@ app.post('/api/nudges/:id/photo', requireRole('member'), express.raw({ type: '*/
   const buf = Buffer.isBuffer(req.body) ? req.body : null, t = buf && NUDGE_TYPES.find(([, , ok]) => buf.length > 12 && ok(buf));
   if (!t) return res.status(400).json({ error: 'Use a JPEG, PNG or WebP picture, up to 5 MB.' });
   fs.mkdirSync(NUDGE_DIR, { recursive: true, mode: 0o700 });
-  if (n.photo) fs.rmSync(path.join(NUDGE_DIR, n.photo), { force: true });
+  nudgePhotoRm(n);
   n.photo = `${n.id}.${t[0]}`; writeFileSafe(path.join(NUDGE_DIR, n.photo), buf, 0o600); nudgeSave();
   res.json({ ok: true, nudge: nudgeView(n) });
 });
 app.delete('/api/nudges/:id/photo', requireRole('member'), (req, res) => {
   const n = ng.list.find((x) => x.id === req.params.id); if (!n) return res.json({ ok: true });
-  if (n.photo) fs.rmSync(path.join(NUDGE_DIR, n.photo), { force: true });
+  nudgePhotoRm(n);
   delete n.photo; nudgeSave(); res.json({ ok: true, nudge: nudgeView(n) });
 });
 app.get('/api/nudges/:id/photo', (req, res) => {
-  const n = ng.list.find((x) => x.id === req.params.id); if (!n?.photo || !/^[0-9a-f]{12}\.(jpg|png|webp)$/.test(n.photo)) return res.status(404).end();
+  const n = ng.list.find((x) => x.id === req.params.id); if (!n?.photo || !NUDGE_PHOTO.test(n.photo)) return res.status(404).end();
   res.setHeader('Cache-Control', 'private, max-age=300'); res.setHeader('Content-Type', NUDGE_TYPES.find(([e]) => n.photo.endsWith(e))[1]);
   res.sendFile(path.join(NUDGE_DIR, n.photo));
 });
