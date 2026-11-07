@@ -487,6 +487,12 @@ input[type=checkbox]:focus-visible, input[type=radio]:focus-visible, input[type=
 /* App tests: the path, hop by hop (21-apptests.js). Wide: left to right, grouped by whose network it is. Narrow: a list. */
 .attile.slow { border-color: rgba(251, 191, 36, .45); } .atculprit { color: var(--warn); font-weight: 600; } .attile.down .atculprit { color: var(--bad); }
 .atverdict { display: grid; gap: 3px; margin: 12px 0 2px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); font-size: 14px; }
+.atverdict.ok { border-color: color-mix(in srgb, var(--good) 35%, var(--line)); background: color-mix(in srgb, var(--good) 6%, var(--surface-2)); }
+.atslowq { text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.atroute { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; margin: 8px 0 2px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-2); }
+.atroute > .grow { min-width: min(240px, 100%); } .atroute .mk { width: 9px; height: 9px; flex: none; transform: rotate(45deg); background: var(--warn); border-radius: 2px; }
+.atsuggest { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin: 12px 0 0; padding: 10px 12px; border-radius: 14px; border: 1px dashed var(--line-2); }
+.atsuggest > .grow { min-width: min(220px, 100%); } .atsuggest-btns { display: flex; flex-wrap: wrap; gap: 6px; } .atsuggest-btns .btn { gap: 6px; }
 .atverdict.warn { border-color: rgba(251, 191, 36, .5); background: rgba(251, 191, 36, .08); } .atverdict.bad { border-color: rgba(251, 113, 133, .5); background: rgba(251, 113, 133, .08); }
 .atalert input, .atowners input { width: auto; margin: 0; flex: none; }
 .atpathwrap2 { overflow-x: auto; padding: 2px 2px 8px; scroll-snap-type: x proximity; }

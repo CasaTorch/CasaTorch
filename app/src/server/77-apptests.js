@@ -87,6 +87,39 @@ const AT_PRESETS = [
   ['baidu', 'Baidu', 'everyday', 'https://www.baidu.com/', 'B', ['CN']],
 ].map(([id, name, group, url, short, cc]) => ({ id, name, group, url, short, cc: cc || null, kind: id === 'router' || id === 'dns' ? id : 'web' }));
 const atPreset = (id) => AT_PRESETS.find((p) => p.id === id) || null;
+/* The names each app is looked up by, to spot the apps a home uses in its DNS filter's most-asked names (Pi-hole,
+   AdGuard Home). Only these service names are kept - never the names themselves, and never who asked. */
+const AT_SEEN_NAMES = { zoom: ['zoom.us'], teams: ['teams.microsoft.com', 'teams.live.com'], meet: ['meet.google.com'], webex: ['webex.com'], whatsapp: ['whatsapp.net', 'whatsapp.com'],
+  m365: ['login.microsoftonline.com'], outlook: ['outlook.office365.com', 'outlook.office.com'], gmail: ['mail.google.com'], gdrive: ['drive.google.com'], slack: ['slack.com', 'slack-edge.com'],
+  salesforce: ['salesforce.com', 'force.com'], github: ['github.com', 'githubusercontent.com'], youtube: ['youtube.com', 'googlevideo.com', 'ytimg.com'], netflix: ['netflix.com', 'nflxvideo.net', 'nflximg.net'],
+  disney: ['disneyplus.com', 'disney-plus.net', 'bamgrid.com'], prime: ['primevideo.com', 'aiv-cdn.net'], spotify: ['spotify.com', 'scdn.co', 'spotifycdn.com'], twitch: ['twitch.tv', 'ttvnw.net'],
+  iplayer: ['bbc.co.uk'], ard: ['ardmediathek.de'], francetv: ['france.tv'], rtve: ['rtve.es'], raiplay: ['raiplay.it'], npo: ['npo.nl'], svtplay: ['svtplay.se'], tvp: ['tvp.pl'], tver: ['tver.jp'],
+  hotstar: ['hotstar.com'], globoplay: ['globo.com'], cbcgem: ['cbc.ca'], iview: ['iview.abc.net.au'], bilibili: ['bilibili.com'], xbox: ['xboxlive.com', 'xbox.com'], playstation: ['playstation.net', 'playstation.com'],
+  steam: ['steampowered.com', 'steamcontent.com', 'steamserver.net', 'steamstatic.com'], nintendo: ['nintendo.net', 'nintendo.com'], icloud: ['icloud.com'], amazon: ['amazon.com'],
+  facebook: ['facebook.com', 'fbcdn.net'], naver: ['naver.com'], baidu: ['baidu.com'] };
+/** The DNS filter's most-asked names ([[name, count]]) -> the apps among them, most used first: [[presetId, count]]. */
+function atSeenServices(top) {
+  const by = new Map();
+  for (const [name, n] of Array.isArray(top) ? top : []) {
+    const d = String(name || '').toLowerCase().replace(/\.$/, ''), c = Number(n) || 0; if (!d || c <= 0) continue;
+    for (const [id, names] of Object.entries(AT_SEEN_NAMES)) if (names.some((x) => d === x || d.endsWith(`.${x}`))) { by.set(id, (by.get(id) || 0) + c); break; }
+  }
+  return [...by].sort((a, b) => b[1] - a[1]).slice(0, 12);
+}
+/** Apps to suggest: seen on the network, not tested yet, offered where the home is, and only while there's room. */
+function atSuggestSeen(seen, tests, max, cc) {
+  if (!Array.isArray(tests) || tests.length >= max) return [];
+  const have = new Set(tests.map((t) => t.preset).filter(Boolean)), room = max - tests.length;
+  return (seen || []).map(([id]) => atPreset(id)).filter((p) => p && p.kind === 'web' && p.id !== 'sharepoint' && !have.has(p.id) && (!p.cc || !cc || p.cc.includes(cc))).slice(0, Math.min(4, room)).map((p) => p.id);
+}
+/* Every DNS filter's apps, added up (only filters read by Network, which keeps them fresh). */
+function atSeenNow() {
+  if (isDemo()) return { from: 'Pi-hole', seen: AT_DEMO_SEEN };
+  if (typeof netSources !== 'function') return { from: null, seen: [] };
+  const by = new Map(), kinds = new Set();
+  for (const s of netSources()) { const st = netState[s.id]; if (!st?.ok || !Array.isArray(st.seen) || !st.seen.length) continue; kinds.add(NET_KINDS[s.kind]); for (const [id, n] of st.seen) by.set(id, (by.get(id) || 0) + n); }
+  return { from: kinds.size === 1 ? [...kinds][0] : kinds.size ? 'your DNS filters' : null, seen: [...by].sort((a, b) => b[1] - a[1]) };
+}
 const atCfg = () => (Array.isArray(config.appTests) ? config.appTests : []);
 const atMax = () => (proStatus().pro ? AT_PRO_MAX : AT_BASIC_MAX);
 const atKind = (t) => t.kind || atPreset(t.preset)?.kind || 'web';
@@ -992,7 +1025,8 @@ const atHomeCc = () => (typeof homeCountry === 'function' ? homeCountry(config.l
 app.get('/api/apptests', async (_req, res) => {
   if (isDemo()) return res.json(atDemo());
   const pro = proStatus().pro;
-  res.json({ pro, max: atMax(), basicMax: AT_BASIC_MAX, every: pro ? AT_EVERY : [5, 15], groups: AT_GROUPS, presets: atPresetsOut(atHomeCc()), owners: atOwnersOn(),
+  const seen = atSeenNow();
+  res.json({ pro, max: atMax(), basicMax: AT_BASIC_MAX, every: pro ? AT_EVERY : [5, 15], groups: AT_GROUPS, presets: atPresetsOut(atHomeCc()), owners: atOwnersOn(), suggest: { from: seen.from, ids: atSuggestSeen(seen.seen, atCfg(), atMax(), atHomeCc()) },
     trace: await atTraceInfo(), traceroute: (await atTools()).length > 0, tests: atCfg().map((t) => ({ ...atView(t), paused: !pro && t.custom })),
     overview: atOverview(atActive().filter((t) => atKind(t) === 'web').map((t) => ({ ...t, path: at.state[t.id]?.path, ...atNow(t) }))) });
 });
@@ -1157,6 +1191,8 @@ const AT_DEMO_TESTS = {
     old: [AT_DEMO_TR('203.0.113.40', 'ae25-0.icr01.transit-example.net', 14.8), AT_DEMO_TR('203.0.113.64', 'be-5.cr3.transit-example.net', 27.2), AT_DEMO_HOP('192.0.2.33', null, 64514, 'Example Games', 'app', 42.0)],   // scrub-ok: demo
     dest: ['192.0.2.50', 64514, 'Example Games', 46.1] },   // scrub-ok: demo
 };
+/* What the demo's Pi-hole saw most (service names only): the apps the demo suggests testing. */
+const AT_DEMO_SEEN = [['youtube', 4810], ['spotify', 2220], ['icloud', 1630], ['disney', 940], ['netflix', 880], ['steam', 610], ['whatsapp', 540]];
 const atDemoRand = (s) => () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
 /* One made-up trace at time t (k: how many traces ago). */
 function atDemoTrace(cfg, t, k, now) {
@@ -1214,7 +1250,7 @@ function atDemo(full = false) {
   const overview = full ? null : atOverview(tests.map((t) => ({ ...t, path: t._path })));
   for (const t of tests) delete t._path;
   tests.push(atDemoNet('demo-nas', 'NAS', 'ping', '192.168.1.20', 0.9, full), atDemoNet('demo-dnsq', 'Cloudflare DNS', 'dnsq', 'example.com @ 1.1.1.1', 11.5, full, { slowMs: 80 }));   // scrub-ok: demo
-  return { pro: true, max: AT_PRO_MAX, basicMax: AT_BASIC_MAX, every: AT_EVERY, demo: true, owners: true, groups: AT_GROUPS, trace: { ok: true, tool: 'mtr', platform: 'linux' }, traceroute: true, presets: atPresetsOut('US'), tests, overview };
+  return { pro: true, max: AT_PRO_MAX, basicMax: AT_BASIC_MAX, every: AT_EVERY, demo: true, suggest: { from: 'Pi-hole', ids: atSuggestSeen(AT_DEMO_SEEN, tests.map((t) => ({ preset: AT_DEMO_TESTS[t.id]?.preset })), AT_PRO_MAX, 'US') }, owners: true, groups: AT_GROUPS, trace: { ok: true, tool: 'mtr', platform: 'linux' }, traceroute: true, presets: atPresetsOut('US'), tests, overview };
 }
 /* The merged path for a time window: ?from&to (ms; default the last hour), &cmp=1 to compare with the last hour. */
 app.get('/api/apptests/:id/graph', (req, res) => {
@@ -1229,5 +1265,5 @@ app.get('/api/apptests/:id/graph', (req, res) => {
   if (!g && !q.from && st.traces?.length) { to = Date.parse(st.traces[st.traces.length - 1].at) + 1000; from = to - AT_H; g = atGraphFor(st, from, to, opts); }   // nothing in the last hour (CasaTorch was off, say): the hour up to the latest trace
   res.json({ from, to, now, graph: g, marks: atMarks(st), changes: st.changes || [] });
 });
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchAT = { atParsePing, atMake, atLimits, atOver, atParseTrace, atZones, atCulprit, atCulpritText, atPathKey, atParseOrigin, atParseAsName, atRevName, atSuggest, atFromSetup, atIsSlow, atBaselines,
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchAT = { atSeenServices, atSuggestSeen, atParsePing, atMake, atLimits, atOver, atParseTrace, atZones, atCulprit, atCulpritText, atPathKey, atParseOrigin, atParseAsName, atRevName, atSuggest, atFromSetup, atIsSlow, atBaselines,
   atRecord, atObs, atMerge, atLayout, atAnalyze, atGraph, atGraphFor, atOverview, atDemoState, atDemo };

@@ -517,6 +517,17 @@ t('App tests: the demo\'s long path - 14 hops, routers sharing the traffic three
   assert.ok(st.changes.some((c) => c.kind === 'route' && c.hopsTo > c.hopsFrom));
   assert.ok(g.nodes.every((x) => !x.ip || /^(192\.168\.1\.|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.)/.test(x.ip)));   // scrub-ok
 });
+t('App tests: apps to suggest from the DNS filter\'s most-asked names - service names only, within the plan\'s limit', () => {
+  const A = globalThis.__casatorchAT;
+  const seen = A.atSeenServices([['rr3---sn-example.googlevideo.com', 900], ['www.youtube.com', 300], ['api.spotify.com', 500], ['tracker.example.net', 9999], ['ZOOM.US.', 40], ['notnetflix.com', 50], ['', 5], [null, 3]]);   // scrub-ok: examples
+  assert.deepEqual(seen, [['youtube', 1200], ['spotify', 500], ['zoom', 40]]);
+  assert.ok(!JSON.stringify(seen).includes('.'), 'no names kept, only apps');
+  const tests = [{ preset: 'zoom' }, { preset: 'google' }];
+  assert.deepEqual(A.atSuggestSeen(seen, tests, 8, 'US'), ['youtube', 'spotify'], 'not the ones already tested');
+  assert.deepEqual(A.atSuggestSeen(seen, Array.from({ length: 7 }, () => ({ custom: true })), 8, 'US'), ['youtube'], 'only as many as there is room for');
+  assert.deepEqual(A.atSuggestSeen(seen, Array.from({ length: 8 }, () => ({ custom: true })), 8, 'US'), [], 'Basic full: nothing');
+  assert.deepEqual(A.atSuggestSeen(A.atSeenServices([['www.bbc.co.uk', 10]]), [], 30, 'US'), [], 'regional apps only where they are offered');
+});
 
 t('security: only home names reach CasaTorch (no DNS rebinding), and cloud metadata is never fetched', () => {
   for (const h of ['localhost:8090', '127.0.0.1:8090', '192.168.1.20:8090', '[::1]:8090', 'casatorch:8090', 'casatorch.local:8090', 'nas.lan', 'homehub', 'box.home.arpa']) assert.ok(H.hostAllowed(h), h);   // scrub-ok: examples

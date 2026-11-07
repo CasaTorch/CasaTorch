@@ -71,6 +71,7 @@ function appTestsCard(a, redraw) {
     return card;
   }
   card.append(el('div', { class: 'atgrid' }, a.tests.map((t) => atTile(t, (id) => atOpen(id, a, redraw)))));
+  const sug = atSuggestRow(a, redraw); if (sug) card.append(sug);
   if (a.overview) card.append(pvOverview(a, (id) => atOpen(id, a, redraw)));
   if (!(a.trace?.ok ?? a.traceroute)) card.append(atNoTrace(a));
   if (!a.pro) card.append(el('p', { class: 'tiny muted', style: 'margin:10px 0 0' }, T('Basic tests the built-in apps (up to {n}).', { n: a.basicMax }), ' ', el('a', { href: '#settings' }, 'Pro'), ' ', T('adds your own websites, up to 30 tests, testing every minute, and an alert when an app is down or slow.')));
@@ -160,6 +161,55 @@ function atAddNet(a, redraw, data = {}) {
     el('p', { class: 'tiny muted' }, T('Tests run from this CasaTorch. Nothing goes through casatorch.com.')), msg, el('div', { class: 'row', style: 'justify-content:flex-end' }, go)), { title: T('Add a network test') });
   sync(); setTimeout(() => host.focus(), 30);
 }
+/* "What's slow?" in one or two plain lines, when nothing is wrong (the red or amber verdict speaks when something is):
+   the step that takes most of the time and whose it is, and how much of the round trip is your home and provider. */
+const AT_WHO_STEP = { dns: 'your router or provider\'s name lookups', connect: 'the trip across the internet', tls: 'the trip across the internet', wait: 'the app itself, not your home', download: 'your internet speed' };
+const atMedianOf = (v) => { const x = v.filter((n) => n != null).sort((p, q) => p - q); return x.length ? x[Math.floor(x.length / 2)] : null; };
+function atWhatsSlow(t, nm) {
+  const l = t.last; if (!l?.ok || t.down || t.slow || t.failing) return null;
+  const lines = [], runs = (t.runs || []).filter((r) => r.ok), usual = t.median24h;
+  let head;
+  if (t.kind === 'web') {
+    const steps = AT_PHASES.map(([k, lab]) => ({ k, lab, v: l[k], m: atMedianOf(runs.map((r) => r[k])) })).filter((x) => x.v != null);
+    const top = steps.slice().sort((p, q) => q.v - p.v)[0], worse = steps.filter((x) => x.m != null && x.v > 2 * x.m && x.v - x.m >= 50).sort((p, q) => (q.v - q.m) - (p.v - p.m))[0];
+    if (usual && l.total > 1.5 * usual && l.total - usual >= 100) {
+      head = T('Slower than usual - {ms} (usually {usual})', { ms: atMs(l.total), usual: atMs(usual) });
+      if (worse) lines.push(T('Slower than usual here: {step}, {ms} (usually {usual}) - {who}.', { step: T(worse.lab), ms: atMs(worse.v), usual: atMs(worse.m), who: T(AT_WHO_STEP[worse.k]) }));
+    } else head = T('Nothing\'s slow - {name} loads in {ms}', { name: nm, ms: atMs(l.total) });
+    if (top && !worse && top.v >= 0.35 * l.total) lines.push(T('Most of the time: {step}, {ms} - {who}.', { step: T(top.lab), ms: atMs(top.v), who: T(AT_WHO_STEP[top.k]) }));
+  } else head = T('Nothing\'s slow - {ms} round trip', { ms: atMs(l.total) });
+  const hops = t.path?.hops || [], dest = t.path?.dest?.avg, near = hops.filter((h) => (h.zone === 'home' || h.zone === 'provider') && h.avg != null).pop();
+  if (dest != null && near && dest >= 5 && near.avg < dest) lines.push(T('Your home and internet provider take {a} of the {b} round trip; the rest is the way to {name}.', { a: atMs(near.avg), b: atMs(dest), name: nm }));
+  return el('div', { class: 'atverdict ok atslow', role: 'status' }, el('span', { class: 'tiny muted atslowq' }, T('What\'s slow?')), el('b', {}, head), ...lines.map((x) => el('span', { class: 'small' }, x)));
+}
+/* The last change of route, before and after: hops and the round trip on each side, and a way to see both paths. */
+function atRouteChange(t, see) {
+  const c = (t.changes || []).filter((x) => x.kind === 'route').pop(); if (!c || Date.now() - Date.parse(c.at) > 7 * 86400_000) return null;
+  const at = Date.parse(c.at), runs = (t.runs || []).filter((r) => r.latency != null), hrs = (t.hours || []).filter((h) => h.latency != null);
+  const side = (a, b) => { const r = runs.filter((x) => { const m = Date.parse(x.at); return m >= a && m < b; }); const v = r.length >= 3 ? r : hrs.filter((x) => { const m = Date.parse(x.at); return m >= a && m < b; }); return v.length >= 2 ? atMedianOf(v.map((x) => x.latency)) : null; };
+  const before = side(at - 6 * 3600_000, at), after = side(at, Date.now());
+  return el('div', { class: 'atroute' }, el('i', { class: 'mk', 'aria-hidden': 'true' }),
+    el('div', { class: 'grow' }, el('b', {}, T('Route changed {when} · {from} → {to} hops', { when: atAgo(c.at), from: c.hopsFrom, to: c.hopsTo })),
+      before != null && after != null ? el('div', { class: 'small muted' }, T('Round trip before: {a} · since: {b}', { a: atMs(before), b: atMs(after) })) : null),
+    el('button', { type: 'button', class: 'btn small', onclick: () => see(at) }, T('See before and after')));
+}
+/* Apps the home uses (from its DNS filter's most-asked names - service names only, never who), not tested yet: one tap
+   to add. Only suggestions: nothing is added by itself, and never past the plan's number of tests. */
+function atSuggestRow(a, redraw) {
+  const ids = (a.suggest?.ids || []).filter((id) => !a.tests.some((t) => t.preset === id)), presets = ids.map((id) => a.presets.find((p) => p.id === id)).filter(Boolean);
+  if (!presets.length || a.tests.length >= a.max) return null;
+  const key = presets.map((p) => p.id).join(','); let hidden = ''; try { hidden = localStorage.getItem('ct.atSuggestHide') || ''; } catch { /* private window */ }
+  if (hidden === key) return null;
+  const from = a.suggest.from === 'your DNS filters' ? T('your DNS filters') : a.suggest.from || T('your DNS filters');
+  const row = el('div', { class: 'atsuggest' }, el('div', { class: 'grow' }, el('b', { class: 'small' }, T('Apps your home uses')), el('div', { class: 'tiny muted' }, T('Seen by {source}. Only app names are used - never who visited what.', { source: from }))),
+    el('div', { class: 'atsuggest-btns' }, presets.slice(0, a.max - a.tests.length).map((p) => el('button', { type: 'button', class: 'btn small', 'aria-label': T('Add {name}', { name: T(p.name) }), onclick: async (e) => {
+      if (a.demo) { toast(T('The demo doesn\'t change anything.')); return; }
+      const b = e.currentTarget; b.disabled = true;
+      try { await post('/api/apptests', { preset: p.id }); toast(T('{name} added', { name: T(p.name) })); redraw(); } catch (err) { toast(err.message); b.disabled = false; }
+    } }, icon('plus', 13), T(p.name))),
+    el('button', { type: 'button', class: 'btn small ghost', onclick: () => { try { localStorage.setItem('ct.atSuggestHide', key); } catch { /* fine */ } row.remove(); } }, T('Not now'))));
+  return row;
+}
 /* The detail sheet: what's wrong (if anything), the last test step by step, the path hop by hop, and the history. */
 async function atOpen(id, a, redraw) {
   const body = el('div', { class: 'atdetail' }, el('p', { class: 'muted' }, T('Loading…')));
@@ -179,12 +229,13 @@ async function atOpen(id, a, redraw) {
       el('div', { class: 'atstep total' }, el('span', { class: 'grow' }, T('Total')), el('b', {}, l?.ok ? atMs(l.total) : T('No answer'))));
     const verdict = t.culprit?.who ? el('div', { class: `atverdict ${t.down ? 'bad' : 'warn'}`, role: 'status' }, el('b', {}, t.down ? T('{name} isn\'t answering from home', { name: nm }) : T('{name} is slow from home', { name: nm })), el('span', {}, el('span', { class: 'muted' }, `${T('Likely culprit')} · `), atCulpritLine(t.culprit, nm)), t.culprit.sure === false ? el('span', { class: 'tiny muted' }, T('A best guess from the path and your other tests.')) : null)
       : t.down || t.slow ? el('div', { class: `atverdict ${t.down ? 'bad' : 'warn'}`, role: 'status' }, el('b', {}, t.down ? T('{name} isn\'t answering from home', { name: nm }) : T('{name} is slow from home', { name: nm })), el('span', {}, T('Nothing along the path stands out yet - CasaTorch keeps watching.'))) : null;
+    const pathSec = pvSection(t, a, nm, id), route = pathSec.pvCompare ? atRouteChange(t, (at) => { pathSec.pvCompare(at); pathSec.scrollIntoView({ block: 'start', behavior: pvReduced() ? 'auto' : 'smooth' }); }) : null;
     body.replaceChildren(...[
       el('div', { class: 'row between wrap', style: 'gap:10px' }, el('div', { class: 'row', style: 'gap:12px;min-width:0' }, el('span', { class: 'atbadge lg', 'aria-hidden': 'true' }, t.kind === 'router' ? icon('wifi') : t.short), el('div', { style: 'min-width:0' }, el('h2', { style: 'margin:0' }, nm), el('div', { class: 'tiny muted ellipsis' }, t.url || t.target || (t.kind === 'router' ? T('Your router, timed from this CasaTorch') : T('How fast this home looks up names'))))),
         el('span', { class: `pill ${dot}` }, el('span', { class: `dot ${dot}` }), word)),
       el('div', { class: 'row wrap', style: 'gap:8px;margin:12px 0 4px;align-items:center' }, a.demo ? null : runBtn, a.demo || !canTrace ? null : pathBtn, every, alertBox, del),
       a.pro ? atLimitsRow(t, a, id) : null,
-      verdict,
+      verdict || atWhatsSlow(t, nm), route,
       el('div', { class: 'atcols' },
         web ? el('section', {}, el('h3', {}, T('Last test'), l ? el('span', { class: 'tiny muted', style: 'font-weight:400;margin-left:6px' }, atAgo(l.at)) : null), atBar(l, true), steps, l?.error ? el('p', { class: 'small', style: 'color:var(--bad)' }, T('Didn\'t work: {why}', { why: l.error })) : null,
           l?.status ? el('p', { class: 'tiny muted' }, l.ip ? T('The app answered {status} from {ip}.', { status: l.status, ip: l.ip }) : T('The app answered {status}.', { status: l.status })) : null)
@@ -194,7 +245,7 @@ async function atOpen(id, a, redraw) {
           [['Latency', atMs(l?.latency), 'how long a round trip takes'], ['Jitter', atMs(l?.jitter), 'how much that wobbles'], ['Loss', l?.loss != null ? `${l.loss}%` : '-', 'probes that got no answer']].map(([k, v, s]) => el('div', { class: 'atstat' }, el('span', { class: 'tiny muted' }, T(k)), el('b', {}, v), el('span', { class: 'tiny muted' }, T(s))))),
           el('p', { class: 'tiny muted' }, T('From five quick connections each test. Video calls stay smooth with latency under about 100 ms, jitter under 30 ms and no loss.')))),
       el('h3', { style: 'margin-top:18px' }, T('Path, hop by hop'), t.path?.at && t.path.hops?.length ? el('span', { class: 'tiny muted', style: 'font-weight:400;margin-left:6px' }, T('traced {when}', { when: atAgo(t.path.at) })) : null),
-      pvSection(t, a, nm, id),
+      pathSec,
       web ? el('h3', { style: 'margin-top:18px' }, T('Time to load today')) : null, web ? atChart(t.runs || []) : null].filter(Boolean));
   };
   try { draw(await api(`/api/apptests/${encodeURIComponent(id)}`)); } catch (e) { body.replaceChildren(el('p', { class: 'small', style: 'color:var(--bad)' }, e.message)); }
@@ -688,6 +739,7 @@ function pvSection(t, a, nm, id) {
   gwrap.append(gbox, tip);
   atWatchWidth(gbox, () => { if (st.data && st.mode === 'graph') draw(); });
   gbox.addEventListener('pointerleave', () => { tip.hidden = true; });
+  wrap.pvCompare = (at) => { st.to = at - 60_000; st.from = st.to - 3600_000; st.cmp = true; if (st.mode !== 'graph') mode.querySelector('button')?.click(); load(); };   // the hour before a change, next to now
   paintChanges(); show(); load();
   return wrap;
 }

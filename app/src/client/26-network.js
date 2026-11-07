@@ -380,7 +380,7 @@ pageTile({ id: 'net-apptests', page: 'network', phoneFull: true, title: 'App and
     !a.demo && nwAdmin() ? el('button', { class: 'btn small', onclick: () => atAddAny(a, redraw, ctx.data) }, icon('plus', 14), T('Add a test')) : null);
   if (nwAt(size, 'l') && size.w >= 6) {
     const grid = el('div', { class: 'atgrid nw-atgrid' }, a.tests.slice().sort((x, y) => (y.down - x.down) || ((y.slow || 0) - (x.slow || 0))).map((t) => atTile(t, (id) => atOpen(id, a, redraw))));
-    return nwPut(b, head, grid, nwAt(size, 'xl') && a.overview && size.h >= 7 ? pvOverview(a, (id) => atOpen(id, a, redraw)) : null);
+    return nwPut(b, head, grid, nwAdmin() || a.demo ? atSuggestRow(a, redraw) : null, nwAt(size, 'xl') && a.overview && size.h >= 7 ? pvOverview(a, (id) => atOpen(id, a, redraw)) : null);
   }
   const rows = Math.max(1, Math.floor((size.h * 78 + (size.h - 1) * 14 - 110) / 44));
   nwPut(b, head, el('div', { class: 'nw-tests' }, a.tests.slice().sort((x, y) => (y.down - x.down) || ((y.slow || 0) - (x.slow || 0))).slice(0, rows).map((t) => { const [dot, word] = atState(t);

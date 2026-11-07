@@ -81,21 +81,24 @@ const NET = {
       const sid = a?.session?.sid; if (!a?.session?.valid && !sid) throw Object.assign(new Error('the password was refused'), { status: 401 });
       const H = sid ? { 'X-FTL-SID': sid } : {};
       try {
-        const [sum, blk] = await Promise.all([netRequest(`${b}/api/stats/summary`, { headers: H }), netRequest(`${b}/api/dns/blocking`, { headers: H }).catch(() => null)]);
-        return { summary: { queries: n0(sum?.queries?.total), blocked: n0(sum?.queries?.blocked), percentBlocked: n0(sum?.queries?.percent_blocked), clients: n0(sum?.clients?.active), blocklist: n0(sum?.gravity?.domains_being_blocked), protection: blk ? blk.blocking === 'enabled' : null }, devices: [] };
+        const [sum, blk, top] = await Promise.all([netRequest(`${b}/api/stats/summary`, { headers: H }), netRequest(`${b}/api/dns/blocking`, { headers: H }).catch(() => null),
+          netRequest(`${b}/api/stats/top_domains?count=100`, { headers: H }).catch(() => null)]);   // the home's most-asked names (never who asked): the apps it uses, to suggest testing
+        return { seen: atSeenServices((Array.isArray(top?.domains) ? top.domains : []).map((d) => [d?.domain, d?.count])), summary: { queries: n0(sum?.queries?.total), blocked: n0(sum?.queries?.blocked), percentBlocked: n0(sum?.queries?.percent_blocked), clients: n0(sum?.clients?.active), blocklist: n0(sum?.gravity?.domains_being_blocked), protection: blk ? blk.blocking === 'enabled' : null }, devices: [] };
       } finally { if (sid) await netRequest(`${b}/api/auth`, { method: 'DELETE', headers: H, timeout: 4000 }).catch(() => {}); }   // don't leave sessions behind (Pi-hole limits them)
     } catch (e) {
       if (e.status !== 404) throw e;
     }
     const j = await netRequest(`${b}/admin/api.php?summaryRaw&auth=${encodeURIComponent(secret || '')}`);   // Pi-hole v5
     if (j?.dns_queries_today == null) throw new Error('the API token was refused (Settings › API in Pi-hole)');
-    return { summary: { queries: n0(j.dns_queries_today), blocked: n0(j.ads_blocked_today), percentBlocked: n0(j.ads_percentage_today), clients: n0(j.unique_clients), blocklist: n0(j.domains_being_blocked), protection: j.status ? j.status === 'enabled' : null }, devices: [] };
+    const top = await netRequest(`${b}/admin/api.php?topItems=100&auth=${encodeURIComponent(secret || '')}`).catch(() => null);
+    return { seen: atSeenServices(Object.entries(top?.top_queries && typeof top.top_queries === 'object' ? top.top_queries : {})), summary: { queries: n0(j.dns_queries_today), blocked: n0(j.ads_blocked_today), percentBlocked: n0(j.ads_percentage_today), clients: n0(j.unique_clients), blocklist: n0(j.domains_being_blocked), protection: j.status ? j.status === 'enabled' : null }, devices: [] };
   },
   async adguard(s, secret) {
     const b = base(s.url), H = { Authorization: `Basic ${Buffer.from(`${s.user || ''}:${secret || ''}`).toString('base64')}` };
     const [st, stats] = await Promise.all([netRequest(`${b}/control/status`, { headers: H }), netRequest(`${b}/control/stats`, { headers: H })]);
     const q = n0(stats?.num_dns_queries), bl = n0(stats?.num_blocked_filtering);
-    return { summary: { queries: q, blocked: bl, percentBlocked: q ? Math.round(bl / q * 1000) / 10 : null, clients: Array.isArray(stats?.top_clients) ? stats.top_clients.length : null, protection: typeof st?.protection_enabled === 'boolean' ? st.protection_enabled : null, version: st?.version || null }, devices: [] };
+    const top = (Array.isArray(stats?.top_queried_domains) ? stats.top_queried_domains : []).flatMap((x) => (x && typeof x === 'object' ? Object.entries(x) : []));
+    return { seen: atSeenServices(top), summary: { queries: q, blocked: bl, percentBlocked: q ? Math.round(bl / q * 1000) / 10 : null, clients: Array.isArray(stats?.top_clients) ? stats.top_clients.length : null, protection: typeof st?.protection_enabled === 'boolean' ? st.protection_enabled : null, version: st?.version || null }, devices: [] };
   },
   async unifi(s, secret) {
     const b = `${base(s.url)}/proxy/network/integration/v1`, H = { 'X-API-Key': secret || '' };
@@ -125,7 +128,7 @@ async function readNetSource(s) {
   try {
     if (!Object.hasOwn(NET, s.kind)) throw new Error('unknown kind of source');
     const r = await NET[s.kind](s, secretOf(s.secret));
-    Object.assign(st, { ok: true, error: null, fails: 0, at: nowIso(), summary: r.summary, devices: r.devices });
+    Object.assign(st, { ok: true, error: null, fails: 0, at: nowIso(), summary: r.summary, devices: r.devices, seen: r.seen || [] });
     if (proStatus().pro) netDeepRead(s).catch(() => {});   // the rest - map, clients, Wi-Fi, ports, events (74n-net-model.js) - without holding up the alerts
   } catch (e) {
     Object.assign(st, { ok: false, error: String(e.message || e).slice(0, 140), fails: st.fails + 1, at: nowIso() });
