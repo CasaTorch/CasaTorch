@@ -143,16 +143,23 @@ async function docHue() {
   const h = config.hue; if (!h?.host) return null;
   try {
     const j = await getJSON(`http://${h.host}/api/${h.username}/config`, { timeout: 6000 });
-    if (Array.isArray(j) && j[0]?.error?.type === 1) return chk('hue', 'connections', 'Philips Hue', 'bad', 'The Hue bridge no longer knows CasaTorch (it was reset or CasaTorch was removed from it).', { why: 'Pair again: press the button on the bridge, then Pair.', fix: { action: 'reconnect', href: setupLink('controls', 'hue-local'), label: 'Pair again' } });
+    if (Array.isArray(j) && j[0]?.error?.type === 1) return chk('hue', 'connections', 'Philips Hue', 'bad', 'The Hue bridge no longer knows CasaTorch (it was reset or CasaTorch was removed from it).', { why: 'Pair again: tap Pair again, then press the button on the bridge.', fix: { action: 'reconnect', href: setupLink('controls', 'hue-local'), label: 'Pair again' } });
+    movedLearnHue(j);   // its bridge id, to find it again if it moves (79m-moved.js)
     return chk('hue', 'connections', 'Philips Hue', 'ok', ['Bridge "{name}" is answering.', { name: String(j?.name || 'Hue').slice(0, 40) }]);
-  } catch (err) { const e = errLine(err, 'The Hue bridge', `http://${h.host}`); return chk('hue', 'connections', 'Philips Hue', 'bad', e.detail, { why: e.why || 'If the bridge got a new address, set it to a fixed address in your router, then pair again.', fix: { action: 'retry', id: 'hue', label: 'Try again' } }); }
+  } catch (err) {
+    // A new address from the router: the same bridge is looked for on the home network and followed.
+    if (movedDue('hue') && await movedFollowHue().catch(() => null)) return chk('hue', 'connections', 'Philips Hue', 'ok', 'The Hue bridge got a new address on your network. CasaTorch found it there.');
+    const e = errLine(err, 'The Hue bridge', `http://${h.host}`); return chk('hue', 'connections', 'Philips Hue', 'bad', e.detail, { why: e.why || 'CasaTorch keeps looking for it on your network. Check the bridge has power and its network cable.', fix: { action: 'retry', id: 'hue', label: 'Try again' } });
+  }
 }
 async function docShelly() {
   const list = (config.shelly || []).map((s) => s.host).filter(Boolean); if (!list.length) return null;
-  const res = await Promise.all(list.map(async (h) => !!(await getJSON(`http://${h}/shelly`, { timeout: 5000 }).catch(() => null))));
-  const down = list.filter((_, i) => !res[i]);
+  const ans = await Promise.all(list.map((h) => getJSON(`http://${h}/shelly`, { timeout: 5000 }).catch(() => null)));
+  movedLearnShelly(list.map((host, i) => ({ host, id: ans[i]?.mac })));   // each one's hardware id, to find it again if it moves (79m-moved.js)
+  let down = list.filter((_, i) => !ans[i]);
+  if (down.length && movedDue('shelly')) { const moves = await movedFollowShelly(down).catch(() => []); down = down.filter((h) => !moves.some((m) => m.from === h)); }
   if (!down.length) return chk('shelly', 'connections', 'Shelly', 'ok', ['All {n} answering.', { n: list.length }]);
-  return chk('shelly', 'connections', 'Shelly', down.length === list.length ? 'bad' : 'warn', ['{n} of {total} not answering: {list}.', { n: down.length, total: list.length, list: down.join(', ') }], { why: 'Check they have power and Wi-Fi. Give each a fixed address in your router so it can\'t move.', fix: { action: 'retry', id: 'shelly', label: 'Try again' } });
+  return chk('shelly', 'connections', 'Shelly', down.length === list.length ? 'bad' : 'warn', ['{n} of {total} not answering: {list}.', { n: down.length, total: list.length, list: down.join(', ') }], { why: 'Check they have power and Wi-Fi. If one gets a new address from the router, CasaTorch finds it again by itself.', fix: { action: 'retry', id: 'shelly', label: 'Try again' } });
 }
 async function docFrigate() {
   const cams = (config.cameras || []).filter((c) => c.type === 'frigate'); if (!cams.length) return null;

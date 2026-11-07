@@ -514,10 +514,10 @@ function hueEl(card) {
   if (!st.host && !st.looked && W.found?.hue?.length) { st.host = W.found.hue[0]; st.looked = true; st.msg = T('Found your Hue bridge at {ip}.', { ip: st.host }); }
   const host = el('input', { type: 'text', placeholder: '192.168.1.20', value: st.host, oninput: (e) => { st.host = e.target.value.trim(); } });
   const out = el('div', { class: 'note' }, st.msg || '');
-  card.append(el('p', { class: 'note' }, T('1. Enter the bridge\'s address (or press Find). 2. Press the round button on top of the Hue bridge. 3. Within 30 seconds, press Pair.')),
+  card.append(el('p', { class: 'note' }, T('Check the bridge\'s address (CasaTorch looks for it), tap Pair, then press the round button on top of the Hue bridge - CasaTorch waits 30 seconds for it.')),
     el('div', { class: 'row' }, el('div', { style: 'flex:1;min-width:160px' }, host),
       el('button', { type: 'button', class: 'small', onclick: async () => { out.textContent = T('Looking...'); const r = await api('/api/setup/hue/discover').catch(() => ({ bridges: [] })); if (r.bridges[0]) { st.host = r.bridges[0]; host.value = st.host; out.textContent = T('Found {join}', { join: r.bridges.join(', ') }); } else out.textContent = T('Not found automatically - look in your router\'s client list for "Philips-hue".'); } }, T('Find')),
-      el('button', { type: 'button', class: 'primary', onclick: async () => { out.textContent = T('Pairing...'); const r = await api('/api/setup/hue/pair', { body: { host: st.host } }).catch((e) => ({ ok: false, error: e.message })); if (r.ok) { st.paired = true; st.msg = r.message; go(); } else out.replaceChildren(el('span', { class: 'err' }, `✗ ${r.error}`)); } }, T('Pair'))), out);
+      el('button', { type: 'button', class: 'primary', onclick: async (ev) => { const pb = ev.currentTarget; pb.disabled = true; out.textContent = T('Now press the round button on top of the Hue bridge. Waiting for it…'); const r = await api('/api/setup/hue/pair', { body: { host: st.host, wait: true } }).catch((e) => ({ ok: false, error: e.message })); pb.disabled = false; if (r.ok) { st.paired = true; st.msg = r.message; go(); } else out.replaceChildren(el('span', { class: 'err' }, `✗ ${r.error}`)); } }, T('Pair'))), out);
   return card;
 }
 function ringEl(card) {

@@ -373,7 +373,7 @@ async function setupFinish(req, res) {
     cameras: [...(prev.cameras || []).filter((c) => !cams.some((n) => n.type === c.type)), ...cams],
     cameraPrefs: a.cameras?.has === 'yes' ? { kinds: picked('cameras'), detection: a.cameras.detect !== 'no' } : null,
     hue: draft.hue || prev.hue || null,
-    shelly: shellyHosts.length ? shellyHosts.map((host) => ({ host })) : prev.shelly || [],
+    shelly: shellyHosts.length ? shellyHosts.map((host) => (prev.shelly || []).find((s) => s.host === host) || { host }) : prev.shelly || [],   // one already added keeps its ids (and hardware id)
     yolink: yl?.uaid ? { uaid: String(yl.uaid).trim(), secret: String(yl.secret || '').trim() } : prev.yolink || null,
     ring: draft.ring || prev.ring || undefined,
     controls: a.controls?.has === 'yes' ? { kinds: picked('controls') } : null,

@@ -228,14 +228,14 @@ PROVIDERS.shelly = {
   async list() {
     const out = [];
     await Promise.all((config.shelly || []).map(async (s) => {
-      const base = `http://${s.host}`;
+      const base = `http://${s.host}`, tag = s.tag || s.host;   // a Shelly that moved keeps the ids it was added with (79m-moved.js)
       try {
         const info = await getJSON(`${base}/shelly`, { timeout: 4000 });
         if (info.gen >= 2) {
           const st = await getJSON(`${base}/rpc/Shelly.GetStatus`, { timeout: 4000 });
           for (const [k, v] of Object.entries(st)) {
             const [type, ch] = k.split(':');
-            const id = `shelly:${s.host}:${type}${ch ?? ''}`, name = s.name || info.name || info.id || s.host;
+            const id = `shelly:${tag}:${type}${ch ?? ''}`, name = s.name || info.name || info.id || s.host;
             if (type === 'switch') out.push({ id, provider: 'shelly', kind: 'plug', name, on: !!v.output, powerW: v.apower ?? null, online: true });
             if (type === 'temperature') out.push({ id, provider: 'shelly', kind: 'sensor', name, tempC: v.tC ?? null, online: true });
             if (type === 'humidity') out.push({ id, provider: 'shelly', kind: 'sensor', name, humidity: v.rh ?? null, online: true });
@@ -244,16 +244,16 @@ PROVIDERS.shelly = {
           }
         } else {
           const st = await getJSON(`${base}/status`, { timeout: 4000 });
-          (st.relays || []).forEach((r, i) => out.push({ id: `shelly:${s.host}:switch${i}`, provider: 'shelly', kind: 'plug', name: s.name || s.host, on: !!r.ison, powerW: st.meters?.[i]?.power ?? null, online: true }));
-          if (st.tmp) out.push({ id: `shelly:${s.host}:temperature`, provider: 'shelly', kind: 'sensor', name: s.name || s.host, tempC: st.tmp.tC ?? null, humidity: st.hum?.value ?? null, battery: st.bat?.value ?? null, online: true });
-          if ('flood' in st) out.push({ id: `shelly:${s.host}:flood`, provider: 'shelly', kind: 'sensor', name: s.name || s.host, water: !!st.flood, online: true });
+          (st.relays || []).forEach((r, i) => out.push({ id: `shelly:${tag}:switch${i}`, provider: 'shelly', kind: 'plug', name: s.name || s.host, on: !!r.ison, powerW: st.meters?.[i]?.power ?? null, online: true }));
+          if (st.tmp) out.push({ id: `shelly:${tag}:temperature`, provider: 'shelly', kind: 'sensor', name: s.name || s.host, tempC: st.tmp.tC ?? null, humidity: st.hum?.value ?? null, battery: st.bat?.value ?? null, online: true });
+          if ('flood' in st) out.push({ id: `shelly:${tag}:flood`, provider: 'shelly', kind: 'sensor', name: s.name || s.host, water: !!st.flood, online: true });
         }
-      } catch { out.push({ id: `shelly:${s.host}:offline`, provider: 'shelly', kind: 'plug', name: s.name || s.host, online: false }); }
+      } catch { out.push({ id: `shelly:${tag}:offline`, provider: 'shelly', kind: 'plug', name: s.name || s.host, online: false }); }
     }));
     return out;
   },
   async act(d, action) {
-    const [, host, part] = d.id.split(':'); const ch = Number(String(part).replace(/\D/g, '')) || 0;
+    const [, tag, part] = d.id.split(':'); const host = (config.shelly || []).find((s) => (s.tag || s.host) === tag)?.host || tag; const ch = Number(String(part).replace(/\D/g, '')) || 0;
     const on = action === 'on' ? true : action === 'off' ? false : !d.on;
     const info = await getJSON(`http://${host}/shelly`, { timeout: 4000 });
     if (info.gen >= 2) await getJSON(`http://${host}/rpc/Switch.Set?id=${ch}&on=${on}`);
@@ -281,9 +281,22 @@ async function huePair(host) {
   const r = await fetch(`http://${host}/api`, { method: 'POST', body: JSON.stringify({ devicetype: 'casatorch#panel' }), signal: AbortSignal.timeout(6000) });
   const j = await r.json();
   if (j?.[0]?.success?.username) return { ok: true, username: j[0].success.username };
-  if (j?.[0]?.error?.type === 101) return { ok: false, error: 'Press the round button on the Hue bridge, then try again within 30 seconds.' };
+  if (j?.[0]?.error?.type === 101) return { ok: false, button: true, error: 'Press the round button on the Hue bridge, then try again within 30 seconds.' };
   return { ok: false, error: j?.[0]?.error?.description || 'the bridge did not answer as expected' };
 }
+/** Pair in one tap: ask, and while the bridge says "press my button", keep asking for up to 30 seconds - so the
+    button can be pressed after tapping Pair (the bridge accepts new apps for 30 seconds after it's pressed). */
+async function huePairWait(host, { ms = 30_000, every = 1500, pair = huePair, wait = sleep } = {}) {
+  const end = Date.now() + ms;
+  for (;;) {
+    const r = await pair(host);
+    if (r.ok || !r.button) return r;
+    if (Date.now() + every > end) return { ok: false, button: true, timeout: true, error: 'The button on the Hue bridge wasn\'t pressed in time. Try again, and press it within 30 seconds.' };
+    await wait(every);
+  }
+}
+/** The bridge's own id once paired (to find it again if its address changes, 79m-moved.js). null when it doesn't say. */
+const hueBridgeId = async (host, username) => movedId((await getJSON(`http://${host}/api/${username}/config`, { timeout: 5000 }).catch(() => null))?.bridgeid);
 
 /* ---- Cameras: config.cameras = [{ id, name, type: frigate|reolink|snapshot, ... }] ---- */
 function digestHeader(method, uri, user, pass, chal) {

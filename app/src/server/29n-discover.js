@@ -24,7 +24,9 @@
  *
  * data/discovered.json  { items: { <key>: item }, known: [device ids], at }   owner-only, no secrets
  *   item: { key, kind, name, addr, firstAt, at, state: 'new' | 'later' | 'hidden' | 'added', until? }
- * Adding: Shelly (no password) is added here and tested first; a new Home Assistant device becomes a tile on Home;
+ * Adding: Shelly (no password) is added here and tested first; the first Hue bridge pairs here (Add, then its button:
+ * CasaTorch waits 30 seconds for it); Frigate without a password has its cameras added here (the first Frigate only);
+ * a new Home Assistant device becomes a tile on Home;
  * the rest open the guided setup at that item with the address filled in (it tests the connection as you go).
  * ====================================================================== */
 const DISC_FILE = path.join(DATA_DIR, 'discovered.json');
@@ -74,9 +76,9 @@ const discIdentifyOk = (now = Date.now()) => { while (discIdentifyHits.length &&
 /* What each kind is, and where "Add" goes. step/add are the guided setup's own ids (catalog/setup.json). */
 const DISC_KINDS = {
   homeassistant: { label: 'Home Assistant', icon: 'home', step: 'homeassistant', add: '' },
-  hue: { label: 'Philips Hue bridge', icon: 'bulb', step: 'controls', add: 'hue-local' },
+  hue: { label: 'Philips Hue bridge', icon: 'bulb', step: 'controls', add: 'hue-local', quick: (c) => !c.hue?.username },   // one tap, then the bridge's button
   shelly: { label: 'Shelly', icon: 'plug', direct: true },
-  frigate: { label: 'Frigate', icon: 'camera', step: 'cameras', add: 'frigate' },
+  frigate: { label: 'Frigate', icon: 'camera', step: 'cameras', add: 'frigate', quick: (c) => !(c.cameras || []).some((x) => x.type === 'frigate') },   // one tap when it has no password
   go2rtc: { label: 'go2rtc camera streams', icon: 'camera', step: 'cameras', add: 'frigate' },
   onvif: { label: 'ONVIF camera', icon: 'camera', step: 'cameras', add: 'onvif' },
   rtsp: { label: 'Camera (RTSP)', icon: 'camera', step: 'cameras', add: 'snapshot' },
@@ -260,9 +262,9 @@ const DISC_DEMO = [
   { key: 'device:light.porch', kind: 'device', addr: 'light.porch', name: 'Porch light', device: 'light', area: 'Porch', state: 'new' },
   { key: 'sonos:192.168.1.82', kind: 'sonos', addr: '192.168.1.82', name: 'Kitchen', area: 'Kitchen', state: 'new' },
 ];
-function discView(it) {
+function discView(it, c = config) {
   const k = DISC_KINDS[it.kind] || {};
-  const how = k.direct ? 'direct' : k.tile ? 'tile' : k.ha ? 'ha' : k.step ? 'setup' : 'info';
+  const how = k.direct || (k.quick && !it.brand && k.quick(c)) ? 'direct' : k.tile ? 'tile' : k.ha ? 'ha' : k.step ? 'setup' : 'info';
   return { key: it.key, kind: it.kind, label: k.label, icon: k.icon, name: it.name || null, addr: it.brand ? null : it.addr, ...(it.brand ? { brand: true, n: it.n || 1 } : {}), device: it.device || null, area: it.area || null, at: it.firstAt || it.at || null, how, ...(how === 'setup' ? { step: k.step, add: k.add } : {}), ...(how === 'ha' ? { domain: k.ha } : {}) };
 }
 app.get('/api/discover', requireRole('admin'), (_req, res) => {
@@ -309,10 +311,42 @@ app.post('/api/discover/:key/add', requireRole('admin'), express.json({ limit: '
     it.state = 'added'; discSave();
     return res.json({ ok: true, added: 'tile', already: !placed, room: room ? it.area : null, area: it.area || null });
   }
+  /* A Hue bridge, when none is paired yet: tap Add, press the bridge's button, done (no wizard). */
+  if (it.kind === 'hue' && k.quick(config)) {
+    const host = discHost(it.addr);
+    if (!discAddrOk('hue', host)) return res.status(400).json({ error: 'That address isn\'t on your home network.' });
+    const r = await huePairWait(host).catch((e) => ({ ok: false, error: friendlyError(e, { what: 'The Hue bridge', url: `http://${host}` }).error }));
+    if (!r.ok) return res.status(r.timeout ? 409 : 502).json({ error: r.error || 'The Hue bridge didn\'t answer. Check that it\'s on and try again.' });
+    const bridgeid = await hueBridgeId(host, r.username);
+    saveConfig({ ...config, hue: { host, username: r.username, ...(bridgeid ? { bridgeid } : {}) } }); it.state = 'added'; discSave();
+    if (typeof audit === 'function') audit(req, 'device-added', { device: 'Philips Hue', via: 'found' });
+    return res.json({ ok: true, added: 'hue' });
+  }
+  /* Frigate without a password (its usual open port): its cameras are added straight away. With a password, or its
+     secure port, the guided setup asks for them as before. */
+  if (it.kind === 'frigate' && k.quick(config)) {
+    const t = await discFrigateQuick(it.addr).catch(() => null);
+    if (t?.cams?.length) {
+      saveConfig({ ...config, cameras: [...(config.cameras || []), ...t.cams] }); it.state = 'added'; discSave();
+      if (typeof audit === 'function') audit(req, 'device-added', { device: 'Frigate', via: 'found' });
+      return res.json({ ok: true, added: 'frigate', n: t.cams.length });
+    }
+  }
   if (k?.ha) return res.json({ ok: true, open: 'ha', domain: k.ha });
   if (k?.step) return res.json({ ok: true, open: 'setup', step: k.step, add: k.add, ...(it.brand ? {} : { addr: it.addr, found: it.kind }) });
   return res.json({ ok: true, open: 'info' });
 }));
+/** Frigate found at an http:// home address that needs no password: its cameras, shaped as setup saves them
+    (05-setup.js). null when it asks for a sign-in, isn't plain http, or has no cameras - then setup takes over. */
+async function discFrigateQuick(addr, test = (b) => frigateTest(b)) {
+  const n = normalizeAddress(addr, { defaultPort: 5000 });
+  if (n.error || n.scheme !== 'http' || !discAddrOk('frigate', n.url)) return null;
+  const r = await test({ url: n.url });
+  if (!r?.ok) return null;
+  const cams = (Array.isArray(r.cameras) ? r.cameras : []).filter((x) => /^[\w.-]{1,64}$/.test(String(x))).slice(0, 64)
+    .map((cam) => ({ id: `frigate-${cam}`, name: cam.replace(/[_-]+/g, ' ').replace(/^\w/, (x) => x.toUpperCase()), type: 'frigate', url: n.url, camera: cam }));
+  return { url: n.url, cams };
+}
 /* "Add by address": type an address, CasaTorch says what it is (the QR-free, no-guessing fallback). */
 app.post('/api/discover/identify', requireRole('admin'), express.json({ limit: '1kb' }), asyncRoute(async (req, res) => {
   const raw = String(req.body?.addr || '').trim().slice(0, 300);
@@ -333,4 +367,4 @@ app.post('/api/discover/identify', requireRole('admin'), express.json({ limit: '
   if (!isDemo()) { discMerge(found); discSave(); }
   res.json({ found: found.map((f) => discView(disc.items[discKey(f)] || { ...f, key: discKey(f), firstAt: nowIso() })) });
 }));
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchDiscover = { disc, ssdpKind, discBrands, discMerge, discText, discAddrOk, discLanIp, discRoomGuess, discIdentifyOk, discIdentifyHits, discConnected, discKey, discView, discoverNewDevices, rtspScan, rtspAnswers, onvifProbe, DISC_KINDS };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchDiscover = { disc, discFrigateQuick, ssdpKind, discBrands, discMerge, discText, discAddrOk, discLanIp, discRoomGuess, discIdentifyOk, discIdentifyHits, discConnected, discKey, discView, discoverNewDevices, rtspScan, rtspAnswers, onvifProbe, DISC_KINDS };

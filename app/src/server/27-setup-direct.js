@@ -69,9 +69,10 @@ app.post('/api/setup/hue/pair', async (req, res) => {
   if (!hostOk(host)) return res.status(400).json({ ok: false, error: 'enter the bridge\'s IP address' });
   if (isDemo()) { draft.hue = { host, username: 'demo' }; return res.json({ ok: true, message: 'Paired (demo)' }); }
   try {
-    const r = await huePair(host);
+    const r = req.body?.wait ? await huePairWait(host) : await huePair(host);   // wait: the button can be pressed after tapping Pair
     if (!r.ok) return res.json(r);
-    draft.hue = { host, username: r.username };
+    const bridgeid = await hueBridgeId(host, r.username);
+    draft.hue = { host, username: r.username, ...(bridgeid ? { bridgeid } : {}) };
     const lights = await getJSON(`http://${host}/api/${r.username}/lights`, { timeout: 6000 }).catch(() => ({}));
     res.json({ ok: true, message: `Paired - ${Object.keys(lights || {}).length} lights` });
   } catch (err) { res.json({ ok: false, error: `could not reach a Hue bridge at ${host} (${err.message})` }); }

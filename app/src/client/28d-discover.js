@@ -2,7 +2,7 @@
  * "New devices found" (29n-discover.js on the server): what CasaTorch spotted on the home network or in Home
  * Assistant since the last look, each with one tap to add, "Not now" (back in a week) or "Hide" (for good).
  *  - Shown at the top of Connect, and as a sheet from the count on the Connect tab.
- *  - Add: a Shelly is tested and added here; a new Home Assistant device becomes a tile on Home (and its room on
+ *  - Add: a Shelly, a Hue bridge (tap Add, then press its button) and Frigate without a password are added here; a new Home Assistant device becomes a tile on Home (and its room on
  *    Controls, when Controls is arranged by room); a brand that comes through Home Assistant opens its questions here;
  *    the rest open the guided setup at that item with the address filled in. Passwords are asked only there, in
  *    sealed fields.
@@ -33,7 +33,7 @@ function discRow(it, after) {
   const busy = (b, on) => { b.disabled = on; b.classList.toggle('busy', on); };
   const add = el('button', { class: 'btn small primary', onclick: async () => {
     busy(add, true); msg.textContent = '';
-    try { await discAdd(it, after); } catch (e) { msg.textContent = e.message; msg.className = 'tiny bad'; } finally { busy(add, false); }
+    try { await discAdd(it, after, (t) => { msg.className = 'tiny'; msg.textContent = t; }); } catch (e) { msg.textContent = e.message; msg.className = 'tiny bad'; } finally { busy(add, false); }
   } }, it.how === 'info' ? T('OK') : T('Add'));
   const hide = (later) => async () => { try { await post(`/api/discover/${encodeURIComponent(it.key)}/hide`, { later }); } catch { /* gone already */ } after(); };
   return el('div', { class: 'disc-row', 'data-kind': it.kind },
@@ -49,11 +49,17 @@ function discRow(it, after) {
       add));
 }
 /** Add one finding. Throws with a message to show on its row. */
-async function discAdd(it, after) {
+async function discAdd(it, after, say = () => {}) {
   if (it.how === 'info') { await post(`/api/discover/${encodeURIComponent(it.key)}/hide`, {}); after(); return; }
-  const r = await post(`/api/discover/${encodeURIComponent(it.key)}/add`, {});
+  // A Hue bridge pairs right here: the server waits (up to 30 seconds) for its button to be pressed.
+  const pair = it.kind === 'hue' && it.how === 'direct';
+  if (pair) say(T('Now press the round button on top of the Hue bridge. Waiting for it…'));
+  const r = await api(`/api/discover/${encodeURIComponent(it.key)}/add`, { method: 'POST', body: '{}', timeout: pair ? 60_000 : undefined });
+  if (pair) say('');
   if (r.demo) { toast(T('Demo mode - nothing was changed.')); after(); return; }
   if (r.added === 'shelly') { toast(T('Added {name}. Its switches and sensors are on Controls.', { name: r.name || 'Shelly' }), 4000); after(); return; }
+  if (r.added === 'hue') { toast(T('Paired with your Hue bridge. Its lights are on Controls.'), 4000); after(); return; }
+  if (r.added === 'frigate') { toast(r.n === 1 ? T('Added Frigate with 1 camera. It\'s on Cameras.') : T('Added Frigate with {n} cameras. They\'re on Cameras.', { n: r.n }), 4000); after(); return; }
   if (r.added === 'tile') { toast(r.room ? T('Added to Home, and to {room} on Controls.', { room: r.room }) : r.already ? T('It\'s on Home already.') : T('Added to Home.'), 4000); after(); return; }
   if (r.open === 'ha' && typeof haFlowModal === 'function') { haFlowModal({ domain: r.domain, label: it.name || T(it.label) }, after); return; }
   if (r.open === 'setup' && typeof startConnect === 'function') {
