@@ -36,8 +36,10 @@ const inlineScriptHashes = (() => {
   }
   return [...out].join(' ');
 })();
+/* Home Assistant's usual name may frame CasaTorch (the HACS card) only when Home Assistant is connected: on a home with
+   none, any device on the network could answer to that name. */
 const frameAncestors = () => {
-  const list = new Set(["'self'", 'http://homeassistant.local:8123', 'https://homeassistant.local:8123']);
+  const list = new Set(["'self'", ...(config.homeAssistant?.url ? ['http://homeassistant.local:8123', 'https://homeassistant.local:8123'] : [])]);
   try { if (config.homeAssistant?.url && !/supervisor/.test(config.homeAssistant.url)) list.add(new URL(config.homeAssistant.url).origin); } catch { /* not a URL */ }
   for (const o of config.security?.frameAncestors || []) if (/^https?:\/\/[\w.-]+(:\d+)?$/.test(o)) list.add(o);
   return [...list].join(' ');

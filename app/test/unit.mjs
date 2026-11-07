@@ -398,6 +398,14 @@ await t('safety rule: scripts Home Assistant does not describe count as unchecke
   assert.ok([...H.CACHE.keys()].some((k) => k.startsWith('ha:scriptcfg:')), 'kept, so the device list does not wait for it every time');
 });
 
+t('framing: Home Assistant\'s usual name may frame CasaTorch only when Home Assistant is connected', () => {
+  const M = globalThis.__casatorchMoved, kept = M.keep();
+  try {
+    M.setCfg({ ...M.cfg(), homeAssistant: undefined }); assert.doesNotMatch(H.frameAncestors(), /homeassistant\.local/);
+    M.setCfg({ ...M.cfg(), homeAssistant: { url: 'http://192.168.1.5:8123', token: 'x' } }); assert.match(H.frameAncestors(), /homeassistant\.local:8123/); assert.match(H.frameAncestors(), /192\.168\.1\.5:8123/);   // scrub-ok: example address
+  } finally { M.restore(kept); }
+});
+
 t('energy card: solar, battery and grid come only from sensors that exist', () => {
   const none = H.energyFlows([{ id: 'ha:sensor.fridge_power', name: 'Fridge', kind: 'sensor', powerW: 90 }], 900);
   assert.equal(none.solarW, null); assert.equal(none.battery, null); assert.equal(none.gridW, null);
