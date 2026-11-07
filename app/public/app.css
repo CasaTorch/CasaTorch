@@ -1116,6 +1116,19 @@ div.field { margin: 10px 0; } div.field > span:first-child { display: block; col
   .ar-more { align-self: center; }
 }
 @media (max-width: 760px) { .ar-field { flex-wrap: wrap; } .ar-field select { max-width: 100%; } }
+/* Settings › Alerts › Which alerts (37t-alert-types.js); headings between the cards of a long Settings page */
+.cards > .set-group { grid-column: 1 / -1; margin: 10px 2px -4px; font-size: 12.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.cards > .set-group:first-child { margin-top: 0; }
+.at-card h3.sub:first-of-type { margin-top: 6px; }
+.at-list { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.at-row { display: flex; align-items: flex-start; gap: 14px; padding: 11px 14px; border-top: 1px solid var(--line); }
+.at-row:first-child { border-top: 0; } .at-row .ar-sw { margin-top: 2px; }
+.at-name { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; } .at-name b { font-weight: 600; font-size: 14px; }
+.at-name .pill { font-size: 10.5px; padding: 1px 7px; }
+.at-extra { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; } .at-extra[hidden] { display: none; }
+.at-num { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.at-num .at-n { width: 72px; padding: 5px 8px; font-size: 13px; border-radius: 9px; }
+.at-num .ar-sel { width: auto; }
 .nw-e.side { stroke-dasharray: 4 5; opacity: .75; }
 
 /* ---- Themes and backgrounds (03-themes.js, 09t-themes.js) ---- */

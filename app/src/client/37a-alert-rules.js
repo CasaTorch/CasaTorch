@@ -179,7 +179,7 @@ async function alertRulesCards() {
   const main = el('div', { class: 'card ar-card' }), times = el('div', { class: 'card' }), devs = el('div', { class: 'card' }), rooms = el('div', { class: 'card' }), mutes = el('div', { class: 'card' });
   const draw = () => {
     const d = AR.data;
-    main.replaceChildren(el('div', { class: 'row between wrap', style: 'gap:10px' }, el('h2', { style: 'margin:0' }, icon('bell', 15), T('What each alert does')), d.admin ? arScopeSeg(draw) : null),
+    main.replaceChildren(el('div', { class: 'row between wrap', style: 'gap:10px' }, el('h2', { style: 'margin:0' }, icon('send', 15), T('Phones, sounds and repeats')), d.admin ? arScopeSeg(draw) : null),
       el('p', { class: 'small muted' }, AR.scope === 'house' ? T('The household\'s defaults. Each person can change them for their own phones.') : T('For you and your phones. Water, smoke and freezing always show and always break through quiet hours.')),
       arMatrix(draw),
       el('p', { class: 'tiny muted' }, T('Automatic keeps what CasaTorch did before: each phone\'s "Send" level, and critical alerts repeating every 10 minutes.')));
@@ -238,7 +238,8 @@ async function alertRulesCards() {
       el('div', { class: 'row wrap', style: 'gap:8px' }, kindPick, el('button', { class: 'btn small', onclick: () => { const k = arKind(kindPick.value); arMuteDialog({ kind: k.id, name: T(k.label), safety: k.safety }); } }, icon('pause', 14), T('Mute a kind for a while'))));
   };
   draw();
-  return [main, times, devs, rooms, mutes];
+  /* A long page: which alerts first, then how they reach you, then the fine-tuning. */
+  return [setGroup(T('Which alerts')), await alertTypesCard(), setGroup(T('How they reach you')), main, times, setGroup(T('Fine-tune')), devs, rooms, mutes];   // alertTypesCard: 37t-alert-types.js
 }
 
 /* ---- on an alert (the Alerts page): Got it, and More: snooze, mark resolved, mute the device, its rules ---- */

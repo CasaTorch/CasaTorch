@@ -121,6 +121,7 @@ function lanCard(s, redraw, size = { tier: 'xl' }) {
   if (!s.devices.length) { card.append(el('p', { class: 'muted' }, s.scanAt ? T('No devices found yet.') : T('The first look at your network happens a minute after CasaTorch starts. The devices it finds then are taken as yours; anything that joins later shows up here as new.'))); return card; }
   const fresh = s.devices.filter((d) => !d.known), risky = s.devices.filter((d) => d.ports.some((p) => !p.expected && p.level !== 'info'));
   card.append(el('p', { class: 'small muted', style: 'margin-top:0' }, `${T('{n} devices', { n: s.devices.length })}${fresh.length ? ` · ${T('{n} new', { n: fresh.length })}` : ''}${risky.length ? ` · ${T('{n} with something to look at', { n: risky.length })}` : ''}. ${T('Ports checked {when}.', { when: s.portsAt ? ago(s.portsAt) : T('soon') })}`));
+  if (s.newdevAlerts === false) card.append(el('p', { class: 'tiny muted', style: 'margin-top:-4px' }, T('New-device alerts are off.'), ' ', el('a', { href: '#settings/alerts' }, T('Turn on in Settings › Alerts'))));
   if (size.tier === 's') return card;
   const list = el('div', { class: 'lanlist' });
   for (const d of (size.tier === 'm' ? s.devices.filter((x) => !x.known || x.ports.some((p) => !p.expected && p.level === 'warning')) : s.devices).slice(0, size.tier === 'l' ? 40 : 120)) {

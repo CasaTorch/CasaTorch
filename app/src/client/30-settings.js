@@ -232,13 +232,15 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     if (!q) { if (pick) showSection(pick); else pane.replaceChildren(); main.classList.toggle('set-searching', false); return; }
     main.classList.add('set-searching');
     const hits = [];
-    for (const [k, label] of SECTIONS) for (const c of await cardsOf(k)) if (c.textContent.toLowerCase().includes(q)) hits.push([label, c]);
+    for (const [k, label] of SECTIONS) for (const c of await cardsOf(k)) if (!c.classList.contains('set-group') && c.textContent.toLowerCase().includes(q)) hits.push([label, c]);
     pane.replaceChildren(el('div', { class: 'set-head' }, el('h2', {}, T('Results for "{q}"', { q: search.value.trim() }))), hits.length ? el('div', { class: 'cards' }, ...hits.map(([l, c]) => { c.dataset.section = l; return c; })) : el('p', { class: 'muted' }, T('No setting matches - try another word.')));
   }, 200); };
   main.replaceChildren(el('div', { class: `settings${phone ? (pick ? ' set-detail' : ' set-list') : ''}` }, nav, pane));
   if (pick) await showSection(pick);
   return null;
 } });
+/** A heading between the cards of a long Settings page. */
+const setGroup = (text) => el('h3', { class: 'set-group' }, text);
 /* Side-rail order */
 const TAB_ORDER = ['home', 'alerts', 'controls', 'cameras', 'security', 'calendar', 'photos', 'energy', 'network', 'house3d', 'ask', 'connect', 'settings'];
 TABS.sort((a, b) => TAB_ORDER.indexOf(a.id) - TAB_ORDER.indexOf(b.id));
