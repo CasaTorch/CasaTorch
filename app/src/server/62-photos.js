@@ -8,18 +8,28 @@ fs.mkdirSync(PHOTO_DIR, { recursive: true, mode: 0o700 });
 const PHOTO_TYPES = [['jpg', 'image/jpeg', (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff], ['png', 'image/png', (b) => b.subarray(0, 4).toString('hex') === '89504e47'],
   ['gif', 'image/gif', (b) => b.subarray(0, 4).toString() === 'GIF8'], ['webp', 'image/webp', (b) => b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP'],
   ['heic', 'image/heic', (b) => b.subarray(4, 8).toString() === 'ftyp' && /hei|mif|avi/.test(b.subarray(8, 12).toString())]];
-const photoList = () => fs.readdirSync(PHOTO_DIR).filter((f) => /^[a-f0-9]{16}\.(jpg|png|gif|webp|heic)$/.test(f))
-  .map((f) => ({ id: f, at: fs.statSync(path.join(PHOTO_DIR, f)).mtime.toISOString(), url: `/api/photos/${f}` })).sort((a, b) => b.at.localeCompare(a.at));
+/* The list is read from the folder once and kept until a photo is added or removed here (or a minute passes, for a
+   folder changed by hand or a restore): every Photo reel tile asks for it, and with 2000 photos that was 2000 file looks each time. */
+let photoMemo = null;
+const photoList = () => {
+  if (photoMemo && Date.now() - photoMemo.at < 60_000) return photoMemo.list;
+  const list = fs.readdirSync(PHOTO_DIR).filter((f) => /^[a-f0-9]{16}\.(jpg|png|gif|webp|heic)$/.test(f))
+    .map((f) => { try { return { id: f, at: fs.statSync(path.join(PHOTO_DIR, f)).mtime.toISOString(), url: `/api/photos/${f}` }; } catch { return null; } }).filter(Boolean).sort((a, b) => b.at.localeCompare(a.at));
+  photoMemo = { at: Date.now(), list };
+  return list;
+};
+const photoChanged = () => { photoMemo = null; };
 app.get('/api/photos', (_req, res) => res.json({ photos: isDemo() && !photoList().length ? demoPhotos() : photoList() }));
 app.post('/api/photos', express.raw({ type: '*/*', limit: '30mb' }), (req, res) => {
   const b = req.body;
   if (!Buffer.isBuffer(b) || b.length < 16) return res.status(400).json({ error: 'no file received' });
   const t = PHOTO_TYPES.find(([, , ok]) => ok(b));
   if (!t) return res.status(415).json({ error: 'that is not a photo CasaTorch can show (JPEG, PNG, WebP, GIF or HEIC)' });
-  if (isDemo() && photoList().length >= 50) return res.status(409).json({ error: 'the demo keeps up to 50 photos - remove some first' });   // the demo has no sign-in: anyone could fill the disk
-  if (photoList().length >= 2000) return res.status(409).json({ error: 'the photo reel is full (2000 photos) - remove some first' });
+  const count = photoList().length;
+  if (isDemo() && count >= 50) return res.status(409).json({ error: 'the demo keeps up to 50 photos - remove some first' });   // the demo has no sign-in: anyone could fill the disk
+  if (count >= 2000) return res.status(409).json({ error: 'the photo reel is full (2000 photos) - remove some first' });
   const id = `${crypto.randomBytes(8).toString('hex')}.${t[0]}`;
-  writeFileSafe(path.join(PHOTO_DIR, id), b, 0o600);
+  writeFileSafe(path.join(PHOTO_DIR, id), b, 0o600); photoChanged();
   res.json({ ok: true, photo: { id, url: `/api/photos/${id}` } });
 });
 app.get('/api/photos/:id', (req, res) => {
@@ -32,6 +42,7 @@ app.get('/api/photos/:id', (req, res) => {
 app.delete('/api/photos/:id', (req, res) => {
   if (!/^[a-f0-9]{16}\.(jpg|png|gif|webp|heic)$/.test(req.params.id)) return res.status(404).json({ error: 'not found' });
   try { fs.unlinkSync(path.join(PHOTO_DIR, req.params.id)); } catch { /* gone already */ }
+  photoChanged();
   res.json({ ok: true });
 });
 /* Demo: scenic sample photos (no people), free-licensed from Wikimedia Commons - each one's
