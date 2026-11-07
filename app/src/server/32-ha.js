@@ -165,21 +165,158 @@ async function haCamModels() {
     });
   } catch { return {}; }
 }
+/* ---- The safety rule for things that act on other things ----
+   A scene, a group or a script can unlock a door, open a garage door or gate, or disarm an alarm without saying so in
+   its name ("Leaving", "Good night", a switch group "Outside" with the garage relay in it). So what each one touches
+   is looked at: a scene's and a group's members (Home Assistant lists them), and a script's own steps (asked from
+   Home Assistant, every scene and script it calls followed too). Each gets a level that riskOf (30-devices.js) uses:
+     'sure'    - it can unlock, open a garage door, gate or door, or disarm: never run from CasaTorch, no exception;
+     'name'    - it switches something whose name looks like a door, gate, lock or alarm control: held, an owner may allow it;
+     'unknown' - CasaTorch couldn't read what it does (a template, a blueprint, Home Assistant didn't say): held the same way.
+   A step that reaches "everything", an area, a floor, a label or a whole device that can't be resolved counts as reaching
+   whatever is there. Running a script asks Home Assistant again first (haSafetyNow), so an edit made a moment ago counts. */
+const HA_ALWAYS_BAD = /^(lock\.(unlock|open)|alarm_control_panel\.alarm_disarm)$/;
+const HA_SAFE_WAY = /^(lock\.lock|cover\.(close_cover|stop_cover|close_cover_tilt|stop_cover_tilt|open_cover_tilt|set_cover_tilt_position)|alarm_control_panel\.alarm_(arm_[a-z_]+|trigger)|valve\.(close_valve|stop_valve))$/;
+const HA_SWEEP_DOMAINS = new Set(['homeassistant', 'cover', 'lock', 'alarm_control_panel', 'switch', 'button', 'input_boolean', 'input_button', 'fan']);
+const HA_SWEEP_SURE = new Set(['homeassistant', 'cover', 'lock', 'alarm_control_panel']);   // these can reach a garage door, a lock or an alarm wherever they sweep
+const HA_SWEEP_KEYS = ['area_id', 'device_id', 'floor_id', 'label_id'];
+const HA_LEVEL = { name: 1, unknown: 2, sure: 3 };
+const haWorse = (a, b) => ((HA_LEVEL[b] || 0) > (HA_LEVEL[a] || 0) ? b : a);
+const haIds = (v) => (Array.isArray(v) ? v : typeof v === 'string' ? v.split(',') : []).map((x) => String(x).trim().toLowerCase()).filter(Boolean);
+const haTemplated = (v) => /[{}%]/.test(typeof v === 'string' ? v : JSON.stringify(v ?? ''));
+/** How risky one entity is to switch on, run or open: 'sure' | 'name' | 'unknown' | null.
+    dev: its device here (or undefined: hidden in Home Assistant); level: the level found for scenes, scripts and groups. Pure. */
+function haEntityRisk(ent, dev, level = () => null) {
+  const e = String(ent || '').toLowerCase(), dom = e.split('.')[0];
+  if (dom === 'lock' || dom === 'alarm_control_panel') return 'sure';
+  if (dom === 'cover') {
+    if (!dev) return RISKY_NAME.test(e) ? 'sure' : 'unknown';
+    if (dev.risky || RISKY_COVERS.has(dev.haClass)) return 'sure';
+    return riskOf({ ...dev, safety: null }) ? 'name' : null;
+  }
+  if (['scene', 'script', 'group', 'switch', 'light', 'fan', 'input_boolean', 'button', 'input_button'].includes(dom)) {
+    const own = level(e); if (own) return own;
+    if (dom === 'light' || dom === 'scene' || dom === 'script' || dom === 'group') return null;
+    if (!dev) return RISKY_NAME.test(e) ? 'name' : null;
+    return riskOf({ ...dev, safety: null }) ? 'name' : null;
+  }
+  return null;
+}
+/** What a script's steps can do, at worst: 'sure' | 'name' | 'unknown' | null. look(entity) rates one entity (haEntityRisk);
+    devEnts(deviceId) lists a Home Assistant device's entities (or null when unknown). Pure. */
+function haActionRisk(cfg, look, devEnts = () => null) {
+  let worst = null;
+  const bump = (lv) => { worst = haWorse(worst, lv); };
+  const rateAll = (ents) => { for (const e of ents) bump(look(e)); };
+  const walk = (o, depth) => {
+    if (worst === 'sure') return;
+    if (depth > 60) { bump('unknown'); return; }
+    if (Array.isArray(o)) { for (const x of o) walk(x, depth + 1); return; }
+    if (!o || typeof o !== 'object') return;
+    if (o.use_blueprint || o.service_template != null) bump('unknown');
+    const svc = typeof o.service === 'string' ? o.service : typeof o.action === 'string' && o.action.includes('.') ? o.action : null;
+    if (svc) {
+      const s = svc.trim().toLowerCase(), [dom, verb = ''] = s.split('.');
+      if (haTemplated(s)) bump('unknown');
+      else {
+        const tg = o.target && typeof o.target === 'object' ? o.target : {}, data = o.data && typeof o.data === 'object' ? o.data : {};
+        const ents = [...haIds(o.entity_id), ...haIds(tg.entity_id), ...haIds(data.entity_id)];
+        const devs = [...haIds(o.device_id), ...haIds(tg.device_id), ...haIds(data.device_id)];
+        const fuzzy = ents.includes('all') || ents.some(haTemplated) || [o.target, o.data].some((x) => typeof x === 'string') || HA_SWEEP_KEYS.some((k) => k !== 'device_id' && (o[k] != null || tg[k] != null || data[k] != null));
+        const devList = devs.map((d) => devEnts(d));
+        if (HA_ALWAYS_BAD.test(s)) bump('sure');
+        else if (!HA_SAFE_WAY.test(s)) {
+          if (dom === 'script' && !['turn_on', 'turn_off', 'toggle', 'reload'].includes(verb)) bump(look(s));   // script.night_mode: runs that script
+          if (verb !== 'turn_off') rateAll(ents.filter((e) => e !== 'all' && !haTemplated(e)));
+          if (verb !== 'turn_off') for (const l of devList) { if (l) rateAll(l); else if (HA_SWEEP_DOMAINS.has(dom)) bump(HA_SWEEP_SURE.has(dom) ? 'sure' : 'unknown'); }
+          if (fuzzy && HA_SWEEP_DOMAINS.has(dom) && verb !== 'turn_off') bump(HA_SWEEP_SURE.has(dom) ? 'sure' : 'unknown');
+          if (dom === 'scene' && (verb === 'apply' || verb === 'create') && data.entities && typeof data.entities === 'object') rateAll(Object.keys(data.entities).map((k) => k.toLowerCase()));
+          if (dom === 'scene' && (verb === 'apply' || verb === 'create') && haTemplated(data.entities)) bump('unknown');
+        }
+      }
+    } else if (typeof o.device_id === 'string' && typeof o.domain === 'string' && typeof o.type === 'string' && o.condition == null && o.trigger == null && o.platform == null) {
+      const dom = o.domain.toLowerCase(), type = o.type.toLowerCase();   // a device action ("Unlock Front door" picked in the script editor)
+      if (dom === 'lock' && type !== 'lock') bump('sure');
+      else if (dom === 'alarm_control_panel' && !/^(arm_[a-z_]+|trigger)$/.test(type)) bump('sure');
+      else if (dom === 'cover' && /^(open|set_position|toggle)$/.test(type)) bump(o.entity_id ? look(String(o.entity_id).toLowerCase()) || null : 'sure');
+      else if (/^(turn_on|toggle|press)$/.test(type)) { const l = o.entity_id ? [String(o.entity_id).toLowerCase()] : devEnts(o.device_id.toLowerCase()); if (l) rateAll(l); else bump('unknown'); }
+    }
+    for (const [k, v] of Object.entries(o)) if (v && typeof v === 'object' && k !== 'target' && k !== 'data') walk(v, depth + 1);
+  };
+  try { walk(cfg, 0); } catch { return 'unknown'; }
+  return worst;
+}
+/** Levels for every scene, group and script, from Home Assistant's states and the scripts' steps. Pure.
+    states: Home Assistant states; devs: our devices; scripts: { 'script.x': steps | null (couldn't read) }; devIds: entity -> device. */
+function haSafetyLevels(states, devs, scripts = {}, devIds = {}) {
+  const byId = new Map((devs || []).map((d) => [d.id, d])), members = new Map(), levels = new Map(), byDev = new Map();
+  for (const [e, d] of Object.entries(devIds || {})) { if (!byDev.has(d)) byDev.set(d, []); byDev.get(d).push(e); }
+  for (const s of states || []) {
+    const e = String(s?.entity_id || '').toLowerCase(), dom = e.split('.')[0];
+    if (dom !== 'light' && Array.isArray(s?.attributes?.entity_id)) members.set(e, s.attributes.entity_id.slice(0, 500).map((x) => String(x).toLowerCase()));
+  }
+  const look = (e) => haEntityRisk(e, byId.get(`ha:${e}`), (x) => levels.get(x) || null);
+  const devEnts = (d) => byDev.get(d) || null;
+  for (let round = 0; round < 6; round++) {   // a scene in a script in a script: until nothing changes
+    let changed = false;
+    for (const [e, list] of members) { let lv = null; for (const m of list) if (m !== e) lv = haWorse(lv, look(m)); if (lv !== (levels.get(e) || null)) { levels.set(e, lv); changed = true; } }
+    for (const s of states || []) {
+      const e = String(s?.entity_id || '').toLowerCase(); if (!e.startsWith('script.')) continue;
+      const cfg = Object.hasOwn(scripts || {}, e) ? scripts[e] : null;
+      const lv = cfg && typeof cfg === 'object' ? haActionRisk(cfg, (x) => (x === e ? null : look(x)), devEnts) : 'unknown';
+      if (lv !== (levels.get(e) || null)) { levels.set(e, lv); changed = true; }
+    }
+    if (!changed) break;
+  }
+  return levels;
+}
+/** Each script's steps, from Home Assistant's websocket ("script/config"): { entity: steps | null }. Kept a minute. */
+async function haScriptConfigs(ents, { fresh = false } = {}) {
+  const list = [...new Set(ents)].filter((e) => /^script\.[\w-]{1,200}$/.test(e)).slice(0, 300); if (!list.length) return {};
+  const key = `ha:scriptcfg:${crypto.createHash('sha1').update(list.join(',')).digest('base64url').slice(0, 12)}`;
+  if (fresh) CACHE.delete(key);
+  try {
+    return await cached(key, 60_000, async () => {
+      const h = config.homeAssistant;
+      const res = await famHaWs(list.map((entity_id) => ({ type: 'script/config', entity_id })), { url: h?.url, token: h?.token, timeout: 4000 });
+      return Object.fromEntries(list.map((e, i) => [e, res[i]?.ok && res[i].result?.config && typeof res[i].result.config === 'object' ? res[i].result.config : null]));
+    });
+  } catch { return {}; }
+}
+/** Marks the devices that act on other things with their level (d.safety), for riskOf. */
+function haSafetyMark(list, states, scripts, devIds) {
+  const levels = haSafetyLevels(states, list, scripts, devIds);
+  for (const d of list) { const lv = levels.get(d.id.slice(3).toLowerCase()); if (lv) d.safety = lv; }
+  return list;
+}
+/** Right before a scene, script or group runs: its level from what Home Assistant says this second. */
+async function haSafetyNow(ent) {
+  const states = await haStates();
+  const scripts = await haScriptConfigs(states.map((s) => s.entity_id).filter((e) => /^script\./.test(e)), { fresh: true });
+  const devs = haPairPlugs(states.map(haDevice).filter(Boolean));
+  return haSafetyLevels(states, devs, scripts, await haDevIds()).get(String(ent).toLowerCase()) || null;
+}
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchHaSafety = { haActionRisk, haEntityRisk, haSafetyLevels, haSafetyMark };
 /** A camera entity that is really a chime becomes one (the snapshot and stream addresses go). Pure. */
 function haChimeOf(d) { const { snapshot: _s, stream: _l, every: _e, liveVia: _v, ...rest } = d; return { ...rest, kind: 'chime', chime: true }; }
 PROVIDERS.ha = {
   async list() {
     const [states, areas, devs, models] = await Promise.all([haStates(), haAreas(), haDevIds(), haCamModels()]);
+    const scripts = await haScriptConfigs(states.map((s) => s.entity_id).filter((e) => /^script\./.test(e)));
     const byEnt = new Map(states.map((s) => [s.entity_id, s]));
     const list = haPairPlugs(states.map(haDevice).filter(Boolean)).map((d) => (d.kind === 'camera' && haIsChime(byEnt.get(d.id.slice(3)), models[d.id.slice(3)]) ? haChimeOf(d) : d));
     const fast = camMapNow();   // cameras Frigate's go2rtc also has: live video through it (29h-camauto.js)
     for (const d of list) { const a = areas[d.id.slice(3)]; if (a) d.area = a; const g = devs[d.id.slice(3)]; if (g) d.dev = g; if (d.kind === 'camera' && fast[d.id.slice(3)]?.via === 'frigate') d.liveVia = 'frigate'; }
-    return list;
+    return haSafetyMark(list, states, scripts, devs);
   },
   async act(d, action, value) {
     const h = config.homeAssistant, ent = d.id.slice(3), domain = ent.split('.')[0];
     if (d.risky && ['open', 'toggle'].includes(action)) throw new Error('opening garage doors and gates stays in Home Assistant');
     const svc = HA_SERVICES[domain]?.[action];
+    if (svc && domain === 'script') {   // a script's steps are asked again this second (scenes and groups: the device list already has their members as they are now)
+      const lv = await haSafetyNow(ent).catch(() => 'unknown');
+      const why = lv && blocked({ ...d, safety: lv }, action); if (why) throw Object.assign(new Error(why), { status: 403 });
+    }
     if (!svc) throw new Error(`can't ${action} a ${domain}`);
     const body = { entity_id: ent, ...haServiceData(d, action, value) };
     await getJSON(`${h.url}/api/services/${domain}/${svc}`, { method: 'POST', headers: { Authorization: `Bearer ${h.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

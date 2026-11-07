@@ -112,14 +112,25 @@ server.on('upgrade', (req, sock) => {
   sock.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${crypto.createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64')}\r\n\r\n`);
   const sendWs = (o) => { const b = Buffer.from(JSON.stringify(o)); const h = b.length < 126 ? Buffer.from([0x81, b.length]) : Buffer.from([0x81, 126, b.length >> 8, b.length & 255]); sock.write(Buffer.concat([h, b])); };
   sendWs({ type: 'auth_required' });
-  sock.on('data', (d) => {
-    let len = d[1] & 127, off = 2; if (len === 126) { len = d.readUInt16BE(2); off = 4; }
-    const mask = d.subarray(off, off + 4), data = Buffer.from(d.subarray(off + 4, off + 4 + len).map((b, i) => b ^ mask[i % 4]));
+  let pending = Buffer.alloc(0);
+  sock.on('data', (chunk) => {   // several frames can arrive in one chunk (a client sending many commands at once)
+    pending = Buffer.concat([pending, chunk]);
+    for (;;) {
+      if (pending.length < 2) return;
+      let len = pending[1] & 127, off = 2; if (len === 126) { if (pending.length < 4) return; len = pending.readUInt16BE(2); off = 4; }
+      if (pending.length < off + 4 + len) return;
+      const mask = pending.subarray(off, off + 4), data = Buffer.from(pending.subarray(off + 4, off + 4 + len).map((b, i) => b ^ mask[i % 4]));
+      const op = pending[0] & 15; pending = pending.subarray(off + 4 + len);
+      if (op === 1) onFrame(data);
+    }
+  });
+  function onFrame(data) {
     let m; try { m = JSON.parse(data.toString()); } catch { return; }
     if (m.type === 'auth') sendWs(m.access_token === 'short-lived' || m.access_token === TOKEN ? { type: 'auth_ok' } : { type: 'auth_invalid' });
     else if (m.type === 'auth/long_lived_access_token') sendWs({ id: m.id, type: 'result', success: true, result: TOKEN });
     else if (m.type === 'integration/descriptions') sendWs({ id: m.id, type: 'result', success: true, result: { core: { integration: { sonos: { name: 'Sonos', config_flow: true, integration_type: 'hub' }, tesla_fleet: { name: 'Tesla Fleet', config_flow: true, iot_class: 'cloud_polling' } } } } });
+    else if (m.type === 'script/config') sendWs({ id: m.id, type: 'result', success: true, result: { config: { alias: 'Lights', sequence: [{ action: 'light.turn_on', target: { area_id: 'kitchen' } }] } } });   // what a script does (the safety rule reads it)
     else sendWs({ id: m.id, type: 'result', success: false, error: { message: 'unknown command' } });
-  });
+  }
 });
 server.listen(PORT, () => console.log(`mock Home Assistant on :${PORT} (token: ${TOKEN})`));

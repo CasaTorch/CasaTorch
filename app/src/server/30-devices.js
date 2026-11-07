@@ -184,8 +184,14 @@ function energyFlows(devices, useW) {
    An owner can allow a specific device in Settings › Safety if the name caught it by mistake. */
 const SAFE_COVERS = new Set(['blind', 'shade', 'curtain', 'shutter', 'awning', 'window', 'damper', 'water']);   // 'water': a water valve
 const RISKY_NAME = /garage|\bgates?\b|gate_|door(?!bell|_?sensor|_?contact)|\block|unlock|disarm|\balarm|opener|deadbolt|\b(puerta|port[oó]n|garaje|cerradura|alarma|verja|cerrojo|tor|t[üu]r|tuer|torantrieb|schloss|riegel|porte|portail|serrure|alarme|verrou|port[ãa]o|porta|garagem|fechadura|cancello|portone|serratura|allarme|poort|deur|hek|slot|alarm)\b|^shelly(plus|pro)?(1|2|uni|i3|i4)\b|^shelly(plus|pro)?1(pm|l)?[-_]/i;   // every language CasaTorch speaks; Shelly relay models keep their default name and often drive garage doors
+const SAFETY_WHY = {
+  sure: 'This scene, script or group can unlock a door, open a garage door or gate, or disarm an alarm, so CasaTorch won\'t run it. Use Home Assistant for it.',
+  name: 'This scene, script or group switches something that looks like a door, gate, lock or alarm control, so CasaTorch won\'t run it. An owner can allow it in Settings › Safety.',
+  unknown: 'CasaTorch couldn\'t check what this scene, script or group does, so it won\'t run it. An owner can allow it in Settings › Safety.',
+};
 function riskOf(d) {
   if (!d) return null;
+  if (d.safety === 'sure') return { only: d.kind === 'cover' ? ['close', 'stop'] : [], why: SAFETY_WHY.sure };   // what it acts on (32-ha.js haSafetyLevels): no exception
   // The owner's "allow anyway" is for names caught by mistake - never for a real lock, alarm, or a cover that says it's a garage door, gate or door.
   const sure = d.kind === 'lock' || d.kind === 'alarm' || (d.kind === 'cover' && (d.risky || RISKY_COVERS.has(d.haClass)));
   if (!sure && (config.safety?.allow || []).includes(d.id)) return null;
@@ -195,6 +201,7 @@ function riskOf(d) {
   if (d.kind === 'cover' && (d.risky || !SAFE_COVERS.has(d.haClass) || RISKY_NAME.test(words))) return { only: ['close', 'stop'], why: 'opening garage doors, gates and doors stays in their own app or Home Assistant' };
   if (d.domain === 'siren' || /siren/.test(d.id)) return { only: ['on'], why: 'sirens can be set off from CasaTorch, but only turned off where they were set' };
   if (['switch', 'plug', 'action', 'fan'].includes(d.kind) && RISKY_NAME.test(words)) return { only: [], why: `"${d.name}" looks like a door, gate, lock or alarm control, so CasaTorch won't switch it. An owner can allow it in Settings › Safety.` };
+  if (d.safety === 'name' || d.safety === 'unknown') return { only: d.kind === 'cover' ? ['close', 'stop'] : [], why: SAFETY_WHY[d.safety] };
   return null;
 }
 const blocked = (d, action) => { const r = riskOf(d); return r && !r.only.includes(action) ? r.why : null; };
@@ -202,7 +209,7 @@ app.get('/api/devices', async (_req, res) => { const r = await houseDevices(); f
 /* Owner: the devices the safety rule is holding back, and the ones allowed anyway. */
 app.get('/api/safety', requireRole('admin'), async (_req, res) => {
   const { devices } = await houseDevices(), allow = new Set(config.safety?.allow || []);
-  res.json({ held: devices.filter((d) => ['switch', 'plug', 'action', 'fan', 'cover'].includes(d.kind) && (allow.has(d.id) || riskOf(d))).map((d) => ({ id: d.id, name: d.name, kind: d.kind, allowed: allow.has(d.id) })) });
+  res.json({ held: devices.filter((d) => ['switch', 'plug', 'action', 'fan', 'cover'].includes(d.kind) && (allow.has(d.id) || riskOf(d))).map((d) => ({ id: d.id, name: d.name, kind: d.kind, allowed: allow.has(d.id) && d.safety !== 'sure', ...(d.safety === 'sure' ? { fixed: true } : {}) })) });   // fixed: it can unlock, open or disarm - no exception
 });
 app.put('/api/safety/:id', express.json({ limit: '2kb' }), (req, res) => {
   if (signInOn() && req.user?.role !== 'owner') return res.status(403).json({ error: 'Only an owner can change this.' });
@@ -220,7 +227,7 @@ app.post('/api/devices/:id/:action', express.json(), async (req, res) => {
   if (!d) return res.status(404).json({ error: 'device not found' });
   const why = blocked(d, String(req.params.action)); if (why) return res.status(403).json({ error: why });
   try { await prov.act(d, req.params.action, req.body?.value); CACHE.delete(`dev:${id.split(':')[0]}`); res.json({ ok: true }); }
-  catch (err) { res.status(502).json({ error: String(err.message) }); }
+  catch (err) { res.status(err?.status === 403 ? 403 : 502).json({ error: String(err.message) }); }
 });
 
 /* ---- Shelly: config.shelly = [{ host, name? }]. Gen1 (/status) and Gen2+ (/rpc). ---- */

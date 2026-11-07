@@ -143,7 +143,7 @@ async function safetyCard() {
     const more = !all && !find && held.length > shown.length ? el('button', { class: 'btn small ghost', onclick: () => { all = true; draw(); } }, T('Show all {n}', { n: held.length })) : null;
     list.replaceChildren(...[search].filter(Boolean), ...(shown.length ? shown.map((d) => el('div', { class: 'row between', style: 'gap:8px;margin:6px 0' },
       el('span', {}, d.name, el('small', { class: 'muted' }, ` · ${d.allowed ? T('allowed') : T('held back')}`)),
-      owner ? el('button', { class: `btn small${d.allowed ? '' : ' ghost'}`, onclick: async () => {
+      owner && !d.fixed ? el('button', { class: `btn small${d.allowed ? '' : ' ghost'}`, onclick: async () => {
         if (!d.allowed && !confirm(d.kind === 'cover' ? T('Allow CasaTorch to open "{name}"? Only do this for blinds, shades or curtains - never a garage door, gate or door.', { name: d.name }) : T('Allow CasaTorch to switch "{name}"? Only do this if it is not a door, gate, lock or alarm.', { name: d.name }))) return;
         await post(`/api/safety/${encodeURIComponent(d.id)}`, { allow: !d.allowed }, 'PUT').catch((e) => toast(e.message)); draw();
       } }, d.allowed ? T('Hold back again') : T('Allow')) : null))

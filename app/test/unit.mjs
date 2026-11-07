@@ -285,6 +285,57 @@ t('device controls: values are checked before they reach Home Assistant, and the
   assert.deepEqual(H.riskOf({ kind: 'lock', id: 'ha:lock.front' }).only, ['lock'], 'never unlock');
 });
 
+t('safety rule: scenes, groups and scripts are judged by what they act on, not their names', () => {
+  const S = globalThis.__casatorchHaSafety;
+  const st = (entity_id, attributes = {}, state = 'off') => ({ entity_id, state, attributes });
+  const states = [
+    st('lock.front_door'), st('alarm_control_panel.home'), st('cover.left_bay', { device_class: 'garage' }), st('cover.blinds', { device_class: 'blind' }),
+    st('switch.relay_1', { friendly_name: 'Garage relay' }), st('switch.kettle', { friendly_name: 'Kettle' }), st('light.lamp'),
+    st('scene.leaving', { friendly_name: 'Leaving', entity_id: ['light.lamp', 'lock.front_door'] }),
+    st('scene.movie', { friendly_name: 'Movie', entity_id: ['light.lamp', 'cover.blinds'] }),
+    st('scene.bay', { friendly_name: 'Evening', entity_id: ['cover.left_bay'] }),
+    st('switch.outside', { friendly_name: 'Outside', entity_id: ['switch.kettle', 'switch.relay_1'] }),
+    st('switch.kitchen', { friendly_name: 'Kitchen', entity_id: ['switch.kettle'] }),
+    st('script.good_night'), st('script.home'), st('script.chain'), st('script.lights'), st('script.sweep'), st('script.area_on'), st('script.unread'), st('script.dev'), st('script.blue'),
+  ];
+  const devs = states.map(H.haDevice).filter(Boolean);
+  const scripts = {
+    'script.good_night': { sequence: [{ action: 'light.turn_off', target: { entity_id: 'light.lamp' } }, { action: 'lock.lock', target: { entity_id: 'lock.front_door' } }, { action: 'cover.close_cover', target: { entity_id: 'cover.left_bay' } }] },
+    'script.home': { sequence: [{ choose: [{ conditions: [], sequence: [{ service: 'lock.unlock', entity_id: 'lock.front_door' }] }] }] },
+    'script.chain': { sequence: [{ action: 'script.turn_on', target: { entity_id: 'script.home' } }] },
+    'script.lights': { sequence: [{ action: 'scene.turn_on', target: { entity_id: 'scene.movie' } }, { action: 'light.turn_on', target: { area_id: 'living_room' } }] },
+    'script.sweep': { sequence: [{ action: 'homeassistant.turn_on', target: { entity_id: 'all' } }] },
+    'script.area_on': { sequence: [{ action: 'switch.turn_on', target: { area_id: 'outside' } }] },
+    'script.unread': null,
+    'script.dev': { sequence: [{ device_id: 'abc123', domain: 'lock', type: 'unlock', entity_id: 'lock.front_door' }] },
+    'script.blue': { use_blueprint: { path: 'x.yaml' } },
+  };
+  const lv = S.haSafetyLevels(states, devs, scripts, {});
+  assert.equal(lv.get('scene.leaving'), 'sure', 'a scene with a lock in it');
+  assert.equal(lv.get('scene.bay'), 'sure', 'a scene with a garage door that has a harmless name');
+  assert.equal(lv.get('scene.movie') || null, null, 'blinds and lights are fine');
+  assert.equal(lv.get('switch.outside'), 'name', 'a switch group with the garage relay in it');
+  assert.equal(lv.get('switch.kitchen') || null, null);
+  assert.equal(lv.get('script.good_night') || null, null, 'locking and closing is fine');
+  assert.equal(lv.get('script.home'), 'sure', 'unlock deep inside a choose');
+  assert.equal(lv.get('script.chain'), 'sure', 'a script that runs a script that unlocks');
+  assert.equal(lv.get('script.lights') || null, null, 'lights by area are fine');
+  assert.equal(lv.get('script.sweep'), 'sure', 'homeassistant.turn_on on everything');
+  assert.equal(lv.get('script.area_on'), 'unknown', 'switch.turn_on on a whole area');
+  assert.equal(lv.get('script.unread'), 'unknown', 'a script CasaTorch could not read');
+  assert.equal(lv.get('script.dev'), 'sure', 'a device action that unlocks');
+  assert.equal(lv.get('script.blue'), 'unknown', 'a blueprint');
+  const marked = S.haSafetyMark(devs.map((d) => ({ ...d })), states, scripts, {}), by = (id) => marked.find((d) => d.id === `ha:${id}`);
+  for (const id of ['scene.leaving', 'scene.bay', 'script.home', 'script.chain', 'script.sweep', 'script.dev']) assert.ok(H.blocked(by(id), 'run'), id);
+  assert.ok(H.blocked(by('switch.outside'), 'on')); assert.ok(H.blocked(by('script.area_on'), 'run')); assert.ok(H.blocked(by('script.unread'), 'run'));
+  for (const id of ['scene.movie', 'script.good_night', 'script.lights']) assert.equal(H.blocked(by(id), 'run'), null, id);
+  assert.equal(H.blocked(by('switch.kitchen'), 'on'), null);
+  assert.equal(S.haActionRisk({ sequence: [{ action: 'alarm_control_panel.alarm_disarm', target: { entity_id: 'alarm_control_panel.home' } }] }, () => null), 'sure');
+  assert.equal(S.haActionRisk({ sequence: [{ action: '{{ "lock.unlock" }}' }] }, () => null), 'unknown', 'a templated action');
+  assert.equal(S.haActionRisk({ sequence: [{ action: 'cover.open_cover', target: { floor_id: 'ground' } }] }, () => null), 'sure', 'opening every cover on a floor');
+  assert.equal(S.haActionRisk({ sequence: [{ action: 'scene.apply', data: { entities: { 'lock.front_door': 'unlocked' } } }] }, (e) => S.haEntityRisk(e, null)), 'sure', 'a scene made on the fly');
+});
+
 t('energy card: solar, battery and grid come only from sensors that exist', () => {
   const none = H.energyFlows([{ id: 'ha:sensor.fridge_power', name: 'Fridge', kind: 'sensor', powerW: 90 }], 900);
   assert.equal(none.solarW, null); assert.equal(none.battery, null); assert.equal(none.gridW, null);
