@@ -58,6 +58,8 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - Yearly plans now pick up their key a month at a time, by themselves.
 
 ### Security
+- **Secure access helper updated** to Cloudflare's 2026.10.7, which no longer trusts certificates Cloudflare
+  has withdrawn (older than 2026.10.2 is affected). CasaTorch downloads and checks it by itself after updating.
 - **Secure access only opens on approved devices.** Requests to your home's secure address are now checked by
   Cloudflare before they reach your CasaTorch: only your paired phones (the CasaTorch app) and browsers you approve get
   through. Everyone else sees a plain "This home only opens on approved devices" page and never reaches your CasaTorch,

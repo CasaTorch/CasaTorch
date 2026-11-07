@@ -23,7 +23,7 @@ const [PORT, EDGE, FAKE] = [await free(), await free(), await free()];
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'casatorch-gate-e2e-')), BIN = path.join(DIR, 'bin');
 fs.mkdirSync(BIN, { recursive: true });
 fs.copyFileSync(path.join(here, 'fixtures/fake-cloudflared.cjs'), path.join(BIN, 'cloudflared')); fs.chmodSync(path.join(BIN, 'cloudflared'), 0o755);
-fs.writeFileSync(path.join(BIN, 'VERSION'), '2026.10.0');
+fs.writeFileSync(path.join(BIN, 'VERSION'), '2026.10.7');
 fs.writeFileSync(path.join(BIN, 'FAKE_MODE'), 'ok');
 const TERMS = /const TERMS_VERSION = '([\d-]+)'/.exec(fs.readFileSync(path.join(here, '../server.js'), 'utf8'))[1];
 const PW = 'correct horse battery staple', salt = crypto.randomBytes(16);

@@ -39,15 +39,17 @@
 import { spawn, execFile } from 'node:child_process';
 
 const REMOTE_URL = process.env.CASATORCH_REMOTE_URL || 'https://casatorch.com/api/remote';
-const CFD_VERSION = '2026.10.0';
+/* 2026.10.2 or later is required: older versions still trust certificates Cloudflare has withdrawn. A box
+   that has an older copy downloads this one by itself the next time secure access starts (see VERSION below). */
+const CFD_VERSION = '2026.10.7';
 const CFD_BASE = process.env.CASATORCH_CFD_BASE || 'https://github.com/cloudflare/cloudflared/releases/download';   // tests point this at a fake
 const CFD_FILES = {
-  'linux-x64': ['cloudflared-linux-amd64', 'd33ff2d14475178d2012c2c56beba87389ac5ded27649519f198a7d3134a99db'],
-  'linux-arm64': ['cloudflared-linux-arm64', 'e6422b9d4f72d3194bc5a38676f13667c06666523217b842a877d72a80b5ac08'],
-  'linux-arm': ['cloudflared-linux-arm', '1dbe8e4ec17e74bb7f49cf91db6a4903bd0f9fe41984556c7503e40b765fd099'],
-  'darwin-arm64': ['cloudflared-darwin-arm64.tgz', 'a2f79ff7b9420aa537d74af239f376da170bbabeb529aec416002adac6a72e70'],
-  'darwin-x64': ['cloudflared-darwin-amd64.tgz', '903845b81828c8cb3c5d13d816a2de71c06a3da5785469df8eb0e1b736d92f9f'],
-  'win32-x64': ['cloudflared-windows-amd64.exe', '86aee4017b26625cee8484c113558f48effa4cd47f7aa05fcf425604e5d2b23c'],
+  'linux-x64': ['cloudflared-linux-amd64', '1f99fb518b83dec2ba8d870a7cc991d82a77e6196295a3d2754ba17ab9f91872'],
+  'linux-arm64': ['cloudflared-linux-arm64', '3df43aedc9ff291d1735b5cb576cb97e0b157488796db2e32b28aecabb445775'],
+  'linux-arm': ['cloudflared-linux-arm', '74f690f6707182839b63e0465726c7776dd63f0a174390b911d5d71f35cab94e'],
+  'darwin-arm64': ['cloudflared-darwin-arm64.tgz', '3586ccf397e98e5f437e60e7c307ca6ac463e110580503af8bb8e6f9ebf831bd'],
+  'darwin-x64': ['cloudflared-darwin-amd64.tgz', '02f3edfd87684dd5b705607688e4eb4b323f6e777b81e7b3a85af556aa356848'],
+  'win32-x64': ['cloudflared-windows-amd64.exe', '2493dbc168923bb3e59e5e7716f71deced92992eea9acd6e9d74f84ac7751343'],
 };
 const BIN_DIR = path.join(DATA_DIR, 'bin'), BIN = path.join(BIN_DIR, process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared');
 /* How long to wait before giving up on a way of connecting (shorter in the tests). */

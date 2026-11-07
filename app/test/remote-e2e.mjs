@@ -20,7 +20,7 @@ const [PORT, EDGE, FAKE] = base ? [base, base + 1, base + 2] : [await free(), aw
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'casatorch-remote-e2e-')), BIN = path.join(DIR, 'bin');
 fs.mkdirSync(BIN, { recursive: true });
 fs.copyFileSync(path.join(here, 'fixtures/fake-cloudflared.cjs'), path.join(BIN, 'cloudflared')); fs.chmodSync(path.join(BIN, 'cloudflared'), 0o755);
-fs.writeFileSync(path.join(BIN, 'VERSION'), '2026.10.0');
+fs.writeFileSync(path.join(BIN, 'VERSION'), '2026.10.7');
 const mode = (m) => fs.writeFileSync(path.join(BIN, 'FAKE_MODE'), m);
 const runs = () => { try { return fs.readFileSync(path.join(BIN, 'FAKE_RUNS'), 'utf8').trim().split('\n'); } catch { return []; } };
 mode('ok');

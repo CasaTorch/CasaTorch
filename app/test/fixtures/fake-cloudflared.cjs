@@ -31,7 +31,7 @@ const log = (lvl, t) => process.stderr.write(`2026-10-17T12:00:00Z ${lvl} ${t}\n
 try { fs.appendFileSync(path.join(here, 'FAKE_RUNS'), `${mode} ${proto}\n`); fs.appendFileSync(path.join(here, 'FAKE_ARGS'), `${JSON.stringify(process.argv.slice(2))}\n`); } catch { /* fine */ }
 let tok; try { tok = JSON.parse(Buffer.from(String(process.env.TUNNEL_TOKEN || ''), 'base64url').toString()); } catch { tok = null; }
 if (!tok?.h || !tok?.p) { log('ERR', 'Provided Tunnel token is not valid.'); process.exit(1); }
-log('INF', `Starting tunnel tunnelID=fake version=2026.10.0 protocol=${proto}`);
+log('INF', `Starting tunnel tunnelID=fake version=2026.10.7 protocol=${proto}`);
 if (mode === 'token') { log('ERR', 'Register tunnel error from server side error="Unauthorized: Invalid tunnel secret" connIndex=0 ip=198.41.192.7'); setTimeout(() => process.exit(1), 100); }
 else if (mode === 'blocked' || (mode === 'noquic' && proto !== 'http2')) {
   const say = () => (proto === 'http2' ? log('ERR', 'Unable to establish connection with Cloudflare edge error="DialContext error: dial tcp 198.41.192.7:7844: i/o timeout" connIndex=0') : log('ERR', 'Failed to dial a quic connection error="failed to dial to edge with quic: timeout: no recent network activity" connIndex=0 ip=198.41.192.7'));

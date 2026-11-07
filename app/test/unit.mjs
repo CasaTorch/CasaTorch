@@ -815,6 +815,14 @@ t('secure access: what the self-test answer means', () => {
   for (const s of [502, 530]) assert.equal(R({ status: s, json: null }).code, 'tunnel', `Cloudflare ${s}`);
   assert.equal(R({ status: 403, json: { needsPro: true } }).code, 'unreachable');
 });
+t('secure access: the pinned cloudflared is new enough, and every download has its own checksum', () => {
+  const src = fsMod.readFileSync(new URL('../src/server/42-remote.js', import.meta.url), 'utf8');
+  const v = /const CFD_VERSION = '(\d+)\.(\d+)\.(\d+)'/.exec(src); assert.ok(v, 'CFD_VERSION found');
+  const n = (a) => a[0] * 1e6 + a[1] * 1e3 + a[2];
+  assert.ok(n(v.slice(1).map(Number)) >= n([2026, 10, 2]), 'older than 2026.10.2 still trusts withdrawn certificates');
+  const sums = [...src.matchAll(/\['cloudflared-[\w.-]+', '([0-9a-f]{64})'\]/g)].map((m) => m[1]);
+  assert.equal(sums.length, 6, 'six platforms'); assert.equal(new Set(sums).size, 6, 'no checksum copied twice');
+});
 t('secure access: cloudflared\'s log lines', () => {
   const K = RM.remoteLineKind;
   assert.equal(K('2026-10-17T12:00:00Z INF Registered tunnel connection connIndex=0 connection=abc event=0 ip=198.41.200.13 location=sjc01 protocol=quic'), 'registered');
