@@ -6,6 +6,34 @@ What changed in each CasaTorch version. The illustrated version, with links into
 
 ## Unreleased
 
+### Looks and feel
+- **A new page opens at its top.** Switching sections (the side bar, the phone bar, More, or a link) no longer leaves
+  you at the bottom of the next page. Links that point at something on a page still go straight to it.
+- **No more text squeezed into a narrow column.** Quick switches never cut a name to a letter or two, camera names keep
+  their line, Settings on an upright tablet shows one section at full width, and a dozen other spots (meals, household
+  chips, status chips, the battery tile, the log) give their words room. A new check looks at every page, Settings
+  section and main sheet at four screen sizes, in dark and light, so this doesn't come back.
+- **Basic is a small chip by the clock** that opens Settings › CasaTorch Pro, instead of a bar across the top of every
+  page.
+- **Follow CasaTorch** in Settings › Help: YouTube, Reddit, X, Discord and Instagram. Help from other owners is now on
+  the CasaTorch Discord.
+
+### App tests
+- **The path fits.** In an app's sheet the path drawing fits its box by itself (and again when the window changes size),
+  so the buttons, the details and the legend are never cut off and nothing needs scrolling sideways. Zoom in and out
+  still work, and Fit goes back. Long paths (10 or more hops, several routes side by side) stay readable: their labels
+  take turns above and below, and on a narrow screen the path runs top to bottom.
+- **"What's slow?"** at the top of an app that's fine: how long it takes, which step takes most of the time and whose it
+  is (the app itself, the internet in between, name lookups, your internet speed), and how much of the trip is your
+  home and provider.
+- **Route changed:** when the way to an app changes, its sheet shows the hops before and after, the round trip on each
+  side, and See before and after.
+- **Apps your home uses:** with Pi-hole or AdGuard Home connected, App tests suggests the apps your home looks up most
+  that aren't tested yet, with one tap to add. Only app names are used, never who visited what; nothing is added by
+  itself, and it stays within your plan's number of tests.
+- The demo has a long path to try (Steam: 14 hops, three routes side by side, a route that moved).
+- The App and network tests sheet's "Open" link went to Home; it opens Network.
+
 ### Alerts
 - **Settings › Alerts › Which alerts.** Every alert CasaTorch can raise is now in one list, grouped into Safety,
   Security, Devices, Network & internet, Home and System. Each one has a switch and one line saying what it is. Many
