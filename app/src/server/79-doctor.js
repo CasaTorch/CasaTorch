@@ -137,8 +137,12 @@ async function docHa() {
     const r = await fetch(`${h.url}/api/`, { headers: { Authorization: `Bearer ${h.token}` }, signal: AbortSignal.timeout(8000) });
     if (r.status === 401 || r.status === 403) return chk('ha', 'connections', 'Home Assistant', 'bad', 'Home Assistant no longer accepts CasaTorch\'s token (it was removed or expired).', { why: 'Sign in to Home Assistant again - it takes a few seconds and nothing else changes.', fix: { action: 'reconnect', href: setupLink('homeassistant'), label: 'Sign in again' } });
     if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
+    if (!h.uuid && h.url !== SUPERVISOR_HA && movedDue('ha-learn')) movedLearnHa().catch(() => {});   // its own id, to find it again if it moves (79m-moved.js)
     return chk('ha', 'connections', 'Home Assistant', 'ok', live ? 'Connected - changes arrive instantly.' : 'Connected (checking every few seconds; instant updates are reconnecting).');
-  } catch (err) { const e = errLine(err, 'Home Assistant', h.url); return chk('ha', 'connections', 'Home Assistant', 'bad', e.detail, { why: e.why, fix: { action: 'retry', id: 'ha', label: 'Try again' } }); }
+  } catch (err) {
+    if (!err.status && h.uuid && movedDue('ha') && await movedFollowHa().catch(() => null)) return chk('ha', 'connections', 'Home Assistant', 'ok', 'Home Assistant got a new address on your network. CasaTorch found it there.');
+    const e = errLine(err, 'Home Assistant', h.url); return chk('ha', 'connections', 'Home Assistant', 'bad', e.detail, { why: e.why, fix: { action: 'retry', id: 'ha', label: 'Try again' } });
+  }
 }
 async function docHue() {
   const h = config.hue; if (!h?.host) return null;

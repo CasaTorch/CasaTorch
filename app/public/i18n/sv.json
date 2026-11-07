@@ -1832,6 +1832,8 @@
 "Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.": "Home Assistant vet redan vilket rum de här finns i, och du har rum med samma namn. Placera dem mitt i rummen och dra sedan var och en till exakt plats.",
 "Home Assistant and your brands, Home AI Agent, Secure Remote Access": "Home Assistant och dina märken, AI-hemagent, säker fjärråtkomst",
 "Home Assistant answers ({ms} ms).": "Home Assistant svarar ({ms} ms).",
+"Home Assistant got a new address on your network, so CasaTorch found it there and carries on.": "Home Assistant fick en ny adress i nätverket, så CasaTorch hittade den där och fortsätter.",
+"Home Assistant got a new address on your network. CasaTorch found it there.": "Home Assistant fick en ny adress i ditt nätverk. CasaTorch hittade den där.",
 "Home Assistant is connected": "Home Assistant är anslutet",
 "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.": "Home Assistant är valfritt. CasaTorch pratar själv med mycket utrustning (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant lägger till resten – tusentals märken, Z-Wave och Zigbee och elbolagets verkliga förbrukning.",
 "Home Assistant is working on it…": "Home Assistant arbetar på det…",

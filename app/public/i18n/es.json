@@ -1824,6 +1824,8 @@
 "Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.": "Home Assistant ya sabe en qué habitación está cada uno, y tienes habitaciones con los mismos nombres. Colócalos en el centro de sus habitaciones y luego arrastra cada uno a su lugar exacto.",
 "Home Assistant and your brands, Home AI Agent, Secure Remote Access": "Home Assistant y tus marcas, Agente IA del hogar, acceso remoto seguro",
 "Home Assistant answers ({ms} ms).": "Home Assistant responde ({ms} ms).",
+"Home Assistant got a new address on your network, so CasaTorch found it there and carries on.": "Home Assistant recibió una dirección nueva en tu red, así que CasaTorch lo encontró allí y sigue funcionando.",
+"Home Assistant got a new address on your network. CasaTorch found it there.": "Home Assistant recibió una dirección nueva en tu red. CasaTorch lo encontró allí.",
 "Home Assistant is connected": "Home Assistant está conectado",
 "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.": "Home Assistant es opcional. CasaTorch se conecta por sí mismo con muchos equipos (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant añade todo lo demás: miles de marcas, Z-Wave y Zigbee, y el consumo real de tu compañía eléctrica.",
 "Home Assistant is working on it…": "Home Assistant está en ello…",

@@ -1854,6 +1854,8 @@
 "Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.": "Home Assistant पहले से जानता है कि ये किस कमरे में हैं, और आपके पास उन्हीं नामों के कमरे हैं। इन्हें इनके कमरों के बीच में रखें, फिर हर एक को सही जगह खींचें।",
 "Home Assistant and your brands, Home AI Agent, Secure Remote Access": "Home Assistant और आपके ब्रांड, होम AI एजेंट, सुरक्षित रिमोट एक्सेस",
 "Home Assistant answers ({ms} ms).": "Home Assistant जवाब देता है ({ms} ms)।",
+"Home Assistant got a new address on your network, so CasaTorch found it there and carries on.": "Home Assistant को नेटवर्क पर नया पता मिला, इसलिए CasaTorch ने उसे वहाँ ढूँढ लिया और काम जारी है।",
+"Home Assistant got a new address on your network. CasaTorch found it there.": "Home Assistant को आपके नेटवर्क पर नया पता मिला। CasaTorch ने उसे वहाँ ढूँढ लिया।",
 "Home Assistant is connected": "Home Assistant कनेक्ट है",
 "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.": "Home Assistant वैकल्पिक है। CasaTorch खुद बहुत-से डिवाइस से जुड़ता है (Hue, Shelly, YoLink, Frigate, Reolink, Ring)। Home Assistant बाकी सब जोड़ता है - हज़ारों ब्रांड, Z-Wave और Zigbee, और आपकी बिजली कंपनी की असली खपत।",
 "Home Assistant is working on it…": "Home Assistant इस पर काम कर रहा है…",

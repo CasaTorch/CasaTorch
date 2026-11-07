@@ -1857,6 +1857,8 @@
 "Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.": "Home Assistant 已经知道这些设备在哪个房间，而你也有同名的房间。先把它们放在各自房间的中央，再逐个拖到准确位置。",
 "Home Assistant and your brands, Home AI Agent, Secure Remote Access": "Home Assistant 和你的品牌、家庭 AI 助手、安全远程访问",
 "Home Assistant answers ({ms} ms).": "Home Assistant 有响应（{ms} 毫秒）。",
+"Home Assistant got a new address on your network, so CasaTorch found it there and carries on.": "Home Assistant 在网络中换了新地址，CasaTorch 已在新地址找到它并继续工作。",
+"Home Assistant got a new address on your network. CasaTorch found it there.": "Home Assistant 在你的网络中换了新地址。CasaTorch 已在新地址找到它。",
 "Home Assistant is connected": "Home Assistant 已连接",
 "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.": "Home Assistant 是可选的。CasaTorch 能直接连接很多设备（Hue、Shelly、YoLink、Frigate、Reolink，Ring）。Home Assistant 能补上其余的一切：数千个品牌、Z-Wave 和 Zigbee，以及电力公司的真实用电量。",
 "Home Assistant is working on it…": "Home Assistant 正在处理…",

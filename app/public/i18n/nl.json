@@ -1805,6 +1805,8 @@
 "Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.": "Home Assistant weet al in welke kamer deze zijn, en je hebt kamers met dezelfde namen. Zet ze in het midden van hun kamers en sleep ze daarna elk naar de juiste plek.",
 "Home Assistant and your brands, Home AI Agent, Secure Remote Access": "Home Assistant en je merken, AI-huisagent, veilige externe toegang",
 "Home Assistant answers ({ms} ms).": "Home Assistant antwoordt ({ms} ms).",
+"Home Assistant got a new address on your network, so CasaTorch found it there and carries on.": "Home Assistant kreeg een nieuw adres op je netwerk, dus CasaTorch heeft het daar gevonden en gaat gewoon door.",
+"Home Assistant got a new address on your network. CasaTorch found it there.": "Home Assistant heeft een nieuw adres op je netwerk gekregen. CasaTorch heeft het daar gevonden.",
 "Home Assistant is connected": "Home Assistant is verbonden",
 "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.": "Home Assistant is optioneel. CasaTorch praat zelf met veel apparaten (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant voegt de rest toe – duizenden merken, Z-Wave en Zigbee, en het echte verbruik van je energieleverancier.",
 "Home Assistant is working on it…": "Home Assistant is ermee bezig…",

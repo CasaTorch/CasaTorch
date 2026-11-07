@@ -1846,6 +1846,8 @@
 "Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.": "Home Assistant bunların hangi odada olduğunu zaten biliyor ve aynı adlı odalarınız var. Onları odalarının ortasına koyun, sonra her birini tam yerine sürükleyin.",
 "Home Assistant and your brands, Home AI Agent, Secure Remote Access": "Home Assistant ve markaların, Ev AI Asistanı, güvenli uzaktan erişim",
 "Home Assistant answers ({ms} ms).": "Home Assistant yanıt veriyor ({ms} ms).",
+"Home Assistant got a new address on your network, so CasaTorch found it there and carries on.": "Home Assistant ağında yeni bir adres aldı; CasaTorch onu orada buldu ve çalışmaya devam ediyor.",
+"Home Assistant got a new address on your network. CasaTorch found it there.": "Home Assistant ağında yeni bir adres aldı. CasaTorch onu orada buldu.",
 "Home Assistant is connected": "Home Assistant bağlı",
 "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.": "Home Assistant isteğe bağlıdır. CasaTorch pek çok cihazla kendisi konuşur (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant gerisini ekler - binlerce marka, Z-Wave ve Zigbee ve elektrik şirketinin gerçek tüketimi.",
 "Home Assistant is working on it…": "Home Assistant üzerinde çalışıyor…",

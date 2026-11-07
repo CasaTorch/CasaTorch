@@ -1858,6 +1858,8 @@
 "Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.": "これらがどの部屋にあるかHome Assistantがすでに知っていて、同じ名前の部屋もあります。部屋の中央に置いてから、それぞれ正確な場所にドラッグしてください。",
 "Home Assistant and your brands, Home AI Agent, Secure Remote Access": "Home Assistantと各ブランド、ホームAIエージェント、安全なリモートアクセス",
 "Home Assistant answers ({ms} ms).": "Home Assistant が応答しています（{ms} ミリ秒）。",
+"Home Assistant got a new address on your network, so CasaTorch found it there and carries on.": "Home Assistantのネットワーク上のアドレスが変わったため、CasaTorchが新しいアドレスで見つけて、そのまま動作を続けています。",
+"Home Assistant got a new address on your network. CasaTorch found it there.": "Home Assistantのネットワーク上のアドレスが変わりました。CasaTorchが新しいアドレスで見つけました。",
 "Home Assistant is connected": "Home Assistantは接続済みです",
 "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.": "Home Assistantは任意です。CasaTorchは多くの機器と直接つながります（Hue、Shelly、YoLink、Frigate、Reolink、Ring）。Home Assistantを使うと、何千ものブランド、Z-WaveやZigbee、電力会社の実際の使用量まで広がります。",
 "Home Assistant is working on it…": "Home Assistantが処理中…",

@@ -59,6 +59,26 @@ export default async function automateTests(t) {
       assert.deepEqual(await M.movedFollowShelly(['192.168.1.41'], { find: async () => [], found: () => [], ask: () => null }), [], 'not found: nothing changes');   // scrub-ok: example address
     });
 
+    await t('moved: Home Assistant is found again by the id it announces; its token goes only to an address announcing that id', async () => {
+      const U = '0123456789abcdef0123456789abcdef', OTHER = 'ffffffffffffffffffffffffffffffff';
+      const ann = (ip, uuid, txt = {}) => ({ name: 'Home._home-assistant._tcp.local', ip, port: 8123, txt: { uuid, ...txt } });
+      assert.deepEqual(M.haAnnounced([ann('192.168.1.20', U), ann('192.168.1.21', 'nope'), ann(null, U, { internal_url: 'http://ha.local:8123/' }), { txt: {} }]),   // scrub-ok: example addresses
+        [{ uuid: U, url: 'http://192.168.1.20:8123' }, { uuid: U, url: 'http://ha.local:8123' }]);   // scrub-ok: example address
+      M.setCfg({ house: { name: 'Test' }, homeAssistant: { url: 'http://192.168.1.20:8123', token: 'ha-token-0123456789' } });   // scrub-ok: example address
+      assert.equal(await M.movedLearnHa({ find: async () => [ann('192.168.1.30', OTHER), ann('192.168.1.20', U)] }), U, 'ours is the one at our address');   // scrub-ok: example addresses
+      assert.equal(M.cfg().homeAssistant.uuid, U);
+      const tried = [];
+      const works = async (url, token) => { tried.push([url, token]); return url === 'http://192.168.1.25:8123'; };   // scrub-ok: example address
+      const heal = M.HEAL.length;
+      const m = await M.movedFollowHa({ find: async () => [ann('192.168.1.20', U), ann('192.168.1.30', OTHER), ann('192.168.1.25', U), ann('198.51.100.9', U)], works });   // scrub-ok: example addresses
+      assert.deepEqual(m, { from: 'http://192.168.1.20:8123', to: 'http://192.168.1.25:8123' });   // scrub-ok: example addresses
+      assert.deepEqual(tried.map((x) => x[0]), ['http://192.168.1.25:8123'], 'the token went only to the address with our id, never another Home Assistant or the internet');   // scrub-ok: example address
+      assert.equal(M.cfg().homeAssistant.url, 'http://192.168.1.25:8123'); assert.equal(M.cfg().homeAssistant.token, 'ha-token-0123456789');   // scrub-ok: example address
+      assert.match(M.HEAL[heal].detail, /Home Assistant got a new address/);
+      M.setCfg({ house: { name: 'Test' }, homeAssistant: { url: 'http://192.168.1.20:8123', token: 't' } });   // scrub-ok: example address
+      assert.equal(await M.movedFollowHa({ find: async () => [ann('192.168.1.25', U)], works }), null, 'its id not learned yet: nothing is tried');   // scrub-ok: example address
+    });
+
     await t('Hue in one tap: Pair waits while the bridge asks for its button, and stops at once on any other answer', async () => {
       let n = 0;
       const pair = async () => (++n < 3 ? { ok: false, button: true, error: 'press it' } : { ok: true, username: 'u' });

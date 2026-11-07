@@ -1856,6 +1856,8 @@
 "Home Assistant already knows which room these are in, and you have rooms with the same names. Place them in the middle of their rooms, then drag each one to the exact spot.": "Home Assistant가 이미 이 기기들이 있는 방을 알고 있고, 같은 이름의 방도 있습니다. 방 가운데에 놓은 뒤 각각 정확한 위치로 드래그하세요.",
 "Home Assistant and your brands, Home AI Agent, Secure Remote Access": "Home Assistant와 브랜드, 홈 AI 에이전트, 보안 원격 접속",
 "Home Assistant answers ({ms} ms).": "Home Assistant가 응답합니다({ms}ms).",
+"Home Assistant got a new address on your network, so CasaTorch found it there and carries on.": "Home Assistant가 네트워크에서 새 주소를 받아서, CasaTorch가 그 주소에서 찾아 계속 작동합니다.",
+"Home Assistant got a new address on your network. CasaTorch found it there.": "Home Assistant가 네트워크에서 새 주소를 받았습니다. CasaTorch가 그 주소에서 찾았습니다.",
 "Home Assistant is connected": "Home Assistant가 연결되었습니다",
 "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.": "Home Assistant는 선택 사항이에요. CasaTorch는 많은 기기와 직접 연결돼요 (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant를 쓰면 수천 개 브랜드, Z-Wave와 Zigbee, 전력 회사의 실제 사용량까지 더해져요.",
 "Home Assistant is working on it…": "Home Assistant가 처리 중입니다…",
