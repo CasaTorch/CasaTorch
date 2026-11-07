@@ -77,7 +77,7 @@ function widgetPicker(have, onPick, { devices = [], tiles = [], ctx, start = 'wi
     if (areas.length && group === 'all') out.push(el('h4', {}, 'Rooms'), el('div', { class: 'room-picks' }, areas.map((a) => { const n = devices.filter((d) => d.area === a).length; return el('button', { class: 'room-pick', onclick: () => pick('room', { area: a, title: a }) }, icon('home'), el('div', { style: 'min-width:0' }, el('b', { class: 'ellipsis' }, a), el('div', { class: 'tiny muted' }, roomsOnHome.has(a) ? T('{n} devices · on Home', { n }) : T('{n} devices', { n })))); })));
     const byArea = new Map(); for (const d of shown) { const k = d.area || ''; if (!byArea.has(k)) byArea.set(k, []); byArea.get(k).push(d); }
     for (const [a, ds] of [...byArea].sort(([x], [y]) => (!x) - (!y) || x.localeCompare(y))) out.push(el('h4', {}, a || (areas.length ? T('Not in a room') : T('Devices'))), ...ds.slice(0, 400).map(devRow));
-    if (!shown.length && !(areas.length && group === 'all')) out.push(el('p', { class: 'muted small' }, devices.length ? T('Nothing matches.') : T('No devices yet. Connect your gear or Home Assistant on the Connect tab and everything shows up here by itself.')));
+    if (!shown.length && !(areas.length && group === 'all')) out.push(el('p', { class: 'muted small' }, devices.length ? T('Nothing matches.') : T('No devices yet. Connect them, or Home Assistant, on the Connect tab.')));
     body.replaceChildren(...out);
   };
   q.oninput = draw;

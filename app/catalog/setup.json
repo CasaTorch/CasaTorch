@@ -146,7 +146,7 @@
     {
       "id": "look",
       "title": "Make it yours",
-      "intro": "Pick a theme and a background - you see it right here as you choose. Change it any time in Settings › Look & main bar, where you can also use your own photo.",
+      "intro": "Pick a theme and a background. Change it any time in Settings › Look & main bar, where you can also use your own photo.",
       "fields": [
         {
           "id": "pick",
@@ -157,7 +157,7 @@
     {
       "id": "account",
       "title": "Your CasaTorch login",
-      "intro": "Your own sign-in for CasaTorch. You'll use it on phones and other screens; later you can add family members, turn on two-step sign-in, or connect Google sign-in in Settings › People & sign-in.",
+      "intro": "Your own sign-in for CasaTorch, on phones and other screens. Add family, two-step sign-in or Google sign-in later in Settings › People & sign-in.",
       "fields": [
         {
           "id": "username",
@@ -202,7 +202,7 @@
     {
       "id": "phone",
       "title": "Your phone",
-      "intro": "The login you just made is this CasaTorch's owner - the main admin that is always here, for this screen and Settings. Now make a login for your phone, so the CasaTorch app (iPhone, iPad, Android) signs in as you without using the owner login. At the end of setup, scan a QR code with the app and the phone is signed in - no typing.",
+      "intro": "The login you just made is the owner: the main admin, always here. Now make a login for your phone, so the CasaTorch app (iPhone, iPad, Android) signs in as you, not as the owner. At the end, scan a QR code with the app to sign in - no typing.",
       "question": {
         "id": "how",
         "label": "Sign in on your phone with...",
@@ -294,7 +294,7 @@
     {
       "id": "calendars",
       "title": "Calendars",
-      "intro": "Show your family's schedule on the Home screen. CasaTorch has its own calendar you can fill in right in the app - no Google account needed. If you already use Google, iCloud or Outlook, you can also link those.",
+      "intro": "Show your family's schedule on the Home screen. Use CasaTorch's own calendar (no Google account needed), or link Google, iCloud or Outlook.",
       "fields": [
         {
           "id": "mine",
@@ -347,7 +347,7 @@
     {
       "id": "reminders",
       "title": "Reminders",
-      "intro": "Your home's own reminders - trash night, meds, feeding the fish, a birthday. At the right time they light up every screen with an icon and a sound; later you can add a photo, and with Pro send them to everyone's phone.",
+      "intro": "Your home's reminders: trash night, meds, a birthday. They light up every screen at the right time. With Pro they also go to everyone's phone.",
       "fields": [
         {
           "id": "list",
@@ -439,7 +439,7 @@
     {
       "id": "homeassistant",
       "title": "Home Assistant",
-      "intro": "Home Assistant is optional. CasaTorch talks to a lot of gear itself (Hue, Shelly, YoLink, Frigate, Reolink, Ring). Home Assistant adds the long tail - thousands of brands, Z-Wave and Zigbee, and your power company's real usage.",
+      "intro": "Home Assistant is optional. CasaTorch talks to Hue, Shelly, YoLink, Frigate, Reolink and Ring itself. Home Assistant adds thousands of brands, Z-Wave, Zigbee and your power company's usage.",
       "question": {
         "id": "uses",
         "label": "Do you use Home Assistant?",
@@ -482,7 +482,7 @@
           "guide": "install-ha"
         },
         "no": {
-          "note": "No problem. Next you'll see the gear CasaTorch connects to directly. Anything marked 'needs Home Assistant' can be added later from Settings > Run setup again."
+          "note": "No problem. Next: the gear CasaTorch connects to directly. Anything marked 'needs Home Assistant' can be added later (Settings > Run setup again)."
         }
       }
     },
@@ -1155,7 +1155,7 @@
     {
       "id": "apptests",
       "title": "App tests",
-      "intro": "Every few minutes CasaTorch checks how fast the apps you use answer from home. When one is slow or down, it shows where the trouble starts: your Wi-Fi or router, your internet provider, or the app itself.",
+      "intro": "Every few minutes CasaTorch checks how fast your apps answer from home. When one is slow or down, it shows where: your Wi-Fi or router, your internet provider, or the app.",
       "question": {
         "id": "want",
         "label": "Want CasaTorch to keep an eye on the apps you use?",

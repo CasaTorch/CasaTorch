@@ -65,7 +65,7 @@ const CHG_STEPS = {
   homeassistant: ['Home Assistant', 'Its address and sign-in'],
   cameras: ['Cameras', 'Frigate, Reolink, Ring, snapshot cameras and more'],
   controls: ['Lights, locks and climate', 'Hue, Shelly, YoLink and what comes through Home Assistant'],
-  sensors: ['Sensors', 'Which sensors, and which alert you right away'],
+  sensors: ['Sensors', 'Leak, smoke, door and other sensors'],
   network: ['Network', 'UniFi or Meraki, speed tests'],
   apptests: ['App tests', 'Which apps are tested, how often, and alerts'],
   energy: ['Energy', 'Your power company or price per kWh, budget, meters'],
@@ -93,7 +93,7 @@ async function changeSetupCard(s, me) {
   });
   return el('div', { class: 'card chg-hero', id: 'change-setup', style: 'grid-column:1/-1' },
     el('h2', { style: 'display:flex;align-items:center' }, icon('reset', 15), T('Change your setup'), docLink('settings.change', { icon: true, topic: T('Change your setup') })),
-    el('p', { class: 'small muted', style: 'margin-top:0' }, T('Everything you answered in setup, in one place. Pick a step: setup opens right there with your current answers filled in, and everything else stays as it is.')),
+    el('p', { class: 'small muted', style: 'margin-top:0' }, T('Pick a step to change it. Your other answers stay as they are.')),
     needPw ? el('label', { class: 'field', style: 'max-width:340px' }, el('span', {}, T('Your password')), pw) : null, msg,
     el('div', { class: 'chg-list' }, steps.length ? steps : [el('p', { class: 'small muted' }, T('Couldn\'t load the setup steps - try again in a moment.'))]),
     el('div', { class: 'row wrap', style: 'margin-top:10px;gap:8px' }, el('button', { class: 'btn primary', onclick: () => go(null) }, icon('reset', 14), T('Change everything')),

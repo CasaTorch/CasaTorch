@@ -24,7 +24,7 @@ async function arSave(body, { safety = false } = {}) {
   try { await post(url, body, 'PUT'); }
   catch (err) {
     if (!err.body?.needsConfirm) { toast(err.message, 5000); return false; }
-    if (!confirm(T('Turn this safety alert off? You could miss a water leak, smoke or a freezing pipe while it is off. It still shows in the app and on wall panels.'))) return false;
+    if (!confirm(T('Turn off pushes for this safety alert? You could miss a leak, smoke or a freezing pipe. It still shows in the app and on wall panels.'))) return false;
     try { await post(url, { ...body, rule: { ...(body.rule || {}), confirm: true } }, 'PUT'); } catch (e) { toast(e.message, 5000); return false; }
   }
   toast(T('Saved')); await arLoad(); return true;
@@ -133,7 +133,7 @@ function arRoomSheet(room, after) {
   const saveHouse = async (patch) => { const was = AR.scope; AR.scope = 'house'; const ok = await arSave({ room, rule: patch }); AR.scope = was; return ok; };
   const draw = () => {
     const rule = AR.data.house.rooms?.[room] || {};
-    body.replaceChildren(el('p', { class: 'small muted', style: 'margin-top:0' }, T('Changes here apply to everything in {room}, on top of the rules for each kind of alert. Safety alerts still always show and break through quiet hours.', { room })),
+    body.replaceChildren(el('p', { class: 'small muted', style: 'margin-top:0' }, T('These rules apply to everything in {room}. Safety alerts still always show and break through quiet hours.', { room })),
       ...arRuleFields(rule, { app: rule.app !== false, push: rule.push ?? true }, { safety: false, tri: true, save: async (patch) => { if (await saveHouse(patch)) { draw(); after?.(); } } }),
       Object.keys(rule).length ? el('div', { class: 'row wrap', style: 'gap:8px;margin-top:12px' }, el('button', { class: 'btn small ghost', onclick: async () => { if (await saveHouse(Object.fromEntries(Object.keys(rule).map((k) => [k, null])))) { draw(); after?.(); } } }, icon('reset', 14), T('Back to automatic'))) : null);
   };
@@ -182,7 +182,7 @@ async function alertRulesCards() {
     main.replaceChildren(el('div', { class: 'row between wrap', style: 'gap:10px' }, el('h2', { style: 'margin:0' }, icon('send', 15), T('Phones, sounds and repeats')), d.admin ? arScopeSeg(draw) : null),
       el('p', { class: 'small muted' }, AR.scope === 'house' ? T('The household\'s defaults. Each person can change them for their own phones.') : T('For you and your phones. Water, smoke and freezing always show and always break through quiet hours.')),
       arMatrix(draw),
-      el('p', { class: 'tiny muted' }, T('Automatic keeps what CasaTorch did before: each phone\'s "Send" level, and critical alerts repeating every 10 minutes.')));
+      el('p', { class: 'tiny muted' }, T('Automatic: each phone\'s "Send" level decides, and critical alerts repeat every 10 minutes.')));
     drawTimes(); drawDevs(); drawRooms(); drawMutes();
   };
   arRefresh = () => { if (main.isConnected) draw(); };
@@ -213,7 +213,7 @@ async function alertRulesCards() {
     const hits = el('div', { class: 'ar-hits' });
     search.oninput = () => { const q = search.value.trim().toLowerCase(); hits.replaceChildren(...(q ? d.devices.filter((x) => `${x.name} ${x.room || ''}`.toLowerCase().includes(q)).slice(0, 8) : []).map((x) => el('button', { class: 'btn small ghost ar-hit', onclick: () => arDeviceSheet(x).then(() => {}) }, icon(x.icon, 14), x.name, x.room ? el('span', { class: 'tiny muted' }, ` · ${x.room}`) : null))); };
     devs.replaceChildren(el('h2', {}, icon('sliders', 15), T('Devices and cameras')),
-      el('p', { class: 'small muted', style: 'margin-top:0' }, T('Give one device its own rules - say, no pushes from the garage freezer, or only the front door camera when nobody\'s home.')),
+      el('p', { class: 'small muted', style: 'margin-top:0' }, T('Give one device its own rules, like no pushes from the garage freezer.')),
       list.length ? el('div', { class: 'list' }, list.map((x) => el('div', { class: 'row between', style: 'padding:6px 0;gap:8px' }, el('span', { class: 'row', style: 'gap:8px;min-width:0' }, icon(x.icon || 'dotc', 14), el('span', { class: 'ellipsis' }, x.name)), el('button', { class: 'btn small', onclick: () => arDeviceSheet(x) }, T('Edit'))))) : el('p', { class: 'small muted' }, T('No device has its own rules yet.')),
       d.devices.length ? el('div', {}, search, hits) : el('p', { class: 'small muted' }, T('Devices show here once they are connected.')));
   };
@@ -224,7 +224,7 @@ async function alertRulesCards() {
     const set = d.house.rooms || {}, known = [...new Set([...d.devices.map((x) => x.room).filter(Boolean), ...Object.keys(set)])].sort((a, b) => a.localeCompare(b));
     const pick = arSelect('', [['', T('Pick a room…')], ...known.filter((r) => !set[r]).map((r) => [r, r])], (v) => { if (v) arRoomSheet(v, () => { arLoad().then(drawRooms).catch(() => {}); }); }, T('Room'));
     rooms.replaceChildren(el('h2', {}, icon('home', 15), T('Rooms')),
-      el('p', { class: 'small muted', style: 'margin-top:0' }, T('Give a whole room its own rules - say, no pushes from anything in the garage at night. A device\'s own rule wins over its room\'s. Rooms are household defaults.')),
+      el('p', { class: 'small muted', style: 'margin-top:0' }, T('Give a room its own rules, like no pushes from the garage at night. Applies to everyone. A device\'s own rule wins.')),
       Object.keys(set).length ? el('div', { class: 'list' }, Object.keys(set).sort((a, b) => a.localeCompare(b)).map((r) => el('div', { class: 'row between', style: 'padding:6px 0;gap:8px' }, el('span', { class: 'row', style: 'gap:8px;min-width:0' }, icon('home', 14), el('span', { class: 'ellipsis' }, r)),
         el('button', { class: 'btn small', onclick: () => arRoomSheet(r, () => { arLoad().then(drawRooms).catch(() => {}); }) }, T('Edit'))))) : el('p', { class: 'small muted' }, T('No room has its own rules yet.')),
       known.length ? pick : el('p', { class: 'small muted' }, T('Rooms show here once your devices are in Home Assistant areas.')));

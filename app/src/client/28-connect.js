@@ -124,14 +124,14 @@ async function haDiscoveredCard(conn) {
     list.replaceChildren(...(r.found.length ? r.found.map((f) => el('div', { class: 'ha-found-row' }, monogram(f.name || f.domain), el('div', { class: 'grow', style: 'min-width:0' }, el('b', { class: 'ellipsis', style: 'display:block' }, f.name || pretty(f.domain)), el('small', { class: 'muted' }, `${T(HA_DOMAIN_NAMES[f.domain] || pretty(f.domain))} · ${T('found by Home Assistant')}`)),
       el('button', { class: 'btn small ghost', title: T('Don\'t show this again'), onclick: async () => { await post('/api/ha/discovered/ignore', { key: f.key }).catch(() => {}); load(); } }, T('Hide')),
       el('button', { class: 'btn small primary', onclick: () => haFlowModal({ flowId: f.flowId, domain: f.domain, label: f.name || pretty(f.domain) }, load) }, T('Add'))))
-      : [el('p', { class: 'muted small' }, T('Nothing new right now. When Home Assistant spots a new device on your network - a TV, speaker, printer or hub - it shows up here, ready to add.'))]));
+      : [el('p', { class: 'muted small' }, T('Nothing new. When Home Assistant finds a new device, it shows up here, ready to add.'))]));
   };
   box.append(el('div', { class: 'row wrap', style: 'gap:10px;align-items:center;margin-bottom:8px' }, icon('search', 18), el('b', { class: 'grow' }, T('Found on your network')), el('button', { class: 'btn small', onclick: () => haAnyModal(conn, load) }, icon('plus'), T('Add any Home Assistant integration'))), list);
   load(); return box;
 }
 async function haAnyModal(conn, after) {
   const q = el('input', { type: 'search', placeholder: T('Search - e.g. Sonos, Tesla, Lutron, Roku'), 'aria-label': T('Search Home Assistant integrations') }), out = el('div', { class: 'ha-any-list' });
-  const m = modal(el('div', {}, el('p', { class: 'muted small', style: 'margin-top:0' }, T('Everything your Home Assistant can add. Pick one and answer its questions here - usually an address, or a sign-in.')), q, out), { title: T('Add a Home Assistant integration'), wide: true });
+  const m = modal(el('div', {}, el('p', { class: 'muted small', style: 'margin-top:0' }, T('Everything Home Assistant can add. Pick one, then give an address or sign in here.')), q, out), { title: T('Add a Home Assistant integration'), wide: true });
   out.append(el('p', { class: 'muted' }, T('Loading…')));
   let r; try { r = await api('/api/ha/integrations'); } catch (e) { out.replaceChildren(el('p', { class: 'bad' }, e.message)); return; }
   const have = new Set(r.have || []);
@@ -156,7 +156,7 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
   main.append(el('div', { class: 'connect-hero card' },
     el('div', { class: 'ha-mark' }, icon('home', 26)),
     el('div', { class: 'grow' }, el('div', { class: 'connect-hero-title' }, ha ? T('Home Assistant is connected') : T('Got Home Assistant? Connect it once and everything comes with it.')),
-      el('p', { class: 'muted', style: 'margin:0' }, ha ? T('{fromHa} entities - every light, sensor, lock, camera and room - are available as widgets automatically. New ones appear on their own.', { fromHa }) : T('Many brands need it - Matter, Zigbee, Z-Wave, ecobee, Nest, Lutron, Kasa, solar and your power company. Connect it once and everything you have in it, every entity and every room, shows up here as ready-made widgets.'))),
+      el('p', { class: 'muted', style: 'margin:0' }, ha ? T('{fromHa} entities are ready as widgets. New ones appear on their own.', { fromHa }) : T('Many brands need it: Matter, Zigbee, Z-Wave, ecobee, Nest, Lutron, Kasa, solar and your power company. Connect it once and all its devices and rooms show up here.'))),
     el('div', { class: 'row', style: 'gap:8px;flex-wrap:wrap' }, ha ? el('a', { class: 'btn primary', href: '#home', onclick: () => setTimeout(() => toast(T('Press Add widget > Rooms & devices')), 400) }, icon('plus'), T('Add Home Assistant widgets'))
       : el('button', { class: 'btn primary', onclick: () => startConnect({ label: 'Home Assistant', step: 'homeassistant', how: 'direct' }, conn) }, T('Connect Home Assistant')),
       ha ? null : el('a', { class: 'btn', href: 'https://www.home-assistant.io/green', target: '_blank', rel: 'noopener' }, T('Don\'t have it? Home Assistant Green')))));
@@ -194,7 +194,7 @@ tab({ id: 'connect', label: 'Connect', icon: 'plug', async render(main) {
     const shown = items.filter((it) => (group === 'all' || it.groups.includes(group)) && (filter === 'any' || isOn(it)) && (!t || `${it.label} ${it.desc} ${it.domain || ''}`.toLowerCase().includes(t)));
     shown.sort((a, b) => isOn(b) - isOn(a) || (a.how === 'soon') - (b.how === 'soon'));
     grid.replaceChildren(...shown.map(card), el('div', { class: 'connect-card more' }, el('b', {}, T('Don\'t see yours?')),
-      el('p', { class: 'small muted' }, ha ? T('Add it in Home Assistant and it appears in CasaTorch by itself - devices, rooms and all.') : T('Anything Home Assistant supports - over 3,000 brands - works in CasaTorch automatically once Home Assistant is connected.')),
+      el('p', { class: 'small muted' }, ha ? T('Add it in Home Assistant and it appears in CasaTorch by itself - devices, rooms and all.') : T('Once Home Assistant is connected, its 3,000+ brands work here too.')),
       el('a', { class: 'btn small', href: 'mailto:support@casatorch.com?subject=Please%20add%20an%20integration' }, T('Ask us to add it'))));   // scrub-ok: public support address
   };
   q.oninput = draw; draw();

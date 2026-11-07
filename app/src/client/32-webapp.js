@@ -80,8 +80,8 @@ async function phoneCard() {
       const rep = el('input', { type: 'checkbox', checked: info.repeat ? true : null, onchange: set('repeat') });   // safety repeats are on every edition (40-alerts.js)
       add(el('h3', { class: 'sub' }, T('Smart alerts '), el('span', { class: 'pill pro' }, 'Pro')),
         el('label', { class: 'field check' }, away, el('span', {}, T('Doorbell and motion alerts only when nobody\'s home'), el('span', { class: 'small muted', style: 'display:block' }, info.people ? T(info.people === 1 ? 'Uses the {n} person or phone Home Assistant tracks. They still show on the dashboard.' : 'Uses the {n} people and phones Home Assistant tracks. They still show on the dashboard.', { n: info.people }) : T('Needs people or phones tracked in Home Assistant (the Home Assistant phone app does this).')))),
-        el('label', { class: 'field check' }, rep, el('span', {}, T('Repeat critical alerts every 10 minutes until someone taps "Got it"'), el('span', { class: 'small muted', style: 'display:block' }, info.pro ? T('Water, smoke and the internet going down. Up to 6 reminders.') : T('Water and smoke repeat on every edition (safety is never Pro). Other critical alerts, like the internet going down, repeat with Pro. Up to 6 reminders.')))),
-        el('p', { class: 'small muted' }, T('For everyone: an alert has to still be there a minute later before it goes out, so a sensor that blinks offline doesn\'t wake anyone up. Water and smoke go out straight away.')));
+        el('label', { class: 'field check' }, rep, el('span', {}, T('Repeat critical alerts every 10 minutes until someone taps "Got it"'), el('span', { class: 'small muted', style: 'display:block' }, info.pro ? T('Water, smoke and the internet going down. Up to 6 reminders.') : T('Water and smoke repeat on every plan. Other critical alerts repeat with Pro. Up to 6 reminders.')))),
+        el('p', { class: 'small muted' }, T('An alert must last at least a minute before it goes out, so a blip doesn\'t wake anyone. Water and smoke go out at once.')));
     }
   };
   draw(); return card;
@@ -131,7 +131,7 @@ async function remoteCard() {
       return;
     }
     if (!r.on) {
-      add(el('p', { class: 'small muted', style: 'margin-top:0' }, T('Give this CasaTorch its own secure https address, so phones can install the CasaTorch app and get alerts. Nothing to change on your router. Everyone still signs in as usual.')),
+      add(el('p', { class: 'small muted', style: 'margin-top:0' }, T('Its own secure https address, so phones can install the app and get alerts. Nothing to change on your router. Sign-in stays the same.')),
         el('p', { class: 'small muted' }, r.anywhere ? T('With Pro, the address works from anywhere - at home or away.') : T('On Basic, the address works on your home Wi-Fi. Using it from anywhere is part of Pro.')),
         !r.supported ? el('p', { class: 'small bad' }, T('Secure Remote Access isn\'t available on this kind of computer yet.')) : null,
         r.demo ? el('p', { class: 'small muted' }, T('Not in the demo.')) : null,
@@ -147,7 +147,7 @@ async function remoteCard() {
       el('p', { style: 'margin:14px 0 8px' }, el('a', { href: r.url, target: '_blank', rel: 'noopener' }, r.url)),
       r.gate ? el('p', { class: 'small muted', style: 'margin:0 0 8px' }, r.gate.active ? T('Edge gate on: only approved devices reach this CasaTorch from outside.') : T('Edge gate not active yet. Secure Remote Access works as before; the gate turns on by itself once casatorch.com has this CasaTorch\'s key.'), ' ', el('a', { href: '#settings/devices' }, T('Devices & sessions'))) : null,   // 31d-devices.js
       el('div', { class: 'row wrap', style: 'gap:16px;align-items:center' }, qr, el('div', { style: 'max-width:360px' },
-        el('p', { class: 'small muted', style: 'margin-top:0' }, T('Scan this with your phone\'s camera to open CasaTorch at its secure address, sign in, then add it to your home screen and turn on alerts (Settings › Phones & alerts).')),
+        el('p', { class: 'small muted', style: 'margin-top:0' }, T('Scan this with your phone\'s camera, sign in, add CasaTorch to your home screen, then turn on alerts (Settings › Phones & alerts).')),
         el('p', { class: 'small muted' }, T('Or send it to your phone:')), remoteSendEls(r.url),
         el('p', { class: 'small muted' }, T('The CasaTorch app picks up this address by itself the next time it connects at home.')))),
       v.status === 'working' ? null : el('p', { class: 'small muted' }, r.anywhere ? T('Works from anywhere (Pro).') : T('Works on your home Wi-Fi. From anywhere is part of Pro.')),
@@ -170,7 +170,7 @@ async function localHttpsCard() {
     if (!r.on) {
       const ip = el('input', { type: 'text', value: r.detected || '', placeholder: '192.168.1.20', inputmode: 'decimal', style: 'max-width:180px' });
       add(r.auto ? el('p', { style: 'margin-top:0' }, el('b', {}, T('Setting itself up…')), ' ', el('span', { class: 'small muted' }, T('This is on by default and starts by itself. It needs the internet once to get its certificate.')))
-          : el('p', { class: 'small muted', style: 'margin-top:0' }, T('Off. Turn it on to use CasaTorch over https at home, so sign-ins and everything else are encrypted on your Wi-Fi.')),
+          : el('p', { class: 'small muted', style: 'margin-top:0' }, T('Off. Turn it on to encrypt sign-ins and everything else on your Wi-Fi (https).')),
         el('p', { class: 'small muted' }, T('Browsers in the house connect straight to this CasaTorch - nothing goes out to the internet - and the plain address sends them to the secure one automatically. CasaTorch gets a free certificate from Let\'s Encrypt for its own name, which points at its address on your network. That address (like 192.168.1.20) is listed in public DNS under a random name; it can\'t be reached from the internet.')),
         r.demo ? el('p', { class: 'small muted' }, T('Not in the demo.')) : el('div', { class: 'row wrap', style: 'gap:8px;align-items:center' }, el('span', { class: 'small muted' }, T('This CasaTorch\'s address on your network')), ip,
           el('button', { class: `btn ${r.auto ? '' : 'primary'}`, onclick: async (e) => { e.target.disabled = true; e.target.textContent = T('Setting up… (about a minute)'); try { await post('/api/local-https/on', { ip: ip.value.trim() === r.detected ? undefined : ip.value.trim() }); } catch (err) { toast(err.message, 5000); } draw(); } }, r.auto ? T('Set up now') : T('Turn on'))));

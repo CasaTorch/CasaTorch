@@ -205,13 +205,13 @@ pageTile({ id: 'cam-det', page: 'cameras', auto: true, bare: true, title: 'Detec
 function hiddenCamList(ctx) {
   const hidden = ctx.data.hiddenCameras || [];
   if (!hidden.length) return el('p', { class: 'muted small' }, T('Every camera is shown.'));
-  return el('div', {}, el('p', { class: 'small muted', style: 'margin-top:0' }, T('Removed ones, and the same camera reached a second way (Frigate, Home Assistant, Meraki, Ring...) - CasaTorch shows each camera once, the fastest way. Add any back if you want both.')),
+  return el('div', {}, el('p', { class: 'small muted', style: 'margin-top:0' }, T('Removed cameras, and cameras found a second way. Each camera shows once, the fastest way. Add any back if you want both.')),
     el('div', { class: 'list' }, hidden.map((h) => el('div', { class: 'row between', style: 'padding:6px 0;gap:10px' }, el('div', { style: 'min-width:0' }, el('b', {}, h.name), el('div', { class: 'tiny muted' }, `${srcName(h.source)} · ${h.why === 'duplicate' ? T('same camera as "{name}"', { name: h.of }) : h.why === 'new' ? T('new - waiting for you to add it') : T('removed')}`)),
       camCanEdit() ? el('button', { class: 'btn small', onclick: () => camVisible(ctx, h.id, true) }, icon('plus', 14), T('Add back')) : null))));
 }
 pageTile({ id: 'cam-hidden', page: 'cameras', auto: true, title: 'Detected cameras', icon: 'camera', blurb: 'Cameras you removed, and the same camera seen twice', size: [12, 1], render(b, ctx) { pgPut(b, hiddenCamList(ctx)); } });
 pageTile({ id: 'cam-start', page: 'cameras', auto: true, title: 'Add cameras', icon: 'camera', blurb: 'Connect your first camera', size: [12, 1], render(b) {
-  pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, any camera with a snapshot address, Ring or cameras in Home Assistant from Connect.'), '#connect', T('Set this up')));
+  pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, Ring or any other camera from Connect.'), '#connect', T('Set this up')));
 } });
 async function camerasPage(main) {
   S.me ||= await api('/api/auth/me').catch(() => ({}));

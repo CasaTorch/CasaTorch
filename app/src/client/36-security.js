@@ -25,7 +25,7 @@ function wallBody(b, ctx, size) {
   const key = JSON.stringify([shown.map((d) => d.id), w.cols, w.live, SEC.wallEdit, size.tier, (ctx.data.hiddenCameras || []).length]);
   if (b._key === key && b.firstChild && !b.querySelector('.pg-skel')) return;   // the wall keeps playing while the rest refreshes
   b._key = key;
-  if (!cams.length) return pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, any camera with a picture address, Ring or cameras in Home Assistant from Connect.'), '#connect', T('Set this up')));
+  if (!cams.length) return pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, Ring or any other camera from Connect.'), '#connect', T('Set this up')));
   const auto = shown.length <= 1 ? 1 : shown.length <= 4 ? 2 : shown.length <= 9 ? 3 : 4;
   const cols = Math.min(w.cols || auto, { s: 1, m: 2, l: 3, xl: 4 }[size.tier || 'xl']);
   const grid = el('div', { class: 'wall', style: `--cols:${cols}` }, shown.map((d) => camView(d, { live: w.live })));
@@ -117,8 +117,8 @@ function lanCard(s, redraw, size = { tier: 'xl' }) {
     el('div', { class: 'row', style: 'gap:6px' }, el('span', { class: 'tiny muted' }, s.scanning ? T('Checking now…') : s.scanAt ? T('Looked {ago}', { ago: ago(s.scanAt) }) : ''), el('button', { class: 'btn small', onclick: async () => { try { await post('/api/security/scan', {}); toast(T('Checking your network - about a minute')); setTimeout(redraw, 60_000); } catch (e) { toast(e.message); } } }, T('Check now'))));
   card.append(head);
   if (!s.watch) { card.append(el('p', { class: 'muted' }, T('Watching for new devices is turned off.')), el('button', { class: 'btn small', onclick: async () => { await post('/api/security/settings', { watch: true }, 'PUT').catch((e) => toast(e.message)); redraw(); } }, T('Turn on'))); return card; }
-  if (s.available === false) { card.append(el('p', { class: 'muted' }, T('CasaTorch can\'t see your home network from where it\'s running (for example inside Docker without host networking). Run it with host networking to use this.'))); return card; }
-  if (!s.devices.length) { card.append(el('p', { class: 'muted' }, s.scanAt ? T('No devices found yet.') : T('The first look at your network happens a minute after CasaTorch starts. The devices it finds then are taken as yours; anything that joins later shows up here as new.'))); return card; }
+  if (s.available === false) { card.append(el('p', { class: 'muted' }, T('CasaTorch can\'t see your home network from here (for example in Docker without host networking). Turn on host networking to use this.'))); return card; }
+  if (!s.devices.length) { card.append(el('p', { class: 'muted' }, s.scanAt ? T('No devices found yet.') : T('CasaTorch looks at your network a minute after it starts. What it finds then counts as yours; anything later shows here as new.'))); return card; }
   const fresh = s.devices.filter((d) => !d.known), risky = s.devices.filter((d) => d.ports.some((p) => !p.expected && p.level !== 'info'));
   card.append(el('p', { class: 'small muted', style: 'margin-top:0' }, `${T('{n} devices', { n: s.devices.length })}${fresh.length ? ` · ${T('{n} new', { n: fresh.length })}` : ''}${risky.length ? ` · ${T('{n} with something to look at', { n: risky.length })}` : ''}. ${T('Ports checked {when}.', { when: s.portsAt ? ago(s.portsAt) : T('soon') })}`));
   if (s.newdevAlerts === false) card.append(el('p', { class: 'tiny muted', style: 'margin-top:-4px' }, T('New-device alerts are off.'), ' ', el('a', { href: '#settings/alerts' }, T('Turn on in Settings › Alerts'))));
@@ -165,7 +165,7 @@ pageTile({ id: 'sec-check', page: 'security', auto: true, title: 'Checklist', ic
 pageTile({ id: 'sec-events', page: 'security', auto: true, title: 'Recent security events', icon: 'clock', blurb: 'Doorbell, motion, doors, leaks, new devices, sign-in trouble', size: [6, 1], render: (b, ctx, size) => pgPut(b, eventsCard(secData(ctx).events || [], size)) });
 pageTile({ id: 'sec-lan', page: 'security', auto: true, title: 'Devices on your network', icon: 'wifi', blurb: 'Who is on your home network, and risky open services', size: [12, 1], render: (b, ctx, size) => pgPut(b, lanCard(secData(ctx), () => ctx.refresh?.(), size)) });
 pageTile({ id: 'sec-hidden', page: 'security', auto: true, title: 'Detected cameras', icon: 'camera', blurb: 'Cameras you removed, and the same camera seen twice', size: [6, 1], render: (b, ctx) => pgPut(b, hiddenCamList(ctx)) });
-pageTile({ id: 'sec-start', page: 'security', auto: true, title: 'Add cameras', icon: 'camera', blurb: 'Connect your first camera', size: [12, 1], render: (b) => pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, any camera with a picture address, Ring or cameras in Home Assistant from Connect.'), '#connect', T('Set this up'))) });
+pageTile({ id: 'sec-start', page: 'security', auto: true, title: 'Add cameras', icon: 'camera', blurb: 'Connect your first camera', size: [12, 1], render: (b) => pgPut(b, pgEmpty(T('No cameras yet. Add Frigate, Reolink, Ring or any other camera from Connect.'), '#connect', T('Set this up'))) });
 tab({ id: 'security', label: 'Security', icon: 'shield', after: 'cameras', async render(main) {
   SEC.wallEdit = false;
   S.me ||= await api('/api/auth/me').catch(() => ({}));
