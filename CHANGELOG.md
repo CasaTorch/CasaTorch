@@ -29,7 +29,7 @@ What changed in each CasaTorch version. The illustrated version, with links into
 
 ### Easier to use
 - **Settings is in five groups:** Home, Alerts, Devices, Security and System, each with a short description. Long pages
-  have headings. Old links into Settings still work.
+  (Alerts, Look & main bar, Connections & AI) have headings. Old links into Settings still work.
 - **Shorter wording** in about 55 places: empty pages, alert settings, Security Center, Connect, phones and setup.
 
 - **Cameras always show a picture when one exists.** When Home Assistant has no picture for a camera (a Ring "Live view" camera nobody is watching, a camera that dozed off), CasaTorch gets it another way: the same camera's snapshot entity, a frame from its stream, or Ring directly. A camera with no picture yet shows a calm "No picture yet" instead of a broken image.

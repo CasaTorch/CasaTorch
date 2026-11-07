@@ -214,13 +214,15 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     ['safety', T('Safety'), 'shield', T('What CasaTorch never switches'), async () => [await safetyCard()], admin],
     // System
     ['health', T('Health|settings'), 'checkc', T('Checks, fixes and saved copies'), async () => [...await healthCards(s, me), await keyCard(me), await supportHelpCard(s)], admin],   // keyCard: 31k-keys.js; supportHelpCard: 39s-support.js
-    ['updates', T('Updates & backup'), 'download', T('Versions, backup, removing CasaTorch'), async () => [setGroup(T('Updates')), await updatesCard(), await updateStatusCard(), setGroup(T('Backup')), await backupCard(s), setGroup(T('Remove CasaTorch')), await removeCard(s)]],   // updateStatusCard: 39s-support.js; removeCard: 30r-remove.js
+    ['updates', T('Updates & backup'), 'download', T('Versions, backup, removing CasaTorch'), async () => [await updatesCard(), await updateStatusCard(), await backupCard(s), await removeCard(s)]],   // updateStatusCard: 39s-support.js; removeCard: 30r-remove.js
     ['pro', T('CasaTorch Pro'), 'spark', T('Your plan and license key'), async () => [pro]],
     ['help', T('Help'), 'help', T('Guides, the tour, getting help'), async () => [helpCard(), await supportStartAgainCard()]],
     ['advanced', T('Advanced'), 'log', T('Log, diagnostics, maintenance'), async () => [await systemCard(), await logCard(), maintCard(s, me)], admin],
   ].filter((x) => x[5] !== false);
   const built = new Map();
-  const cardsOf = async (k) => { if (!built.has(k)) built.set(k, (await SECTIONS.find((x) => x[0] === k)[4]()).flat().filter(Boolean)); return built.get(k); };
+  const isHead = (c) => c?.classList?.contains('set-group');
+  /* a heading with no cards under it (one that isn't shown here, like backups in the demo) goes too */
+  const cardsOf = async (k) => { if (!built.has(k)) { const l = (await SECTIONS.find((x) => x[0] === k)[4]()).flat().filter(Boolean); built.set(k, l.filter((c, i) => !isHead(c) || (l[i + 1] && !isHead(l[i + 1])))); } return built.get(k); };
   const cur = SECTIONS.some((x) => x[0] === sub) ? sub : null, phone = window.innerWidth <= 760;
   const pick = cur || (phone ? null : 'general');
   const search = el('input', { type: 'search', placeholder: T('Search settings'), 'aria-label': T('Search settings') });
