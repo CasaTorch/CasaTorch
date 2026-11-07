@@ -2,7 +2,7 @@
 /*
  * Everything in one go (what `npm test` in app/ runs, and what CI runs):
  *   build -> syntax check -> unit tests -> security checks (own temp server) -> penetration checks -> setup wizard end-to-end
- *   (with mock Home Assistant) -> setup wizard end-to-end without Home Assistant.
+ *   (with mock Home Assistant) -> setup wizard end-to-end without Home Assistant -> ... -> squeezed-text layout check.
  *
  *   node tools/test-all.mjs                 everything
  *   node tools/test-all.mjs --no-e2e        skip the browser tests (or SKIP_E2E=1)
@@ -33,6 +33,7 @@ const STEPS = [
   ['3d-compat', APP, ['test/floorplan-compat-browser.cjs'], true],   // the 3D home on older browsers (about 1 min on a software GPU)
   ['3d-perf', APP, ['test/floorplan-perf-budget.cjs'], true],       // the 3D home's draw-call/triangle budget (1-3 min)
   ['remote-sim', ROOT, ['tools/test-remote-sim.mjs'], true],   // over a slow (150 ms), flaky link: never a blank page, tab switches within 1 s from the last answers, reconnects (about 30 s)
+  ['layout', APP, ['test/layout-text-check.cjs'], true, 900_000],   // no text squeezed into a narrow column (or cut to a few letters) on any page, Settings section or main sheet, 4 sizes x dark/light, with screenshots; switching pages lands at the top (about 7 min)
 ];
 
 const run = (name, cwd, argv, limitMs) => new Promise((ok) => {
@@ -44,11 +45,11 @@ const run = (name, cwd, argv, limitMs) => new Promise((ok) => {
 
 const results = [];
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(130));   // children get the same signal from the terminal
-for (const [name, cwd, argv, e2e] of STEPS) {
+for (const [name, cwd, argv, e2e, limit] of STEPS) {
   if (only.length && !only.includes(name)) continue;
   if (e2e && noE2e) { results.push({ name, ok: true, skipped: true, secs: 0 }); continue; }
   console.log(`\n=== ${name} ===`);
-  const r = await run(name, cwd, argv, Number(process.env.TEST_STEP_TIMEOUT) || 240_000);
+  const r = await run(name, cwd, argv, Number(process.env.TEST_STEP_TIMEOUT) || limit || 240_000);
   results.push(r);
   if (!r.ok && name === 'build') break;   // nothing else can run without a build
 }
