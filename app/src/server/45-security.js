@@ -175,7 +175,7 @@ app.get('/api/security', async (_req, res) => {
   const devices = list.map((d) => ({ ...d, who: whoIsIt(d), announced: announcedName(d), ports: (d.ports || []).map((p) => ({ ...portInfo(p, d), expected: !!sec.expected[`${d.mac}:${p}`] })) }))
     .sort((a, b) => Number(a.known) - Number(b.known) || (b.ports.filter((p) => !p.expected && p.level !== 'info').length - a.ports.filter((p) => !p.expected && p.level !== 'info').length) || String(a.ip).localeCompare(String(b.ip), undefined, { numeric: true }));
   res.json({ available: isDemo() ? true : sec.available, scanning: sec.scanning || !!sec.portsRunning, scanAt: isDemo() ? nowIso() : sec.scanAt, portsAt: isDemo() ? nowIso() : sec.portsAt,
-    devices, types: Object.entries(DEV_TYPES).map(([id, t]) => ({ id, label: t.label, short: t.short })), wall: sec.wall, checklist: securityChecklist(), events: isDemo() ? DEMO_SEC_EVENTS() : securityEvents(), watch: config.security?.watch !== false });
+    devices, types: Object.entries(DEV_TYPES).map(([id, t]) => ({ id, label: t.label, short: t.short })), wall: sec.wall, checklist: securityChecklist(), events: isDemo() ? DEMO_SEC_EVENTS() : securityEvents(), watch: config.security?.watch !== false, newdevAlerts: alertTypeOn('newdev') });   // Settings › Alerts (40a-alert-types.js)
 });
 const DEMO_SEC_EVENTS = () => { const t = (m) => new Date(Date.now() - m * 60_000).toISOString(); return [
   { at: t(14), title: 'Someone at the Front door', severity: 'notice', source: 'ring' }, { at: t(36), title: 'New device on your network: 192.168.1.77', severity: 'notice', source: 'network' },   // scrub-ok

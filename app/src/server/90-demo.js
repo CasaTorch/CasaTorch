@@ -25,6 +25,7 @@ app.get('/api/:tab', (req, res, next) => {
   if (!isDemo()) return res.status(501).json({ error: `the ${req.params.tab} tab is not ported yet - run in demo mode (CASATORCH_DEMO=1)` });
   try {
     const j = demoFresh(JSON.parse(fs.readFileSync(path.join(FIXTURES, `${req.params.tab}.json`), 'utf8')));
+    if (req.params.tab === 'alerts') for (const k of ['now', 'recent']) if (Array.isArray(j[k])) j[k] = j[k].filter((a) => alertTypeAllows(a));   // as Settings › Alerts says
     if (req.params.tab === 'home' && j.calendar && myEvents.length) j.calendar.events = [...j.calendar.events, ...myCalendarEvents(Date.now() - 6 * 3600_000, Date.now() + 7 * 86400_000)].sort((a, b) => a.start.localeCompare(b.start));
     res.json(j);
   }

@@ -27,18 +27,20 @@ const ALERT_KINDS = Object.freeze([
   { id: 'water', label: 'Water leaks', icon: 'drop', safety: true, tier: 'critical', re: /^leak:/, sample: 'Water detected: Kitchen sink sensor' },
   { id: 'smoke', label: 'Smoke, gas & CO', icon: 'fire', safety: true, tier: 'critical', re: /^smoke:/, sample: 'Smoke alarm: Hallway' },
   { id: 'temp', label: 'Freezing or very hot', icon: 'thermo', safety: true, tier: 'important', re: /^temp:/, sample: 'Garage freezer is very hot' },
+  { id: 'doors', label: 'Doors & garage left open', icon: 'door', tier: 'important', re: /^dooropen:/, sample: 'Garage door has been open for over 15 min' },
   { id: 'security', label: 'Security & sign-in', icon: 'shield', tier: 'important', re: /^(newdev|port|owner-reset|owner-reset-done|signin|login):/, sample: 'New device on your network: Phone' },
   { id: 'doorbell', label: 'Doorbell', icon: 'bell', tier: 'important', sample: 'Someone at the Front door' },
   { id: 'motion', label: 'Motion', icon: 'user', tier: 'info', sample: 'Motion at the Driveway' },
   { id: 'detection', label: 'People & vehicles on camera', icon: 'camera', tier: 'info', coming: true, re: /^(detect|frigate-event):/, sample: 'Person at the Driveway' },
-  { id: 'offline', label: 'Devices not responding', icon: 'plug', tier: 'important', re: /^(offline|server|netdev|netsrc):/, sample: 'Porch camera is not responding' },
+  { id: 'offline', label: 'Devices not responding', icon: 'plug', tier: 'important', re: /^(offline|camoff|server|netdev|netsrc):/, sample: 'Porch camera is not responding' },
   { id: 'battery', label: 'Low batteries', icon: 'gauge', tier: 'info', re: /^battery:/, sample: 'Low battery (12%): Back door sensor' },
   { id: 'network', label: 'Internet & app tests', icon: 'wifi', tier: 'critical', re: /^(internet|apptest|dnsoff|cert)(:|$)/, sample: 'The internet is down' },
   { id: 'energy', label: 'Energy (high or unusual use)', icon: 'bolt', tier: 'info', coming: true, re: /^energy:/, sample: 'Unusually high energy use' },
+  { id: 'fridge', label: 'Fridge & freezer', icon: 'thermo', tier: 'important', re: /^fridge:/, sample: 'Garage freezer is too warm' },
   { id: 'weather', label: 'Rain & open windows', icon: 'drop', tier: 'important', re: /^(rain|rainopen):/, sample: 'Kitchen window is open and it\'s raining' },
   { id: 'household', label: 'Household (bins, mail, plants, laundry)', icon: 'trash', tier: 'info', reminder: true, re: /^hh-/, sample: 'Take out the trash tonight' },
   { id: 'reminders', label: 'Reminders', icon: 'clock', tier: 'info', reminder: true, re: /^nudge:/, sample: 'Reminder from your home' },
-  { id: 'system', label: 'CasaTorch health & reports', icon: 'checkc', tier: 'important', re: /^(health|health-ok|report):/, sample: '1 thing needs a look: Weather' },
+  { id: 'system', label: 'CasaTorch health & reports', icon: 'checkc', tier: 'important', re: /^(health|health-ok|report|disk):/, sample: '1 thing needs a look: Weather' },
   { id: 'updates', label: 'Updates', icon: 'download', tier: 'info', coming: true, re: /^update:/, sample: 'A new version is ready' },
   { id: 'other', label: 'Everything else', icon: 'bell', tier: 'info', sample: 'Something happened at home' },
 ]);
@@ -68,7 +70,7 @@ function alertKindOf(a) {
 function alertDeviceOf(a) {
   if (a?.device) return String(a.device);
   const id = String(a?.id || '').replace(/^cleared:/, '').replace(/:repeat$/, '').replace(/:\d{4}-\d\d-\d\dT[\d:.]+Z$/, '');
-  let m = /^(leak|smoke|battery|offline|temp|rainopen):(.+)$/.exec(id); if (m && m[2] !== 'more') return m[2];
+  let m = /^(leak|smoke|battery|offline|camoff|dooropen|fridge|temp|rainopen):(.+)$/.exec(id); if (m && m[2] !== 'more') return m[2];
   m = /^ring:([^:]+):(doorbell|motion):/.exec(String(a?.id || '')); if (m) return `ring:${m[1]}`;
   return null;
 }
@@ -260,6 +262,7 @@ function alertTargets() {
    changed it goes to every phone as before; Settings › Alerts can turn it off, pick phones, sound or quiet hours. */
 async function alertSendReminder(item, { kind = 'reminders', msg, isTest = false } = {}) {
   const a = { id: kind === 'household' ? String(item.id) : `nudge:${item.id}`, alertKind: kind === 'household' ? 'household' : 'reminders', severity: 'event', pushAsked: true, title: item.title };
+  if (!isTest && !alertTypeAllows(a)) return 0;   // turned off in Settings › Alerts (40a-alert-types.js)
   const m = await alertMoment(), dec = new Map(), go = [];
   for (const t of alertTargets()) { const d = alertDecide(a, { ...m, user: t.user ? alertRulesUser(t.user) : {}, target: t, isTest }); dec.set(t, d); if (d.push) go.push(t); else if (d.digest) digestAdd(t.id, a); }
   if (!go.length) return 0;

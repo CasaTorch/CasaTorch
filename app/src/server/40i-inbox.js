@@ -49,7 +49,7 @@ function inboxView(events, st, { decide, panel = false, limit = INBOX_SHOW } = {
 }
 function inboxFor(req) {
   const rules = alertRulesHouse(), user = alertRulesUser(alertUserKey(req)), pro = !!proStatus().pro;
-  const events = (isDemo() ? inboxDemo() : alerts.events).filter((a) => alertForReq(a, req));
+  const events = (isDemo() ? inboxDemo() : alerts.events).filter((a) => alertForReq(a, req) && alertTypeAllows(a));   // a type turned off leaves the inbox too
   return inboxView(events, inboxUser(alertUserKey(req)), { panel: !!req.user?.panel, decide: (a) => alertDecide(a, { rules, user, pro, target: null, device: alertDevCtx(a) }) });
 }
 /* Only the ids this person still has matter: the rest go (alerts.events keeps 300). */

@@ -1005,37 +1005,7 @@
                 "guide": "already-in-ha"
               }
             ]
-          },
-          "fields": [
-            {
-              "id": "alertOn",
-              "label": "Which should alert you right away?",
-              "type": "multi",
-              "options": [
-                [
-                  "leak",
-                  "Water leaks"
-                ],
-                [
-                  "smoke",
-                  "Smoke / CO"
-                ],
-                [
-                  "battery",
-                  "Low batteries"
-                ],
-                [
-                  "temp",
-                  "Freezing or overheating"
-                ]
-              ],
-              "default": [
-                "leak",
-                "smoke",
-                "battery"
-              ]
-            }
-          ]
+          }
         }
       }
     },

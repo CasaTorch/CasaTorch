@@ -325,7 +325,7 @@ app.get('/api/setup/current', async (_req, res) => {
     // gear: Home Assistant picks come back ticked; direct gear is kept as is unless set up again here
     cameras: c.cameraPrefs || (c.cameras || []).length ? { has: 'yes', kinds: haKinds(c.cameraPrefs?.kinds), detect: c.cameraPrefs?.detection === false ? 'no' : 'yes' } : { has: 'no' },
     controls: c.controls || c.hue || (c.shelly || []).length ? { has: 'yes', kinds: haKinds(c.controls?.kinds) } : { has: 'no' },
-    sensors: c.sensors?.kinds || c.yolink ? { has: 'yes', kinds: haKinds(c.sensors?.kinds), alertOn: c.sensors?.alertOn || ['leak', 'smoke', 'battery'] } : { has: 'no' },
+    sensors: c.sensors?.kinds || c.yolink ? { has: 'yes', kinds: haKinds(c.sensors?.kinds) } : { has: 'no' },
     network: { kind: c.network?.provider || undefined, speedtest: c.network?.speedtest === false ? 'no' : 'yes' },
     energy: c.energy ? { track: 'yes', utility: c.energy.utility || 'other', rate: c.energy.ratePerKwh ?? '', budget: c.energy.budget ?? '', kinds: haKinds(c.energy.kinds) } : {},
     apptests: typeof atSetupCurrent === 'function' ? atSetupCurrent() : {},   // app tests (77-apptests.js)
@@ -400,14 +400,15 @@ async function setupFinish(req, res) {
     yolink: yl?.uaid ? { uaid: String(yl.uaid).trim(), secret: String(yl.secret || '').trim() } : prev.yolink || null,
     ring: draft.ring || prev.ring || undefined,
     controls: a.controls?.has === 'yes' ? { kinds: picked('controls') } : null,
-    sensors: a.sensors?.has === 'yes' ? { kinds: picked('sensors'), alertOn: a.sensors.alertOn || [] } : { alertOn: ['leak', 'smoke', 'battery'] },
+    sensors: a.sensors?.has === 'yes' ? { kinds: picked('sensors') } : {},   // which alerts are on: Settings › Alerts (40a-alert-types.js)
     // Running setup again keeps what wasn't asked about this time (the UniFi console, the DNS blocker).
     network: { provider: a.network?.kind || 'other', meraki: a.network?.meraki || a.cameras?.['meraki-mv'] || a.sensors?.['meraki-mt'] || null,
       unifi: a.network?.unifi?.apiKey ? a.network.unifi : (a.network?.kind || 'other') === (prev.network?.provider || 'other') ? prev.network?.unifi || null : null,
       dns: a.network?.dns === undefined || (a.network.dns === prev.network?.dns?.kind && !a.network.dnsUrl) ? prev.network?.dns || null : a.network.dns && a.network.dns !== 'none' ? { kind: a.network.dns, url: a.network.dnsUrl || null, key: a.network.dnsKey || null } : null, speedtest: a.network?.speedtest !== 'no' },
     energy: a.energy?.track === 'yes' ? { utility: a.energy.utility && a.energy.utility !== 'other' ? a.energy.utility : null, ratePerKwh: Number(a.energy.rate) || null, budget: Number(a.energy.budget) || null, kinds: picked('energy') } : null,
     ai: aiOf(a.ai?.provider) && raw.ai?._test?.ok && raw.ai._test.model ? { provider: a.ai.provider, model: String(raw.ai._test.model).slice(0, 120), url: a.ai.url ? String(a.ai.url).trim() : null, apiKey: a.ai.apiKey ? String(a.ai.apiKey).trim() : null } : prev.ai || undefined,
-    alerts: { phone: a.alerts?.phone === 'ha' && usesHa ? 'homeassistant' : null, quietHours: a.alerts?.quiet || '22-7' },
+    // setup asks only these two: the alert rules and which alerts are on stay as they were (a new box starts with the defaults)
+    alerts: { ...(prev.alerts || {}), phone: a.alerts?.phone === 'ha' && usesHa ? 'homeassistant' : null, quietHours: a.alerts?.quiet || '22-7', types: prev.alerts?.types || alertTypesMigrate(prev) || { v: 1 } },
     // each integration once, however many times setup runs
     addedToHomeAssistant: [...new Map([...(prev.addedToHomeAssistant || []), ...(Array.isArray(raw._added) ? raw._added.slice(0, 50).map((x) => ({ domain: String(x.domain), title: String(x.title) })) : [])].map((x) => [`${x.domain}|${x.title}`, x])).values()].slice(-100),
   };

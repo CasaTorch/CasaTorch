@@ -69,7 +69,7 @@ const recentTags = new Map();   // the same alert twice within 2 minutes (two so
 /* An alert goes to each phone its rules allow (40r-alert-rules.js: alertDecide), with that phone's sound. */
 async function notify(a) {
   const sev = sevOf(a);
-  if (sev === 'ok') return;   // "Cleared: ..." stays on the dashboard
+  if (sev === 'ok' || !alertTypeAllows(a)) return;   // "Cleared: ..." stays on the dashboard; a type turned off in Settings › Alerts never goes   // "Cleared: ..." stays on the dashboard
   const base = alertBaseId(a.id || a.title), isRepeat = /:repeat$/.test(String(a.id || ''));
   const now = Date.now();
   for (const [k, at] of recentTags) if (now - at > 120_000) recentTags.delete(k);
