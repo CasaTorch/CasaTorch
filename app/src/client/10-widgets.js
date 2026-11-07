@@ -433,9 +433,13 @@ async function camFetch(c, force = false) {
       c.img.src = url; await c.img.decode?.().catch(() => {});
       c.fade.classList.remove('on');
     }
-    c.wrap.classList.remove('cam-err');
+    c.wrap.classList.remove('cam-err', 'cam-none');
     if (old) setTimeout(() => URL.revokeObjectURL(old), 1500);
-  } catch { c.wrap.classList.add('cam-err'); c.wrap.classList.remove('cam-wait'); }
+  } catch {
+    // no picture this time: with an older one on screen, say so; with none yet, a calm placeholder (never a broken image)
+    c.wrap.dataset.msg = c.url ? T('Not answering - showing the last picture') : T('No picture yet - CasaTorch keeps trying');
+    c.wrap.classList.add('cam-err'); c.wrap.classList.toggle('cam-none', !c.url); c.wrap.classList.remove('cam-wait');
+  }
   finally { c.busy = false; }
 }
 setInterval(() => {
@@ -452,7 +456,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) for 
 function camView(d, o = {}) {
   let c = CAMS.get(d.id);
   if (!c) {
-    const img = el('img', { alt: d.name, decoding: 'async', role: 'button', tabindex: 0 }), fade = el('img', { class: 'cam-fade', alt: '', 'aria-hidden': 'true' });
+    const img = el('img', { alt: '', decoding: 'async', role: 'button', tabindex: 0, 'aria-label': d.name }), fade = el('img', { class: 'cam-fade', alt: '', 'aria-hidden': 'true' });
     const video = el('video', { class: 'cam-video', 'aria-hidden': 'true' }), mjpeg = el('img', { class: 'cam-mjpeg', alt: '', 'aria-hidden': 'true' });
     const age = el('span', { class: 'cam-age' }), name = el('span', {}, d.name);
     const wrap = el('div', { class: 'cam cam-wait', onclick: () => { c.held = true; camLive(c, false); (typeof camDrawer === 'function' ? camDrawer : camModal)(c.d, () => { c.held = false; camLive(c, camLiveOk(c)); }); } }, img, fade, video, mjpeg,
@@ -460,7 +464,7 @@ function camView(d, o = {}) {
     c = { d, img, fade, video, mjpeg, age, name, wrap, visible: true, last: 0, etag: null, url: null, busy: false }; wrap.__cam = c; CAMS.set(d.id, c);
     camSeen?.observe(wrap); camFetch(c, true);
   }
-  c.d = d; c.name.textContent = d.name; c.img.alt = d.name; c.boost = !!o.live;
+  c.d = d; c.name.textContent = d.name; c.img.setAttribute('aria-label', d.name); c.boost = !!o.live;
   return c.wrap;
 }
 function camStage(d) {

@@ -204,7 +204,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
     ['safety', T('Safety'), 'shield', T('What CasaTorch will never switch, and your exceptions'), async () => [await safetyCard()], admin],
     ['connections', T('Connections & AI'), 'link', T('Home Assistant and your brands, Home AI Agent, Secure Remote Access'), async () => [conn, aiCard(s), aiPrivacyCard(s), await remoteCard(), await localHttpsCard()]],
     ['voice', T('Voice assistants'), 'mic', T('Alexa, Google Home, Apple Home and Siri'), async () => voiceCards(), admin],   // 39v-voice.js
-    ['household', T('Household'), 'trash', T('Bins, the mail, plants and laundry'), async () => householdCards()],   // 37h-household.js
+    ['household', T('Household'), 'household', T('Bins, the mail, plants and laundry'), async () => householdCards()],   // 37h-household.js
     ['family', T('Family board'), 'star', T('The family, chores and stars, lists and meals'), async () => familyCards()],   // 38-family.js
     ['alerts', T('Alerts'), 'bell', T('What each kind of alert does: in the app, on phones, sounds, repeats, quiet hours, per device'), async () => alertRulesCards()],   // 37a-alert-rules.js
     ['phones', T('Phones & alerts'), 'phone', T('The CasaTorch app, alerts on your phones, quiet hours'), async () => [...(await appCards()), await phoneCard()]],

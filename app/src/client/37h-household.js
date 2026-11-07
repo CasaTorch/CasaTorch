@@ -72,7 +72,7 @@ function hhBinRow(x, w, canAct) {
     el('div', { class: 'grow' }, el('b', { class: 'ellipsis' }, x.name), el('span', { class: 'sub' }, (small ? [wn.pill || wn.sub] : [wn.pill, wn.pill && (act || wn.hot) && w < 5 ? '' : wn.sub, x.movedFrom ? T('moved') : '']).filter(Boolean).join(' · '))),
     act || (wn.right && !small ? el('span', { class: 'small muted', style: 'flex:none' }, wn.right) : null));
 }
-widget({ id: 'household', title: 'Household', icon: 'trash', cat: 'home', multi: true, blurb: 'Bin night, the mail, thirsty plants and the laundry', keywords: 'trash garbage recycling bins pickup mail mailbox post plants water laundry washer dryer dishwasher chores', min: [2, 2], size: [4, 3],
+widget({ id: 'household', title: 'Household', icon: 'household', cat: 'home', multi: true, blurb: 'Bin night, the mail, thirsty plants and the laundry', keywords: 'trash garbage recycling bins pickup mail mailbox post plants water laundry washer dryer dishwasher chores', min: [2, 2], size: [4, 3],
   options: [{ key: 'parts', type: 'chips', label: 'Show', choices: [['bins', 'Bins'], ['mail', 'Mail'], ['plants', 'Plants'], ['laundry', 'Laundry']], help: 'Pick none for all of them.' }],
   async render(b, ctx, { w, h }) {
     const o = optsOf(b._t || {}), want = new Set(o.parts || []), show = (k) => !want.size || want.has(k);
@@ -125,7 +125,7 @@ function hhPlantsSheet(d, canAct) {
    A page of tiles (06-pagegrid.js), like every other page: the bins, the mail, the plants and the laundry, each a
    tile Edit can move, resize or remove; the server suggests the ones this house has set up (60-layout.js). */
 const hhPageEmpty = () => pgEmpty(T('Bin night, the mail, plants and laundry - set them up once.'), '#settings/household', T('Set up'));
-pageTile({ id: 'hh-start', page: 'household', auto: true, title: 'Get started', icon: 'trash', blurb: 'Set up bins, the mail, plants and laundry', size: [12, 1], render(b) { b.replaceChildren(hhPageEmpty()); } });
+pageTile({ id: 'hh-start', page: 'household', auto: true, title: 'Get started', icon: 'household', blurb: 'Set up bins, the mail, plants and laundry', size: [12, 1], render(b) { b.replaceChildren(hhPageEmpty()); } });
 pageTile({ id: 'hh-bins', page: 'household', auto: true, title: 'Bins', icon: 'trash', blurb: 'Every bin and its next pickup - tap "It\'s out" the evening before', size: [6, 1], render(b, ctx) {
   const d = ctx.data.hh, bins = (d?.bins || []).filter((x) => x.next || x.error);
   b.replaceChildren(!d?.configured ? hhPageEmpty() : bins.length ? el('div', { class: 'hh-rows' }, bins.map((x) => hhBinRow(x, 6, ctx.data.canAct))) : pgEmpty(T('No bins set up yet.'), '#settings/household', T('Add a bin')));
@@ -153,7 +153,7 @@ pageTile({ id: 'hh-laundry', page: 'household', auto: true, title: 'Laundry', ic
     el('div', { class: 'grow' }, el('b', { class: 'ellipsis' }, T(a.name)), el('span', { class: 'sub' }, a.phase === 'running' ? (a.remainingMin != null ? T('{n} min left', { n: a.remainingMin }) : T('Running')) : a.phase === 'done' ? T('Done') : T('Idle'))),
     a.phase === 'done' && ctx.data.canAct ? el('button', { class: 'hh-outbtn', onclick: () => hhDo(`/api/household/laundry/${encodeURIComponent(a.id)}/emptied`, {}, T('Emptied')) }, icon('check'), T('Emptied')) : null))));
 } });
-tab({ id: 'household', label: 'Household', icon: 'trash', after: 'reminders', async render(main) {
+tab({ id: 'household', label: 'Household', icon: 'household', after: 'reminders', async render(main) {
   const load = async () => { WCACHE.delete('/api/household'); const [hh, canAct] = await Promise.all([wget('/api/household', 10_000).catch(() => null), hhRole()]); return { hh, canAct }; };
   return pageGrid(main, { page: 'household', auto: true, title: tabLabel({ id: 'household', label: T('Household') }), sub: T('Bins, the mail, plants and laundry'), load,
     actions: [el('a', { class: 'btn', href: '#settings/household' }, icon('gear', 14), el('span', { class: 'hide-phone' }, T('Household settings')))] });

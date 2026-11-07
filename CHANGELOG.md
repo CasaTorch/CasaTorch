@@ -6,6 +6,9 @@ What changed in each CasaTorch version. The illustrated version, with links into
 
 ## Unreleased
 
+- **Cameras always show a picture when one exists.** When Home Assistant has no picture for a camera (a Ring "Live view" camera nobody is watching, a camera that dozed off), CasaTorch gets it another way: the same camera's snapshot entity, a frame from its stream, or Ring directly. A camera with no picture yet shows a calm "No picture yet" instead of a broken image.
+- Household has its own icon (a house with a heart), not a bin.
+
 - The 3D home uses three.js 0.187.0 (its files are pinned by their hashes as before).
 
 ### Plans

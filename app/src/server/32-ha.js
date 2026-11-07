@@ -198,12 +198,59 @@ setTimeout(async () => {
   const h = config.homeAssistant; if (isDemo() || !h?.url) return;
   for (const st of (await haStates().catch(() => [])).filter((x) => /^camera\./.test(x.entity_id) && !haIsChime(x)).slice(0, 24)) snapRefresh(snapEntry(`ha:${st.entity_id}`, () => haCameraPicture(st.entity_id), 'ha'));
 }, 4000).unref?.();
-async function haCameraPicture(ent) {
+async function haProxyPicture(ent) {
   const h = config.homeAssistant;
   const r = await fetch(`${h.url}/api/camera_proxy/${ent}`, { headers: { Authorization: `Bearer ${h.token}` }, signal: AbortSignal.timeout(10000) });
   if (!r.ok) throw new Error(`Home Assistant answered ${r.status}`);
-  return { buf: Buffer.from(await r.arrayBuffer()), type: r.headers.get('content-type') || 'image/jpeg' };
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length < 200) throw new Error('Home Assistant sent an empty picture');
+  return { buf, type: r.headers.get('content-type') || 'image/jpeg' };
 }
+/* A camera's picture, from wherever it can be had. Home Assistant's own picture first; when that fails (a Ring
+   "Live view" camera has none until someone watches it, a camera that is asleep or briefly gone), the same camera
+   another way: the same camera's other entity in Home Assistant (Ring and ring-mqtt both list it: "_snapshot"),
+   a frame from its go2rtc stream through Frigate, or Ring itself when it is connected here. Ways that wake a camera
+   (a Ring stream, a battery camera) are asked at most once a minute per camera. Only this box's own connections are
+   used, with the same sign-ins as always; nothing new is sent anywhere. */
+/** The same camera's other entities in Home Assistant (never a chime, never one that is unavailable), "_snapshot" ones
+    first: ring-mqtt's snapshot entity has a picture when the Ring integration's "Live view" has none. Pure. */
+function haPicTwins(ent, states) {
+  const base = camBaseName(ent); if (base.length < 3) return [];
+  return states.filter((s) => s.entity_id !== ent && /^camera\.\w{1,120}$/.test(s.entity_id) && !haIsChime(s) && s.state !== 'unavailable' && camBaseName(s.entity_id) === base)
+    .map((s) => s.entity_id).sort((a, b) => (/_snapshot$/.test(b) ? 1 : 0) - (/_snapshot$/.test(a) ? 1 : 0) || a.localeCompare(b));
+}
+/** Try the ways in turn - the one that worked last time first - and remember the one that works. */
+async function haPicFirst(ent, tries) {
+  const last = HA_PIC_WAY.get(ent), order = last ? [...tries.filter(([w]) => w === last), ...tries.filter(([w]) => w !== last)] : tries;
+  let first = null;
+  for (const [way, fn] of order) { try { const pic = await fn(); HA_PIC_WAY.set(ent, way); return pic; } catch (e) { first ||= e; } }
+  throw first || new Error('no picture');
+}
+const HA_PIC_SLOW = new Map();   // entity -> when a waking way was last used
+const HA_PIC_WAY = new Map();    // entity -> the way that worked last time, tried first next time
+async function haCameraPicture(ent) {
+  const tries = [], base = camBaseName(ent), key = camMatchKeys(ent).key;
+  tries.push(['ha', () => haProxyPicture(ent)]);
+  for (const id of haPicTwins(ent, await haStates().catch(() => []))) tries.push([`twin:${id}`, () => haProxyPicture(id)]);
+  const slow = (fn) => async () => {
+    if (Date.now() - (HA_PIC_SLOW.get(ent) || 0) < 60_000) throw new Error('asked a moment ago');
+    HA_PIC_SLOW.set(ent, Date.now()); return fn();
+  };
+  tries.push(['go2rtc', slow(async () => {
+    const fast = typeof camFastFor === 'function' ? await camFastFor(ent).catch(() => null) : null;
+    if (!fast) throw new Error('no stream');
+    const r = await frigateGet(fast.c, `/api/go2rtc/api/frame.jpeg?src=${encodeURIComponent(fast.sub || fast.main)}`);
+    const buf = await readAll(r, 20 * 1024 * 1024);
+    if (r.statusCode >= 300 || buf.length < 200) throw new Error(`go2rtc answered ${r.statusCode}`);
+    return { buf, type: r.headers['content-type'] || 'image/jpeg' };
+  })]);
+  if (typeof ring !== 'undefined' && ring.cameras?.length && key) {
+    const rc = ring.cameras.find((c) => camMatchKeys(c.name).key === key || camBaseName(c.name) === base);
+    if (rc) tries.push(['ring', slow(async () => ({ buf: await rc.getSnapshot(), type: 'image/jpeg' }))]);
+  }
+  return haPicFirst(ent, tries);
+}
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchHaPic = { haPicTwins, haPicFirst, HA_PIC_WAY };
 /* Home Assistant cameras: a still picture through HA's camera proxy (the token stays on the box). */
 app.get('/api/ha/camera/:entity', async (req, res) => {
   const h = config.homeAssistant, ent = String(req.params.entity);
