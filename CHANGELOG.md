@@ -6,6 +6,32 @@ What changed in each CasaTorch version. The illustrated version, with links into
 
 ## Unreleased
 
+### Alerts
+- **Settings › Alerts › Which alerts.** Every alert CasaTorch can raise is now in one list, grouped into Safety,
+  Security, Devices, Network & internet, Home and System. Each one has a switch and one line saying what it is. Many
+  also let you pick how important it is, and some have their own limits. Changes save right away. Only an owner or
+  admin can change them; everyone else can see them.
+- **Off means off.** An alert you turn off isn't raised. It doesn't reach phones or the inbox, isn't on the Alerts
+  tab and isn't counted.
+- **"New device on the network" is off by default**, including on homes that already have CasaTorch. If you turned
+  watching for new devices back on yourself, it stays on. Security Center still lists every device, and it links to
+  the switch.
+- **Safety alerts (water, smoke, gas and CO, freezing) are on by default.** Turning one off asks first. Alerts about
+  sign-ins and password resets can't be turned off. Motion on a camera is off by default (it still shows on the
+  timeline).
+- **New alerts:** a door, gate or garage door left open (after 15 minutes), a fridge or freezer too warm (fridge above
+  8 °C / 46 °F, freezer above -12 °C / 10 °F, for 30 minutes), a camera offline (after 10 minutes) and the disk almost
+  full (under 10% free). You can change every limit.
+- **Fewer false alarms:** a device must be offline for 30 minutes, and the internet down for 5 minutes, before an alert
+  goes out. Water and smoke still go out at once. A fridge or freezer no longer counts as "near freezing".
+- Setup no longer asks which alerts you want; the defaults are on Settings › Alerts. Running setup again keeps your
+  alert rules.
+
+### Easier to use
+- **Settings is in five groups:** Home, Alerts, Devices, Security and System, each with a short description. Long pages
+  have headings. Old links into Settings still work.
+- **Shorter wording** in about 55 places: empty pages, alert settings, Security Center, Connect, phones and setup.
+
 - **Cameras always show a picture when one exists.** When Home Assistant has no picture for a camera (a Ring "Live view" camera nobody is watching, a camera that dozed off), CasaTorch gets it another way: the same camera's snapshot entity, a frame from its stream, or Ring directly. A camera with no picture yet shows a calm "No picture yet" instead of a broken image.
 - Household has its own icon (a house with a heart), not a bin.
 

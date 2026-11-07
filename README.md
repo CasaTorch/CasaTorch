@@ -239,7 +239,7 @@ Details: [docs/SUPPORT.md](docs/SUPPORT.md).
 
 - **Security Center** (the Security tab, included in Basic): a video wall of every camera (layouts,
   full screen, live video where available), doors and locks with "Lock all", the alarm (arm only),
-  smoke and leak sensors, every device on your home network with an alert when a new one joins, a
+  smoke and leak sensors, every device on your home network (an alert when a new one joins is optional, in Settings › Alerts), a
   daily check for risky open services (Telnet, FTP, file sharing, Remote Desktop, VNC, open camera
   streams, unencrypted MQTT), a security checklist and recent security events.
 - **Secure address at home**: https on your home network straight to the box, with a Let's Encrypt
