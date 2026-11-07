@@ -346,6 +346,13 @@ t('rate limits: an hourly or daily limit is not cleared by the 15-minute tidy-up
   const q = 'unit-quick:198.51.100.9'; G.failed(q); G.triesSweep(Date.now() + 16 * 60_000); assert.ok(!G.tries.has(q));   // scrub-ok
 });
 
+t('Google sign-in: waiting sign-ins anyone can start are capped', () => {
+  const G = globalThis.__casatorchGoogle;
+  for (let i = 0; i < G.GOOGLE_STATES_MAX + 50; i++) G.googleStateAdd(`unit-${i}`, { exp: Date.now() + 600_000 });
+  assert.equal(G.googleStates.size, G.GOOGLE_STATES_MAX); assert.ok(G.googleStates.has(`unit-${G.GOOGLE_STATES_MAX + 49}`), 'the newest stays'); assert.ok(!G.googleStates.has('unit-0'));
+  G.googleStates.clear();
+});
+
 t('energy card: solar, battery and grid come only from sensors that exist', () => {
   const none = H.energyFlows([{ id: 'ha:sensor.fridge_power', name: 'Fridge', kind: 'sensor', powerW: 90 }], 900);
   assert.equal(none.solarW, null); assert.equal(none.battery, null); assert.equal(none.gridW, null);

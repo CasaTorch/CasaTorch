@@ -544,13 +544,19 @@ app.get('/api/auth/admin/audit', requireRole('admin'), (_req, res) => {
 app.get('/api/auth/admin/sessions', requireRole('admin'), (_req, res) => res.json({ sessions: Object.values(sessions).map((s) => ({ id: s.id, user: userById(s.userId)?.name || '?', kind: s.kind, seen: s.seen, created: s.created, ip: s.ip, agent: s.agent })) }));
 
 /* ---- Sign in with Google (OAuth 2.0 authorization code + PKCE) ---- */
-const googleStates = new Map();
+const googleStates = new Map(), GOOGLE_STATES_MAX = 200;
+/** A Google sign-in that has started. Anyone can open the start page, so only the newest 200 are kept (memory stays small). */
+function googleStateAdd(state, v) {
+  for (const [k, x] of googleStates) if (x.exp < Date.now()) googleStates.delete(k);
+  googleStates.set(state, v);
+  while (googleStates.size > GOOGLE_STATES_MAX) googleStates.delete(googleStates.keys().next().value);
+}
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchGoogle = { googleStates, googleStateAdd, GOOGLE_STATES_MAX };
 app.get('/api/auth/google/start', (req, res) => {
   if (!users.google?.clientId) return res.redirect('/login.html?error=google-off');
   const state = crypto.randomBytes(24).toString('base64url'), verifier = crypto.randomBytes(48).toString('base64url');
   const redirectUri = `${req.protocol}://${req.headers.host}/api/auth/google/callback`;
-  googleStates.set(state, { verifier, redirectUri, remember: req.query.remember === '1', exp: Date.now() + 10 * 60_000 });
-  for (const [k, v] of googleStates) if (v.exp < Date.now()) googleStates.delete(k);
+  googleStateAdd(state, { verifier, redirectUri, remember: req.query.remember === '1', exp: Date.now() + 10 * 60_000 });
   const q = new URLSearchParams({ client_id: users.google.clientId, redirect_uri: redirectUri, response_type: 'code', scope: 'openid email profile', state, code_challenge: crypto.createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256', prompt: 'select_account' });
   res.setHeader('Set-Cookie', `casatorch_gstate=${state}; ${cookieFlags(req)}; Max-Age=600`);
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${q}`);

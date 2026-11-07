@@ -320,7 +320,12 @@ const voiceGate = (scope) => (req, res, next) => {
   const ip = clientIp(req), now = Date.now(), tries = (voiceTries.get(ip) || []).filter((t) => now - t < 15 * 60_000);
   if (tries.length >= 20) return voiceSay(req, res, 429, 'Too many tries with a wrong token. Wait 15 minutes.');
   const t = voiceTokenOf(req);
-  if (!t) { tries.push(now); voiceTries.set(ip, tries); audit(req, 'voice-token-refused', {}); return voiceSay(req, res, 401, 'CasaTorch didn\'t recognize this phone. Make a new token in Settings, Voice assistants.'); }
+  if (!t) {
+    tries.push(now); voiceTries.set(ip, tries);
+    if (voiceTries.size > 500) for (const [k, v] of voiceTries) if (!v.some((x) => now - x < 15 * 60_000)) voiceTries.delete(k);   // addresses whose tries ran out
+    if (voiceTries.size > 2000) voiceTries.delete(voiceTries.keys().next().value);
+    if (tries.length <= 3) audit(req, 'voice-token-refused', {});   // the first few per address: a flood can't fill the activity log
+    return voiceSay(req, res, 401, 'CasaTorch didn\'t recognize this phone. Make a new token in Settings, Voice assistants.'); }
   if (!t.scopes.includes(scope)) return voiceSay(req, res, 403, scope === 'do' ? 'This phone may ask questions, but not switch things.' : 'This phone may switch things, but not ask questions.');
   const u = t.userId && typeof userById === 'function' ? userById(t.userId) : null;
   if (signInOn() && !u) return voiceSay(req, res, 401, t.userId ? 'The person who made this token isn\'t on this CasaTorch any more.' : 'Sign-in was turned on after this token was made. Make a new token in Settings, Voice assistants.');
