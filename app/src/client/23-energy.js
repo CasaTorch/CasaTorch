@@ -222,7 +222,7 @@ pageTile({ id: 'en-battery', page: 'energy', title: 'Home battery', icon: 'batte
   const ring = svgEl('svg', { viewBox: '0 0 64 64', class: 'en-ringg', role: 'img', 'aria-label': pct != null ? `${pct}%` : '' }, svgEl('circle', { cx: 32, cy: 32, r: 26, class: 'trk' }), svgEl('circle', { cx: 32, cy: 32, r: 26, class: 'val', 'stroke-dasharray': `${C * (pct || 0) / 100} ${C}`, transform: 'rotate(-90 32 32)' }), svgEl('text', { x: 32, y: 37, 'text-anchor': 'middle' }, pct != null ? `${pct}%` : '-'));
   const state = x.w > 20 ? T('Powering the house: {w}', { w: enW(x.w) }) : x.w < -20 ? T('Charging: {w}', { w: enW(-x.w) }) : pct >= 97 ? T('Full') : T('Standing by');
   const t = d.sources?.totals;
-  enPut(b, el('div', { class: 'row', style: 'gap:14px;align-items:center' }, ring, el('div', { style: 'min-width:0' }, el('b', {}, state), t ? el('div', { class: 'en-sub' }, T('{in} in · {out} out today', { in: enK(t.battIn || 0), out: enK(t.battOut || 0) })) : null)));
+  enPut(b, el('div', { class: 'row', style: 'gap:10px 14px;align-items:center;flex-wrap:wrap' }, ring, el('div', { style: 'min-width:0;flex:1 1 110px' }, el('b', {}, state), t ? el('div', { class: 'en-sub' }, T('{in} in · {out} out today', { in: enK(t.battIn || 0), out: enK(t.battOut || 0) })) : null)));
 } });
 
 /* ---- the week, hour by hour ---- */

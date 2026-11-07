@@ -227,7 +227,7 @@ tab({ id: 'settings', label: 'Settings', icon: 'gear', async render(main, sub) {
   const isHead = (c) => c?.classList?.contains('set-group');
   /* a heading with no cards under it (one that isn't shown here, like backups in the demo) goes too */
   const cardsOf = async (k) => { if (!built.has(k)) { const l = (await SECTIONS.find((x) => x[0] === k)[4]()).flat().filter(Boolean); built.set(k, l.filter((c, i) => !isHead(c) || (l[i + 1] && !isHead(l[i + 1])))); } return built.get(k); };
-  const cur = SECTIONS.some((x) => x[0] === sub) ? sub : null, phone = window.innerWidth <= 760;
+  const cur = SECTIONS.some((x) => x[0] === sub) ? sub : null, phone = window.innerWidth <= 900;
   const pick = cur || (phone ? null : 'general');
   const search = el('input', { type: 'search', placeholder: T('Search settings'), 'aria-label': T('Search settings') });
   const nav = el('nav', { class: 'set-nav', 'aria-label': T('Settings sections') }, search, ...SECTIONS.flatMap(([k, label, ic, blurb], i) => [SET_GROUP[k] !== SET_GROUP[SECTIONS[i - 1]?.[0]] ? el('div', { class: 'set-ghead' }, T(SET_GROUP[k])) : null, el('a', { href: `#settings/${k}`, class: `set-link${k === pick ? ' on' : ''}` }, el('span', { class: 'set-ic' }, icon(ic, 18)), el('span', { class: 'grow', style: 'min-width:0' }, el('b', {}, label, newTag(k)), el('small', { class: 'ellipsis' }, blurb)), phone ? icon('chevr', 16) : null)]).filter(Boolean));

@@ -248,7 +248,7 @@ widget({ id: 'entities', title: 'Pinned devices', icon: 'sliders', multi: true, 
     const ds = (b._t?.ids || []).map((id) => all.find((d) => d.id === id)).filter(Boolean);
     if (!ds.length) return b.replaceChildren(empty(T('Pick any devices or Home Assistant entities to keep here.'), null, null), el('div', { style: 'text-align:center' }, el('button', { class: 'btn small primary', onclick: () => pickDevices([], (picked) => { b._t.ids = picked; b._saved(); }) }, T('Choose devices'))));
     const perRow = Math.max(1, Math.floor(w / 2));
-    b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr));overflow:auto` }, ds.map((d) => devButton(d, true))));
+    b.replaceChildren(el('div', { class: 'switches', style: `--per:${perRow};overflow:auto` }, ds.map((d) => devButton(d, true))));
   } });
 /* One device or entity as a tile of its own. The Add widget screen offers every device and every
    Home Assistant entity automatically - anything new in Home Assistant shows up there on its own. */
@@ -358,7 +358,7 @@ widget({ id: 'room', title: 'Room', icon: 'home', multi: true, hidden: true, min
   const facts = [temp != null ? el('b', {}, tempOf(temp)) : null, lights ? el('span', {}, `${on}/${lights} lights on`) : null, watts ? el('span', {}, `${Math.round(watts)} W`) : null, el('span', {}, `${ds.length} device${ds.length === 1 ? '' : 's'}`)].filter(Boolean);
   const perRow = Math.max(1, Math.floor(w / 2));
   b.replaceChildren(el('div', { class: 'row small muted', style: 'gap:14px;margin-bottom:10px;flex-wrap:wrap' }, facts),
-    el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr));overflow:auto` }, ds.filter((d) => d.kind !== 'camera').slice(0, perRow * Math.max(1, fits(h, 66, 80))).map((d) => devButton(d, true))));
+    el('div', { class: 'switches', style: `--per:${perRow};overflow:auto` }, ds.filter((d) => d.kind !== 'camera').slice(0, perRow * Math.max(1, fits(h, 66, 80))).map((d) => devButton(d, true))));
 } });
 widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', cat: 'home', essential: true, multi: true, blurb: 'Tap to switch lights, plugs and speakers', min: [2, 2], size: [4, 3],
   options: (t, ctx) => {
@@ -373,7 +373,7 @@ widget({ id: 'lights', title: 'Quick switches', icon: 'bulb', cat: 'home', essen
     if (o.onFirst) ds = [...ds].sort((a, c) => (c.on || c.playing ? 1 : 0) - (a.on || a.playing ? 1 : 0));
     if (!ds.length) return b.replaceChildren(empty(o.area ? T('Nothing to switch in {area}.', { area: o.area }) : T('No lights or plugs yet.')));
     const perRow = Math.max(1, Math.floor(w / 2)), rows = fits(h, 66);
-    b.replaceChildren(el('div', { class: 'switches', style: `grid-template-columns:repeat(${perRow},minmax(0,1fr))` }, ds.slice(0, perRow * rows).map((d) => devButton(d, true))));
+    b.replaceChildren(el('div', { class: 'switches', style: `--per:${perRow}` }, ds.slice(0, perRow * rows).map((d) => devButton(d, true))));
   } });
 
 const snapUrl = (d) => (d.snapshot ? d.snapshot : d.provider === 'ha' ? `/api/ha/camera/${encodeURIComponent(d.id.slice(3))}` : `/api/${d.provider === 'ring' ? 'ring' : 'cameras'}/${encodeURIComponent(d.id.split(':').slice(1).join(':'))}/snapshot`);
