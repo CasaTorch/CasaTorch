@@ -12,9 +12,11 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Secure access is now called Secure Remote Access**, in the app, the phone apps and all 13 languages.
 
 ### Looking after itself
-- **Devices that get a new address keep working.** When your router gives Home Assistant, a Hue bridge or a Shelly a
-  new address (after a power cut or a new router), CasaTorch finds it again by itself and carries on. No re-pairing,
-  no typing addresses, and a Shelly keeps its tiles and alert rules. Settings › Health lists it under "Fixed by itself".
+- **Devices that get a new address are found again.** When your router gives Home Assistant, a Hue bridge or a Shelly
+  a new address (after a power cut or a new router), CasaTorch finds it on your network. A Shelly without a password
+  carries on by itself, keeping its tiles and alert rules. For anything with a key or password (Home Assistant, Hue,
+  a Shelly with a password), Settings › Health shows the old and new address with one button, Use the new address:
+  CasaTorch sends the key there only after an owner or admin taps it, because another device could pretend to be yours.
 - **A full disk is tidied by itself.** When the disk is almost full, CasaTorch removes its own leftovers (temporary
   files, unfinished backups, old copies and the map cache). It never touches photos, scans, history or settings.
 

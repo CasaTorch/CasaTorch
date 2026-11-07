@@ -125,7 +125,8 @@ opens the guided setup right at that item - pick, answer a question or two, Test
 Hue, Shelly, Frigate, cameras, Sonos, Chromecast, UniFi, Pi-hole, AdGuard Home, your router, Ring and Meraki gear)
 and offers each one at the top of Connect, added in one tap with the room filled in (a Hue bridge: tap Add, then
 press its button). If Home Assistant, a Hue bridge or a Shelly later gets a new address from the router, CasaTorch
-finds it again by itself. Only home-network addresses are
+finds it again: Health offers "Use the new address" (its key is sent there only after you tap it; a Shelly without a
+password just carries on). Only home-network addresses are
 ever looked at. Removing a brand also takes its tiles, camera-wall spots and alert rules with it.
 
 ## What works without Home Assistant

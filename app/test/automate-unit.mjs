@@ -30,8 +30,9 @@ export default async function automateTests(t) {
       assert.equal(M.movedDue('test', now + 11 * 60_000), true);
     });
 
-    await t('moved: the Hue bridge is followed by its bridge id; only its public page is asked, the key goes nowhere else', async () => {
-      M.setCfg({ house: { name: 'Test' }, hue: { host: '192.168.1.20', username: 'hue-user-key-0123456789' } });   // scrub-ok: example address
+    await t('moved: the Hue bridge seen at a new address is only suggested - no key is sent and nothing is saved until an admin taps', async () => {
+      const KEY = 'hue-user-key-0123456789';
+      M.setCfg({ house: { name: 'Test' }, hue: { host: '192.168.1.20', username: KEY } });   // scrub-ok: example address
       M.movedLearnHue({ name: 'Hue', bridgeid: '000000FFFE000001' });   // scrub-ok: made-up id
       assert.equal(M.cfg().hue.bridgeid, '000000FFFE000001', 'learned while it answered');   // scrub-ok: made-up id
       const asked = [];
@@ -39,46 +40,80 @@ export default async function automateTests(t) {
       const heal = M.HEAL.length;
       const m = await M.movedFollowHue({ find: async () => ['192.168.1.20', '192.168.1.30', '192.168.1.31', '8.8.8.8', '169.254.169.254'], ask });   // scrub-ok: example addresses
       assert.deepEqual(m, { from: '192.168.1.20', to: '192.168.1.31' });   // scrub-ok: example addresses
-      assert.deepEqual(asked.sort(), ['192.168.1.30', '192.168.1.31'], 'never its old address, never an internet or metadata address');   // scrub-ok: example addresses
-      assert.equal(M.cfg().hue.host, '192.168.1.31'); assert.equal(M.cfg().hue.username, 'hue-user-key-0123456789', 'the key stays');   // scrub-ok: example address
-      assert.equal(M.HEAL.length, heal + 1); assert.match(M.HEAL[M.HEAL.length - 1].detail, /Hue bridge got a new address/);
-      assert.equal(await M.movedFollowHue({ find: async () => ['192.168.1.30'], ask }), null, 'no match: nothing changes');   // scrub-ok: example address
+      assert.deepEqual(asked.sort(), ['192.168.1.30', '192.168.1.31'], 'only public pages; never its old address, the internet or the metadata address');   // scrub-ok: example addresses
+      assert.equal(M.cfg().hue.host, '192.168.1.20', 'nothing saved by itself');   // scrub-ok: example address
+      assert.equal(M.HEAL.length, heal, 'not "fixed by itself"');
+      const p = M.movedPending('hue', '192.168.1.20');   // scrub-ok: example address
+      assert.deepEqual([p.from, p.to], ['192.168.1.20', '192.168.1.31']);   // scrub-ok: example addresses
+      assert.ok(!JSON.stringify(M.MOVED.pending).includes(KEY), 'the suggestion holds no key');
+      const [msg, vars] = M.movedDetail(p); assert.match(msg, /seems to have moved to \{to\} \(it was at \{from\}\)/); assert.ok(!JSON.stringify(vars).includes(KEY));
+      // the admin's tap: a device that refuses the key changes nothing
+      const sent = [];
+      await assert.rejects(M.movedUse('hue', { hueAsk: (ip, user) => { sent.push([ip, user]); return [{ error: { type: 1 } }]; } }), /didn't accept/);
+      assert.deepEqual(sent, [['192.168.1.31', KEY]], 'the key went only to the suggested address, only on the tap');   // scrub-ok: example address
+      assert.equal(M.cfg().hue.host, '192.168.1.20');   // scrub-ok: example address
+      await assert.rejects(M.movedUse('hue', { hueAsk: () => { throw new Error('must not be asked'); } }), /out of date/, 'a refused suggestion is gone');
+      await M.movedFollowHue({ find: async () => ['192.168.1.31'], ask });   // scrub-ok: example address
+      const r = await M.movedUse('hue', { hueAsk: (ip) => ({ name: 'Hue', bridgeid: '000000FFFE000001' }) });   // scrub-ok: made-up id
+      assert.deepEqual([r.from, r.to], ['192.168.1.20', '192.168.1.31']); assert.equal(M.cfg().hue.host, '192.168.1.31'); assert.equal(M.cfg().hue.username, KEY);   // scrub-ok: example addresses
       M.setCfg({ house: { name: 'Test' }, hue: { host: '192.168.1.20', username: 'k' } });   // scrub-ok: example address
       assert.equal(await M.movedFollowHue({ find: async () => ['192.168.1.31'], ask }), null, 'no bridge id learned yet: nothing is guessed');   // scrub-ok: example address
     });
 
-    await t('moved: a Shelly is followed by its hardware id and keeps its device ids (tiles, rooms, alert rules)', async () => {
-      M.setCfg({ house: { name: 'Test' }, shelly: [{ host: '192.168.1.40' }, { host: '192.168.1.41' }] });   // scrub-ok: example addresses
-      M.movedLearnShelly([{ host: '192.168.1.40', id: 'AABBCC000001' }, { host: '192.168.1.41', id: 'AABBCC000002' }]);   // scrub-ok: example addresses, made-up ids
-      assert.deepEqual(M.cfg().shelly.map((s) => s.hwid), ['AABBCC000001', 'AABBCC000002']);   // scrub-ok: made-up ids
-      const moves = await M.movedFollowShelly(['192.168.1.40'], { find: async () => ['192.168.1.41', '192.168.1.90'], found: () => ['192.168.1.91'], ask: (ip) => ({ '192.168.1.90': { mac: 'FFFFFF000009' }, '192.168.1.91': { mac: 'AABBCC000001' } })[ip] });   // scrub-ok: example addresses, made-up ids
-      assert.deepEqual(moves, [{ from: '192.168.1.40', to: '192.168.1.91' }]);   // scrub-ok: example addresses
+    await t('moved: a Shelly without a password is followed by itself and keeps its device ids; one with a password is only suggested', async () => {
+      M.setCfg({ house: { name: 'Test' }, shelly: [{ host: '192.168.1.40' }, { host: '192.168.1.41' }, { host: '192.168.1.42', user: 'admin', password: 'shelly-pass-0123' }] });   // scrub-ok: example addresses
+      M.movedLearnShelly([{ host: '192.168.1.40', id: 'AABBCC000001' }, { host: '192.168.1.41', id: 'AABBCC000002' }, { host: '192.168.1.42', id: 'AABBCC000003' }]);   // scrub-ok: example addresses, made-up ids
+      assert.deepEqual(M.cfg().shelly.map((s) => s.hwid), ['AABBCC000001', 'AABBCC000002', 'AABBCC000003']);   // scrub-ok: made-up ids
+      const pages = { '192.168.1.90': { mac: 'FFFFFF000009' }, '192.168.1.91': { mac: 'AABBCC000001' }, '192.168.1.92': { mac: 'AABBCC000003' } };   // scrub-ok: example addresses, made-up ids
+      const r = await M.movedFollowShelly(['192.168.1.40', '192.168.1.42'], { find: async () => ['192.168.1.41', '192.168.1.90'], found: () => ['192.168.1.91', '192.168.1.92'], ask: (ip) => pages[ip] });   // scrub-ok: example addresses
+      assert.deepEqual(r.moved, [{ from: '192.168.1.40', to: '192.168.1.91' }]); assert.deepEqual(r.suggested, [{ from: '192.168.1.42', to: '192.168.1.92' }]);   // scrub-ok: example addresses
       const s = M.cfg().shelly;
       assert.equal(s[0].host, '192.168.1.91'); assert.equal(s[0].tag, '192.168.1.40', 'device ids stay named after where it was added');   // scrub-ok: example addresses
-      assert.equal(s[1].host, '192.168.1.41'); assert.equal(s[1].tag, undefined, 'the other one is untouched');   // scrub-ok: example address
-      assert.deepEqual(await M.movedFollowShelly(['192.168.1.41'], { find: async () => [], found: () => [], ask: () => null }), [], 'not found: nothing changes');   // scrub-ok: example address
+      assert.equal(s[1].host, '192.168.1.41'); assert.equal(s[2].host, '192.168.1.42', 'the one with a password waits for an admin');   // scrub-ok: example addresses
+      assert.ok(!JSON.stringify(M.MOVED.pending).includes('shelly-pass'), 'the suggestion holds no password');
+      await M.movedUse('shelly:192.168.1.42', { shellyAsk: (ip) => pages[ip] });   // scrub-ok: example address
+      assert.equal(M.cfg().shelly[2].host, '192.168.1.92'); assert.equal(M.cfg().shelly[2].tag, '192.168.1.42');   // scrub-ok: example addresses
+      assert.deepEqual((await M.movedFollowShelly(['192.168.1.41'], { find: async () => [], found: () => [], ask: () => null })).moved, [], 'not found: nothing changes');   // scrub-ok: example address
     });
 
-    await t('moved: Home Assistant is found again by the id it announces; its token goes only to an address announcing that id', async () => {
-      const U = '0123456789abcdef0123456789abcdef', OTHER = 'ffffffffffffffffffffffffffffffff';
+    await t('moved: Home Assistant seen at a new address is only suggested; its token is sent only on an admin\'s tap, only there', async () => {
+      const U = '0123456789abcdef0123456789abcdef', OTHER = 'ffffffffffffffffffffffffffffffff', TOKEN = 'ha-token-0123456789';
       const ann = (ip, uuid, txt = {}) => ({ name: 'Home._home-assistant._tcp.local', ip, port: 8123, txt: { uuid, ...txt } });
       assert.deepEqual(M.haAnnounced([ann('192.168.1.20', U), ann('192.168.1.21', 'nope'), ann(null, U, { internal_url: 'http://ha.local:8123/' }), { txt: {} }]),   // scrub-ok: example addresses
         [{ uuid: U, url: 'http://192.168.1.20:8123' }, { uuid: U, url: 'http://ha.local:8123' }]);   // scrub-ok: example address
-      M.setCfg({ house: { name: 'Test' }, homeAssistant: { url: 'http://192.168.1.20:8123', token: 'ha-token-0123456789' } });   // scrub-ok: example address
+      M.setCfg({ house: { name: 'Test' }, homeAssistant: { url: 'http://192.168.1.20:8123', token: TOKEN } });   // scrub-ok: example address
       assert.equal(await M.movedLearnHa({ find: async () => [ann('192.168.1.30', OTHER), ann('192.168.1.20', U)] }), U, 'ours is the one at our address');   // scrub-ok: example addresses
-      assert.equal(M.cfg().homeAssistant.uuid, U);
-      const tried = [];
-      const works = async (url, token) => { tried.push([url, token]); return url === 'http://192.168.1.25:8123'; };   // scrub-ok: example address
-      const heal = M.HEAL.length;
-      const m = await M.movedFollowHa({ find: async () => [ann('192.168.1.20', U), ann('192.168.1.30', OTHER), ann('192.168.1.25', U), ann('198.51.100.9', U)], works });   // scrub-ok: example addresses
+      const checked = [], realFetch = globalThis.fetch, fetched = [];
+      globalThis.fetch = async (u, o) => { fetched.push([String(u), JSON.stringify(o?.headers || {})]); throw new Error('no network in this test'); };
+      let m;
+      try { m = await M.movedFollowHa({ find: async () => [ann('192.168.1.20', U), ann('192.168.1.30', OTHER), ann('192.168.1.25', U), ann('198.51.100.9', U)], isHa: async (url) => { checked.push(url); return true; } }); }   // scrub-ok: example addresses
+      finally { globalThis.fetch = realFetch; }
       assert.deepEqual(m, { from: 'http://192.168.1.20:8123', to: 'http://192.168.1.25:8123' });   // scrub-ok: example addresses
-      assert.deepEqual(tried.map((x) => x[0]), ['http://192.168.1.25:8123'], 'the token went only to the address with our id, never another Home Assistant or the internet');   // scrub-ok: example address
-      assert.equal(M.cfg().homeAssistant.url, 'http://192.168.1.25:8123'); assert.equal(M.cfg().homeAssistant.token, 'ha-token-0123456789');   // scrub-ok: example address
-      assert.match(M.HEAL[heal].detail, /Home Assistant got a new address/);
+      assert.deepEqual(checked, ['http://192.168.1.25:8123'], 'only an address with our id, never the internet');   // scrub-ok: example address
+      assert.ok(!fetched.some(([, h]) => h.includes(TOKEN)), 'no request carried the token');
+      assert.equal(M.cfg().homeAssistant.url, 'http://192.168.1.20:8123', 'nothing saved by itself');   // scrub-ok: example address
+      assert.ok(!JSON.stringify(M.MOVED.pending).includes(TOKEN));
+      const sent = [];
+      await assert.rejects(M.movedUse('ha', { haWorks: async (url, token) => { sent.push([url, token]); return false; } }), /didn't accept/);
+      assert.deepEqual(sent, [['http://192.168.1.25:8123', TOKEN]], 'tried only there, only on the tap');   // scrub-ok: example address
+      assert.equal(M.cfg().homeAssistant.url, 'http://192.168.1.20:8123');   // scrub-ok: example address
+      await M.movedFollowHa({ find: async () => [ann('192.168.1.25', U)], isHa: async () => true });   // scrub-ok: example address
+      await M.movedUse('ha', { haWorks: async () => true });
+      assert.equal(M.cfg().homeAssistant.url, 'http://192.168.1.25:8123'); assert.equal(M.cfg().homeAssistant.token, TOKEN);   // scrub-ok: example address
+      await assert.rejects(M.movedUse('ha', { haWorks: async () => true }), /out of date/, 'used once');
+      await assert.rejects(M.movedUse('__proto__'), /out of date/);
       M.setCfg({ house: { name: 'Test' }, homeAssistant: { url: 'http://192.168.1.20:8123', token: 't' } });   // scrub-ok: example address
-      assert.equal(await M.movedFollowHa({ find: async () => [ann('192.168.1.25', U)], works }), null, 'its id not learned yet: nothing is tried');   // scrub-ok: example address
+      assert.equal(await M.movedFollowHa({ find: async () => [ann('192.168.1.25', U)], isHa: async () => true }), null, 'its id not learned yet: nothing is suggested');   // scrub-ok: example address
     });
 
+    await t('moved: "Use the new address" is a Health fix, which only a signed-in owner or admin can use', async () => {
+      const fs = await import('node:fs');
+      const doc = fs.readFileSync(new URL('../src/server/79-doctor.js', import.meta.url), 'utf8'), mv = fs.readFileSync(new URL('../src/server/79m-moved.js', import.meta.url), 'utf8');
+      assert.match(doc, /app\.post\('\/api\/doctor\/fix', requireRole\('admin'\)/);
+      assert.match(doc, /async 'moved-use'\(b, req\) \{\s*const r = await movedUse\(/);
+      assert.equal((mv.match(/saveConfig\(\{ \.\.\.config, (homeAssistant|hue): \{ \.\.\.config\.(homeAssistant|hue), (url|host):/g) || []).length, 2, 'Home Assistant and Hue addresses are saved in one place only: movedUse');
+      assert.ok(mv.indexOf('async function movedUse') < mv.indexOf("saveConfig({ ...config, hue: { ...config.hue, host:"), 'that place is inside movedUse');
+    });
     await t('Hue in one tap: Pair waits while the bridge asks for its button, and stops at once on any other answer', async () => {
       let n = 0;
       const pair = async () => (++n < 3 ? { ok: false, button: true, error: 'press it' } : { ok: true, username: 'u' });
@@ -168,17 +203,21 @@ export default async function automateTests(t) {
     await t('every text these show is translated in all 13 languages (tools/i18n-strings.tsv)', async () => {
       const fs = await import('node:fs');
       const rows = new Map(fs.readFileSync(new URL('../../tools/i18n-strings.tsv', import.meta.url), 'utf8').split('\n').slice(1).filter(Boolean).map((l) => { const c = l.split('\t'); return [c[0], c]; }));
-      const texts = [M.HEAL.find((h) => h.what === 'hue-moved')?.detail, M.HEAL.find((h) => h.what === 'shelly-moved')?.detail, M.HEAL.find((h) => h.what === 'ha-moved')?.detail, M.HEAL.find((h) => h.what === 'space-freed')?.detail];
+      const texts = [M.HEAL.find((h) => h.what === 'shelly-moved')?.detail, M.HEAL.find((h) => h.what === 'space-freed')?.detail];
       assert.ok(texts.every(Boolean), 'each note was made by the tests above');
       const src = (f) => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
-      for (const m of src('../src/server/79-doctor.js').matchAll(/'((?:Home Assistant|The Hue bridge) got a new address[^']*|CasaTorch keeps looking[^']*|Pair again: tap[^']*|Check they have power and Wi-Fi\. If one[^']*)'/g)) texts.push(m[1]);
+      for (const m of src('../src/server/79-doctor.js').matchAll(/'(CasaTorch keeps looking[^']*|Pair again: tap[^']*|Check they have power and Wi-Fi\. If one[^']*|\{name\} now uses its new address\.)'/g)) texts.push(m[1]);
+      for (const k of ['ha', 'hue', 'shelly']) texts.push(M.movedDetail({ kind: k, from: 'a', to: 'b' })[0]);
+      const mv = src('../src/server/79m-moved.js');
+      for (const m of mv.matchAll(/(?:why|label|Error\()[:]? ?'((?:CasaTorch found the same|Use the new address|That suggestion is out|The device at the new address)(?:[^'\\]|\\.)*)'/g)) texts.push(m[1].replace(/\\'/g, "'"));
+      for (const n of ['Home Assistant', 'The Hue bridge', 'The Shelly']) texts.push(n);
       texts.push((await M.huePairWait('x', { pair: async () => ({ ok: false, button: true }), ms: 0 })).error);
       texts.push('The Hue bridge didn\'t answer. Check that it\'s on and try again.');
       const cli = src('../src/client/28d-discover.js') + src('../public/setup.js');
       for (const k of ['Now press the round button on top of the Hue bridge. Waiting for it…', 'Paired with your Hue bridge. Its lights are on Controls.', 'Added Frigate with 1 camera. It\\\'s on Cameras.', 'Added Frigate with {n} cameras. They\\\'re on Cameras.', 'Check the bridge\\\'s address (CasaTorch looks for it), tap Pair, then press the round button on top of the Hue bridge - CasaTorch waits 30 seconds for it.', 'Home Assistant\\\'s home location', 'Filled in from Home Assistant - check it\\\'s right.']) {
         assert.ok(cli.includes(`T('${k}'`), `used on screen: ${k}`); texts.push(k.replace(/\\'/g, "'"));
       }
-      assert.ok(texts.length >= 17, String(texts.length));
+      assert.ok(texts.length >= 22, String(texts.length));
       for (const x of texts) { const r = rows.get(x); assert.ok(r, `not in i18n-strings.tsv: ${x}`); assert.equal(r.length, 14, x); assert.ok(r.every(Boolean), x); }
     });
   } finally { M.restore(kept); }

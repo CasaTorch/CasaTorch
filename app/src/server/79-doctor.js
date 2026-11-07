@@ -137,10 +137,13 @@ async function docHa() {
     const r = await fetch(`${h.url}/api/`, { headers: { Authorization: `Bearer ${h.token}` }, signal: AbortSignal.timeout(8000) });
     if (r.status === 401 || r.status === 403) return chk('ha', 'connections', 'Home Assistant', 'bad', 'Home Assistant no longer accepts CasaTorch\'s token (it was removed or expired).', { why: 'Sign in to Home Assistant again - it takes a few seconds and nothing else changes.', fix: { action: 'reconnect', href: setupLink('homeassistant'), label: 'Sign in again' } });
     if (!r.ok) throw Object.assign(new Error(`HTTP ${r.status}`), { status: r.status });
+    delete MOVED.pending.ha;
     if (!h.uuid && h.url !== SUPERVISOR_HA && movedDue('ha-learn')) movedLearnHa().catch(() => {});   // its own id, to find it again if it moves (79m-moved.js)
     return chk('ha', 'connections', 'Home Assistant', 'ok', live ? 'Connected - changes arrive instantly.' : 'Connected (checking every few seconds; instant updates are reconnecting).');
   } catch (err) {
-    if (!err.status && h.uuid && movedDue('ha') && await movedFollowHa().catch(() => null)) return chk('ha', 'connections', 'Home Assistant', 'ok', 'Home Assistant got a new address on your network. CasaTorch found it there.');
+    // Seen at a new address: only suggested - its token goes there after an admin's tap (79m-moved.js).
+    if (!err.status && h.uuid && movedDue('ha')) await movedFollowHa().catch(() => null);
+    const mp = movedPending('ha', h.url); if (mp) return chk('ha', 'connections', 'Home Assistant', 'bad', movedDetail(mp), movedCheckExtra('ha', mp));
     const e = errLine(err, 'Home Assistant', h.url); return chk('ha', 'connections', 'Home Assistant', 'bad', e.detail, { why: e.why, fix: { action: 'retry', id: 'ha', label: 'Try again' } });
   }
 }
@@ -149,11 +152,14 @@ async function docHue() {
   try {
     const j = await getJSON(`http://${h.host}/api/${h.username}/config`, { timeout: 6000 });
     if (Array.isArray(j) && j[0]?.error?.type === 1) return chk('hue', 'connections', 'Philips Hue', 'bad', 'The Hue bridge no longer knows CasaTorch (it was reset or CasaTorch was removed from it).', { why: 'Pair again: tap Pair again, then press the button on the bridge.', fix: { action: 'reconnect', href: setupLink('controls', 'hue-local'), label: 'Pair again' } });
+    delete MOVED.pending.hue;   // answering where it is: no suggestion stands
     movedLearnHue(j);   // its bridge id, to find it again if it moves (79m-moved.js)
     return chk('hue', 'connections', 'Philips Hue', 'ok', ['Bridge "{name}" is answering.', { name: String(j?.name || 'Hue').slice(0, 40) }]);
   } catch (err) {
     // A new address from the router: the same bridge is looked for on the home network and followed.
-    if (movedDue('hue') && await movedFollowHue().catch(() => null)) return chk('hue', 'connections', 'Philips Hue', 'ok', 'The Hue bridge got a new address on your network. CasaTorch found it there.');
+    // Seen at a new address: only suggested - its key goes there after an admin's tap (79m-moved.js).
+    if (movedDue('hue')) await movedFollowHue().catch(() => null);
+    const mp = movedPending('hue', h.host); if (mp) return chk('hue', 'connections', 'Philips Hue', 'bad', movedDetail(mp), movedCheckExtra('hue', mp));
     const e = errLine(err, 'The Hue bridge', `http://${h.host}`); return chk('hue', 'connections', 'Philips Hue', 'bad', e.detail, { why: e.why || 'CasaTorch keeps looking for it on your network. Check the bridge has power and its network cable.', fix: { action: 'retry', id: 'hue', label: 'Try again' } });
   }
 }
@@ -162,7 +168,9 @@ async function docShelly() {
   const ans = await Promise.all(list.map((h) => getJSON(`http://${h}/shelly`, { timeout: 5000 }).catch(() => null)));
   movedLearnShelly(list.map((host, i) => ({ host, id: ans[i]?.mac })));   // each one's hardware id, to find it again if it moves (79m-moved.js)
   let down = list.filter((_, i) => !ans[i]);
-  if (down.length && movedDue('shelly')) { const moves = await movedFollowShelly(down).catch(() => []); down = down.filter((h) => !moves.some((m) => m.from === h)); }
+  if (down.length && movedDue('shelly')) { const r = await movedFollowShelly(down).catch(() => ({ moved: [] })); down = down.filter((h) => !r.moved.some((m) => m.from === h)); }
+  const mp = down.map((h) => movedPending(`shelly:${h}`, h)).find(Boolean);   // one with a password: suggested, an admin's tap uses it
+  if (mp) return chk('shelly', 'connections', 'Shelly', 'bad', movedDetail(mp), movedCheckExtra(`shelly:${mp.from}`, mp));
   if (!down.length) return chk('shelly', 'connections', 'Shelly', 'ok', ['All {n} answering.', { n: list.length }]);
   return chk('shelly', 'connections', 'Shelly', down.length === list.length ? 'bad' : 'warn', ['{n} of {total} not answering: {list}.', { n: down.length, total: list.length, list: down.join(', ') }], { why: 'Check they have power and Wi-Fi. If one gets a new address from the router, CasaTorch finds it again by itself.', fix: { action: 'retry', id: 'shelly', label: 'Try again' } });
 }
@@ -415,6 +423,13 @@ const FIXES = {
     if (remote.state === 'connected') await remoteCheck('by you').catch(() => {});
     const c = await docEdgeGate(); if (c) DOC.checks = [...DOC.checks.filter((x) => x.id !== 'edgegate'), c];
     return { check: c, message: 'The edge gate is on.' };
+  },
+  /* "Use the new address": the one place a moved device's key, token or password is sent to its new address. */
+  async 'moved-use'(b, req) {
+    const r = await movedUse(String(b.id || ''));
+    if (typeof audit === 'function') audit(req, 'device-moved', { device: r.kind });
+    await doctorRecheck(r.kind).catch(() => null);
+    return { message: `${r.name} now uses its new address.`, msg: '{name} now uses its new address.', vars: { name: r.name } };
   },
   async 'check-updates'() { await checkUpdates(); return updateView().available ? { message: `CasaTorch ${updateView().latest} is available.`, msg: 'CasaTorch {latest} is available.', vars: { latest: updateView().latest } } : { message: 'Up to date.' }; },
 };
