@@ -11,6 +11,13 @@ What changed in each CasaTorch version. The illustrated version, with links into
   CasaTorch, with no Pro needed. It is still marked Labs, because Ring has no official way in.
 - **Secure access is now called Secure Remote Access**, in the app, the phone apps and all 13 languages.
 
+### Looking after itself
+- **Devices that get a new address keep working.** When your router gives Home Assistant, a Hue bridge or a Shelly a
+  new address (after a power cut or a new router), CasaTorch finds it again by itself and carries on. No re-pairing,
+  no typing addresses, and a Shelly keeps its tiles and alert rules. Settings › Health lists it under "Fixed by itself".
+- **A full disk is tidied by itself.** When the disk is almost full, CasaTorch removes its own leftovers (temporary
+  files, unfinished backups, old copies and the map cache). It never touches photos, scans, history or settings.
+
 ### Adding devices
 - **New devices found.** CasaTorch now keeps looking for gear on your home network, every 30 minutes and whenever you
   press Look again: Home Assistant and new devices in it, Hue bridges, Shelly, Frigate, go2rtc streams, ONVIF and RTSP
@@ -19,6 +26,11 @@ What changed in each CasaTorch version. The illustrated version, with links into
   takes one tap: a Shelly is tested and added, a new Home Assistant device gets a tile on Home (and its room on
   Controls when Controls is arranged by room), and the rest open the guided setup at that item with the address filled
   in. The room comes from the Home Assistant area or the device's name. "Not now" asks again in a week; Hide is for good.
+- **More in one tap.** A Hue bridge found on your network pairs right there: tap Add, then press the button on the
+  bridge (CasaTorch waits 30 seconds for it). Frigate without a password is added with all its cameras. Pairing Hue in
+  setup works the same way: tap Pair first, then press the button.
+- **Setup fills in your home from Home Assistant.** With the Home Assistant add-on, the first setup page already has
+  your home's name, time zone, °F/°C, currency and town position from Home Assistant. Change anything you like.
 - **Add by address.** Type an address and CasaTorch asks it what it is.
 - Only addresses on your home network are ever looked at or kept, names from the network are cleaned, and looks are
   limited (one full look a minute, 12 address checks a minute).

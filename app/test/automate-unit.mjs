@@ -164,5 +164,22 @@ export default async function automateTests(t) {
         assert.equal(M.HEAL.length, heal + 1);
       } finally { S.DOC.freedAt = was; }
     });
+
+    await t('every text these show is translated in all 13 languages (tools/i18n-strings.tsv)', async () => {
+      const fs = await import('node:fs');
+      const rows = new Map(fs.readFileSync(new URL('../../tools/i18n-strings.tsv', import.meta.url), 'utf8').split('\n').slice(1).filter(Boolean).map((l) => { const c = l.split('\t'); return [c[0], c]; }));
+      const texts = [M.HEAL.find((h) => h.what === 'hue-moved')?.detail, M.HEAL.find((h) => h.what === 'shelly-moved')?.detail, M.HEAL.find((h) => h.what === 'ha-moved')?.detail, M.HEAL.find((h) => h.what === 'space-freed')?.detail];
+      assert.ok(texts.every(Boolean), 'each note was made by the tests above');
+      const src = (f) => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
+      for (const m of src('../src/server/79-doctor.js').matchAll(/'((?:Home Assistant|The Hue bridge) got a new address[^']*|CasaTorch keeps looking[^']*|Pair again: tap[^']*|Check they have power and Wi-Fi\. If one[^']*)'/g)) texts.push(m[1]);
+      texts.push((await M.huePairWait('x', { pair: async () => ({ ok: false, button: true }), ms: 0 })).error);
+      texts.push('The Hue bridge didn\'t answer. Check that it\'s on and try again.');
+      const cli = src('../src/client/28d-discover.js') + src('../public/setup.js');
+      for (const k of ['Now press the round button on top of the Hue bridge. Waiting for it…', 'Paired with your Hue bridge. Its lights are on Controls.', 'Added Frigate with 1 camera. It\\\'s on Cameras.', 'Added Frigate with {n} cameras. They\\\'re on Cameras.', 'Check the bridge\\\'s address (CasaTorch looks for it), tap Pair, then press the round button on top of the Hue bridge - CasaTorch waits 30 seconds for it.', 'Home Assistant\\\'s home location', 'Filled in from Home Assistant - check it\\\'s right.']) {
+        assert.ok(cli.includes(`T('${k}'`), `used on screen: ${k}`); texts.push(k.replace(/\\'/g, "'"));
+      }
+      assert.ok(texts.length >= 17, String(texts.length));
+      for (const x of texts) { const r = rows.get(x); assert.ok(r, `not in i18n-strings.tsv: ${x}`); assert.equal(r.length, 14, x); assert.ok(r.every(Boolean), x); }
+    });
   } finally { M.restore(kept); }
 }
