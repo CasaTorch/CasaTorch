@@ -94,5 +94,30 @@ export default async function automateTests(t) {
       assert.equal(await D.discFrigateQuick('http://198.51.100.7:5000', test), null, 'never an internet address');
       assert.deepEqual(seen, ['http://192.168.1.10:5000'], 'only the home address was asked');   // scrub-ok: example address
     });
+
+    t('Home step from Home Assistant: name, time zone, units, currency and a rounded position; anything odd is left out', () => {
+      const G = globalThis.__casatorchSetupHome.haHomeGuess;
+      assert.deepEqual(G({ location_name: 'Maple\u202e Cottage\n', time_zone: 'Europe/Berlin', latitude: 52.520008, longitude: 13.404954, country: 'de', currency: 'EUR', unit_system: { temperature: '°C' } }),
+        { name: 'Maple Cottage', timezone: 'Europe/Berlin', units: 'C', currency: 'EUR', location: { lat: 52.52, lon: 13.4, cc: 'DE' } });
+      assert.deepEqual(G({ time_zone: 'America/Argentina/Buenos_Aires', unit_system: { temperature: '°F' } }), { name: null, timezone: 'America/Argentina/Buenos_Aires', units: 'F', currency: null, location: null });
+      const odd = G({ location_name: '<>\u200b ', time_zone: '../../etc', latitude: 0, longitude: 0, currency: 'euro', unit_system: { temperature: 'K' } });
+      assert.equal(odd, null, 'nothing usable: nothing offered');
+      assert.equal(G({ latitude: 95, longitude: 10, location_name: 'Home' }).location, null, 'not a place on Earth');
+      assert.equal(G(null), null); assert.equal(G('x'), null);
+    });
+
+    await t('Home step from Home Assistant: the setup screen fills only what is still unanswered', async () => {
+      const fs = await import('node:fs'), vm = await import('node:vm');
+      const src = fs.readFileSync(new URL('../public/setup.js', import.meta.url), 'utf8');
+      const fn = src.match(/function fillHomeFromHa\(store, g\) \{[\s\S]*?\n\}/)?.[0]; assert.ok(fn, 'fillHomeFromHa is in setup.js');
+      const ctx = { T: (s) => s, Intl }; vm.runInNewContext(`${fn}; this.fill = fillHomeFromHa;`, ctx);
+      const g = { name: 'Maple Cottage', timezone: 'Europe/Berlin', units: 'C', currency: 'EUR', location: { lat: 52.52, lon: 13.4, cc: 'DE' } };
+      const fresh = {}; assert.equal(ctx.fill(fresh, g), true);
+      assert.deepEqual([fresh.name, fresh.timezone, fresh.units, fresh.currency, fresh.location.lat, fresh.location.cc, fresh.location.fromHa], ['Maple Cottage', 'Europe/Berlin', 'C', 'EUR', 52.52, 'DE', true]);
+      const mine = { name: 'Our place', timezone: 'Asia/Tokyo', units: 'F', _unitsSet: true, currency: 'JPY', _currencySet: true, location: { name: 'Kyoto', lat: 35.01, lon: 135.77 } };
+      assert.equal(ctx.fill(mine, g), false, 'everything answered already: nothing changes');
+      assert.deepEqual([mine.name, mine.timezone, mine.units, mine.currency, mine.location.name], ['Our place', 'Asia/Tokyo', 'F', 'JPY', 'Kyoto']);
+      assert.equal(ctx.fill({}, null), false);
+    });
   } finally { M.restore(kept); }
 }

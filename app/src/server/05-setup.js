@@ -173,6 +173,29 @@ app.get('/api/setup/ha/find', async (_req, res) => {
   const all = await DISCOVERERS.homeassistant().catch(() => []);   // what it announces on the network (mDNS), then the usual names
   res.json({ url: all[0] || null, all });
 });
+/* The Home step from Home Assistant: when it's reachable without typing anything (the add-on), or was connected earlier
+   in this setup, its home's name, time zone, temperature unit, currency and position (rounded to about a kilometre)
+   are offered to fill in. Only for a first setup - running setup again keeps what's there. Nothing is saved here. */
+function haHomeGuess(c) {
+  if (!c || typeof c !== 'object') return null;
+  const name = String(c.location_name ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) || null;
+  const timezone = typeof c.time_zone === 'string' && /^[A-Za-z]+(\/[A-Za-z0-9_+-]+){0,2}$/.test(c.time_zone) && c.time_zone.length <= 60 ? c.time_zone : null;
+  const lat = Number(c.latitude), lon = Number(c.longitude), cc = String(c.country ?? '').toUpperCase();
+  const location = c.latitude != null && c.longitude != null && Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && (lat || lon)
+    ? { lat: Math.round(lat * 100) / 100, lon: Math.round(lon * 100) / 100, ...(/^[A-Z]{2}$/.test(cc) ? { cc } : {}) } : null;
+  const t = String(c.unit_system?.temperature ?? ''), units = /F/.test(t) ? 'F' : /C/.test(t) ? 'C' : null;
+  const currency = /^[A-Z]{3}$/.test(String(c.currency ?? '')) ? c.currency : null;
+  const out = { name, timezone, units, currency, location };
+  return Object.values(out).some((v) => v != null) ? out : null;
+}
+app.get('/api/setup/home-guess', async (_req, res) => {
+  if (isDemo() || isConfigured()) return res.json({ home: null });
+  const h = draft.ha?.url ? draft.ha : process.env.SUPERVISOR_TOKEN ? { url: SUPERVISOR_HA, token: process.env.SUPERVISOR_TOKEN } : null;
+  if (!h) return res.json({ home: null });
+  try { res.json({ home: haHomeGuess(await getJson(`${h.url}/api/config`, { headers: { Authorization: `Bearer ${h.token}` }, timeout: 6000 })) }); }
+  catch { res.json({ home: null }); }
+});
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchSetupHome = { haHomeGuess };
 /* Everything setup can find by itself, to fill in (05b-setup-net.js). */
 app.get('/api/setup/discover', async (req, res) => res.json(await discoverAll(req.query.fresh === '1')));
 const haSignins = new Map();   // state -> { url, origin, exp }

@@ -73,6 +73,19 @@ function prefillFound(store, find) {
   return store._found[find.field] && store[find.field] === store._found[find.field] ? el('div', { class: 'found' }, '✓ ', T('Found on your network and filled in - check it\'s right.')) : null;
 }
 const ans = (stepId) => (W.a[stepId] ||= {});
+/** Home Assistant's own answers for the Home step ({ name, timezone, units, currency, location }), into what is still
+    unanswered there. Says whether anything was filled in. */
+function fillHomeFromHa(store, g) {
+  if (!g || typeof g !== 'object') return false;
+  let n = 0;
+  const browserTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return null; } })();
+  if (g.name && !store.name) { store.name = String(g.name).slice(0, 60); n++; }
+  if (g.timezone && (!store.timezone || store.timezone === browserTz) && store.timezone !== g.timezone) { store.timezone = g.timezone; n++; }
+  if (g.location?.lat != null && store.location?.lat == null) { store.location = { name: T('Home Assistant\'s home location'), lat: g.location.lat, lon: g.location.lon, ...(g.location.cc ? { cc: g.location.cc } : {}), fromHa: true }; n++; }
+  if (g.units && !store._unitsSet && store.units !== g.units) { store.units = g.units; n++; }
+  if (g.currency && !store._currencySet && store.currency !== g.currency) { store.currency = g.currency; n++; }
+  return n > 0;
+}
 const pretty = (s) => String(s).replace(/[_-]+/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 
 /* ---------- fields ---------- */
@@ -140,7 +153,7 @@ const CUSTOM = {
       catch (e) { results.replaceChildren(el('div', { class: 'err' }, e.message)); }
     };
     q.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); find(); } });
-    if (cur?.lat != null) box.append(el('div', { class: 'ok' }, `✓ ${cur.name || `${cur.lat}, ${cur.lon}`}`));
+    if (cur?.lat != null) box.append(el('div', { class: 'ok' }, `✓ ${cur.name || `${cur.lat}, ${cur.lon}`}`), cur.fromHa ? el('div', { class: 'found' }, '✓ ', T('Filled in from Home Assistant - check it\'s right.')) : null);
     box.append(el('div', { class: 'row' }, el('div', { style: 'flex:1;min-width:180px' }, q), el('button', { type: 'button', class: 'small', onclick: find }, T('Find')),
       navigator.geolocation ? el('button', { type: 'button', class: 'small', onclick: () => navigator.geolocation.getCurrentPosition((g) => pick({ name: T('This location'), lat: Math.round(g.coords.latitude * 1e4) / 1e4, lon: Math.round(g.coords.longitude * 1e4) / 1e4 }), () => results.replaceChildren(el('div', { class: 'note' }, T('The browser did not share a location - search instead.')))) }, T('Use this device\'s location')) : null), results);
     if (f.help) box.append(el('div', { class: 'help' }, T(f.help)));
@@ -962,6 +975,9 @@ function watchAsks() {
   focusFromLink();
   W.ready = true;
   go();
+  // Home Assistant already reachable (the add-on): its home's name, time zone, units, currency and position fill in the
+  // Home step - only what hasn't been answered yet, and still yours to change.
+  if (!st.demo && !W.rerun && !linked) api('/api/setup/home-guess').then((g) => { const busy = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName); if (fillHomeFromHa(ans('house'), g?.home) && !busy && W.steps[W.i - 1]?.id === 'house') go(); }).catch(() => {});
   // Look for gear on the network in the background; whatever turns up is filled in on its step.
   if (!st.demo) api('/api/setup/discover').then((f) => { W.found = foundFromLink(f && typeof f === 'object' ? f : {}); const busy = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName); const cur = W.steps[W.i - 1]?.id; if (!busy && ['homeassistant', 'cameras', 'controls', 'sensors', 'energy', 'network'].includes(cur)) go(); }).catch(() => {});
 })();
