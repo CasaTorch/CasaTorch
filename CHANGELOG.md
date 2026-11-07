@@ -6,6 +6,21 @@ What changed in each CasaTorch version. The illustrated version, with links into
 
 ## Unreleased
 
+### Safety and privacy
+- **Scenes, scripts and groups follow the safety rule by what they do, not just their names.** CasaTorch now looks at
+  what each Home Assistant scene, script and switch group touches. One that can unlock a door, open a garage door or
+  gate, or disarm an alarm never runs from CasaTorch. One CasaTorch can't read, or that switches something with a
+  door-like name, is held back until an owner allows it in Settings › Safety. A script is checked again right before it
+  runs.
+- **A name you give a device no longer changes how the safety rule sees it.** Renaming a device in Settings is only a
+  label; the rule always goes by the name Home Assistant or the device itself uses.
+- **A bin calendar link a member adds stays on the internet** every time CasaTorch reads it, not only when it's saved.
+- Hourly and daily limits on asking for an owner reset code now really last an hour or a day.
+- Reminder photos: removing one only ever removes a reminder photo.
+- Only a home with Home Assistant lets `homeassistant.local` show CasaTorch inside its own page (for the HACS card).
+- Some bookkeeping that anyone on the network could grow (waiting Google sign-ins, wrong voice tokens) is now capped,
+  and a flood of wrong voice tokens no longer fills the activity log.
+
 ### Looks and feel
 - **A new page opens at its top.** Switching sections (the side bar, the phone bar, More, or a link) no longer leaves
   you at the bottom of the next page. Links that point at something on a page still go straight to it.
@@ -110,6 +125,7 @@ What changed in each CasaTorch version. The illustrated version, with links into
 - **Nothing sent when nothing changed.** Pages now ask "has this changed?" when they refresh, and CasaTorch answers
   "no" (304) before compressing anything, so a screen left on Home moves about a third less data and the box does less
   work (in the demo house, 26 of 34 refreshes over two minutes came back as "not changed").
+- The Photo reel's list of photos is kept in memory instead of being read from the disk for every tile.
 
 ### Look
 - Phones: every page's title and the inbox bell share one row, with the page's buttons under them (a long subtitle
