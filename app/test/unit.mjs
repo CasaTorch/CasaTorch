@@ -376,6 +376,22 @@ await t('household: a calendar link a member saved stays on the internet each ti
   } finally { HH.hh.cfg = was; HH.hh.ext = wasExt; }
 });
 
+await t('safety rule: a name the household gives a device never hides what it really is', async () => {
+  const P = globalThis.__casatorchProviders;
+  P.unitsafe = { async list() { return [{ id: 'unitsafe:relay1', provider: 'unitsafe', kind: 'switch', name: 'Garage door', on: false, online: true }]; } };
+  const M = globalThis.__casatorchMoved, C = { get: M.cfg, set: M.setCfg }, kept = M.keep();
+  try {
+    C.set({ ...C.get(), ui: { ...(C.get().ui || {}), deviceNames: { 'unitsafe:relay1': 'Porch' } } });
+    for (let i = 0; i < 3; i++) {
+      const d = (await H.houseDevices()).devices.find((x) => x.id === 'unitsafe:relay1');
+      assert.equal(d.name, 'Porch'); assert.equal(d.originalName, 'Garage door', `call ${i + 1}`);
+      assert.ok(H.riskOf(d), `call ${i + 1}: still held back`);
+    }
+    const raw = (await H.allDevices()).devices.find((x) => x.id === 'unitsafe:relay1');
+    assert.equal(raw.name, 'Garage door', 'the shared list keeps the real name'); assert.ok(H.blocked(raw, 'on'));
+  } finally { delete P.unitsafe; M.restore(kept); }
+});
+
 t('energy card: solar, battery and grid come only from sensors that exist', () => {
   const none = H.energyFlows([{ id: 'ha:sensor.fridge_power', name: 'Fridge', kind: 'sensor', powerW: 90 }], 900);
   assert.equal(none.solarW, null); assert.equal(none.battery, null); assert.equal(none.gridW, null);

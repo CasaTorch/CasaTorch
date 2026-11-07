@@ -70,7 +70,9 @@ async function houseDevices() {
   // The demo "without Home Assistant" (CASATORCH_DEMO_NOHA=1): only the brands CasaTorch reaches by itself - for honest side-by-side pictures.
   if (isDemo() && process.env.CASATORCH_DEMO_NOHA === '1') r.devices = r.devices.filter((d) => d.provider !== 'ha');
   const names = uiPrefs().deviceNames || {};
-  for (const d of r.devices) { d.originalName = d.name; if (names[d.id]) d.name = names[d.id]; }
+  /* Copies: the providers' lists are kept for a few seconds (allDevices) and shared, so naming them here would make the
+     household's name the "original" one the next time - and the safety rule reads the original name. */
+  r.devices = r.devices.map((d) => { const c = { ...d, originalName: d.originalName ?? d.name }; if (names[d.id]) c.name = names[d.id]; return c; });
   // Cameras you removed, and the same camera reached twice (through Home Assistant and directly): only one shows.
   const { show, hidden } = cameraSort(r.devices);
   r.devices = r.devices.filter((d) => d.kind !== 'camera' || show.has(d.id));
