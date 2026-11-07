@@ -330,6 +330,7 @@ t('safety rule: scenes, groups and scripts are judged by what they act on, not t
   assert.ok(H.blocked(by('switch.outside'), 'on')); assert.ok(H.blocked(by('script.area_on'), 'run')); assert.ok(H.blocked(by('script.unread'), 'run'));
   for (const id of ['scene.movie', 'script.good_night', 'script.lights']) assert.equal(H.blocked(by(id), 'run'), null, id);
   assert.equal(H.blocked(by('switch.kitchen'), 'on'), null);
+  assert.equal(S.haServiceFor('light', 'constructor'), null); assert.equal(S.haServiceFor('__proto__', 'on'), null); assert.equal(S.haServiceFor('lock', 'unlock'), null); assert.equal(S.haServiceFor('light', 'on'), 'turn_on');
   assert.equal(S.haActionRisk({ sequence: [{ action: 'alarm_control_panel.alarm_disarm', target: { entity_id: 'alarm_control_panel.home' } }] }, () => null), 'sure');
   assert.equal(S.haActionRisk({ sequence: [{ action: '{{ "lock.unlock" }}' }] }, () => null), 'unknown', 'a templated action');
   assert.equal(S.haActionRisk({ sequence: [{ action: 'cover.open_cover', target: { floor_id: 'ground' } }] }, () => null), 'sure', 'opening every cover on a floor');

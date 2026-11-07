@@ -87,6 +87,8 @@ const HA_SERVICES = {
   climate: { target: 'set_temperature', mode: 'set_hvac_mode', on: 'turn_on', off: 'turn_off' }, water_heater: { target: 'set_temperature' },
   alarm_control_panel: { arm_home: 'alarm_arm_home', arm_away: 'alarm_arm_away', arm_night: 'alarm_arm_night' },   // never disarm
 };
+/** The Home Assistant service for one of CasaTorch's actions, or null - only the ones listed (never "constructor" and the like). */
+const haServiceFor = (domain, action) => (Object.hasOwn(HA_SERVICES, String(domain)) && Object.hasOwn(HA_SERVICES[domain], String(action)) ? HA_SERVICES[domain][action] : null);
 Object.assign(HA_SERVICES.light, { color: 'turn_on', kelvin: 'turn_on' });
 Object.assign(HA_SERVICES.fan, { percent: 'set_percentage' });
 Object.assign(HA_SERVICES.media_player, { volume: 'volume_set', prev: 'media_previous_track' });
@@ -296,7 +298,7 @@ async function haSafetyNow(ent) {
   const devs = haPairPlugs(states.map(haDevice).filter(Boolean));
   return haSafetyLevels(states, devs, scripts, await haDevIds()).get(String(ent).toLowerCase()) || null;
 }
-if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchHaSafety = { haActionRisk, haEntityRisk, haSafetyLevels, haSafetyMark };
+if (process.env.CASATORCH_TEST === '1') globalThis.__casatorchHaSafety = { haServiceFor, haActionRisk, haEntityRisk, haSafetyLevels, haSafetyMark };
 /** A camera entity that is really a chime becomes one (the snapshot and stream addresses go). Pure. */
 function haChimeOf(d) { const { snapshot: _s, stream: _l, every: _e, liveVia: _v, ...rest } = d; return { ...rest, kind: 'chime', chime: true }; }
 PROVIDERS.ha = {
@@ -312,7 +314,7 @@ PROVIDERS.ha = {
   async act(d, action, value) {
     const h = config.homeAssistant, ent = d.id.slice(3), domain = ent.split('.')[0];
     if (d.risky && ['open', 'toggle'].includes(action)) throw new Error('opening garage doors and gates stays in Home Assistant');
-    const svc = HA_SERVICES[domain]?.[action];
+    const svc = haServiceFor(domain, action);
     if (svc && domain === 'script') {   // a script's steps are asked again this second (scenes and groups: the device list already has their members as they are now)
       const lv = await haSafetyNow(ent).catch(() => 'unknown');
       const why = lv && blocked({ ...d, safety: lv }, action); if (why) throw Object.assign(new Error(why), { status: 403 });
