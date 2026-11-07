@@ -6,6 +6,8 @@ What changed in each CasaTorch version. The illustrated version, with links into
 
 ## Unreleased
 
+- The 3D home uses three.js 0.187.0 (its files are pinned by their hashes as before).
+
 ### Plans
 - **Ring is now part of Basic (free).** Ring doorbells, cameras and chimes connect without Home Assistant on every
   CasaTorch, with no Pro needed. It is still marked Labs, because Ring has no official way in.

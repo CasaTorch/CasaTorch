@@ -15,6 +15,8 @@ jobs:
         with:
           fail-on-severity: high
           fail-on-scopes: runtime
-          deny-licenses: SSPL-1.0, BUSL-1.1, Commons-Clause, CC-BY-NC-4.0, CC-BY-NC-SA-4.0
+          # SPDX ids only: Commons-Clause has none, and one unknown id makes the action refuse the whole list.
+          # Every dependency's license is also listed and checked by hand in THIRD_PARTY_NOTICES.md.
+          deny-licenses: SSPL-1.0, BUSL-1.1, CC-BY-NC-4.0, CC-BY-NC-SA-4.0
           comment-summary-in-pr: never
           warn-on-openssf-scorecard-level: 3

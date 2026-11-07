@@ -17,6 +17,12 @@ updates:
       # Express 5 changes routing and error handling; move to it on purpose, with the full test suite, not by bot.
       - dependency-name: express
         update-types: ["version-update:semver-major"]
+      # three.js is served with pinned hashes (tools/make-vendor-integrity.mjs must run with every move), which
+      # Dependabot can't do - move it by hand: npm i three@<v> --save-exact, then node tools/make-vendor-integrity.mjs.
+      - dependency-name: three
+      # Matter talks to locks and garage doors through other apps; a new 0.x line is moved on purpose, with its tests.
+      - dependency-name: "@matter/*"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
 
   # The Node.js base image, pinned to an exact patch release and its digest (tag@sha256:...). Dependabot moves both in
   # app/Dockerfile; ha-addon/build.yaml and the add-on's ARG BUILD_FROM follow by hand in the same pull request - a unit
@@ -49,3 +55,14 @@ updates:
     groups:
       android:
         patterns: ["*"]
+    ignore:
+      # New major versions of the Android build tools (Gradle, the Android plugin, Kotlin) change the build itself;
+      # they are moved on purpose, not by the weekly pull request.
+      - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.android.tools.build:gradle"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.jetbrains.kotlin*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "gradle-wrapper"
+        update-types: ["version-update:semver-major"]
