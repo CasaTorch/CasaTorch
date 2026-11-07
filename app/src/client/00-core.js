@@ -310,10 +310,18 @@ const TABS = [];   // filled by the tab files
 const tab = (t) => { const k = t.after ? TABS.findIndex((x) => x.id === t.after) : -1; if (k >= 0) TABS.splice(k + 1, 0, t); else TABS.push(t); };   // after: its place on the main bar
 let refresher = null, current = null;
 function setTop(title, sub = '', actions = []) { $('#title').textContent = title; $('#subtitle').textContent = sub; $('#actions').replaceChildren(...actions); if (typeof docTitleLink === 'function') docTitleLink(current); }   // docTitleLink: the page's "?" guide link (39d-docs-links.js)
-let showSeq = 0;
+let showSeq = 0, shownKey = null;
+/* A new page starts at its top: the window and every box that scrolls the page (a page asked for again - a refresh,
+   Try again - stays where it was). A deep link (#network?tile=..., a section a page scrolls to itself) still goes to
+   its target: the page scrolls there after this, once it has drawn. */
+function pageTop() {
+  for (const n of [document.scrollingElement, document.documentElement, document.body, $('.shell'), $('.main'), $('#view')]) if (n && n.scrollTop) n.scrollTop = 0;
+  try { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); } catch { window.scrollTo(0, 0); }
+}
 async function show(id) {
   const [base, sub] = String(id || '').split('/');   // #settings/people opens Settings at People
   const t = TABS.find((x) => x.id === base) || TABS[0];
+  const key = `${t.id}/${sub || ''}`, newPage = key !== shownKey; shownKey = key;
   current = t.id; document.body.classList.remove('editing-on');
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.tab === t.id));
   if (window.innerWidth <= 760 && S.ui) drawNav();   // the phone bar's More lights up for a page inside it
@@ -332,6 +340,7 @@ async function show(id) {
     if (seq !== showSeq || !main.isConnected || !main.classList.contains('view-next')) return;
     if (!main.children.length) main.append(pageSkeleton());
     for (const n of [...view.children]) if (n !== main) n.remove(); main.classList.remove('view-next'); main.classList.add('view-in');
+    if (newPage) pageTop();
   };
   const early = setTimeout(reveal, 250);
   setTop(tabLabel(t));
