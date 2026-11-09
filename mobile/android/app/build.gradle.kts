@@ -40,16 +40,16 @@ val copyShell by tasks.registering(Copy::class) {
 tasks.named("preBuild") { dependsOn(copyShell) }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.activity:activity-ktx:1.9.3")
-    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.appcompat:appcompat:1.8.0")
     implementation("androidx.webkit:webkit:1.12.1")
-    implementation("androidx.biometric:biometric:1.2.0-alpha05")
-    implementation("androidx.browser:browser:1.8.0")
-    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
-    implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("androidx.biometric:biometric:1.4.0-beta01")
+    implementation("androidx.browser:browser:1.10.0")
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.2.0")
+    implementation("androidx.core:core-splashscreen:1.2.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
     implementation("com.google.firebase:firebase-messaging")
 }
