@@ -30,7 +30,7 @@
     "qrcode": "1.5.4",
     "ring-client-api": "^14.3.0",
     "three": "0.187.0",
-    "web-push": "3.6.7"
+    "web-push": "4.0.0"
   },
   "overrides": {
     "werift": "0.25.0"
