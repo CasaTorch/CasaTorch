@@ -8,7 +8,7 @@
 # final image. See deploy/docker-compose.yml for the matching run options (read_only, cap_drop, no-new-privileges).
 
 # ---- build: install the packages and join the source (nothing from this stage runs in the final image) ----
-FROM node:22.23.4-trixie-slim@sha256:be1e2a3dc2c4fd68cdfadad2a696a280e0d2749098bee509230174d72fb768c6 AS build
+FROM node:22.23.5-trixie-slim@sha256:68c76cfad89921b927eae28ba21407475e29d0ce450afcdbe70c1532db042b64 AS build
 WORKDIR /app
 COPY app/package.json app/package-lock.json ./
 # --ignore-scripts: no install scripts are needed, and it keeps out the static FFmpeg build that ring-client-api would
@@ -21,7 +21,7 @@ COPY app/catalog ./catalog
 RUN node build.mjs
 
 # ---- the image people run ----
-FROM node:22.23.4-trixie-slim@sha256:be1e2a3dc2c4fd68cdfadad2a696a280e0d2749098bee509230174d72fb768c6
+FROM node:22.23.5-trixie-slim@sha256:68c76cfad89921b927eae28ba21407475e29d0ce450afcdbe70c1532db042b64
 # traceroute, tracepath: the hop-by-hop path in Network > App tests (no special rights needed). mtr is left out: it
 # needs raw sockets, which this container never has.
 # Then: no package manager for JavaScript in the running image (CasaTorch never installs anything at run time), and
